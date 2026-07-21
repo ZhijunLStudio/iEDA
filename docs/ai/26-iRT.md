@@ -162,101 +162,93 @@ NanoRoute signoff 级布线的 DRC=0 收敛性来自一整套互相咬合的机�
 
 **§1.5 结论**：精度缺口是**结构性的两层**——(a) 控制层：plateau/策略/诚实拒绝（#4/5/9，P0）；(b) 时序层：排序/代价（#7/8，P1）；(c) 对拍层：harness（#13，P0）。内核算法（#1-3）**不是**缺口。
 
-### 1.4 跨工具协调——单向消费多，反向驱动少
+### 1.6 边界 / 回退 / 假成功——操作化尚可，缺诚实拒绝
 
-| 方向 | 现状 | 判定 |
-|---|---|---|
-| iPL/iCTS → iRT | 消费已摆位 DEF / netlist / 时钟网类型 | 就绪 |
-| iPDN → iRT | fixed rect / 电源形状进 env | 依赖 iDB；**未验证** PDN 是否常被当障碍 |
-| iRT → iDRC | `DRCEngine` / `getViolationList`（`RTInterface.cpp:1484+`） | **Composition 接通** |
-| iRT → iSTA | `updateTiming` 空壳；summary 槽位空 | **时序闭环断开** |
-| iSTA → iRT | 无 slack→net 排序/代价 | **全无** |
-| iRT → iPL | 无 congestion map 回灌 density | 与 `22-iPL` §1.4 对称缺口 |
-| iRT → iTO | 详布 DEF 供 route_opt | 就绪；ECO route 缺则 Phase C 增量弱 |
-| 外部 UI | `sendNotification`（`:1778-1788`） | ecos≠ECO |
+- **边界较全**：DR box 初始化、`max_routed_times`、`max_candidate_patch_num`、min-area patch、违例上传多轮（`routeDRModel` 内 `uploadViolation` 两次 + final）。优于「取数→循环→写回」三行式脚本。
+- **checkpoint**：box 级与 model 级 `updateBestResult`；终态 `selectBestResult`。**但**九轮结束仍有违例时：`runRT`/`route()` 仍走完 → **无失败 rc**（对照 G5「诚实拒绝」、G14）。**未验证** TCL 层是否检查 VR 总数——标「未验证」，P0 实测。
+- **配置缺省策略偏软**：`getConfigValue`（`Utility.hpp:2251-2260`）缺键 → `RTLOG.warn` + 默认值，**不 error**。相对主纲 G14 / KH-X-04，未知关键键应响亮失败（§4.F、§7）。
+- **结构化日志半通**：每 DR iter 有 fort 表 +（`output_inter_result`）CSV；JSON 多受 `enable_notification` 门控（VR `outputJson` `:503-507`）。**缺**机器可读 `iter_dr_series.json`（违例序列专档）与 `route_incomplete` 失败码。
 
-### 1.5 与商业 NanoRoute / ICC2 route 的差距量化（假说，待 G17 实测）
+### 1.7 死配置 / 死接线 / 假成功点名
 
-| 能力 | Innovus/ICC2 | iRT 现状 | 差距归因 |
-|---|---|---|---|
-| GR/TA/DR 管线 | ✓ | ✓（+TG/SR） | 架构不弱 |
-| 反馈控制收敛 | plateau/effort | 固定 9×size=12 | **R1 P0** |
-| Timing-driven | 关键网/层偏置 | 开关+死实现 | **R3 P0/P1** |
-| 违例机读归因 | 层×类型报告 | VR 有类型表；JSON 默认关 | 产物/门控 |
-| ECO route | 局部拆线 | 仅 notification | **R4 P1** |
-| NDR/SI spacing | 有 | 未见独立膨胀环 | Phase C |
-| DRC=0 语义 | 失败即报 | 可能静默完成+残留违例 | **G5/G14** |
-| Runtime | 日构预算 | omp 有；未对拍 | G21 |
+1. **`RTInterface::updateTiming` 函数体大段注释**（`RTInterface.cpp:1522+`）——时序接口是死骨架。
+2. **无 plateau API / 无策略升级机制**——`stopIteration` 仅 clean 早停，无策略分支。
+3. **调度表嵌死 `.cpp`**——`Config` 无 `dr_schedule` / `plateau_window` / `enable_eco` 字段。
+4. **`ecos` 名不副实**：`#if 1 // ecos` 仅 notification（`RTInterface.hpp:154-156`）。
+5. **VR JSON 默认关**：依赖 `enable_notification`；G5 harness 若只读 JSON 会假阴性。
+6. **九轮后残留违例可能静默完成**——无 `route_incomplete` 标记、无非零 rc。
+7. **ER vs runRT 双入口**：能力重叠边界、默认 TCL flow 走哪条——**未验证**（§14.1）。
 
-### 1.6 其他工业缺项 / 死配置点名
+### 1.8 症结优先级表（§1 结论摘要）
 
-- **死实现**：`updateTiming` 整段注释（`RTInterface.cpp:1522+`）——打开 `-enable_timing` **改变不了布线 DEF**（假说；E-RT-03 杀）。
-- **死配置感**：`Config` 无 `dr_schedule` / `plateau_window` / `enable_eco` 字段——不是「定义了不读」，而是**从未定义**；调度魔数埋在 `.cpp`。
-- **ecos 名不副实**：`#if 1 // ecos` 仅 notification（`RTInterface.hpp:154-156`）。
-- **VR JSON 默认关**：依赖 `enable_notification`；G5 harness 若只读 JSON 会假阴性。
-- **ER vs runRT 双入口**：能力重叠边界、默认 TCL flow 走哪条——**未验证**（§14）。
-- **写死层名**：报告用 `routing_layer.get_layer_name()`（tech 来）；**未见** `"M1"` 硬编码进算法分支（初步 grep；P0 全量红线扫描仍要做，KH-RT-06）。
+| ID | 症结 | 证据 | 对标线 | P |
+|---|---|---|---|---|
+| **S1** | **无 plateau 检测 + 无策略升级**（外环固定九幕） | `DetailedRouter.cpp:126-134` 字面量；`:2426-2432` 仅 clean 早停；`grep plateau` 零命中 | NanoRoute | P0 |
+| **S2** | **调度表硬编码**（box=12 不可配） | `:126-134`；`Config.hpp:60-61` 无调度字段 | NanoRoute | P0 |
+| **S3** | **timing 死实现**（`updateTiming` 空+不进代价） | `RTInterface.cpp:1522+` 函数体注释；`DetailedRouter.cpp:1425-1574` 无 slack | NanoRoute | P0 |
+| **S4** | **DRC 残留无诚实拒绝**（假 clean） | 九轮后 `runRT` 正常返回；无 `route_incomplete` | NanoRoute | P0 |
+| **S5** | **无 vs NanoRoute harness → G5 不可证** | 无对齐脚本/schema | NanoRoute | P0 |
+| S6 | VR JSON 默认关（门控风险） | `ViolationReporter.cpp:503-507` `enable_notification` | NanoRoute | P1 |
+| S7 | 无 ECO route | `RTInterface.hpp:154-156` 仅 notification | NanoRoute | P1 |
+| S8 | ER/runRT 双入口边界未验证 | 能力重叠；默认 flow 未文档化 | — | P1 |
 
-### 1.7 §1 三条关键症结（回报用）
-
-| ID | 症结 | 证据 `file:line` |
-|---|---|---|
-| R1 | DR 调度硬编码九组、`box/size=12`；**无 plateau 策略** | `DetailedRouter.cpp:126-134`（字面量）；`:2426-2432`（仅 0 违例早停） |
-| R3 | `enable_timing` **不驱动布线**；`updateTiming` **空操作** | `DetailedRouter.cpp:3194-3263`（仅 summary 调用）；`RTInterface.cpp:1522+`（体注释）；代价路径无 slack |
-| R4 | 无 ECO route；`ecos`=通知 | `RTInterface.hpp:154-156`；`:1778-1788` `sendNotification` |
-
-（并列：管线真相 = `RTInterface.cpp:108-147` 含 TG/SR；ER 在 `:90-106`。）
+**§1 最关键 5 条**：S1（plateau/策略）、S2（调度外置）、S3（timing）、S4（诚实拒绝）、S5（harness）。
 
 ---
 
-## 2. 需求
+## 2. 需求 FR / NFR / 约束
 
-### 2.1 FR（★ = 本 rv 新增或大改）
+### 2.1 FR（★ = 相对现状新增）
 
-| ID | 功能 | 现状 | rv1.0 |
+| ID | 功能 | 现状 | rv2.0 |
 |---|---|---|---|
-| FR-RT-01 | ★ plateau 检测：违例序列窗口连平且 >0 → 策略升级 | 无；仅 0 违例早停 | ★ |
-| FR-RT-02 | ★ 可配 DR 调度表（box/offset/代价倍率）；默认表≡今日九组 | 字面量 size=12 | ★ |
-| FR-RT-03 | ★ 策略耗尽仍违例 → `route_incomplete` + 非假 clean（G5） | 静默跑完 | ★ |
-| FR-RT-04 | ★ 时序：Phase1 关键网排序；Phase2 slack-aware 代价（依赖 G7） | 死 `updateTiming` | ★ |
-| FR-RT-05 | ★ 违例终态 JSON（层×类型×bbox），禁中间态 | VR 有能力；默认 notification 关 | ★ |
-| FR-RT-06 | ★ `routeECO(net_names)` 局部拆线重布 | 无 | ★ Phase C |
-| FR-RT-07 | 保持 ER/PA/SA/TG/LA/SR/TA/DR/VR 管线 | ✓ | 保留；文档纠偏 |
-| FR-RT-08 | ★ 未知关键 config 键响亮失败（G14） | WARN+默认 | ★ |
-| FR-RT-09 | ★ vs NanoRoute/ICC2 苹果对苹果 harness | 无 | ★ G17/G21 |
-| FR-RT-10 | NDR / SI spacing 膨胀 | 未见 | Phase C |
-| FR-RT-11 | ★ IterParam / effort 包多轮渐进 | 固定九幕 | ★ |
-| FR-RT-12 | ★ Exhibit：`iter_dr_series` + `violation_summary` + 失败码 | 半通 | ★ |
+| FR-RT-01 | GR/TA/DR 八段管线（PA→SA→TG→LA→SR→TA→DR→VR） | ✓ | 保留；文档纠偏 TG/SR |
+| FR-RT-02 | ★ **plateau 检测**（违例序列窗口连平且 >0） | 无；仅 clean 早停 | ★ 缺省关；`enable_plateau=0` 零回归 |
+| FR-RT-03 | ★ **策略升级**（box×2 / 代价重加权 / 热点撕布） | 固定九幕 | ★ 缺省关；plateau 触发后升级 |
+| FR-RT-04 | ★ **可配 DR 调度表**（box/offset/代价倍率/effort） | 字面量 size=12 | ★ 外置 JSON/内嵌表；默认表≡今日九组 |
+| FR-RT-05 | ★ **DRC 残留诚实拒绝**（`route_incomplete` + 非假 clean） | 静默跑完 | ★ G5；`fail_on_residual_drc` 建议默认 true |
+| FR-RT-06 | ★ **时序驱动 Phase1**（关键网排序） | 死 `updateTiming` + 无 slack 读取 | ★ 缺省关；依赖 G7（iSTA 可信） |
+| FR-RT-07 | ★ **时序驱动 Phase2**（slack-aware 代价） | cost 路径无 slack | ★ 缺省关；单独 PR |
+| FR-RT-08 | ★ **违例终态 JSON**（层×类型×bbox），禁中间态 | VR 有能力；默认 notification 关 | ★ 独立开关；建议 harness 默认开 |
+| FR-RT-09 | ★ **`routeECO(net_names)` 局部拆线重布** | 无 | ★ Phase C |
+| FR-RT-10 | ★ **未知关键 config 键响亮失败**（G14） | WARN+默认 | ★ 严格键表+响亮 |
+| FR-RT-11 | ★ **vs NanoRoute 苹果对苹果 harness** | 无 | ★ G5/G17；`benchmark/qor/irt/` |
+| FR-RT-12 | ★ **Exhibit 机读**：`iter_dr_series` + `violation_summary` + 失败码 | 半通（fort/CSV） | ★ JSON schema |
+| FR-RT-13 | NDR / SI spacing 膨胀 | 未见 | Phase C（P2） |
+| FR-RT-14 | ★ **effort 包**（low/medium/high）多轮渐进 | 固定九幕 | ★ §5.2 |
 
-### 2.2 NFR
+### 2.2 NFR（可测数字）
 
-| ID | 项 | 指标 |
-|---|---|---|
-| NFR-RT-01 | 中密度设计（日常五套子集）DRC | =0（G5）；或诚实拒绝+定位 |
-| NFR-RT-02 | 密设计 | 违例 < 阈值 **或** `route_incomplete`（G5） |
-| NFR-RT-03 | WL / via vs 商业 | δ≤8%（主纲分层；独立转绿） |
-| NFR-RT-04 | post-route WNS（双方 PT） | 进 G17；timing 杠杆真化后 A/B |
-| NFR-RT-05 | route 墙钟 | 日常 ≤1.5× 商业；大设计 ≤3×（G21/G20） |
-| NFR-RT-06 | 关 ★杠杆时 | 与当前二进制行为一致（零回归） |
-| NFR-RT-07 | plateau 日志 | 可机读（轮次/违例/动作） |
+| ID | 项 | 指标 | 对标线 |
+|---|---|---|---|
+| NFR-RT-01 | **G5 中密度设计 DRC** | **=0**；或诚实拒绝+定位 | NanoRoute |
+| NFR-RT-02 | 密设计 | 违例 < 阈值 **或** `route_incomplete` | NanoRoute |
+| NFR-RT-03 | WL / via vs 商业 | δ≤8%（主纲分层；独立转绿） | NanoRoute |
+| NFR-RT-04 | post-route WNS（双方 PT） | 进 G17；timing 杠杆真化后 A/B | NanoRoute |
+| NFR-RT-05 | **route 墙钟** | 日常 ≤1.5× 商业；大设计 ≤3×（G21/G20） | **NanoRoute** |
+| NFR-RT-06 | **零回归** | 关 ★杠杆时与当前二进制行为一致 | 双 |
+| NFR-RT-07 | plateau 日志 | 可机读（轮次/违例/动作） | — |
+| NFR-RT-08 | 峰值内存 | 记录；plateau 策略不恶化超 20% | NanoRoute |
 
-### 2.3 约束（红线）
+### 2.3 红线约束
 
-- **G14 / KH-X-04**：禁止「rc 成功 + 残留 DRC 且无标记」；禁止未知关键键静默默认；禁止把空 `updateTiming` 宣传为 timing-driven。
-- **G5**：中密度 0 DRC；密设计阈值或诚实拒绝。
-- **商业金标**：Innovus NanoRoute / ICC2 route；报告点 `post-route` 对齐（主纲 §1bis）。
-- **新杠杆缺省关**：`enable_plateau=0`、`enable_timing_sort=0`、`slack_cost_weight=0`、`enable_eco=0` → 数值路径≈现状；**仅**「终态违例致命 / 未知键失败」类正确性开关可默认建议开（与假成功修复同逻辑）。
-- **禁止**重写整个 DetailedRouter 内核换收敛（附录 B E-1）。
+- **金标 = Innovus NanoRoute / ICC2 route**（精度：DRC=0 收敛性；性能：plateau 反馈 + 墙钟）；G17 route 行最终以双方 DEF 经 PT + signoff DRC 读数为准。
+- **无 G5 背书，不准关闭 G17 route 打平**。
+- **缺省新杠杆关闭 → 零回归**（plateau/timing/ECO 均显式开关）。
+- 禁止静默吞掉未知关键配置键（G14）。
+- 禁止用 DRC 自报「打平」而无外生 NanoRoute 对照（G15）。
+- **禁止重写整个 DetailedRouter 内核换收敛**（附录 B E-1）——内核成熟，缺口在外环（§1.3）。
+- **禁止把空 `updateTiming` 宣传为 timing-driven**（G14）——开关真化前文档必须诚实标「未实现」。
 
 ---
 
 ## 3. HLD 总体架构
 
-### 3.1 数据流（据真实 `RTInterface` 重画）
+### 3.1 数据流（据真实 `RTInterface` 重画，双对标线标注）
 
 ```
   iPL/iCTS/iPDN: DEF + nets + fixed shapes     tech LEF/rules
-  iSTA: slack (L6) ★注入排序/代价              iDRC: DRCEngine
+  ★iSTA: slack (Phase1/2) 注入排序/代价        iDRC: DRCEngine
           │                                          │
           └──────────────────┬───────────────────────┘
                              ▼
@@ -265,37 +257,44 @@ NanoRoute signoff 级布线的 DRC=0 收敛性来自一整套互相咬合的机�
         │  initRT(config_map) → DataManager + DRCEngine + GDSPlotter │
         │                                                              │
         │  runERT(config):  EarlyRouter (access/supply/EGR stages)     │
+        │                   （独立粗布线；与 runRT 能力重叠待边界）      │
         │                                                              │
-        │  runRT():                                                    │
-        │    PinAccessor.access                                        │
-        │    SupplyAnalyzer.analyze                                    │
-        │    TopologyGenerator.generate                                │
-        │    LayerAssigner.assign                                      │
-        │    SpaceRouter.route                                         │
-        │    TrackAssigner.assign                                      │
-        │    DetailedRouter.route  ← ★plateau/调度外置/时序排序        │
+        │  runRT():  八段管线                                          │
+        │    PinAccessor.access     ← 重型成熟（5521 LOC）             │
+        │    SupplyAnalyzer.analyze ← GCell supply/demand             │
+        │    TopologyGenerator.generate ← Flute Steiner 树            │
+        │    LayerAssigner.assign   ← GR→DR 桥                         │
+        │    SpaceRouter.route      ← 层空间路由                        │
+        │    TrackAssigner.assign   ← 轨道化                           │
+        │    DetailedRouter.route   ← ★内核成熟（PathFinder+A*）        │
+        │      ├ 内核：routeDRBox (A* + patch + min-area)             │
+        │      └ 外环：routeDRModel ← ★plateau/调度外置/时序排序        │
         │    ViolationReporter.report ← ★终态 JSON / G5 检查           │
         │                                                              │
         │  ★ routeECO (Phase C)                                        │
         │  destroyRT → output DEF                                      │
-        │  Exhibit: CSV/JSON/text (+ plot)                             │
+        │  Exhibit: ★iter_dr_series / violation_summary JSON          │
         └────────────────────────────────────────────────────────────┘
                              │
-                             ▼
-                    iRCX / iSTA / iTO / eval (G17)
+           ┌─────────────────┴─────────────────┐
+           │ NanoRoute 精度线                  │ Innovus 性能线
+           ▼                                   ▼
+    iDRC signoff DRC=0              iRCX / iSTA / iTO / eval (G17)
+    vs NanoRoute harness (G5)       墙钟剖面 (G21)
 ```
 
 ### 3.2 关键设计决策（含被否）
 
-| # | 决策 | 被否方案 | 理由 |
+| ID | 决策 | 被否方案 | 理由 |
 |---|---|---|---|
-| D1 | **plateau 最小切口**挂在 `stopIteration` 旁，不重写 A* | 重写整个 DR | 内核成熟；缺口在外环（KH-RT-02） |
+| **D1** | **plateau 最小切口**挂在 `stopIteration` 旁，不重写 A* | 重写整个 DR 内核 | **内核成熟**；缺口在外环（§1.3 核心判定，KH-RT-02） |
 | D2 | **调度表外置**，默认 JSON/内嵌表 ≡ 今日九组 size=12 | 立刻改默认 box | 零回归（NFR-RT-06） |
-| D3 | 时序 **先关键网稳定排序**，再 slack 代价 | 一步改代价数值 | 数值稳定性；代价依赖 G7 |
+| D3 | 时序 **先关键网排序**，再 slack 代价 | 一步改代价数值 | 数值稳定性；代价依赖 G7 |
 | D4 | 违例产物 **只认 DR/VR 最终态** | 读 TA 中间态 | fork 教训；G5/iDRC 共读 |
 | D5 | ECO / NDR / SI → **Phase C** | 与收敛同 PR | 降低耦合 |
-| D6 | 新杠杆缺省关；G14 响亮失败可默认开 | 混在同一开关 | 正确性≠QoR 实验 |
-| D7 | 商业对照外生度量（双方 PT + 同 DEF 输入） | 只用 iSTA 自评打 G17 | 主纲 §1bis / KH-X-01 |
+| D6 | **新杠杆缺省关**；G14 响亮失败可默认开 | 混在同一开关 | 正确性≠QoR 实验 |
+| D7 | **商业对照外生度量**（双方 PT + 同 DEF 输入） | 只用 iSTA 自评打 G17 | 主纲 §1bis / KH-X-01 |
+| **D8** | **双对标线显式**（NanoRoute 精度 × Innovus 性能） | 单一「打平」目标 | 精度（DRC=0）与性能（墙钟）解耦；§10 双看板 |
 
 ---
 

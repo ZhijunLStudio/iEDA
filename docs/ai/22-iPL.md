@@ -3,15 +3,15 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 22 · iPL 布局 · 商业对标优化方案 · rv1.1
+# 22 · iPL 布局 · 商业对标优化方案 · rv2.0
 
-> 文档号：22-rv1.1　　版本：v3.0（大改，逐文件代码走读后重写）　　里程碑：**宏真化 + DP 回流 + 守卫修复 + 时序/拥塞驱动可验证 + vs Innovus/ICC2 place_opt**
-> 体例：`01-ai-doc-conventions-rv1.md`（对齐 `24-iPL-3d-rv1.0.md` 走读深度）
-> 主纲：`00-ieda-commercial-parity-master-plan-v1.1.md`（G2/G3/G5/G14/G17/G21）
-> Know-how：`03-commercial-knowhow-catalog.md`（KH-PL-* / KH-X-04）
-> 上游：`20-iFP`、`21-iNO`　下游：`23-iCTS`、`26-iRT`　反馈：`27-iSTA`
+> 文档号：22-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— place_opt QoR 精度线（G2/G3/G17：HPWL/overlap/timing）× 性能线（G21：墙钟/内存/调用模式）**
+> 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`（逐 kernel 走读 + 双看板 + 诚实归因 + 被否方案）
+> 商业金标：**Innovus place_opt / ICC2 place_opt**（QoR 与调用模式）；门禁：**G2 / G3 / G14 / G17 / G21**
+> 上游：`20-iFP`（die/rows/宏约束）、`21-iNO`（netlist）、`27-iSTA`（timing）　下游：`23-iCTS`、`26-iRT`、`25-iTO`
+> 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-PL-\*
 > 覆盖：`src/operation/iPL/`（31.3k LOC）：`api/PLAPI.{hh,cc}`、`source/module/{global_placer/electrostatic_placer,legalizer,detail_placer,initial_placer,macro_placer,buffer,evaluator,grid_manager,topology_manager,checker,filler,post_global_placer,wrapper}`、`platform/.../ipl_io.cpp`、`tcl_ipl`
-> 纪律：**文档是假说不是事实**；每条断言带 `file:line` 或实测；没实测写「未验证」；每个理论附能杀死它的对照。
+> 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
 
 ---
 
@@ -21,15 +21,16 @@ iEDA is licensed under Mulan PSL v2.
 |---|---|---|---|
 | v1.0–v1.2 | 2026-07-20 | parity | 骨架：宏空壳、RandomPlace、isSTAStarted=false、LG 不上抛 |
 | rv1.0 / v2.0 | 2026-07-20 | parity | 体例对齐；坐实宏假成功、Random 默认、发散只打日志 |
-| **rv1.1 / v3.0** | **2026-07-21** | parity | **大改**：对 `PLAPI.cc`（1087）全文、`NesterovPlace.cc`（2055）关键段、`runFlow` 全链、`ipl_io.cpp`、`tcl_ipl` 重读后重写。核心修订五条，**两条推翻 v2.0 判定**：**(1)** v2.0 说"默认 flow 某分支 `// runDP()`"——**实情严重得多**：`PLAPI::runFlow()`（`PLAPI.cc:387-458`）全链为 `runGP → (buffer/spread 可选) → runLG → if(isSTAStarted()) runPostGP() else { /*runDP 注释*/ } → writeBack`，而 `isSTAStarted()` 在 `PLAPI.cc:842-846` **硬编码 `return false`**（真实查询 `_external_api->isSTAStarted()` 被注释）——于是 **runPostGP 永不可达、else 分支 runDP 被注释，详细布局在默认 flow 中整体死亡**；生产入口 `run_placer`（`ipl_io.cpp:65` → `runFlow()`）+ sky130_gcd 回归脚本（`run_iPL.tcl:40`）走的就是这条链——**现行回归从 GP→LG 直接写回，从不跑 DP 五算子**；**(2)** v2.0 说"拥塞→density inflat 全无"——**不准**：`NesterovPlace.cc:1360-1390` 存在 `_nes_config.isOptCongestion()` 门控的 **LUT-RUDY 拥塞驱动**（`BinGrid::evalRouteDem → fastGaussianBlur → evalRouteUtil → updateWirelengthForceDirect`），是 opt-in 配置的内置 RUDY 环；注释掉的只是经 `eval::EvalAPI` 的 GR 版（`:1383-1387` TODO）；**(3)** `isSTAStarted` 的死亡点精确定位：`ExternalAPI::isSTAStarted()`（`ExternalAPI.cc:40-43`）是**真查询**（`staInst->isInitSTA()`），死在 `PLAPI` 包装层（`:842-846`）；**(4)** `runFlow` 内 `runLG()` 的 bool 返回值被**丢弃**（`:411`）——LG 失败在默认 flow 里同样静默（v2.0 只记了 TCL 层）；**(5)** `runFlow` 还挂了两段隐蔽流程：config 门控的 `runBufferInsertion`（`:399-403`，iPL 自带 BufferInserter 617 LOC）与 `runNetworkFlowSpread`（`:405-408`），外加一段被注释的二次合法化（`:436-440`）——flow 实际形状由 config 隐式决定，无任何文档。 |
+| rv1.1 / v3.0 | 2026-07-21 | parity | 大改：对 `PLAPI.cc`（1087）全文、`NesterovPlace.cc`（2055）关键段、`runFlow` 全链、`ipl_io.cpp`、`tcl_ipl` 重读后重写。核心修订五条，两条推翻 v2.0 判定：(1) `runFlow` 全链为 `runGP → (buffer/spread 可选) → runLG → if(isSTAStarted()) runPostGP() else { /*runDP 注释*/ } → writeBack`，而 `isSTAStarted()` 在 `PLAPI.cc:842-846` 硬编码 `return false`——**runPostGP 永不可达、else 分支 runDP 被注释，详细布局在默认 flow 中整体死亡**；(2) `NesterovPlace.cc:1360-1390` 存在 `_nes_config.isOptCongestion()` 门控的 **LUT-RUDY 拥塞驱动**（内置 RUDY 环，opt-in）；(3) `isSTAStarted` 死在 `PLAPI` 包装层；(4) `runFlow` 内 `runLG()` 的 bool 返回值被丢弃；(5) `runFlow` 还挂了两段隐蔽流程（buffer/spread）。 |
+| **rv2.0 / v4.0** | **2026-07-21** | parity | **大改（对照 27-iSTA-rv2.0.md 的深度与体例重写，目标显式拆成双对标线）**。核心修订六条：**(1)** rv1.1 把 iPL 当成「一组功能缺口」来审——**代码级核实后发现头号结构症结是调用层面的三处死链（宏假成功 D1、DP 在 runFlow 死亡 D2、守卫恒 false D4）+ 发散静默（D-fail）**，这些不是特性缺失而是**工程死结**——Nesterov 内核（2055 LOC）本身成熟，但被错误的流程包装杀死了；**(2)** 新增**主算法对比审计**（§1.2 核心算法判定表）：commercial place_opt 核心能力 = (a) mixed-size macro+std 协同（力导向+SA+通道）+ (b) 解析初值（QP/B2B）+ (c) timing-driven 净权重注入 + (d) congestion-driven density inflation + (e) 多轮 DP refinement **默认跑**——iPL 差距主要在 (a) 空壳 + (b) 资产不存在 + (c)(d) 守卫死 + (e) 默认不跑，**不是 Nesterov 算法本身弱**（§1.2/§1.5）；**(3)** 全文按**双对标线**重组：place_opt QoR 线 = 宏成功/HPWL/timing/congestion（G2/G3/G17），性能线 = 墙钟/内存/调用模式适合优化循环（G21），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§1.5 与 place_opt 差距逐项（算法/实现/调用三层归因）、§4.13 模块状态一览（成熟度/复杂度/边界/复用姿势）、§5 双档配置表（effort 分级）、§10.3 对照实验框架（E-PL-NN 编号，能杀死假说）、§14 未验证/不要重走/平行实现嫌疑；**(5)** 新增**性能剖面审计**（§1.6）：现状无墙钟/内存打点、无 per-stage breakdown、无增量调用接口——对比 Innovus place_opt 可被 iTO 循环内高频调用（ECO 后局部 re-place），iPL 只有全量批处理模式；**(6)** 明确**算法 vs 工程归因**（§1.7 症结优先级表）：P0 是假成功修复（D1/D2/D4，纯工程，零算法工作量）+ DP 回流（D2，~3.2k LOC 成熟算子从死代码变生产），P1 是宏算法（MP force+SA）+ QP 初值（依赖 11-solver），时序/拥塞驱动（守卫修复后验证收益）——**最高性价比修复在 P0**。**缺省新特性关闭 → 零回归**的纪律不变。 |
 
 ---
 
-## 1. 症结审计（深度，逐 kernel 代码走读）
+## 1. 症结审计（逐 kernel / 逐模块代码走读）
 
-对 `PLAPI.cc` 全文、`runFlow` 全链、`NesterovPlace.cc` 主循环与拥塞段、`Legalizer.cc`、`detail_placer/` 五算子目录、`initial_placer/`、空壳 `macro_placer/`、`evaluator/`（DCT 862 / WAWirelengthGradient 536 / TimingAnnotation 395 / SteinerWirelength 311）、`buffer/BufferInserter`（617）、`ipl_io.cpp`、`tcl_ipl.cpp` 走读后的判定。
+对 `src/operation/iPL/` 全树（api/ 含 `PLAPI.{hh,cc}` 1087+372 LOC、source/module/ 各子模块、platform/data_manager/ipl_io.cpp、tcl_ipl 层）走读后的判定。**前提**：rv2.0 不推翻 rv1.1 的核心发现（假成功、DP 死路径、守卫恒 false），但把审计深度对齐 27-iSTA-rv2.0.md：逐 kernel 给「现状算法 / 判定 / 缺口」三列，并新增 rv1.1 没有的**主算法对比**（§1.2 与 place_opt 核心能力逐项）与**调用模式审计**（§1.6 批处理 vs in-design）。
 
-### 1.1 功能「假成功 / 死路径」——三处死链 + 一条死守卫
+### 1.1 功能「假成功 / 死路径」——三处死链 + 一条死守卫（工程症结）
 
 | # | 死链 | 证据 | 后果 |
 |---|---|---|---|
@@ -49,7 +50,41 @@ if (isSTAStarted()) runPostGP(); else { /* runDP(); // remove DP */ }   // D2/D4
 reportPLInfo(); writeBackSourceDataBase();
 ```
 
-### 1.2 算法「内核不弱，杠杆缺」——逐 kernel 判定
+### 1.2 ★主算法对比——commercial place_opt 核心能力 vs iPL 现状（对标线核心）
+
+**place_opt 的核心算法能力**（Innovus/ICC2，文献 + 行业标准流程）：
+
+| # | 能力 | 算法形态 | 意图 | 是否必需 |
+|---|---|---|---|---|
+| A | **Mixed-size macro+std 协同** | force-directed initial + overlap resolve + SA/MIP polish + channel-aware | 宏与 std cell 同时优化，通道约束 | 有宏设计必需（G3） |
+| B | **解析初值** | Quadratic Placement（QP）/ B2B partition | 比 random 低 15-30% 初始 HPWL（文献量级） | 中大设计强需（G2） |
+| C | **Electrostatic GP** | Nesterov / ePlace 类（预条件梯度 + eDensity + WA + overflow ramp） | 全局展开的工业标准内核 | 必需 |
+| D | **Timing-driven 净权重** | crit path → 增大净权重 → WA 拉近 | post-CTS 时序闭环的主杠杆 | timing 关键路径必需（G17） |
+| E | **Congestion-driven density** | GR/RUDY → bin density inflation | 避免局部拥塞 hotspot | 密集设计强需（G17） |
+| F | **Legalization** | Abacus/Tetris 类（位移最小 DP） | GP→LG 质量守恒 | 必需 |
+| G | **Detail placement 多算子** | cell swap / local reorder / bin optimization / spread | LG→DP 再降 5-15% HPWL（文献），**默认跑** | 商业布局器标配 |
+| H | **多轮渐进 effort 档** | 低 effort 快速铺开 → 高 effort 精化 | 速度/质量平衡 | 生产必需（G21） |
+
+**iPL 现状对照**（逐能力判定）：
+
+| # | iPL 现状 | 算法判定 | 差距归因层 | 证据 |
+|---|---|---|---|---|
+| A | **空壳+假成功** | 无 macro 算法；有宏时 GP 在无宏约束下铺 std | **P0 算法缺** | `macro_placer/` 一行 readme；`PLAPI.cc:517-522` / `ipl_io.cpp:170-181` 全注释恒 true |
+| B | **RandomPlace 生产默认** | 教科书最低档；QP 资产不存在（`src/solver/qudratic_programming` 空目录 TBD） | **P1 资产缺** | `PLAPI.cc:526` `:525` CenterPlace 注释；11-solver §1.1 |
+| C | **Nesterov 成熟（2055 LOC）** | 预条件 Nesterov + eDensity（DCT 862）+ WA（536）+ overflow ramp —— **工业级内核，不弱** | **算法 OK** | `NesterovPlace.cc` 主循环；`evaluator/` DCT/WA 成熟 |
+| D | **守卫殉葬** | `TimingAnnotation` 基建在（395 LOC）；`isSTAStarted()` 恒 false 杀死整条 TDP 路径 | **P0 工程死结** | `PLAPI.cc:842-846` 硬编码；`ExternalAPI.cc:40-43` 真查询被屏蔽 |
+| E | **内置 RUDY opt-in** | `NesterovPlace.cc:1360-1390` **LUT-RUDY 存在**（evalRouteDem → fastGaussianBlur → evalRouteUtil → updateWirelengthForceDirect），`isOptCongestion` 门控 | **实现在，默认化待评估** | `:1360-1390`；GR 版注释 TODO `:1383-1387` |
+| F | **Abacus 成熟（597）** | `ieda_solver::LGMethodCreator` 位移最小 DP | **算法 OK** | `Legalizer.cc:32`；bool 返回被丢（工程） |
+| G | **五算子就绪但默认 flow 死** | NFSpread 1117 / InstanceSwap 853 / BinOpt 460 / RowOpt 341 / LocalReorder ≈3.2k —— **全仓最完整 DP，但 runFlow 不跑** | **P0 工程死结** | `detail_placer/` 各目录；`PLAPI.cc:421-425` 守卫+注释杀死；独立命令 `run_detail_placer` 可达（`ipl_io.cpp:226`） |
+| H | **单趟 / 无 effort 分级** | 配置项散落；无 IterParam 包；无快/精档切换 | **P1 工程** | 无 `PlacerIterParam` 类；§5 待建 |
+
+**§1.2 结论（诚实归因）**：
+- **算法层不是主要差距**：Nesterov GP（C）与 Legalizer（F）是成熟的工业内核，**不弱于 place_opt 同类算法**；DP 五算子（G）已就绪且体量完整（~3.2k LOC）。
+- **P0 差距在工程死结**：宏假成功（A 接线缺）、DP 默认不跑（G 被"守卫+注释"杀死）、timing 守卫恒 false（D）——**三处死链不是算法问题，是流程包装错误**。
+- **P1 差距在算法资产缺**：QP 初值（B 资产不存在，需先建）、宏算法（A 空壳，需力导向+SA）。
+- **主杠杆不同于主纲 G2 印象**：G2「对齐 Innovus GP 质量」的瓶颈**不是 Nesterov 不够好**，而是 (1) 宏处理为零（A）、(2) 初值用 random（B）、(3) DP 不跑（G）三者联合导致 HPWL 偏高——**修 P0 工程死结（零算法工作量）可能比重写 GP 更快见效**（假说 H1，E-PL-01 可杀）。
+
+### 1.3 算法「内核不弱，杠杆缺」——逐 kernel 判定（细化 §1.2）
 
 | kernel | LOC | 现状算法 | 判定 |
 |---|---|---|---|

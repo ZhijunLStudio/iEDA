@@ -82,7 +82,7 @@ CTSAPI::runCTS → Flow::runCTS
 **假说 H-CTS-2（可杀）**：HiGHS analytical 系统性优于离散。杀死实验 E-CTS-02：同设计 A/B off/on，p50/p90 skew/latency 无显著改善或墙钟爆炸 → 杀，维持离散默认。
 **假说 H-CTS-3（rv2.0 新增，可杀）**：iCTS 的 FastSTA 与外生 iSTA 读数系统性偏差 >10%。杀死实验 E-CTS-03：同 CTS 产物用 FastSTA vs 外生 iSTA 算 skew/latency，若一致（Δ<5%）→ 杀 H-CTS-3，sizing 策略本身不是瓶颈。
 
-### 1.3 边界 / 回退 / 假成功——**本版核心：成败公式的三重排除**
+### 1.3 边界 / 回退 / 假成功——**本版核心：成败公式的三重排除**（rv1.1 保留）
 
 `Flow::runCTS` 的成败判定（`Flow.cc:130`）：
 
@@ -97,42 +97,69 @@ const bool run_success = _run_summary.outcome == SynthesisOutcome::kFinished
 4. **四阶段 `(void)` 强转**（`Flow.cc:125-128`）：阶段的 `EvaluationBuild`/summary 返回值显式丢弃，状态靠成员变量隐式传递——这是上述三排除的代码形态根源。
 5. 仅有的失败通道：setup（`Flow.cc:100-111` → kSetupNotReady）与 readClockData（`:113-124` → kReadDataFailed）——**数据进得来、树搭得出，后面全是软语义**。
 
-### 1.4 跨工具协调
+### 1.4 ★in-design 调用审计——现状 = 单次批处理，不是高频增量（Innovus 线核心证据）
+
+**Innovus ccopt in-design 模式**：
+- **常驻内存**：CTS 后时钟树结构保持，后续 ECO（iTO buffer 插入、iPL 微调）只需**局部更新** skew/latency
+- **增量接口**：`update_clock_tree -eco` 仅重算受影响分支，非全树重 synthesis
+- **高频调用**：post-CTS 的 iTO fix_drv / fix_hold 每轮迭代都调 STA，若 CTS 数据被破坏则立即修复时钟网，而非重跑完整 CTS
+
+**iCTS 现状调用形态**（据下游代码审计）：
+
+| 下游工具 | 调用点 | 形态 | 判定 |
+|---|---|---|---|
+| 日常流程 | `run_iCTS.tcl` → `run_cts` 命令 | **单次全量**：setup → synthesis → optimization → instantiation → 写 DEF 退出 | **批处理** |
+| iTO post-CTS | **无运行时调用**（iTO 在 CTS 后从 iDB 读时钟网） | ECO 后无"update_clock_tree"语义 | **静态产物** |
+| iRT post-CTS | **无运行时调用**（iRT 从 DEF 读） | 同上 | **静态产物** |
+| iPL post-CTS | **无运行时调用**（布局从 iDB 读坐标） | cell 微移后无时钟树更新 | **静态产物** |
+
+**与 Innovus 的差距**（Innovus 线，影响 G21 墙钟占比）：
+- iCTS 是"run once, write DEF, exit"批处理——post-CTS 工具把时钟网当普通网处理，CTS 本身不再参与闭环。
+- ccopt in-design 模式下，时钟结构在内存常驻，ECO 可触发局部更新（如单 buffer resize 只重算该分支 RC）。
+- **影响**：若 post-CTS 的 iPL/iTO 破坏了时钟 buffer 位置/连接，现状**无闭环修复**——要么忍受劣化，要么手动重跑完整 `run_cts`（成本高，实际不做）。
+
+**假说 H-CTS-4（rv2.0 新增，可杀）**：post-CTS 的 iPL/iTO 不会显著破坏时钟质量（skew/latency 变化 <5%）。
+**杀死实验 E-CTS-04**：CTS 后 → iTO fix_drv → 重测 skew/latency（外生 STA），若劣化 >5% → 杀 H-CTS-4，需要增量 update 接口（FR-CTS-14）。
+
+### 1.5 跨工具协调（保留 rv1.1）
 
 | 方向 | 现状 | 判定 |
 |---|---|---|
 | SDC → iCTS | `SdcClockReader` + `ClockTraceResolve` | **通** |
 | iCTS → iDB | IdbConversion/WrapperClockWriter | **通**；无 post-LG |
 | iCTS → iPL | **无** `runIncrLG`（grep 零命中） | **断（P0）** |
-| iCTS → iSTA | 内部 FastSTA adapter（9 子目录） | 估计轨；G19 须外生 |
-| iCTS → iPA | FastSTA power 子目录在；→iPA 链**未验证** | G4「时钟进功耗报告」待实锤 |
+| iCTS → iSTA | 内部 FastSTA adapter（304 LOC） | 估计轨；G19 须外生 |
+| iCTS → iPA | FastSTA power 在；→iPA 链**未验证** | G4「时钟进功耗报告」待实锤 |
 | iCTS → iRT | 不调 iRT；Steiner/RC 内估 | NDR 属 KH-CTS-04 Phase C |
 | iCTS ↔ ccopt | 无 `benchmark/qor/cts/` | **G19 前置缺** |
+| **post-CTS → iCTS** | **无增量更新接口** | **Innovus 线缺口** |
 
-### 1.5 「legalize」名存实亡（rv1.0 结论保留，证据维持）
+### 1.6 「legalize」名存实亡（rv1.1 结论保留，证据维持）
 
 `LocalLegalization` 服务 FLUTE 端子/聚类 root（`Router.cc:152-184`、`ClusterConstraintEvaluator.cc:80-93`）；`Router::legalizePins`（`Router.cc:305-321`）生产零调用仅测试引用；**Instantiation 后无 cell 级 LG/DRC/site 校验**。措辞纪律：缺的是 **iPL incr LG**，不是"没有 legalize"。
 
-### 1.6 症结优先级表
+### 1.7 症结优先级表（§1 结论摘要）
 
-| ID | 症结 | 证据 | P |
-|---|---|---|---|
-| **C1** | buffer 写回后无 iPL incr LG | `source/` 内 `runIncrLG` 零命中；KH-CTS-05 | **P0** |
-| **C2** | optimization/skew 不进 `runCTS` 成败 | `Flow.cc:125-130`（void 强转+成败公式）；`Optimization.cc:225,241,273,319-321` | **P0（G4）** |
-| **C3** | 无 vs ccopt harness | 无 `benchmark/qor/cts/` | **P0** |
-| C4 | HiGHS 缺省关；易误读为默认 | `Config.hh:75,182`；`Solution.cc:35-41` | P1 |
-| C5 | 时钟功耗→iPA 链未验证 | fast_sta/power 在；外链未验 | P1（G4） |
-| C6 | 无 useful skew | 零命中；KH-CTS-02 | P2（G7 后） |
-| C7 | BST 无专项 gtest | test/（21.2k）无 BoundSkew 专用 | P2 |
-| C8 | no_op reason 字符串惯例 | `Optimization.cc:294` 覆写逻辑 | P1（可观测性） |
+| ID | 症结 | 证据 | 对标线 | P |
+|---|---|---|---|---|
+| **C1** | buffer 写回后无 iPL incr LG | `source/` 内 `runIncrLG` 零命中；KH-CTS-05 | ccopt | **P0** |
+| **C2** | optimization/skew 不进 `runCTS` 成败 | `Flow.cc:125-130`（void 强转+成败公式）；`Optimization.cc:225,241,273,319-321` | ccopt | **P0（G4）** |
+| **C3** | 无 vs ccopt harness | 无 `benchmark/qor/cts/` | ccopt | **P0** |
+| **C4** | ★ 无增量 update 接口（post-CTS ECO 静态产物） | §1.4 下游调用审计 | Innovus | **P0（G21）** |
+| **C5** | ★ 单目标优化（skew only，无 latency/power 联合） | Optimization 只看 skew；无 `-power_priority` 等 | ccopt | **P1（G19）** |
+| C6 | HiGHS 缺省关；易误读为默认 | `Config.hh:75,182`；`Solution.cc:38-41` | ccopt | P1 |
+| C7 | 时钟功耗→iPA 链未验证 | fast_sta/power 在；外链未验 | ccopt | P1（G4）** |
+| C8 | 无 useful skew | 零命中；KH-CTS-02 | ccopt | P2（G7 后）** |
+| C9 | BST 无专项 gtest | test/（21.2k）无 BoundSkew 专用 | — | P2 |
+| C10 | no_op reason 字符串惯例 | `Optimization.cc:294` 覆写逻辑 | — | P1（可观测性）** |
 
 ---
 
 ## 2. 需求 FR / NFR / 约束
 
-### 2.1 FR（★ = 相对现状新增）
+### 2.1 FR（★ = 相对 rv1.1 新增）
 
-| ID | 功能 | 现状 | rv1.1 |
+| ID | 功能 | 现状 | rv2.0 |
 |---|---|---|---|
 | FR-CTS-01 | SDC multi-clock trace + 歧义报告 | ✓ | 保留；ambiguous 响亮策略进 G14 |
 | FR-CTS-02 | H-tree 离散合成 + embedding/writeback | ✓ | 保留主路径 |
@@ -147,26 +174,31 @@ const bool run_success = _run_summary.outcome == SynthesisOutcome::kFinished
 | FR-CTS-11 | ★ 多域门禁汇总 + JSON exhibit | 部分 | ★ 对齐 12-eval |
 | FR-CTS-12 | ★ NDR/shield 契约（与 iRT） | ✗ | ★ Phase C |
 | FR-CTS-13 | ★ no_op reason 类型化（enum 替字符串惯例） | 字符串覆写 | ★ P1 可观测性 |
+| **FR-CTS-14** | ★ **增量 update 接口**（post-CTS ECO 可触发局部修复） | ✗ | ★ `update_clock_tree` 命令；缺省 off（Innovus 线） |
+| **FR-CTS-15** | ★ **多目标优化**（skew + latency + power 三目标） | 单 skew | ★ 权重可配；缺省单目标=现状（ccopt 线） |
 
 ### 2.2 NFR（可测数字）
 
-| ID | 项 | 指标 |
-|---|---|---|
-| NFR-CTS-01 | G4 skew | 每 SDC clock：optimized_skew ≤ skew_bound + ε（1–5 ps 协议化） |
-| NFR-CTS-02 | G4 legality | CTS 后 overlap=0；site 对齐；runIncrLG rc=0 |
-| NFR-CTS-03 | G19 | vs ccopt skew/latency/时钟功耗 相对差 ≤5% |
-| NFR-CTS-04 | 零回归 | 两开关 false → 与当前二进制行为一致（浮点 ε 内） |
-| NFR-CTS-05 | HiGHS 可选档 | 开启不劣于离散，或响亮回退 |
-| NFR-CTS-06 | 墙钟 | 日常设计 CTS ≤1.5× ccopt（G21 分项） |
-| NFR-CTS-07 | optimization 失败 | `solver_failed`/`fast_sta_context_failed` → runCTS 非成功 rc（开关 on 时） |
+| ID | 项 | 指标 | 对标线 |
+|---|---|---|---|
+| NFR-CTS-01 | G4 skew | 每 SDC clock：optimized_skew ≤ skew_bound + ε（1–5 ps 协议化） | ccopt |
+| NFR-CTS-02 | G4 legality | CTS 后 overlap=0；site 对齐；runIncrLG rc=0 | ccopt |
+| NFR-CTS-03 | **G19 精度** | vs ccopt **skew/latency/时钟功耗** 相对差 **≤5%**（三指标） | ccopt |
+| NFR-CTS-04 | 零回归 | 两开关 false → 与当前二进制行为一致（浮点 ε 内） | — |
+| NFR-CTS-05 | HiGHS 可选档 | 开启不劣于离散，或响亮回退 | ccopt |
+| **NFR-CTS-06** | ★ **墙钟（Innovus 线）** | 日常设计 CTS ≤1.5× ccopt；**post-CTS 工具（iTO/iRT）墙钟中 CTS 更新占比 ≤20%** | Innovus / G21 |
+| NFR-CTS-07 | optimization 失败 | `solver_failed`/`fast_sta_context_failed` → runCTS 非成功 rc（开关 on 时） | — |
+| **NFR-CTS-08** | ★ 增量更新响应 | `update_clock_tree` 单 buffer ECO ≤ 全量 10% 墙钟 | Innovus |
 
 ### 2.3 红线
 
 - **金标 = ccopt/clock_opt**（同设计冻结一条）；G19 外生读数，禁内部 FastSTA 自报打平（G15）。
+- **双对标线独立验收**：ccopt 精度线（G19 三指标）≠ Innovus 性能线（G21 墙钟占比）——前者可先达标。
 - **无 G4 背书不宣称 G19/G17 CTS 行转绿**。
 - **useful skew 无 G7 不开生产默认**（KH-CTS-02）。
 - **禁止平行重写 62.5k 行骨架**；只补闭环与目标函数。
 - buffer 后**禁止**未 legalize 进 route（对接 40-platform 硬约束）。
+- ★ **post-CTS 工具破坏时钟质量 >5% 必报告**（E-CTS-04 量化门槛）。
 
 ---
 

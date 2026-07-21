@@ -26,64 +26,65 @@ iEDA is licensed under Mulan PSL v2.
 
 ---
 
-## 1. 症结审计（深度，逐 kernel 代码走读）
+## 1. 症结审计（逐 kernel / 逐模块代码走读）
 
-对 `src/operation/iTO` 生产路径走读后的判定。**重要前提**：v1.2 摘要表方向正确，但未展开到「主循环关缓冲 / AutoRun 序颠倒 / 本地 Placer ≠ incr LG」的操作化深度；本节全部据当前主干代码重判。
+对 `src/operation/iTO/` 全树（fix_setup/ 3.2k LOC + fix_hold/ 1.1k + fix_drv/ 1.8k + timing_engine/ 2.4k + module/placer/ 0.6k + solver/buffer/vg/ 2.1k + tcl_ito/ 0.5k，全树约 15k LOC 含头文件）走读后的判定。**前提**：rv2.0 不推翻 rv1.0 的三条坐实症结（T1 无路径否决 / T2 VG 主路径关 / T3 无 incr LG），但把审计深度对齐 27 号文档：逐 kernel 给「现状算法 / 判定 / 缺口」三列，并新增 rv1.0 没有的两个结构级审计（§1.6 商业工具核心算法对照、§1.7 调用效率审计）。
 
-### 1.1 功能形态——真 apply，但提交语义是「局部贪心 + 无事务」
+### 1.1 功能形态——真 apply，但提交语义是「局部贪心 + 无事务 + 无合法化闭环」
 
-- **正面（必须保留）**：resize / buffer **真改 iDB + STA**，不是 fork 只 plan。
-  - gate sizing：`repowerInstance` → `invalidNetRC`（`SetupOptimizer_gate_sizing.cpp:81-85`）。
-  - VG buffer：`createInstance` + `attach` + `insertBuffer` + `placeInstance`（`SetupOptimizer_buffers.cpp:88-107`）。
-  - hold / DRV 同款 `createInstance` 真插入（`HoldOptimizer_buffers.cpp:95` 一带；`ViolationOptimizer_buffers.cpp:97`）。
-- **头号症结 T1 · 无路径 re-time 否决**：`heuristicGateSizing` 在等价单元上扫一遍，**唯一接受条件**是局部延迟：
+主流程（`ToApi::autoRunTO`，`iTO.cpp:37-97`，实测存在）：
 
-```74:76:iEDA/src/operation/iTO/source/module/fix_setup/SetupOptimizer_gate_sizing.cpp
-    if (eq_cell_delay < 0.5 * delay) {
-      find_repower_size = equiv_lib_cell;
-    }
+```text
+init → readConfig → timingEngine(sta/rcx/idb) → Reporter
+  → optimize_drv (ViolationOptimizer)      ← 位置 1（G16 主路径）
+  → optimize_hold (HoldOptimizer)          ← 位置 2（错位：应在 setup 后）
+  → optimize_setup (SetupOptimizer)        ← 位置 3
+  → [no 复扫 setup]                        ← 缺：hold 修完应重检 setup
+  → updateTiming / report
 ```
 
-  选中后直接 `repowerInstance`（`:81`），**不**记录旧 master、**不**算路径 Δslack、**不** rollback。循环会覆盖到最后一个满足阈值的 cell（更大驱动优先排序在 `:50-54`），仍是局部启发式。注释掉的 `prev_delay`（`:69-70`）说明前级负载项曾考虑又关掉——**加剧**「换大门拖垮前级」风险（KH-TO-05）。
-- **症结 T2 · buffer 真 apply，但无路径否决、无事务**：`implementVGSolution` 递归改拓扑（`:81-151`），选解只比 `BufferedOption` 上的 required arrival（`:61-68`），**commit 后无**「路径级 WNS/TNS 变差则回滚」。
-- **症结 T2b · setup 主循环把 VG 缓冲关掉**：
+| 能力 | 现状 | 证据 | 判定 |
+|---|---|---|---|
+| Gate sizing 真 apply | ✓ | `repowerInstance`（`SetupOptimizer_gate_sizing.cpp:81`）+ `invalidNetRC`（`:85`） | **真改 iDB + STA**，非 fork |
+| ★ Resize 接受判据 | ⚠️ 局部贪心 | `eq_cell_delay < 0.5 * delay`（`:74`）**唯一**门槛；选中直接 apply（`:81`） | **教科书阈值、无路径否决**（T1） |
+| VG buffering 真 apply | ✓ 代码在 | `createInstance + attach + insertBuffer + placeInstance`（`SetupOptimizer_buffers.cpp:88-107`） | **算法正确、真 apply** |
+| ★ VG 主路径可达性 | ⚠️ 关闭 | setup 主循环 `optimizeSetupViolation(node, true, false)`（`process.cpp:60`）→ `perform_buf=false` | **VG 写好却半接线**（T2b） |
+| ★ Buffer 接受判据 | ⚠️ 局部 | `implementVGSolution` 选解只比 `BufferedOption` required arrival（`buffers.cpp:61-68`） | **无路径级增益否决**（T2） |
+| Hold fix | ✓ | `HoldOptimizer::process` 循环插 delay buffer（`HoldOptimizer_process.cpp:33-151`） | **真修 hold** |
+| DRV fix | ✓ | `ViolationOptimizer::fixViolations` slew/cap buffer + repower（`ViolationOptimizer.cpp:26-170`） | **真修 DRV** |
+| ★ 单步事务/回滚 | ✗ | 全树无 `MoveTxn`；resize/buffer 直接 apply，**不**记录旧 master、**不**算 Δslack、**不** rollback | **无路径收益模型**（KH-TO-01 主缺口） |
+| ★ Pass 末 incr LG | ✗ | `iTO/` 全树 `grep runIncrLG` **零命中** | **G16 增量闭环缺口**（T3） |
+| 本地 Placer | ⚠️ 弱 | `ito::Placer::findNearestSpace`（`module/placer/Placer.cpp:75-135`，最多扫 40 行空隙） | **自建行搜索 ≠ Abacus**；与 iPL 平行且更弱 |
+| ★ AutoRun 序 | ⚠️ 错位 | drv（`:37`）→ hold（`:45`）→ setup（`:59`）（`iTO.cpp`） | **hold 在 setup 前**，商业惯例是 drv→setup→hold→复扫 |
+| 复扫 setup | ✗ | hold 后无 `optimize_setup` 二次调用 | **缺**：hold buffer 可能恶化 setup |
+| VT-swap | ✗ | 全树无 VT/threshold 分组逻辑；仓库 Liberty 无 `threshold_voltage_group` 解析 | **KH-TO-02 廉价手柄缺失** |
+| SI-aware opt | ✗ | 无耦合 Δdelay 进优化目标 | 阻塞于 27/28 |
+| useful skew 消费 | ✗ | 无 CTS skew budget 接口 | **正确**：不在 iTO 实现 skew（属 CTS；§2.3 红线） |
 
-```59:60:iEDA/src/operation/iTO/source/module/fix_setup/SetupOptimizer_process.cpp
-    while (worst_slack < toConfig->get_setup_target_slack()) {
-      optimizeSetupViolation(node, true, false);
-```
-
-  `perform_gs=true, perform_buf=false` → 主路径只跑 gate sizing + `performSplitBufferingIfNecessary`（`:199`）；`performVGBuffering` 仅在 `perform_buf` 为真或独立 `performBuffering(net)` TCL 时可达。**写好却半接线**——对照 24-iPL-3d「死 kernel」同类。
-- **症结 T3 · buffer 后无 incr LG**：全树 `grep runIncrLG` 在 `iTO/` **零命中**。放置走：
-
-```39:51:iEDA/src/operation/iTO/source/timing_engine/timing_engine_inst.cpp
-void ToTimingEngine::placeInstance(int x, int y, ista::Instance* place_inst)
-{
-  ...
-  std::pair<int, int> loc = toPlacer->findNearestSpace(master_width, x, y);
-  ...
-  idb_adapter->placeInstance(...);
-  toPlacer->updateRow(master_width, loc.first, loc.second);
-}
-```
-
-  `ito::Placer`（`module/placer/Placer.cpp:75-135`）是**自建行空隙搜索**（最多扫 40 行），**不是** `PLAPI::runIncrLG`（`PLAPI.cc:540+`）。合法化与 iPL Abacus **平行且更弱**——G16 增量闭环缺口。
-
-### 1.2 算法成熟度——教科书贪心 / 经典 VG，缺工业杠杆
+### 1.2 算法成熟度——逐 kernel 走读（教科书算法在、工业杠杆缺）
 
 | kernel | 现状算法 | 判定 | 缺口 |
 |---|---|---|---|
-| `heuristicGateSizing` | 等价 cell 按 driveResistance 降序；`eq_cell_delay < 0.5*delay` 取末个满足者 | **教科书贪心**；魔法 `0.5` | 路径否决；ε 可配；前级 cap 项复活 |
-| `VGBuffer` + `implementVGSolution` | van Ginneken 式 option 合并 + 真拓扑实现 | **算法正确、真 apply** | setup 主路径关闭；无否决；无 LG |
-| `insertBufferDivideFanout` | 按 fanout slack 半切扇出插 buf | 启发式可用 | 同无否决/LG |
-| `HoldOptimizer::process` | 违例 endpoint 循环插 delay buffer 至 target slack | **真修 hold** | 与 setup 无协同序；可恶化 setup |
-| `ViolationOptimizer` | slew/cap DRV：buffer + 局部 repower；可多轮 `drv_optimize_iter_number` | **真修 DRV** | 无与 setup 的固定编排契约 |
-| `EstimateParasitics` | dirty net `invalidNetRC` + incr paras/timing | 增量形态在 | 否决环需扩锥 |
-| `ito::Placer` | 行空隙 nearest | **弱合法化** | 应 Composition `iPL::runIncrLG` |
-| VT-swap | — | **全无**（仓库无 VT/threshold 分组逻辑） | KH-TO-02 |
-| useful skew / clock retime | — | **全无**（属 CTS/商业 opt；iTO 不碰时钟树） | 见 §1.5 / KH-CTS-02 |
+| `heuristicGateSizing`（`gate_sizing.cpp:46-99`，156 LOC） | 等价 cell 按 `driveResistance` 降序（`:50-54`）；扫一遍，`eq_cell_delay < 0.5*delay` 取末个满足者（`:74`） | **教科书贪心**；魔法 `0.5` | ① 局部延迟非全局收益；② `prev_delay` 注释（`:69-70`）= 前级负载项失活 |
+| `repowerInstance`（`gate_sizing.cpp:81-85`） | `idb_adapter->repowerInstance` + `invalidNetRC(net)` | 真改 iDB；RC dirty 正确 | **无旧 master 记录、无 Δslack、无 rollback** |
+| `VGBuffer::buildBufferedTree`（`solver/buffer/vg/VGBuffer.cc:180-354`，1025 LOC） | van Ginneken option 合并（下游 cap + buf delay → 新 option）；queue 按 cap 排序；同 signature 保 n-best | **经典 VG 算法、正确** | 选解后无路径否决；n-best 截断可能丢全局最优 |
+| `implementVGSolution`（`SetupOptimizer_buffers.cpp:81-151`） | 递归建缓冲树；`createInstance` + `attach` + `insertBuffer` + `placeInstance` | **真拓扑实现** | ① commit 后无「WNS/TNS 变差则回滚」；② setup 主循环关闭 VG（T2b） |
+| `BufferedOption` 选解（`buffers.cpp:61-68`） | `bestOption(options, req)` 只比 `required_arrival`；取最晚可达者 | 局部可行解 | **非全局收益**；未量路径 Δslack |
+| `insertBufferDivideFanout`（`buffers.cpp:165-207`） | 按 fanout slack 排序；前半/后半插 buf 半切扇出 | 启发式可用 | 同无否决 |
+| `HoldOptimizer::optimizeHoldViolation`（`HoldOptimizer_process.cpp:39-149`，300 LOC） | 违例 endpoint 循环；按 slack 升序；插 delay buffer（`insertHoldBuffer`）至 target 或达 iter 上限 | **真修 hold** | ① 无与 setup 协同序（现 hold→setup 颠倒）；② 可恶化 setup WNS（无监控） |
+| `ViolationOptimizer::fixViolations`（`ViolationOptimizer.cpp:26-170`，384 LOC） | slew/cap 违例扫描；buffer（`insertBuffer`）+ repower（`repowerInst`）；可多轮 `drv_optimize_iter_number` | **真修 DRV** | 无与 setup 固定编排契约（现位置 1，setup 位置 3） |
+| `EstimateParasitics`（`timing_engine/timing_engine_paras.cpp:30-70`） | dirty net `invalidNetRC` → `rcx_run.updateRCTimingIncrementally` | 增量形态在 | 否决环需扩锥（插 buf 劈网 → 扇出锥全 dirty） |
+| `ito::Placer::findNearestSpace`（`module/placer/Placer.cpp:75-135`，228 LOC） | 从 (x, y) 上下扫最多 40 行；找首个宽≥width 空隙；`updateRow` 占位 | **弱合法化**（行内空隙搜索） | ① 非全局最小位移；② 无密度软化；③ 与 iPL Abacus 平行且更弱 |
+| `ToTimingEngine::placeInstance`（`timing_engine_inst.cpp:39-51`） | `toPlacer->findNearestSpace` → `idb_adapter->placeInstance` | 调度 ito::Placer | **应 Composition `iPL::runIncrLG`**（T3） |
+| `SetupOptimizer::process`（`SetupOptimizer_process.cpp:42-219`，426 LOC） | while `worst_slack < target`：选 worst endpoint → `optimizeSetupViolation` → `checkSlackDecrease`（变差守卫） | 外循环可用 | ① 无单步事务；② 守卫是整 endpoint 循环级，非 move 级 |
+| `checkSlackDecrease`（`process.cpp:97-118`） | slack 变差 >2% 或连续变差 >`_number_iter_allowed_decreasing_slack`（默认 50）→ break | **有止损** | **非单步回滚**；已恶化的 move 不撤 |
+| 路径收益模型 | — | **全无** | **头号算法缺口**（KH-TO-01）：apply→算 Δslack→判据→commit/rollback |
 
-**四项缺失的工业杠杆**（对标 ICC2 `route_opt` / Innovus postroute opt）：① **路径收益否决（re-time veto）**；② **pass 末 incr legalize**；③ **DRV→setup→hold→setup 复扫固定序**；④ **VT-swap（廉价手柄）**。SI-aware 阻塞于 27/28。
+**假说 H1（可杀）**：G17 失败主因是贪心阈值（`0.5`），而非 VG 算法或 STA 精度。
+**杀死实验 E-TO-01**：固定阈值，加路径否决环（apply→算 Δslack→判据→rollback）；若 WNS 仍不优于无否决基线 → 杀 H1，改查 VG 选解或 STA 口径（27 G7）。
+
+**假说 H2（rv2.0 新增，可杀）**：hold 在 setup 前的序会系统性恶化 setup。
+**杀死实验 E-TO-02**：同设计跑两序（legacy: drv→hold→setup vs kh: drv→setup→hold→复扫）；若 kh 序的终局 setup WNS **不优于** legacy → 杀 H2，序非主因。
 
 ### 1.3 边界 / 回退——有「变差停」，无「单步回滚」
 
