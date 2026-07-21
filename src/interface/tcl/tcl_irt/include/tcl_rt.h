@@ -1,0 +1,129 @@
+// ***************************************************************************************
+// Copyright (c) 2023-2025 Peng Cheng Laboratory
+// Copyright (c) 2023-2025 Institute of Computing Technology, Chinese Academy of Sciences
+// Copyright (c) 2023-2025 Beijing Institute of Open Source Chip
+//
+// iEDA is licensed under Mulan PSL v2.
+// You can use this software according to the terms and conditions of the Mulan PSL v2.
+// You may obtain a copy of Mulan PSL v2 at:
+// http://license.coscl.org.cn/MulanPSL2
+//
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+//
+// See the Mulan PSL v2 for more details.
+// ***************************************************************************************
+#pragma once
+
+#include "tcl_util.h"
+
+namespace tcl {
+
+#if 1  // rt
+
+class TclInitRT : public TclCmd
+{
+ public:
+  explicit TclInitRT(const char* cmd_name);
+  ~TclInitRT() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
+
+ private:
+  std::vector<std::pair<std::string, ValueType>> _config_list;
+};
+
+class TclRunERT : public TclCmd
+{
+ public:
+  explicit TclRunERT(const char* cmd_name);
+  ~TclRunERT() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
+
+ private:
+  std::vector<std::pair<std::string, ValueType>> _config_list;
+};
+
+class TclRunRT : public TclCmd
+{
+ public:
+  explicit TclRunRT(const char* cmd_name);
+  ~TclRunRT() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
+
+ private:
+  std::vector<std::pair<std::string, ValueType>> _config_list;
+};
+
+class TclDestroyRT : public TclCmd
+{
+ public:
+  explicit TclDestroyRT(const char* cmd_name);
+  ~TclDestroyRT() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
+
+ private:
+  std::vector<std::pair<std::string, ValueType>> _config_list;
+};
+
+#endif
+
+#if 1  // aux
+
+class TclRTCleanDef : public TclCmd
+{
+ public:
+  explicit TclRTCleanDef(const char* cmd_name);
+  ~TclRTCleanDef() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
+
+ private:
+  std::vector<std::pair<std::string, ValueType>> _config_list;
+};
+
+class TclRTFixFanout : public TclCmd
+{
+ public:
+  explicit TclRTFixFanout(const char* cmd_name);
+  ~TclRTFixFanout() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
+
+ private:
+  std::vector<std::pair<std::string, ValueType>> _config_list;
+};
+
+class TclRTGetCongestion : public TclCmd
+{
+ public:
+  explicit TclRTGetCongestion(const char* cmd_name);
+  ~TclRTGetCongestion() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
+
+ private:
+  std::vector<std::pair<std::string, ValueType>> _config_list;
+};
+
+#endif
+
+}  // namespace tcl

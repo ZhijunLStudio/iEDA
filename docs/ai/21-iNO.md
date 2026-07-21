@@ -1,0 +1,377 @@
+<!--
+Copyright (c) 2026-2030 Southeast University
+Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
+iEDA is licensed under Mulan PSL v2.
+-->
+# 21 · iNO 网表优化（修复）· 商业对标方案 · rv1.1
+
+> 文档号：21-rv1.1　　版本：v3.0（大改，逐文件代码走读后重写）　　里程碑：**真 apply + 路径级否决 → 与 iTO 边界清晰 → 物理感知可选**
+> **范围裁定（保留）**：iNO ≈ **网表修复**（fix_fanout/fixIO），**不是** DC/Genus 综合（G18→`33-iLO-iTM`）
+> 体例：`01-ai-doc-conventions-rv1.md`（对齐 `24-iPL-3d-rv1.0.md` 走读深度）
+> 主纲：`00-ieda-commercial-parity-master-plan-v1.1.md`（G6/G14，与 iTO 协同）　Know-how：KH-TO-01、KH-SYN-01、KH-X-04
+> 覆盖：`src/operation/iNO/` 全树（1129 LOC）：`FixFanout.{h,cpp}`、`NoApi.cpp`、`iNO.{h,cpp}`、`io/{JsonParser,DbInterface,Reporter}`、`config/NoConfig.h`、`test/run_no.cpp`
+> 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」。
+
+---
+
+## 0. 变更记录
+
+| 版本 | 日期 | 说明 |
+|---|---|---|
+| v1.0–v1.1 | 2026-07-20 | 范围裁定+摘要 |
+| rv1.0 / v2.0 | 2026-07-20 | 体例升格；坐实 FixFanout 真插 buffer、无 commit 后否决 |
+| **rv1.1 / v3.0** | **2026-07-21** | **大改**：对 iNO 全树 13 个源文件（1129 LOC）逐行读完重写（`FixFanout.cpp` 271 行全读）。核心修订五条，**三条深化/推翻 v2.0 判定**：**(1)** v2.0 判 FixFanout "可用教科书"——**过誉**：`fixFanout(IdbNet*)`（`:155-233`）是**贪心链式**插 buffer（每轮一个新 buffer 取走前 `max_fanout` 个负载，原网保留其余负载 + buffer 输入 pin），产生的是**沿原网挂成一串的 buffer 链**，不是平衡树；负载按 `get_load_pins()` 容器序分配，**无时序关键度排序**（关键负载应留近根）——延迟结构上劣于商业 fanout 修复；**(2)** `NoApi::outputSummary`（`NoApi.cpp:126-150`）为产"优化前后对比"**整体销毁并重建 TimingEngine**（`:147-149` `destroyTimingEngine(); initISTA(_idb)` 含 readSdc/buildGraph/initRcTree/updateTiming 全链）——拿一次 summary 付一次全量 STA，是**性能地雷**（大设计上 summary 本身成为瓶颈，未量化）；**(3)** API 全 void 无失败语义：`NoApi::fixIO/fixFanout`（`:110-112`）返回 void，TCL `CmdNORunFixFanout/CmdNORunFixIO`（`tcl_ino.cpp:36,65`）无法感知失败——v2.0 说"无否决"对，但**连"失败可观测"这一层也没有**；**(4)** 新坐实三处代码级缺陷：`connect()` 的 if/else 两分支**逐字相同**（`FixFanout.cpp:258-262`，死分支）；`fixIO()` 自承"临时修复"（`:32-34` 注释"此函数有问题可联系zzs"）；`LOG_ERROR_IF`（`:182,:202-203`）只记日志**不中断**，buf pin 缺失时后续 `connect` 拿空 pin 有崩险；**(5)** `fixFanout()` 有**隐蔽副作用**：把时钟网在 iDB 里改写为 `kClock`（`:134-136`）——修复命令顺手改网表类型标注，未文档化。 |
+
+---
+
+## 1. 症结审计（逐文件代码走读）
+
+### 1.1 功能形态——两命令一配置的窄工具
+
+| 模块 | 文件 | LOC | 判定 |
+|---|---|---|---|
+| 内核 | `FixFanout.{h,cpp}` | 69+271 | 全树唯一算法模块（fixIO + fixFanout 两入口） |
+| API | `NoApi.cpp` | 192 | 薄转发 + initISTA + saveDef + outputSummary（全 void） |
+| 驱动 | `iNO.{h,cpp}` | 49+70 | initialization/fixIO/fixFanout；**ASCII art banner 走 cout**（`:34-45,:54-63`） |
+| 配置 | `NoConfig.h` + `JsonParser.{h,cpp}` | 75+42+84 | json 配置；`insert_buffer` 空仅 cout（`JsonParser.cpp:69-71`） |
+| DB 桥 | `DbInterface.{h,cpp}` | 79+70 | idb/timing_engine 句柄 + eval_data |
+| 报告 | `Reporter.{h,cpp}` | 52+49 | ofstream + 计时 |
+| 测试 | `test/run_no.cpp` | 27 | **象征性**（一个 main） |
+| TCL | `tcl_ino.cpp`/`tcl_noconfig.cpp` | — | `CmdNORunFixFanout`/`CmdNORunFixIO`/`CmdNOConfig` 三命令 |
+
+### 1.2 算法成熟度（逐 kernel，`FixFanout.cpp` 全读）
+
+| kernel | 现状算法（file:line） | 判定 | 缺口 |
+|---|---|---|---|
+| `fixFanout()` 主循环 | 遍历 STA netlist（`FOREACH_NET`，`:129`），`fanout>_max_fanout` → 修；时钟网改写 `kClock` 跳过（`:134-136`） | 可用 | **副作用未文档化**（kClock 改写）；违例网按容器序，无关键度排序 |
+| `fixFanout(IdbNet*)` 修复体 | **贪心链式**（`:155-233`）：`while fanout>max`：新建 1 net + 1 buffer，buffer 入 pin 接原网、出 pin 接新网，**前 `max_fanout` 个负载挪新网**；原网负载数每轮降 `max_fanout-1` | **教科书以下**：链式非平衡树；负载按 `get_load_pins()` 容器序（`:159`），**无 slack/关键度优先** | 商业做法（拓扑平衡 + 关键负载近根 + 物理位置聚簇）整体缺失；无 legalize；无 veto |
+| `fixIO()` | 每 IO pin：解开全部 instance pin → 新 net → IO 与原网之间插 buffer（`:35-119`）；方向匹配靠 pin direction 比较（`:73-83`） | **自承"临时"**（`:32-34`） | 方向匹配启发式未验证；buffer 放 `kNone` 无坐标 |
+| `makeInstance` | `createInstance(..., kTiming, kNone, kNone, 0,0, kErrorIfExists)`（`:240-244`） | 可用 | `kNone` 放置态 → 下游必须容忍无坐标实例 |
+| 网名交换（port 网） | STA adapter `swapNetNames` 或三次 rename（`:208-225`） | 可用 | 双路径语义等价性未验证 |
+| `connect()` | pin 名匹配后 `connectPinToNet`（`:252-269`） | 有缺陷 | **if/else 两分支逐字相同**（`:258-262` 死分支）；`dinst` 空时直接用 `dpin` |
+| 配置读取 | `insert_buffer` 空 → `cout << "[Config Info] insert_buffer is Null"`（`JsonParser.cpp:69-71`）继续跑 | **假成功温床** | 空 buffer 下 `makeInstance` 必失败（`LOG_ERROR_IF :182`），但**流程不中断、rc 不变** |
+| `NoApi::outputSummary` | 销毁重建整个 TimingEngine 产"after"数据（`NoApi.cpp:147-149`） | **性能地雷** | summary 应付 incr STA；全量重建未量化 |
+| `NoApi::initISTA` | readSdc→buildGraph→initRcTree→updateTiming（`:100-107`） | 可用 | 与 12-init_sta / 25-iTO 的 STA 引导是否重复，未审计 |
+
+### 1.3 边界 / 回退 / 假成功
+
+- **回滚：无**。修复直接改 iDB，无 txn/undo；veto 环缺失（v2.0 判定保留，且是本工具 P0）。
+- **失败语义三层漏**：(a) 配置空 buffer 仅 cout；(b) `LOG_ERROR_IF`（`:182,:202-203`）记日志后继续，`:183-185` 虽 return 但 `:202-203` 之后**无检查**——`buf_input_pin` 为 null 时 `connect(insert_buf, nullptr, in_net)` 内 `dpin->get_pin_name()` 崩险；(c) API 全 void → TCL 恒 rc=0。
+- **日志纪律**：ASCII art banner + 结果数字走 `cout`/`LOG_INFO` 混用（`iNO.cpp:34-63`、`FixFanout.cpp:144-150`）；`Reporter` 与 cout 双通道。
+- 计数口径：`_insert_instance_index - 1`（`:145,:149`）依赖索引初值 1（`FixFanout.h`），初值改动即报表错一——**脆弱但未证错**。
+
+### 1.4 跨工具协调
+
+| 方向 | 现状 | 判定 |
+|---|---|---|
+| iNO → iDB | 直接 createInstance/createNet/disconnect/connect | 通（真改网表，v2.0 判定正确） |
+| iNO → iSTA | 经 `TimingIDBAdapter` 取 fanout；`swapNetNames` | 通；但 fix 后**无 incr STA 刷新**——时序图与网表脱节直到下次全量 update |
+| iNO ↔ iTO | 都可插 buffer，**无分工协议** | 同网双修无冲突检测（v2.0 判定保留） |
+| iNO → iPL | 新 buffer `kNone` 无坐标 | 布局前 OK；布局后无 legalize 闭环（→40 incr LG） |
+| iNO → iLO/iTM | 综合/映射不在此 | 边界清晰（范围裁定保留） |
+
+---
+
+## 2. 需求 FR / NFR / 约束
+
+| ID | 需求 | 现状 | P |
+|---|---|---|---|
+| FR-NO-01 | FixFanout/FixIO 保持 | ✓ | — |
+| FR-NO-02 | ★ commit 后 incr STA；Δslack≤0 回滚（txn 语义与 25-iTO 同库） | ✗ | P0 |
+| FR-NO-03 | ★ API 返 bool/SolverResult 式状态；TCL rc 透传 | ✗（全 void） | P0 |
+| FR-NO-04 | ★ 空 insert_buffer 响亮失败（配置校验前置） | 弱（cout） | P0 |
+| FR-NO-05 | ★ 平衡树 fanout 修复（关键负载近根 + slack 排序） | ✗（链式） | P1（§4.2） |
+| FR-NO-06 | ★ `connect()` 死分支清理 + `LOG_ERROR_IF` 后崩险修复 | ✗ | P0（卫生） |
+| FR-NO-07 | ★ kClock 改写副作用文档化或移除 | 隐蔽 | P1 |
+| FR-NO-08 | ★ `outputSummary` 改 incr STA（禁全量重建）或标注成本 | 全量重建 | P1 |
+| FR-NO-09 | 有坐标才启用物理感知放置（经 40 incr LG） | ✗ | P1 |
+| NFR-NO-01 | 假成功 0（配置/修复/汇报三层） | G14 | |
+| NFR-NO-02 | 缺省关 veto → 数值零回归 | 红线 | |
+| NFR-NO-03 | 不承担 G18 | 范围 | |
+
+---
+
+## 3. HLD 总体架构
+
+### 3.1 数据流
+
+```text
+高扇出/IO 违例
+  → 配置校验（★空 buffer 响亮失败）
+  → FixFanout/FixIO（TimingIDBAdapter 改 iDB）
+  → ★ incr STA / veto（与 25-iTO 共享 eco_txn：Δslack>0 且 DRV 不恶化才 commit）
+  → ★ IncrLegalizeAfterCommit（40，若已有坐标）
+  → 报告（inserts/rollbacks/ΔWNS 独立列）
+```
+
+### 3.2 关键设计决策（含被否）
+
+| # | 决策 | 被否 |
+|---|---|---|
+| D1 | iNO=修复非综合（保留 v2.0） | 用 iNO 扛 G18 |
+| D2 | 否决环与 iTO 同库同配置键 | 两套回滚/两套"可接受恶化" |
+| D3 | **先补失败语义（FR-NO-03/04/06）再谈算法升级（FR-NO-05）** | 在假成功地基上换平衡树 |
+| D4 | 平衡树修复做成**可选模式**（`fanout.mode=chain|tree`，默认 chain 零回归） | 直接替换默认行为 |
+| D5 | `outputSummary` 保留但标注全量重建成本；incr 化排 P1 | 立即重写（影响面未审计） |
+| D6 | 布局前可不 LG；布局后必经 40 incr LG | 从不合法化 |
+
+---
+
+## 4. LLD · 模块分解
+
+### 4.1 ★ 失败语义地基（FR-NO-03/04/06，P0）
+
+**现状签名（真实）**：`void NoApi::fixIO()` / `void NoApi::fixFanout()`（`NoApi.cpp:110-112`）；`bool` 在底层都不存在。
+
+```text
+ALG-4.1-1  失败语义三层修复
+  [配置层] JsonParser 读完即校验：insert_buffer 空 / master 不存在 → ERROR rc≠0（FR-NO-04）
+  [内核层] FixFanout 两入口返 FixResult{ok, inserted, rolled_back, msg}；
+           LOG_ERROR_IF(:182,:202-203) 改为"检查+失败上抛"（消 :202-203 崩险）
+  [API/TCL 层] NoApi 返 bool；Cmd*::exec 透传（G14）
+  [卫生] connect() 删死分支（:258-262）
+```
+
+### 4.2 ★ 平衡树 fanout 修复（FR-NO-05，P1，`fanout.mode=tree`）
+
+**现状**：链式（§1.2）。**设计**：
+
+```text
+ALG-4.2-1  treeFixFanout(net)   # ★ 新增，与 chain 并存（D4）
+  loads = net.load_pins 按 slack 升序（关键在前）   # 需 incr STA 供给
+  while |剩余负载| > max:
+    取 slack 最松的 max 个负载挂新 buffer（关键负载留近根）
+    buffer 挂到当前层的下一级 → 深度 ⌈log_{max}(fanout)⌉ 的平衡树
+  复杂度 O(fanout log fanout)；边界：fanout≤max 不动；时钟网跳过（现状保留）
+  验收：同设计 chain vs tree，critical load 到达时间不劣化、总 buffer 数不增
+```
+
+**复用姿势**：自建（修复拓扑是 iNO 本体职责）；veto 复用 25-iTO eco_txn（D2）。
+
+### 4.3 ★ veto 环（FR-NO-02，P0，与 25 对齐）
+
+```text
+txn = begin()
+apply fix（chain 或 tree）
+Δ = incr_sta(dirty_region)
+if Δslack > 0 or DRV 不恶化: commit else rollback
+if placed: platform IncrLegalizeAfterCommit
+配置键与 iTO 同一：eco.max_slack_degrade（缺省关 → 零回归 NFR-NO-02）
+```
+
+### 4.4 `outputSummary` 成本标注（FR-NO-08，P1）
+
+现状全量重建（`NoApi.cpp:147-149`）。P1 改 incr STA 差分；过渡期内**在文档与日志显式标注**"summary 成本 = 一次全量 STA"，大设计默认关闭。
+
+### 4.5 模块状态一览
+
+| 模块 | 现状成熟度 | 主复杂度 | 关键边界 | 复用姿势（现状→目标） |
+|---|---|---|---|---|
+| `fixFanout` 主循环 | 可用 | O(nets) | kClock 副作用（FR-NO-07） | 保留 + 文档化 |
+| `fixFanout(net)` 链式修复 | 教科书以下 | O(fanout²/max)（while 重取 load_pins） | fanout≤max 不动；port 网改名 | 保留为 chain 模式；★tree 并存 |
+| `fixIO` | 自承"临时" | O(io_pins) | 方向匹配启发式 | 保留 + 失败语义 |
+| `connect` | 有死分支 | O(buf_pins) | null pin 崩险 | 修（§4.1） |
+| JsonParser | 可用 | — | 空 buffer 仅 cout | 前置校验 |
+| NoApi | 全 void | — | 失败不可观测 | 返 bool |
+| `outputSummary` | 性能地雷 | 全量 STA | 大设计默认关 | incr 化（P1） |
+| Reporter | cout/ofstream 双通道 | — | 口径混用 | 统一到 Reporter |
+
+---
+
+## 5. 配置
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `insert_buffer` | **必填**（空→ERROR） | FR-NO-04 |
+| `max_fanout` | 现状 | |
+| `fanout.mode` | `chain` | ★ `tree` 可选（FR-NO-05，D4 零回归） |
+| `enable_timing_veto` | false | ★ FR-NO-02；与 iTO 同 `eco.*` 键族 |
+
+---
+
+## 6. 指标分解
+
+| 维 | 含义 | 记录 |
+|---|---|---|
+| inserted_buffers / inserted_nets | | 独立列 |
+| rolled_back | veto 回滚次数 | 独立列 |
+| ΔWNS / ΔTNS / DRV 前后 | | 独立列（进 12 schema 候选） |
+| chain vs tree 对比 | critical 到达时间、buffer 数 | E-NO-04 |
+| summary_cost_s | outputSummary 墙钟 | 标注全量重建 |
+
+---
+
+## 7. 状态机 / 命令语义
+
+```text
+init_config → check_config(★空 buffer ERROR) → fix → ★veto? → commit/rollback
+  → ★(placed → incr LG) → report
+任一层失败 rc≠0；API 返 bool；TCL 透传
+```
+
+---
+
+## 8. 跨工具 Cascade
+
+| 上/下游 | 信号 | 契约 |
+|---|---|---|
+| ← iSTA | fanout/slack（incr） | veto 与 tree 排序的输入 |
+| → iDB | 网表真改 | txn 可回滚（FR-NO-02） |
+| ↔ 25-iTO | eco_txn 同库同键；同网双修冲突检测 | 分工矩阵（下） |
+| → 40 platform | IncrLegalizeAfterCommit | 布局后必经 |
+| → iPL | kNone 新实例 | 布局前插入时由后续 GP 处理 |
+
+分工矩阵（保留 v2.0）：综合后扇出/IO → iNO（G6/G14）；布局后时序 → iTO（G6/G17）；逻辑映射 → iLO/iTM（G18）。
+
+---
+
+## 9. 商业 Know-how 映射
+
+| KH-ID | 本工具落点 |
+|---|---|
+| KH-TO-01（修复后否决） | §4.3 veto 环 |
+| KH-SYN-01（物理感知可选） | FR-NO-09 |
+| KH-X-04（空配置/失败响亮） | §4.1 三层修复 |
+
+---
+
+## 10. 商业对照看板 + 演进 M0–M4
+
+### 10.1 看板
+
+| 指标 | iNO | 商业 fanout fix | 门槛 | G |
+|---|---|---|---|---|
+| DRV/fanout 清 | 链式可清 | 平衡树+关键度 | 清或可解释 | G6 协同 |
+| 修复拓扑 | 链（深度 O(n/max)） | 树（O(log)） | tree 模式达标 | — |
+| 否决回滚 | 无 | 有 | 注入必滚 | G14 |
+| 失败可观测 | 全 void | 响亮 | rc≠0 | G14 |
+| 综合 QoR | N/A | DC | →33 | G18 |
+
+### 10.2 对照实验（杀假说）
+
+| 实验 | 方法 | 杀死条件 |
+|---|---|---|
+| E-NO-01 | 空 insert_buffer 跑 fix | rc==0 → §1.3 实锤（修复后必≠0） |
+| E-NO-02 | 关 veto 看 WNS 变化 | 变差 → veto 必要性 |
+| E-NO-03 | 注入恶化修复（mock incr STA） | 不回滚 → veto 假 |
+| **E-NO-04** | 同设计 chain vs tree：critical load 到达时间/buffer 数 | tree 不优 → FR-NO-05 价值被杀（降级 P2） |
+| E-NO-05 | 与 iTO 同网双修 | 无冲突检测 → 分工协议必要性实锤 |
+
+### 10.3 演进
+
+```text
+M0 先量：失败语义台账（E-NO-01）+ 链式结构实测量化（链深度/关键负载位置）
+M1 可信：§4.1 三层失败语义 + 死分支/崩险修复 + gtest
+M2 主算法：veto 环（与 25 同库）+ 40 incr LG 接线
+M3 打平：tree 模式（E-NO-04 裁决后）+ 与 iTO 分工用例集
+M4 纵深：物理感知放置 + outputSummary incr 化
+```
+
+退出门禁：M0→台账；M1→E-NO-01 绿；M2→E-NO-03 绿；M3→E-NO-04 裁决记录。
+
+---
+
+## 11. Exhibit
+
+| 档 | 产物 |
+|---|---|
+| JSON | `no_report.json`（inserts/rollbacks/Δslack/mode） |
+| text | `report.txt`（现状保留，口径统一到 Reporter） |
+
+---
+
+## 12. 测试计划
+
+| 层 | 用例 | 锁住 |
+|---|---|---|
+| L0 | 空 buffer → ERROR rc≠0 | FR-NO-04 |
+| L0 | 否决注入必回滚 | FR-NO-02 |
+| L0 | 小网（fanout≤max）不动；时钟网跳过 | 现状语义 |
+| L0 | chain vs tree 拓扑深度 | FR-NO-05 |
+| L1 | gcd fanout 修复后 DRV 清 + incr STA 一致 | G6 |
+| L1 | 布局后修复经 incr LG 合法 | FR-NO-09 |
+| L5 | 不宣称 G18；缺省 veto 关零回归 | NFR-NO-02/03 |
+
+---
+
+## 13. 里程碑（按周粗估）
+
+| 周 | 交付 | 验收 |
+|---|---|---|
+| W0 | M0 台账 + 范围锁定重申 | M0 |
+| W1 | §4.1 失败语义三层 + 卫生修复 | M1 |
+| W2 | veto 环 + 40 incr LG | M2 |
+| W3+ | tree 模式（E-NO-04 裁决）+ iTO 分工用例 | M3 |
+
+PR 切片：NO-0 台账 → NO-1 失败语义+卫生 → NO-2 veto 环 → NO-3 incr LG → NO-4 tree 模式（裁决后）。
+
+---
+
+## 14. 未验证 / 负面结论
+
+| # | 项 | 说明 |
+|---|---|---|
+| 1 | 链式修复的实际 QoR 损失 | 结构分析为链式，但未在真实设计上量化 vs 树——E-NO-04 前提 |
+| 2 | fixIO 方向匹配启发式正确率 | 自承"临时"（`:32-34`），无用例 |
+| 3 | `swapNetNames` vs 三次 rename 语义等价 | `:208-225` 双路径未对拍 |
+| 4 | `_insert_instance_index` 初值依赖 | `:145` 的 `-1` 口径脆弱，未证错 |
+| 5 | `outputSummary` 全量重建的墙钟占比 | 未量化 |
+| 6 | 与 iTO buffer 命名/实例冲突 | 分工协议前未验证 |
+| 7 | initISTA 与 12-init_sta/25-iTO 的重复度 | 三处 STA 引导未审计 |
+
+**不要重走**：
+- 不要把 ABC/综合塞进 iNO（范围裁定）。
+- 不要在全 void API 上继续加功能——先补失败语义地基（D3）。
+- 不要把 chain 直接替换成 tree 改默认——并存可选，E-NO-04 裁决后再谈切换。
+
+---
+
+## 附录 A · 迁移 checklist
+
+- [ ] M0 台账（失败语义三层 + 链式结构量化）
+- [ ] JsonParser 前置校验（空 buffer ERROR）
+- [ ] FixFanout 两入口返 FixResult；`:202-203` 崩险修复
+- [ ] `connect()` 死分支清理
+- [ ] NoApi 返 bool；TCL rc 透传
+- [ ] veto 环（eco_txn 与 25 同库同键）
+- [ ] 40 IncrLegalizeAfterCommit 接线
+- [ ] kClock 副作用文档化
+- [ ] tree 模式（E-NO-04 裁决后）
+- [ ] outputSummary 成本标注 / incr 化
+
+## 附录 B · 关键决策记录
+
+| # | 决策 | 被否 |
+|---|---|---|
+| E-1 | 修复≠综合 | iNO 扛 G18 |
+| E-2 | 先失败语义后算法 | 在假成功地基上换算法 |
+| E-3 | 否决与 iTO 同库同键 | 平行回滚 |
+| E-4 | tree 与 chain 并存可选 | 直接替换默认 |
+| E-5 | 缺省关 veto 零回归 | 强改默认行为 |
+| E-6 | summary 标注成本缓重写 | 立即重写（影响面未审） |
+
+## 附录 C · 术语
+
+- **链式修复**：每 buffer 取 max 个负载挂原网，深度 O(fanout/max) 的一串（现状）
+- **平衡树修复**：深度 O(log_max fanout)、关键负载近根的拓扑（FR-NO-05 目标）
+- **eco_txn**：begin/apply/incr_sta/commit-or-rollback 事务语义（与 25-iTO 共享）
+- **kNone 放置态**：新实例无坐标状态，需下游 GP/LG 消化
+
+## 附录 D · 证据摘录（file:line 最小集）
+
+| 断言 | 证据 |
+|---|---|
+| 链式修复 | `FixFanout.cpp:155-233`（while 循环 + `:206` 前 max 个负载） |
+| 负载无关键度排序 | `FixFanout.cpp:159`（`get_load_pins()` 容器序） |
+| kClock 副作用 | `FixFanout.cpp:134-136`（`setNetConnectType`） |
+| fixIO 自承临时 | `FixFanout.cpp:32-34`（"临时修复io问题…联系zzs"） |
+| 死分支 | `FixFanout.cpp:258-262`（if/else 逐字相同） |
+| LOG_ERROR_IF 不中断 | `FixFanout.cpp:182,:202-203` |
+| 空 buffer 仅 cout | `JsonParser.cpp:69-71` |
+| API 全 void | `NoApi.cpp:110-112` |
+| outputSummary 全量重建 | `NoApi.cpp:147-149`（`destroyTimingEngine(); initISTA`） |
+| initISTA 全链 | `NoApi.cpp:100-107` |
+| ASCII banner cout | `iNO.cpp:34-45,:54-63` |
+| buffer kNone | `FixFanout.cpp:66-68,:96-98,:240-244` |
+| TCL 三命令 | `tcl_ino.cpp:36,65`、`tcl_noconfig.cpp:37` |
+| 全树体量 | `find src/operation/iNO -name '*.cpp' -o ... | xargs wc -l` = 1129 |
