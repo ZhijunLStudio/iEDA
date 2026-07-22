@@ -1,0 +1,29 @@
+{
+  "name": "s1238_asap7_a",
+  "top": "s1238",
+  "scale": "S",
+  "role": "iscas",
+  "description": "ISCAS89 benchmark s1238",
+  "pdk": "asap7",
+  "variant": "RVT",
+  "inputs": {
+    "tech_lef": "$PDK/lef/asap7_tech_RVT.lef",
+    "cells_lef": "$PDK/lef/asap7sc7p5t_RVT.lef",
+    "lib": "$PDK/lib/asap7sc7p5t_RVT_TT_nldm_201020.lib",
+    "netlist": "netlist/s1238.v",
+    "sdc": "sdc/s1238.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 500 500",
+    "core_area": "50.0 50.0 450.0 450.0",
+    "core_utilization": 0.55
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "CK",
+      "period_ns": 5.0
+    }
+  ],
+  "strategy": "a"
+}

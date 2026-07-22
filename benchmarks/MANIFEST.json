@@ -1,0 +1,52 @@
+{
+  "benchmark": "iEDA.ai-sky130",
+  "version": "1.0",
+  "created": "2026-07-22",
+  "description": "iEDA.ai evaluation benchmark suite based on SkyWater 130nm PDK",
+  "pdk": {
+    "name": "sky130",
+    "variant": "fd_sc_hd",
+    "node": "130nm",
+    "vendor": "SkyWater",
+    "path": "/home/lxq/AiEDA/Foundary/sky130"
+  },
+  "designs": [
+    {
+      "name": "gcd",
+      "top": "gcd",
+      "scale": "XS",
+      "role": "smoke",
+      "netlist_lines": 399,
+      "description": "Greatest-common-divisor unit. Small smoke test.",
+      "path": "designs/gcd"
+    },
+    {
+      "name": "aes",
+      "top": "aes",
+      "scale": "M",
+      "role": "timing",
+      "netlist_lines": 16978,
+      "description": "AES encryption core. Medium-scale timing test.",
+      "path": "designs/aes"
+    },
+    {
+      "name": "picorv32",
+      "top": "picorv32",
+      "scale": "L",
+      "role": "processor",
+      "netlist_lines": 16941,
+      "description": "PicoRV32 RISC-V processor. Large-scale scalability test.",
+      "path": "designs/picorv32"
+    }
+  ],
+  "source": {
+    "netlist_dataset": "/mnt/mdisk3/PCL-167/data3/taosimin/dataset_skywater130",
+    "reference_benchmark": "/home/lxq/AiEDA/HS-3D_Problem/thirdparty/iEDA-3D/benchmark",
+    "note": "Netlists are from the skywater130 dataset with commercial tool reference results."
+  },
+  "targets": {
+    "ppa_gap": "≤5% vs Innovus/ICC2",
+    "runtime": "comparable or faster",
+    "signoff": "iSTA/iRCX/iDRC/iPA trusted results"
+  }
+}

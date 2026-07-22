@@ -1,0 +1,2244 @@
+{
+  "version": "1.0",
+  "total_designs": 279,
+  "pdks": [
+    "sky130",
+    "asap7",
+    "nangate45",
+    "ics55"
+  ],
+  "designs": [
+    {
+      "name": "PPU_asap7_a",
+      "dir": "PPU_asap7_a",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_asap7_b",
+      "dir": "PPU_asap7_b",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_asap7_t",
+      "dir": "PPU_asap7_t",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_ics55_a",
+      "dir": "PPU_ics55_a",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_ics55_b",
+      "dir": "PPU_ics55_b",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_ics55_t",
+      "dir": "PPU_ics55_t",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_nangate45_a",
+      "dir": "PPU_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_nangate45_b",
+      "dir": "PPU_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_nangate45_t",
+      "dir": "PPU_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_sky130_a",
+      "dir": "PPU_sky130_a",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_sky130_b",
+      "dir": "PPU_sky130_b",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "PPU_sky130_t",
+      "dir": "PPU_sky130_t",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "logic",
+      "description": "Picture processing unit"
+    },
+    {
+      "name": "aes",
+      "dir": "aes",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core. Medium-scale design for timing and congestion evaluation (~17K lines)."
+    },
+    {
+      "name": "aes_asap7_a",
+      "dir": "aes_asap7_a",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_asap7_b",
+      "dir": "aes_asap7_b",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_asap7_t",
+      "dir": "aes_asap7_t",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_core_asap7_a",
+      "dir": "aes_core_asap7_a",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_asap7_b",
+      "dir": "aes_core_asap7_b",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_asap7_t",
+      "dir": "aes_core_asap7_t",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_ics55_a",
+      "dir": "aes_core_ics55_a",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_ics55_b",
+      "dir": "aes_core_ics55_b",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_ics55_t",
+      "dir": "aes_core_ics55_t",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_nangate45_a",
+      "dir": "aes_core_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_nangate45_b",
+      "dir": "aes_core_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_nangate45_t",
+      "dir": "aes_core_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_sky130_a",
+      "dir": "aes_core_sky130_a",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_sky130_b",
+      "dir": "aes_core_sky130_b",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_core_sky130_t",
+      "dir": "aes_core_sky130_t",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES core module"
+    },
+    {
+      "name": "aes_ics55_a",
+      "dir": "aes_ics55_a",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_ics55_b",
+      "dir": "aes_ics55_b",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_ics55_t",
+      "dir": "aes_ics55_t",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_nangate45_a",
+      "dir": "aes_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_nangate45_b",
+      "dir": "aes_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_nangate45_t",
+      "dir": "aes_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_sky130_a",
+      "dir": "aes_sky130_a",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_sky130_b",
+      "dir": "aes_sky130_b",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "aes_sky130_t",
+      "dir": "aes_sky130_t",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "timing",
+      "description": "AES encryption core"
+    },
+    {
+      "name": "apb4_archinfo_asap7_a",
+      "dir": "apb4_archinfo_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_asap7_b",
+      "dir": "apb4_archinfo_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_asap7_t",
+      "dir": "apb4_archinfo_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_ics55_a",
+      "dir": "apb4_archinfo_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_ics55_b",
+      "dir": "apb4_archinfo_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_ics55_t",
+      "dir": "apb4_archinfo_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_nangate45_a",
+      "dir": "apb4_archinfo_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_nangate45_b",
+      "dir": "apb4_archinfo_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_nangate45_t",
+      "dir": "apb4_archinfo_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_sky130_a",
+      "dir": "apb4_archinfo_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_sky130_b",
+      "dir": "apb4_archinfo_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_archinfo_sky130_t",
+      "dir": "apb4_archinfo_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 architecture info"
+    },
+    {
+      "name": "apb4_clint_asap7_a",
+      "dir": "apb4_clint_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_asap7_b",
+      "dir": "apb4_clint_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_asap7_t",
+      "dir": "apb4_clint_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_ics55_a",
+      "dir": "apb4_clint_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_ics55_b",
+      "dir": "apb4_clint_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_ics55_t",
+      "dir": "apb4_clint_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_nangate45_a",
+      "dir": "apb4_clint_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_nangate45_b",
+      "dir": "apb4_clint_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_nangate45_t",
+      "dir": "apb4_clint_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_sky130_a",
+      "dir": "apb4_clint_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_sky130_b",
+      "dir": "apb4_clint_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_clint_sky130_t",
+      "dir": "apb4_clint_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 core local interruptor"
+    },
+    {
+      "name": "apb4_i2c_asap7_a",
+      "dir": "apb4_i2c_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_asap7_b",
+      "dir": "apb4_i2c_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_asap7_t",
+      "dir": "apb4_i2c_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_ics55_a",
+      "dir": "apb4_i2c_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_ics55_b",
+      "dir": "apb4_i2c_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_ics55_t",
+      "dir": "apb4_i2c_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_nangate45_a",
+      "dir": "apb4_i2c_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_nangate45_b",
+      "dir": "apb4_i2c_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_nangate45_t",
+      "dir": "apb4_i2c_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_sky130_a",
+      "dir": "apb4_i2c_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_sky130_b",
+      "dir": "apb4_i2c_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_i2c_sky130_t",
+      "dir": "apb4_i2c_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 I2C controller"
+    },
+    {
+      "name": "apb4_ps2_asap7_a",
+      "dir": "apb4_ps2_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_asap7_b",
+      "dir": "apb4_ps2_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_asap7_t",
+      "dir": "apb4_ps2_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_ics55_a",
+      "dir": "apb4_ps2_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_ics55_b",
+      "dir": "apb4_ps2_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_ics55_t",
+      "dir": "apb4_ps2_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_nangate45_a",
+      "dir": "apb4_ps2_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_nangate45_b",
+      "dir": "apb4_ps2_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_nangate45_t",
+      "dir": "apb4_ps2_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_sky130_a",
+      "dir": "apb4_ps2_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_sky130_b",
+      "dir": "apb4_ps2_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_ps2_sky130_t",
+      "dir": "apb4_ps2_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 PS2 controller"
+    },
+    {
+      "name": "apb4_rng_asap7_a",
+      "dir": "apb4_rng_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_asap7_b",
+      "dir": "apb4_rng_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_asap7_t",
+      "dir": "apb4_rng_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_ics55_a",
+      "dir": "apb4_rng_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_ics55_b",
+      "dir": "apb4_rng_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_ics55_t",
+      "dir": "apb4_rng_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_nangate45_a",
+      "dir": "apb4_rng_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_nangate45_b",
+      "dir": "apb4_rng_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_nangate45_t",
+      "dir": "apb4_rng_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_sky130_a",
+      "dir": "apb4_rng_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_sky130_b",
+      "dir": "apb4_rng_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_rng_sky130_t",
+      "dir": "apb4_rng_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 random number generator"
+    },
+    {
+      "name": "apb4_timer_asap7_a",
+      "dir": "apb4_timer_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_asap7_b",
+      "dir": "apb4_timer_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_asap7_t",
+      "dir": "apb4_timer_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_ics55_a",
+      "dir": "apb4_timer_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_ics55_b",
+      "dir": "apb4_timer_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_ics55_t",
+      "dir": "apb4_timer_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_nangate45_a",
+      "dir": "apb4_timer_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_nangate45_b",
+      "dir": "apb4_timer_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_nangate45_t",
+      "dir": "apb4_timer_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_sky130_a",
+      "dir": "apb4_timer_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_sky130_b",
+      "dir": "apb4_timer_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_timer_sky130_t",
+      "dir": "apb4_timer_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 timer"
+    },
+    {
+      "name": "apb4_uart_asap7_a",
+      "dir": "apb4_uart_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_asap7_b",
+      "dir": "apb4_uart_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_asap7_t",
+      "dir": "apb4_uart_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_ics55_a",
+      "dir": "apb4_uart_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_ics55_b",
+      "dir": "apb4_uart_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_ics55_t",
+      "dir": "apb4_uart_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_nangate45_a",
+      "dir": "apb4_uart_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_nangate45_b",
+      "dir": "apb4_uart_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_nangate45_t",
+      "dir": "apb4_uart_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_sky130_a",
+      "dir": "apb4_uart_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_sky130_b",
+      "dir": "apb4_uart_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_uart_sky130_t",
+      "dir": "apb4_uart_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 UART controller"
+    },
+    {
+      "name": "apb4_wdg_asap7_a",
+      "dir": "apb4_wdg_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_asap7_b",
+      "dir": "apb4_wdg_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_asap7_t",
+      "dir": "apb4_wdg_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_ics55_a",
+      "dir": "apb4_wdg_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_ics55_b",
+      "dir": "apb4_wdg_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_ics55_t",
+      "dir": "apb4_wdg_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_nangate45_a",
+      "dir": "apb4_wdg_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_nangate45_b",
+      "dir": "apb4_wdg_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_nangate45_t",
+      "dir": "apb4_wdg_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_sky130_a",
+      "dir": "apb4_wdg_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_sky130_b",
+      "dir": "apb4_wdg_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "apb4_wdg_sky130_t",
+      "dir": "apb4_wdg_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "peripheral",
+      "description": "APB4 watchdog"
+    },
+    {
+      "name": "gcd",
+      "dir": "gcd",
+      "pdk": "sky130",
+      "scale": "XS",
+      "role": "smoke",
+      "description": "Greatest-common-divisor unit. Small smoke test design for sky130 PDK evaluation."
+    },
+    {
+      "name": "gcd_asap7_a",
+      "dir": "gcd_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_asap7_b",
+      "dir": "gcd_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_asap7_t",
+      "dir": "gcd_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_ics55_a",
+      "dir": "gcd_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_ics55_b",
+      "dir": "gcd_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_ics55_t",
+      "dir": "gcd_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_nangate45_a",
+      "dir": "gcd_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_nangate45_b",
+      "dir": "gcd_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_nangate45_t",
+      "dir": "gcd_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_sky130_a",
+      "dir": "gcd_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_sky130_b",
+      "dir": "gcd_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "gcd_sky130_t",
+      "dir": "gcd_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "reference",
+      "description": "Greatest common divisor"
+    },
+    {
+      "name": "picorv32",
+      "dir": "picorv32",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "processor",
+      "description": "PicoRV32 RISC-V processor. Large-scale design for scalability evaluation (~17K lines)."
+    },
+    {
+      "name": "picorv32_asap7_a",
+      "dir": "picorv32_asap7_a",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_asap7_b",
+      "dir": "picorv32_asap7_b",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_asap7_t",
+      "dir": "picorv32_asap7_t",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_ics55_a",
+      "dir": "picorv32_ics55_a",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_ics55_b",
+      "dir": "picorv32_ics55_b",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_ics55_t",
+      "dir": "picorv32_ics55_t",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_nangate45_a",
+      "dir": "picorv32_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_nangate45_b",
+      "dir": "picorv32_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_nangate45_t",
+      "dir": "picorv32_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_sky130_a",
+      "dir": "picorv32_sky130_a",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_sky130_b",
+      "dir": "picorv32_sky130_b",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "picorv32_sky130_t",
+      "dir": "picorv32_sky130_t",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "cpu",
+      "description": "RISC-V CPU core"
+    },
+    {
+      "name": "s1238_asap7_a",
+      "dir": "s1238_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_asap7_b",
+      "dir": "s1238_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_asap7_t",
+      "dir": "s1238_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_ics55_a",
+      "dir": "s1238_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_ics55_b",
+      "dir": "s1238_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_ics55_t",
+      "dir": "s1238_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_nangate45_a",
+      "dir": "s1238_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_nangate45_b",
+      "dir": "s1238_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_nangate45_t",
+      "dir": "s1238_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_sky130_a",
+      "dir": "s1238_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_sky130_b",
+      "dir": "s1238_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s1238_sky130_t",
+      "dir": "s1238_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1238"
+    },
+    {
+      "name": "s13207_asap7_a",
+      "dir": "s13207_asap7_a",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_asap7_b",
+      "dir": "s13207_asap7_b",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_asap7_t",
+      "dir": "s13207_asap7_t",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_ics55_a",
+      "dir": "s13207_ics55_a",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_ics55_b",
+      "dir": "s13207_ics55_b",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_ics55_t",
+      "dir": "s13207_ics55_t",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_nangate45_a",
+      "dir": "s13207_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_nangate45_b",
+      "dir": "s13207_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_nangate45_t",
+      "dir": "s13207_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_sky130_a",
+      "dir": "s13207_sky130_a",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_sky130_b",
+      "dir": "s13207_sky130_b",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s13207_sky130_t",
+      "dir": "s13207_sky130_t",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s13207"
+    },
+    {
+      "name": "s1488_asap7_a",
+      "dir": "s1488_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_asap7_b",
+      "dir": "s1488_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_asap7_t",
+      "dir": "s1488_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_ics55_a",
+      "dir": "s1488_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_ics55_b",
+      "dir": "s1488_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_ics55_t",
+      "dir": "s1488_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_nangate45_a",
+      "dir": "s1488_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_nangate45_b",
+      "dir": "s1488_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_nangate45_t",
+      "dir": "s1488_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_sky130_a",
+      "dir": "s1488_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_sky130_b",
+      "dir": "s1488_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s1488_sky130_t",
+      "dir": "s1488_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s1488"
+    },
+    {
+      "name": "s15850_asap7_a",
+      "dir": "s15850_asap7_a",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_asap7_b",
+      "dir": "s15850_asap7_b",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_asap7_t",
+      "dir": "s15850_asap7_t",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_ics55_a",
+      "dir": "s15850_ics55_a",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_ics55_b",
+      "dir": "s15850_ics55_b",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_ics55_t",
+      "dir": "s15850_ics55_t",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_nangate45_a",
+      "dir": "s15850_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_nangate45_b",
+      "dir": "s15850_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_nangate45_t",
+      "dir": "s15850_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_sky130_a",
+      "dir": "s15850_sky130_a",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_sky130_b",
+      "dir": "s15850_sky130_b",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s15850_sky130_t",
+      "dir": "s15850_sky130_t",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s15850"
+    },
+    {
+      "name": "s35932_asap7_a",
+      "dir": "s35932_asap7_a",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_asap7_b",
+      "dir": "s35932_asap7_b",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_asap7_t",
+      "dir": "s35932_asap7_t",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_ics55_a",
+      "dir": "s35932_ics55_a",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_ics55_b",
+      "dir": "s35932_ics55_b",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_ics55_t",
+      "dir": "s35932_ics55_t",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_nangate45_a",
+      "dir": "s35932_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_nangate45_b",
+      "dir": "s35932_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_nangate45_t",
+      "dir": "s35932_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_sky130_a",
+      "dir": "s35932_sky130_a",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_sky130_b",
+      "dir": "s35932_sky130_b",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s35932_sky130_t",
+      "dir": "s35932_sky130_t",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s35932"
+    },
+    {
+      "name": "s38417_asap7_a",
+      "dir": "s38417_asap7_a",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_asap7_b",
+      "dir": "s38417_asap7_b",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_asap7_t",
+      "dir": "s38417_asap7_t",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_ics55_a",
+      "dir": "s38417_ics55_a",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_ics55_b",
+      "dir": "s38417_ics55_b",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_ics55_t",
+      "dir": "s38417_ics55_t",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_nangate45_a",
+      "dir": "s38417_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_nangate45_b",
+      "dir": "s38417_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_nangate45_t",
+      "dir": "s38417_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_sky130_a",
+      "dir": "s38417_sky130_a",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_sky130_b",
+      "dir": "s38417_sky130_b",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38417_sky130_t",
+      "dir": "s38417_sky130_t",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38417"
+    },
+    {
+      "name": "s38584_asap7_a",
+      "dir": "s38584_asap7_a",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_asap7_b",
+      "dir": "s38584_asap7_b",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_asap7_t",
+      "dir": "s38584_asap7_t",
+      "pdk": "asap7",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_ics55_a",
+      "dir": "s38584_ics55_a",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_ics55_b",
+      "dir": "s38584_ics55_b",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_ics55_t",
+      "dir": "s38584_ics55_t",
+      "pdk": "ics55",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_nangate45_a",
+      "dir": "s38584_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_nangate45_b",
+      "dir": "s38584_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_nangate45_t",
+      "dir": "s38584_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_sky130_a",
+      "dir": "s38584_sky130_a",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_sky130_b",
+      "dir": "s38584_sky130_b",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s38584_sky130_t",
+      "dir": "s38584_sky130_t",
+      "pdk": "sky130",
+      "scale": "L",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s38584"
+    },
+    {
+      "name": "s5378_asap7_a",
+      "dir": "s5378_asap7_a",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_asap7_b",
+      "dir": "s5378_asap7_b",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_asap7_t",
+      "dir": "s5378_asap7_t",
+      "pdk": "asap7",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_ics55_a",
+      "dir": "s5378_ics55_a",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_ics55_b",
+      "dir": "s5378_ics55_b",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_ics55_t",
+      "dir": "s5378_ics55_t",
+      "pdk": "ics55",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_nangate45_a",
+      "dir": "s5378_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_nangate45_b",
+      "dir": "s5378_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_nangate45_t",
+      "dir": "s5378_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_sky130_a",
+      "dir": "s5378_sky130_a",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_sky130_b",
+      "dir": "s5378_sky130_b",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s5378_sky130_t",
+      "dir": "s5378_sky130_t",
+      "pdk": "sky130",
+      "scale": "S",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s5378"
+    },
+    {
+      "name": "s9234_asap7_a",
+      "dir": "s9234_asap7_a",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_asap7_b",
+      "dir": "s9234_asap7_b",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_asap7_t",
+      "dir": "s9234_asap7_t",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_ics55_a",
+      "dir": "s9234_ics55_a",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_ics55_b",
+      "dir": "s9234_ics55_b",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_ics55_t",
+      "dir": "s9234_ics55_t",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_nangate45_a",
+      "dir": "s9234_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_nangate45_b",
+      "dir": "s9234_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_nangate45_t",
+      "dir": "s9234_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_sky130_a",
+      "dir": "s9234_sky130_a",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_sky130_b",
+      "dir": "s9234_sky130_b",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "s9234_sky130_t",
+      "dir": "s9234_sky130_t",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "iscas",
+      "description": "ISCAS89 benchmark s9234"
+    },
+    {
+      "name": "salsa20_asap7_a",
+      "dir": "salsa20_asap7_a",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_asap7_b",
+      "dir": "salsa20_asap7_b",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_asap7_t",
+      "dir": "salsa20_asap7_t",
+      "pdk": "asap7",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_ics55_a",
+      "dir": "salsa20_ics55_a",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_ics55_b",
+      "dir": "salsa20_ics55_b",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_ics55_t",
+      "dir": "salsa20_ics55_t",
+      "pdk": "ics55",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_nangate45_a",
+      "dir": "salsa20_nangate45_a",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_nangate45_b",
+      "dir": "salsa20_nangate45_b",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_nangate45_t",
+      "dir": "salsa20_nangate45_t",
+      "pdk": "nangate45",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_sky130_a",
+      "dir": "salsa20_sky130_a",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_sky130_b",
+      "dir": "salsa20_sky130_b",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    },
+    {
+      "name": "salsa20_sky130_t",
+      "dir": "salsa20_sky130_t",
+      "pdk": "sky130",
+      "scale": "M",
+      "role": "crypto",
+      "description": "Salsa20 stream cipher"
+    }
+  ]
+}

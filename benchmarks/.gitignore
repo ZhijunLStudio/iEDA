@@ -1,0 +1,48 @@
+# iEDA.ai Benchmark gitignore
+
+# 运行结果
+results/
+*/results/
+*.log
+*.rpt
+*.def
+*.def.gz
+*.spef
+*.gds
+*.gds2
+
+# 配置文件（运行时生成）
+*/config/
+config/
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*~
+
+# DRC临时目录
+drc_temp_directory/
+
+# 编译产物
+*.o
+*.a
+*.so
+
+# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 备份文件
+*.bak
+*.orig
+
+# IDE文件
+.vscode/
+.idea/
+*.iml
+
+# 日志文件
+glog_dump.log
+flow.log

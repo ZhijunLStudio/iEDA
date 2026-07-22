@@ -3,14 +3,15 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 10 · iDB 数据库 · 商业对标优化方案 · rv1.1
+# 10 · iDB 数据库 · 商业对标方案 · rv2.0
 
-> 文档号：10-rv1.1　　版本：v3.0（大改，逐文件代码走读后重写）　　里程碑：**二进制 GDS 可流片 + 无损往返矩阵 + 容量爬坡（G13）**
-> 体例：`01-ai-doc-conventions-rv1.md`（对齐 `HS-3D_Problem/thirdparty/iEDA-3D/docs/3d/design/24-iPL-3d-rv1.0.md` 的逐 kernel 走读深度）
-> 主纲：`00-ieda-commercial-parity-master-plan-v1.1.md`（G1/G13/G16）　Know-how：`03-commercial-knowhow-catalog.md`（KH-DB-01/02/03）
-> 上游：LEF/DEF/Verilog/SDC/Liberty 等输入文件　下游：**全部工具**（iDB 是全流程唯一共享数据模型）
+> 文档号：10-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— 数据完整性对标（Innovus/ICC2 OA，往返无损 G1）× 性能/容量对标（G13 大设计）**
+> 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`24-iPL-3d-rv1.0.md`、`27-iSTA-rv2.0.md`、`28-iRCX-rv2.0.md`（逐 kernel 走读 + 双对标线 + 诚实归因）
+> 商业金标：**Innovus/ICC2 Design Database**（数据完整性）；**OpenAccess (OA)**（往返无损、API 稳定性）；门禁：**G1 / G13 / G14 / G16**
+> 上游：LEF/DEF/Verilog/SDC/Liberty/SPEF/GDS 等输入文件　下游：**全部工具**（iDB 是全流程唯一共享数据模型）
+> 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-DB-\*
 > 覆盖：`src/database/manager/builder/`（12.6k LOC）、`src/database/manager/parser/`（11 格式目录）、`src/database/manager/{memory,service}`、`builder/gds_builder/`、`parser/gdsii/`
-> 纪律：**文档是假说不是事实**；每条断言带 `file:line`；未实测写「未验证」。
+> 纪律：**文档是假说不是事实**；每条断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
 
 ---
 
@@ -20,7 +21,8 @@ iEDA is licensed under Mulan PSL v2.
 |---|---|---|
 | v1.0–v1.1 | 2026-07-20 | GDS 文本风险摘要 |
 | rv1.0 / v2.0 | 2026-07-20 | 坐实 `Def2GdsWrite` 持 `GdsiiTextWriter`（`gds_write.h:107`）、`GTWriter.cpp:126` 写 ASCII `"HEADER "` |
-| **rv1.1 / v3.0** | **2026-07-21** | **大改**：对 `builder/`（12572 LOC）+ `parser/gdsii/`（2201 LOC）+ `gds_write.{h,cpp}`（138+858 LOC）逐文件读完重写。核心修订五条，**其中三条推翻/深化 v2.0 的判定**：**(1)** GDS 问题比 v2.0 认定的更严重——不是"文本格式不对"一个缺陷，而是**四重叠加**：文本 writer + **坐标单位换算函数是死代码**（`gds_write.h:122-126` `transDB2Unit` 第一句 `return value;` 使第二句永不可达，21 处调用全部原样透传 DBU，而 UNITS 声明却是 `1.0/_unit_microns`——**声明与坐标自相矛盾**）+ 无 GDS reader（全仓 grep `GdsReader/GTReader/readGds/loadGDS` **零命中**，"往返"根本无从谈起）+ TCL 层丢弃失败返回值（`tcl_db_file.cpp:385-398` `CmdSaveGDS::exec` 无视 `saveGDSII` 的 bool，恒 `return 1`，G14 假成功）;**(2)** v2.0 称"SDC ✓ 读"——**错**，`parser/` 下无 sdc 目录，SDC 由 iSTA `TimingEngine::readSdc` 消费，**不在 iDB 数据模型内**（对 G16 session 序列化是缺口）;**(3)** `manager/memory/` 是**空壳目录**（仅一个 0 字节 `CMakeLists.txt`），v2.0 §DB3"大设计内存未爬坡"连基础设施都不存在;**(4)** `Def2GdsWrite` 的类结构是 **DEF writer 的换皮移植**：`write_version/write_design` 产出名为 `"VERSION"`/`"Design Name"`/`"DIEAREA"` 的 GdsStruct 并把版本号当 `GdsText` 写进版图（`gds_write.cpp:124-176`）——这是**可视化调试产物**，不是 tapeout 语义;**(5)** parser 层已 Rust 化（liberty/spef/verilog/vcd 四个 Rust parser + C 桥），往返矩阵必须把 Rust 桥纳入断言面。 |
+| rv1.1 / v3.0 | 2026-07-21 | **大改**：对 `builder/`（12572 LOC）+ `parser/gdsii/`（2201 LOC）+ `gds_write.{h,cpp}`（138+858 LOC）逐文件读完重写。核心修订五条，**其中三条推翻/深化 v2.0 的判定**：**(1)** GDS 问题比 v2.0 认定的更严重——不是"文本格式不对"一个缺陷，而是**四重叠加**：文本 writer + **坐标单位换算函数是死代码**（`gds_write.h:122-126` `transDB2Unit` 第一句 `return value;` 使第二句永不可达，21 处调用全部原样透传 DBU，而 UNITS 声明却是 `1.0/_unit_microns`——**声明与坐标自相矛盾**）+ 无 GDS reader（全仓 grep `GdsReader/GTReader/readGds/loadGDS` **零命中**，"往返"根本无从谈起）+ TCL 层丢弃失败返回值（`tcl_db_file.cpp:385-398` `CmdSaveGDS::exec` 无视 `saveGDSII` 的 bool，恒 `return 1`，G14 假成功）;**(2)** v2.0 称"SDC ✓ 读"——**错**，`parser/` 下无 sdc 目录，SDC 由 iSTA `TimingEngine::readSdc` 消费，**不在 iDB 数据模型内**（对 G16 session 序列化是缺口）;**(3)** `manager/memory/` 是**空壳目录**（仅一个 0 字节 `CMakeLists.txt`），v2.0 §DB3"大设计内存未爬坡"连基础设施都不存在;**(4)** `Def2GdsWrite` 的类结构是 **DEF writer 的换皮移植**：`write_version/write_design` 产出名为 `"VERSION"`/`"Design Name"`/`"DIEAREA"` 的 GdsStruct 并把版本号当 `GdsText` 写进版图（`gds_write.cpp:124-176`）——这是**可视化调试产物**，不是 tapeout 语义;**(5)** parser 层已 Rust 化（liberty/spef/verilog/vcd 四个 Rust parser + C 桥），往返矩阵必须把 Rust 桥纳入断言面。 |
+| **rv2.0** | **2026-07-22** | **大改（对照 27-iSTA-rv2.0.md / 28-iRCX-rv2.0.md 的深度与双对标线重写，强化基础设施工具特性）**。核心修订五条：**(1)** rv1.1 把 iDB 当成"GDS 问题为主、其余格式成熟"来审——**代码级核实后发现头号结构症结是数据完整性机制缺失**：往返无损能力未证（无 CI 矩阵）、属性保留策略不透明（STATUS/PROPERTY/VERSION 映射未文档化）、格式覆盖表空白（哪些 DEF 5.8 / LEF 5.7 特性支持/跳过/假成功不可知）——基础设施的价值前提是"我知道我保留了什么、丢了什么、与金标 OA 的差距在哪"，当前状态是**边界失明**（§1.5，类比 30 号文档对 DRC 覆盖表缺失的判定）；**(2)** 新增 **数据完整性栈逐项**（§1.5，Innovus/ICC2 OA 对标核心证据）：逐机制列出 iDB 已有 vs 商业 DB 必需的差距清单——LEF/DEF/Verilog 读写引擎 ✓、Rust parser 桥 ✓；但 **往返无损不可证**（无 CI 矩阵）、**格式覆盖表零建设**（哪些子特性映射到 iDB 的哪个字段/接口）、**属性映射策略未文档化**（REGION/GROUP/SLOT 等 DEF 扩展语义的保留/丢弃规则不透明）、**性能/容量基线缺失**（memory/ 空壳目录，G13 容量爬坡无起点）；**(3)** 全文按**双对标线**重组：Innovus/ICC2 OA 线 = 数据完整性栈（往返无损 + 格式覆盖表透明 + 属性映射文档化 → G1 零丢失），性能/容量线 = 内存/I/O 速度栈（内存池/驻留策略 + 增量更新 API + 大设计剖面 → G13 百万实例），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§1.5 精度栈（数据完整性机制 15 项对比）、§4.12 模块状态一览已有但补充复用姿势/复杂度分析、§5 双档配置表（全量档 vs 增量档）、§8 调用方契约表（全工具 → iDB 消费契约 + iDB → evaluation/platform 提供契约）、§10.2 对照实验（E-DB-\* 系列可杀假说）；**(5)** 基础设施工具特殊纪律强化：**边界诚实红线前置**（§1.3 边界、§2.3 约束、§7 状态机、§10.1 看板、§14.2 负面）、格式覆盖表从"附录可选"升为 **M0 前置 + CI 强制**（§4.3，对标 30 号 DRC 覆盖表的地位）、数据完整性看板必填往返丢失计数/覆盖率（§10.1，对标 OA 的机械判据，非目视）。**缺省配置零回归**纪律不变；新增 GDS 二进制 + 往返矩阵 CI 开关缺省 **强制**（基础设施边界诚实 > 开发便利）。 |
 
 ---
 
@@ -76,18 +78,45 @@ iEDA is licensed under Mulan PSL v2.
 
 - **写失败不传播**：`Def2GdsWrite::writeDb` 返回 `_writer.finish()` 的 bool，但 `writeChip()` 内部各段（write_die 等）失败只 `std::cout` 打印继续跑（`gds_write.cpp:180-184`）；TCL 层再丢一次（§1.2-4）。**三层过滤后，用户不可能看到写失败**。
 - `set_units` 失败路径：`def_units==nullptr && lef_units==nullptr` → cout + `kDbFail`（`gds_write.cpp:108-112`），但 `writeDb` 不检查 `set_units` 的返回值继续写（`gds_write.cpp:59-63`）——单位缺失时产出无 UNITS 的文件。
-- **空壳目录**：`manager/memory/`（0 字节 CMakeLists）。v2.0 的"内存爬坡"P1 项连挂载点都没有。
+- **空壳目录**：`manager/memory/`（0 字节 CMakeLists）。rv1.1 的"内存爬坡"P1 项连挂载点都没有。
 - JSON 有写无读（§1.1）——G16 session 若选 JSON 做 checkpoint 格式，需补 reader 或换格式（未决，见 §14）。
 
-### 1.5 跨工具协调
+### 1.5 ★数据完整性栈逐项——对 Innovus/ICC2 OA 的差距清单（数据库对标核心，基础设施头号纪律）
 
-| 方向 | 现状 | 判定 |
-|---|---|---|
-| iDB → 全工具 | 唯一共享数据模型，各工具经 `dmInst` 读写 | 成熟（这是 iEDA 的正确骨架） |
-| iDB → iRCX/iSTA | SPEF/Liberty 读入供给 signoff | 通（读路径） |
-| iDB → 12 evaluation | 最终产物 DEF/GDS 是 L2 QoR 的真源 | **GDS 断**：L2 若按 GDS 抽样几何，拿到的是文本示意图 |
-| iDB → 40 platform | G16 session 断点续跑依赖 iDB 可序列化 | **缺**：无二进制 session dump；DEF 往返未证无损 |
-| iDB → flow 脚本 | `regress_gcd.sh` 以最终 GDS 做验收 | **验收对象本身是文本 GDS**——"过 regression"≠"可流片" |
+Innovus/ICC2 设计数据库的可信度来自一整套互相咬合的数据完整性机制。逐项核实 iDB 差距（✓=有且生产在用，⚠️=有但半残，✗=无）：
+
+| # | Innovus/ICC2 OA 机制 | iDB 现状 | 证据 | 对数据完整性的影响 | P |
+|---|---|---|---|---|---|
+| 1 | **LEF/DEF 读写引擎** | ✓ | `def_read.cpp` 2330 LOC + `def_write.cpp` 1455 LOC；`lef_builder/` + third_party lefdef | 主路径成熟 | — |
+| 2 | **Verilog 网表读写** | ✓（双路径） | Rust（`verilog-rust` + `VerilogParserRustC.cc`）+ 旧 C++ `verilog_read.cpp` 1107 LOC | 两套读路径并存，切换逻辑未审计 | P2 |
+| 3 | **Liberty/SPEF/SDF 读取** | ✓（Rust桥） | `lib-rust` / `spef-parser` / `sdf/sdf_parse` + Rust-C 桥 | 读-only，合理 | ✓ |
+| 4 | **往返无损能力**（read→write→read，字段保真） | ✗（无 CI 矩阵） | repo 无往返断言 CI；DEF/Verilog/GDS 属性保留**未验证** | **边界失明**：不知道 iDB 保留了输入的哪些字段、丢了哪些 → **假无损的根源**（工具报"写成功"但关键属性已丢，流程后段拿到残缺数据） | **P0** |
+| 5 | **格式覆盖表**（DEF 5.8 / LEF 5.7 特性 ↔ iDB 字段映射） | ✗ | repo 无强制覆盖表；哪些 DEF STATUS/REGION/GROUP/SLOT 支持/跳过不可知 | **边界失明**：不知道 iDB 支持了输入格式的哪个子集 → **假支持的根源**（builder "不报错"≠ 数据正确进 iDB） | **P0** |
+| 6 | **属性映射策略文档化**（扩展属性/PROPERTY/VERSION 的保留规则） | ✗ | DEF PROPERTY 读取路径存在（`def_read.cpp`），写出是否保真**未验证**；LEF VERSION 映射策略**未文档化** | 属性丢失不透明 → 下游工具（如 iDRC 需要 layer property、iTO 需要 cell timing class）拿到不完整数据 | P1 |
+| 7 | **GDS 二进制读写**（tapeout 唯一真源） | ✗✗（§1.2 四重缺陷） | 文本 writer + 死换算 + 无 reader + 假成功 | **流片阻断**：当前产出是 ASCII 示意图（坐标错 2000×），无法交 foundry | **P0** |
+| 8 | **API 稳定性**（builder/service 接口版本兼容） | ⚠️ 未承诺 | `data_service` / `def_service` / `lef_service` 在；接口变更策略**无文档** | iDB 接口变更破坏下游工具（24 个 operation 模块全依赖 iDB）；无版本号/deprecation 策略 | P1 |
+| 9 | **数据校验**（几何/拓扑/命名合法性） | ⚠️ 零散 | DEF 坐标/单位读取有校验；**无统一 validate() 入口** | 非法数据进 iDB → 后段工具 crash（如 iPL 拿到重叠 placement blockage） | P1 |
+| 10 | **内存管理**（池化/驻留/增量释放） | ✗（空壳目录） | `manager/memory/` 仅 0 字节 `CMakeLists.txt`（§1.3） | **G13 容量爬坡无基础**：大设计内存爆炸（100 万实例 RSS 未知） | **P0** |
+| 11 | **增量更新 API**（局部修改无需全量重建） | ✗ | 全树无 `updateNet` / `modifyInstance` / `incrementalLoad` 类 API | 每次 ECO 后全量 save→reload → 墙钟主瓶颈（iTO 每轮优化都要序列化整个 DB） | P1 |
+| 12 | **session 序列化/断点续跑**（G16 前置） | ✗（格式未定） | JSON 有写无读（§1.1）；DEF 往返无损未证；SDC 不在 iDB（§1.1） | G16 无法实现（session dump 需要全状态：design + timing constraints + opt state） | P1 |
+| 13 | **并发读保护**（多工具同时查询 iDB） | ⚠️ 未验证 | `dmInst` 全局单例；是否线程安全**未验证** | 潜在 race（如 evaluation 后台统计 + iTO 前台修改） | P2 |
+| 14 | **错误恢复**（写失败回滚/部分写保护） | ✗ | §1.4：写失败继续写 + TCL 层假成功 | 损坏输出文件被下游当成合法输入 → 全链失真 | **P0** |
+| 15 | **性能剖面/基线**（load/save 墙钟/内存分项） | ✗ | 无 `benchmark/db/` 剖面脚本；memory/ 空壳 | 性能退化不可察觉（如某次提交让 50 万实例 load 慢 3×） | P1 |
+
+**§1.5 结论**：数据完整性缺口是**结构性的三层**——(a) 验证层：往返无损不可证、格式覆盖表零建设、属性映射不透明（#4/5/6，**边界失明**）；(b) 实现层：GDS 四重缺陷、内存管理空壳、增量 API 缺（#7/10/11）；(c) 健壮性层：错误恢复缺、数据校验零散、并发保护未验证（#14/9/13）。rv1.1 只覆盖了 (b) 的一部分，(a) 是 rv2.0 新增战线。**基础设施工具头号纪律 = 边界诚实**（KH-DB-02）：无往返矩阵的"格式支持" = 假支持。
+
+### 1.6 跨工具协调——消费契约与提供契约（基础设施调用方/被调用方双向审计）
+
+| 方向 | 现状 | 契约要求 | 判定 |
+|---|---|---|---|
+| 全工具 → iDB（消费契约） | 唯一共享数据模型，各工具经 `dmInst` 读写 | iDB API 稳定性承诺（版本兼容/deprecation 策略） | **半通**：骨架正确，但无版本策略（§1.5-#8） |
+| iRCX/iSTA → iDB | SPEF/Liberty 读入 | 格式覆盖表透明（哪些 SPEF 字段进 iDB） | **半通**：读路径在，覆盖表缺（§1.5-#5） |
+| iDB → evaluation | 最终产物 DEF/GDS 是 L2 QoR 的真源 | GDS 二进制可信 + 几何与 DEF 一致 | **GDS 断**：L2 若按 GDS 抽样几何，拿到的是文本示意图（坐标错 2000×） |
+| iDB → platform | G16 session 断点续跑依赖 iDB 可序列化 | session dump 包含全状态（design + constraints + opt state） | **缺**：无二进制 session dump；DEF 往返未证无损；SDC 不在 iDB |
+| iDB → flow 脚本 | `regress_gcd.sh` 以最终 GDS 做验收 | 二进制 GDS 可被 foundry 接收（gdstk/klayout stream 模式打开） | **验收对象本身是文本 GDS**——"过 regression"≠"可流片" |
+| iTO/iPL → iDB | ECO 后修改 instance/net | 增量更新 API（局部修改无需全量重建） | **断**：无增量 API，每次 ECO 全量 save→reload（§1.5-#11） |
+
+**§1.6 结论**：跨工具契约断点三处——**(a) 数据完整性契约不透明**（格式覆盖表/往返无损/属性映射策略缺）；**(b) GDS 产物不可信**（文本示意图冒充流片数据）；**(c) 性能契约缺失**（无增量 API，ECO 墙钟主瓶颈）。
 
 ---
 
@@ -128,34 +157,47 @@ iEDA is licensed under Mulan PSL v2.
 
 ## 3. HLD 总体架构
 
-### 3.1 数据流
+### 3.1 数据流——单引擎双档（数据完整性档 × 性能/容量档）
 
+```text
+                    LEF/DEF/Verilog/Liberty/SPEF/GDS (输入格式)
+                         │
+输入文件 ──────────────► builder/ (lef/def/verilog/json/gds)  ← parser/ (11 格式; 4 Rust 桥)
+LEF ──────────────────► │  data: design/tech/circuit          │
+DEF ──────────────────► │  service: def/lef/data              │ ──► DEF   (成熟)
+Verilog(Rust+旧C++)──► │  memory: 【空壳 → ★需建设】          │ ──► Verilog(成熟)
+Liberty(Rust)─────────► │                                     │ ──► JSON  (写-only)
+SPEF(Rust)────────────► │  ★ 往返矩阵 CI (§4.3, G1 前置)      │ ──► GDS:
+SDF/AOCV/VCD──────────► │  ★ 格式覆盖表 (§4.7, 边界诚实)      │     文本(现, debug only)
+SDC ✗(在 iSTA, G16缺口) └──────────────┬─────────────────────┘     ★二进制(§4.1, 流片)
+                                        │
+           ┌────────────────────────────┼────────────────────────────┐
+           │ 数据完整性档（OA 线）       │        性能/容量档（G13 线）│
+           ▼                            ▼                            ▼
+     往返无损 CI              全工具 → iDB 消费        ★ 内存池/驻留策略
+     格式覆盖表透明          (24 operation 模块)        ★ 增量更新 API
+     属性映射文档化          dmInst 读写              ★ 容量剖面 (10万/50万/100万)
+     GDS 二进制可信                                    load/save 墙钟分项
+           │                            │                            │
+           ▼                            ▼                            ▼
+     G1 看板（§10.1）              调用方契约表（§8）         性能/容量看板（§10.2）
 ```
-输入文件                    iDB（唯一共享数据模型）                     输出
-─────────────   ┌────────────────────────────────────┐   ─────────────────
-LEF ──────────► │  builder/ (lef/def/verilog/json)    │ ──► DEF   (成熟)
-DEF ──────────► │  parser/  (11 格式; 4 个 Rust 桥)    │ ──► Verilog(成熟)
-Verilog(Rust)─► │  data: design/tech/circuit          │ ──► JSON  (写-only)
-Liberty(Rust)─► │  service: def/lef/data              │ ──► GDS:
-SPEF(Rust)────► │  memory: 【空壳】                     │     文本(现, debug only)
-SDF/AOCV/VCD─►  │                                     │     ★二进制(§4.1, 流片)
-SDC ✗(在 iSTA)  └──────────────┬─────────────────────┘
-                               │ ★ GdsBinaryReader(§4.2)
-                               ▼
-                    ★ 往返矩阵 CI（读→写→再读 → 字段断言，§4.3）
-```
+
+**核心架构判断**：数据完整性线与性能/容量线**共用同一个 iDB 数据模型、同一套 builder/parser**——差别只在「验证的深度（往返矩阵 vs 基础读写）」和「生效的优化策略（§5 双档表：全量档 vs 增量档）」。这与 Innovus「common database, 多 effort」同构；也直接否定「为快而再写一套轻量 DB」的路线（代价是口径分家，参考 27 号文档 §1.3 三套栈教训）。
 
 ### 3.2 关键设计决策（含被否）
 
-| # | 决策 | 被否 |
-|---|---|---|
-| D1 | **先修死换算与假成功，再做二进制 writer** | 直接上新 writer（会把 2000× 错误坐标编码进二进制） |
-| D2 | 二进制 writer **复用 `GdsData/Gds* POD`**，只新增 record 编码层 | 另起一套 GDS 数据模型（平行重写） |
-| D3 | GDS reader 走 `GdsData` 中间表示再进 iDB（读改写共用一套 POD） | reader 直插 iDB（两套语义映射） |
-| D4 | 文本 GDS 保留为显式 debug 旗标 + WARN | 立刻物理删除（现网脚本可能依赖，§14 未验证） |
-| D5 | 往返矩阵"测试即规格"进 CI | 口头字段清单 |
-| D6 | `manager/memory/` 空壳：容量剖面先落在 benchmark 脚本，不新建目录 | 把空壳填实再测（无需求驱动，先量后建） |
-| D7 | SDC 留在 iSTA，不进 iDB（本里程碑） | 为 G16 提前把 SDC 搬进 iDB（超范围，§14 记录） |
+| ID | 决策 | 被否方案 | 理由 |
+|---|---|---|---|
+| **D1** | **先修死换算与假成功，再做二进制 writer** | 直接上新 writer（会把 2000× 错误坐标编码进二进制） | 死换算修复是前置（FR-DB-01）；否则二进制产物仍错 |
+| D2 | 二进制 writer **复用 `GdsData/Gds* POD`**，只新增 record 编码层 | 另起一套 GDS 数据模型（平行重写） | Composition 复用现有 19 个 POD 结构（§4.1） |
+| D3 | GDS reader 走 `GdsData` 中间表示再进 iDB | reader 直插 iDB（两套语义映射） | 读改写共用一套 POD，代码复用率高 |
+| **D4** | **往返矩阵"测试即规格"进 CI，字段清单即边界承诺** | 口头字段清单 / 等全通过再建 CI | 基础设施边界诚实纪律（KH-DB-02）；清单外丢失不阻断，清单内丢失 = G1 红 |
+| D5 | 文本 GDS 保留为显式 debug 旗标 + WARN | 立刻物理删除（现网脚本可能依赖） | 零回归；二进制验收通过后降级 debug-only |
+| **D6** | `manager/memory/` 空壳：容量剖面先落 benchmark 脚本，不新建目录 | 把空壳填实再测（新建内存池基础设施） | 无需求驱动，先量后建；剖面数据定义内存策略（不是反过来） |
+| D7 | SDC 留在 iSTA，不进 iDB（本里程碑） | 为 G16 提前把 SDC 搬进 iDB | 超范围；G16 序列化选型未定（§14 记录） |
+| **D8** | **格式覆盖表 P0（边界诚实先于盲追 OA 全特性）** | 先追 OA 全格式支持再记覆盖 | **KH-DB-02 核心**：无覆盖表的"格式支持" = 假支持（不知道跳过了哪些字段）。对照：OA 明确标注每个 API 版本支持的 DEF/LEF 子集。**被否原因**：追 OA 100% 特性 = 工作量数量级差；边界诚实（支持/跳过字段列表）= G1 可判定基础。 |
+| **D9** | **增量 API 外挂（显式 `updateNet`/`modifyInstance`），缺省全量** | 内部自动识别脏数据增量 save | 显式契约可审计（§8）；自动识别 = 隐式魔法（易出 bug） |
 
 ---
 
@@ -219,32 +261,92 @@ ALG-4.3-1  每格式一行矩阵
 
 `writeChip()`（`gds_write.cpp:64-85`）按 GDS 语义重排：去掉 `"VERSION"`/`"Design Name"` 两个 DEF 换皮 struct；顶层 struct 用真实 design name；die 边界是否落 layer 0 需按 PDK layer map 决策（**deferred**：layer map 表先行，见 §14）；`write_pin/component/net/special_net/fill` 保留但坐标一律过修复后的 `transDB2Unit`。
 
-### 4.6 模块状态一览
+### 4.3 ★ 往返矩阵 CI（FR-DB-04，P0，G1 前置）
+
+**现状**：各 parser 散落单测，无"读→写→再读"闭环。
+
+**设计**（测试即规格，D4）：参见上文 ALG-4.3-1 详细设计。
+
+**接入 CI**：`benchmark/db/roundtrip_ci.sh` 每格式 × 每 PDK → JSON 报告 → CI 门禁（清单内 fail=0）
+
+### 4.4 ★ 容量剖面（FR-DB-06，P1，G13 前置）
+
+**设计**：参见上文 ALG-4.4-1，落 `benchmark/db/capacity_profile.sh`，三档实例数（100k/500k/1000k）剖面。
+
+### 4.5 `Def2GdsWrite` 段落重排（随 FR-DB-02 落地）
+
+`writeChip()` 按 GDS 语义重排，去掉 DEF 换皮 struct，详见上文。
+
+### 4.6 ★ 增量更新 API（FR-DB-11，P1，性能线核心）
+
+**设计**：参见上文 IncrementalDB 类设计 + 增量语义 + 下游切换表。
+
+### 4.7 ★ 格式覆盖表（FR-DB-05，P0，边界诚实核心）
+
+**设计**：参见上文 `docs/ai/attachments/idb-format-coverage.json` + CI 接入。
+
+### 4.8 模块状态一览（成熟度 / 复杂度 / 边界 / 复用姿势）
 
 | 模块 | 现状成熟度 | 主复杂度 | 关键边界 | 复用姿势（现状→目标） |
 |---|---|---|---|---|
-| def_read/def_write | 成熟（2330+1455 LOC） | O(对象数) | 属性保真无 CI | 保留 + 矩阵 |
-| verilog (Rust+旧C++) | 双读路径并存 | — | 切换逻辑未审计 | 收敛或写明分工（FR-DB-08） |
-| json_write / GJWriter | 写-only（952 LOC） | — | 无 reader | 标记 BLOCKED（§4.3） |
-| `Gds*/GdsData` POD | 结构齐全（2201 LOC） | — | is_full flush 阈值 | **Composition 复用**（§4.1/4.2） |
-| `GdsiiTextWriter` | 调试级（566 LOC） | O(元素) | 非流片格式 | 降级 debug-only + WARN |
-| `Def2GdsWrite` | DEF 换皮（858 LOC） | O(元素) | §1.2 四重缺陷 | 重排 + 接二进制后端 |
-| `GdsiiBinaryWriter` ★ | 无 | O(元素) | int32 溢出；excess-64 | 新增（Composition POD） |
-| `GdsBinaryReader` ★ | 无 | O(字节) | 截断/未知 record | 新增 |
-| `manager/memory/` | **空壳** | — | — | 不填实，剖面落 benchmark（D6） |
-| `CmdSaveGDS` | 假成功 | — | 丢 bool | 修返回值（FR-DB-01） |
+| def_read/def_write | 成熟（2330+1455 LOC） | O(对象数) | 属性保真无 CI | 保留 + 矩阵（§4.3） |
+| verilog (Rust+旧C++) | 双读路径并存 | O(tokens) | 切换逻辑未审计 | 收敛或写明分工（FR-DB-08） |
+| json_write / GJWriter | 写-only（952 LOC） | O(对象数) | 无 reader | 标记 BLOCKED 直至补 reader |
+| `Gds*/GdsData` POD | 结构齐全（2201 LOC） | — | is_full flush 阈值需重审 | **Composition 复用**（§4.1/4.2） |
+| `GdsiiTextWriter` | 调试级（566 LOC） | O(元素) | 非流片格式 | 降级 debug-only + WARN（D5） |
+| `Def2GdsWrite` | DEF 换皮（858 LOC） | O(元素) | §1.2 四重缺陷 | 重排 + 接二进制后端（§4.5） |
+| `GdsiiBinaryWriter` ★ | 无 | O(元素) | int32 溢出；excess-64 编码 | 新增（Composition POD，§4.1） |
+| `GdsBinaryReader` ★ | 无 | O(字节) | 截断/未知 record | 新增（§4.2） |
+| `IncrementalDB` ★ | 无 | O(dirty) | base checksum 校验 | 新增封套（§4.6） |
+| `FormatCoverage` ★ | 无 | O(特性数) | 覆盖表与实现同步 | 新增活文档（§4.7） |
+| `manager/memory/` | **空壳** | — | — | 不填实，剖面落 benchmark（D6，§4.4） |
+| `CmdSaveGDS` | 假成功 | — | 丢 bool | 修返回值透传（FR-DB-01） |
 
 ---
 
-## 5. 配置
+## 5. 配置 / 双档表 / 迭代策略
 
-| 键 | 默认 | 说明 |
-|---|---|---|
-| `gds.mode` | `binary`（落地后） | `binary` / `text_debug`；落地前唯一可用值是 text 且必须 WARN |
-| `gds.layer_map` | PDK 侧车文件 | die/pin/net → (layer,datatype) 映射；**缺失即失败**，禁止硬编 |
-| `roundtrip.manifest` | repo 内清单 | §4.3 FIELD_MANIFEST 路径 |
+### 5.1 可配表（缺省 = 现状零回归）
 
-缺省行为不变（text 路径保留至 binary 验收通过）→ 零回归。
+| 键 | 默认 | 说明 | 回归 |
+|---|---|---|---|
+| `gds.mode` | `binary`（落地后） | `binary` / `text_debug`；落地前唯一可用值是 text 且必须 WARN | 零回归 |
+| `gds.layer_map` | PDK 侧车文件 | die/pin/net → (layer,datatype) 映射；**缺失即失败**，禁止硬编 | 新增必填 |
+| `roundtrip.manifest` | repo 内清单 | §4.3 FIELD_MANIFEST 路径；CI 强制 | 新增 |
+| `db.incremental` | `false` | 开启增量 API（§4.6）；缺省全量 | 零回归 |
+| `db.validate_on_load` | `false` | 加载后数据校验（几何/拓扑合法性） | 零回归（新增开关） |
+| `db.memory_profile` | `false` | 运行时内存剖面（RSS 采样） | 零回归 |
+
+### 5.2 ★双档表（rv2.0 核心新增：同一数据库的两套配置）
+
+**档 A/B = 数据完整性 effort（OA 线）**：
+
+| 档 | name | 往返验证 | 格式覆盖 | 属性保留 | 用途 | 禁 |
+|---|---|---|---|---|---|---|
+| A | baseline | 基础读写 | 隐式 | 部分未知 | 现状行为（零回归基线） | — |
+| B | certified | CI 矩阵强制 | 覆盖表透明 | 清单内 100% | G1 数据完整性保证 | 无矩阵宣称"无损" |
+
+**轮 C/D = 性能/容量档（G13 线）**：
+
+| 档 | name | 实例数 | 内存优化 | 增量 API | 用途 |
+|---|---|---|---|---|---|
+| C | daily | ≤10万 | 无 | 全量 | 日常小设计 |
+| D | large | ≤100万 | 池化/驻留（§4.4 数据定义策略） | 增量（§4.6） | G13 大设计 |
+
+**触发规则**：
+- CI 回归一律档 B（数据完整性优先）
+- 性能剖面走档 C/D（分档基线）
+- 生产 flow 缺省档 A（零回归）；G1 验收通过后切档 B
+
+### 5.3 迭代策略（评测向，非求解器 iter）
+
+| 轮 | 数据完整性档 | 容量档 | GDS | 目的 |
+|---|---|---|---|---|
+| 0 | A（baseline） | C（daily） | text | 基线 / 零回归 |
+| 1 | A | C | text | 修死换算 + 假成功（FR-DB-01） |
+| 2 | B（certified） | C | binary | 往返矩阵 CI + 二进制 GDS（G1 起步） |
+| 3 | B | D（large） | binary | 容量剖面（G13 爬坡） |
+| 4 | B | D + incremental | binary | 增量 API（ECO 性能） |
 
 ---
 
@@ -270,61 +372,102 @@ save_gds: check(layer_map) → write → verify(rc 透传)
 
 ---
 
-## 8. 跨工具 Cascade
+## 8. 跨工具 Cascade——★调用方契约表（基础设施消费/提供双向契约）
 
-| 上/下游 | 信号 | 契约 |
-|---|---|---|
-| 全工具 ↔ iDB | dmInst 读写 | 不变（正确骨架） |
-| iDB → 12 evaluation | 最终 DEF/★GDS 为 L2 QoR 真源 | 二进制落地前 L2 禁抽 GDS |
-| iDB → 40 platform | G16 session 序列化 | DEF 往返无损证明，或专用 dump（§14 未决） |
-| iDB → flow 脚本 | regress 验收对象 | binary 落地后脚本切 binary |
+| 调用方 | 消费契约（工具 → iDB） | 提供契约（iDB → 工具） | 单位/口径 | 现状判定 |
+|---|---|---|---|---|
+| 全工具（24 个 operation） | 经 `dmInst` 读写设计数据；API 稳定性承诺 | 数据模型一致性；版本兼容/deprecation 策略 | — | **半通**：骨架正确，但无版本策略（§1.5-#8） |
+| iPL/iNO/iCTS/iTO/iRT | 读 instance/net/pin 拓扑 | 拓扑正确性；几何合法性 | DBU 整数 | 通；数据校验零散（§1.5-#9） |
+| iSTA | 读 Liberty/SPEF（时序分析） | Liberty/SPEF 格式覆盖透明 | ns/fF/Ohm | **半通**：读路径在，覆盖表缺（§1.5-#5） |
+| iRCX | 读 routing 几何 → 写 SPEF | SPEF 写出保真（耦合 C/电阻） | fF/Ohm | 通；SPEF 往返未验证 |
+| iPW | 读 power net + activity（功耗分析） | VCD 解析 + power net 拓扑 | mW | 通 |
+| evaluation | 读最终 DEF/GDS（L2 QoR 真源） | GDS 二进制可信 + 几何与 DEF 一致（抽样 0 偏差） | — | **GDS 断**：L2 若按 GDS 抽样，拿到文本示意图（坐标错 2000×） |
+| platform | G16 session dump/restore | session 序列化包含全状态（design + constraints） | — | **缺**：无二进制 session；DEF 往返未证无损；SDC 不在 iDB |
+| flow 脚本 | `regress_gcd.sh` 验收 GDS | 二进制 GDS 可被 foundry 接收（gdstk/klayout stream 打开） | — | **验收对象是文本 GDS**："过 regression"≠"可流片" |
+| iTO/iPL ECO | 修改 instance/net 后继续优化 | 增量更新 API（局部修改无需全量重建） | — | **断**：无增量 API，每次 ECO 全量 save→reload（§1.5-#11） |
+
+**闭环触发**：
+- iTO ECO 后脏数据 → 增量 save（档 D） → 墙钟 <10% 全量 → 接受优化；否则拒绝增量（回退全量）
+- evaluation L2 几何抽样 → GDS vs DEF 偏差 >DBU → iDB 写出失败，escalate 到 builder 层
+- platform session restore → 往返矩阵 fail >0 → 拒绝 restore，要求 clean checkpoint
+
+**契约分层**（对标 OA API 稳定性承诺）：
+- **Tier 1（稳定 API）**：`dmInst`、`design/tech/circuit` 核心数据结构 → 承诺向后兼容（版本号 + deprecation 周期）
+- **Tier 2（演进 API）**：builder/parser 扩展接口 → 可变更，但需 changelog + migration guide
+- **Tier 3（实验 API）**：增量 API、session dump → 明确标注 experimental，可随时变更
 
 ---
 
 ## 9. 商业 Know-how 映射
 
-| KH-ID | 本工具落点 |
-|---|---|
-| KH-DB-01（二进制唯一流片真源） | §1.2 / §4.1 / NFR-DB-01/03 |
-| KH-DB-02（属性往返） | §4.3 矩阵 + KNOWN_LOSS |
-| KH-DB-03（分层驻留/容量） | §4.4 剖面（memory/ 空壳记录在案） |
-| KH-X-04（失败响亮） | §1.4 / FR-DB-01 / §7 |
+| KH-ID | 含义 | 本工具落点 |
+|---|---|---|
+| KH-DB-01 | 二进制唯一流片真源（GDS stream format） | §1.2 / §4.1 / NFR-DB-01/03 |
+| **KH-DB-02** | **边界诚实**（格式覆盖表透明 + 往返无损可证 + 属性映射文档化） | §1.5 / §4.3 矩阵 + §4.7 覆盖表 + KNOWN_LOSS |
+| KH-DB-03 | 分层驻留/容量（内存池/大设计） | §4.4 剖面（memory/ 空壳记录在案，先量后建） |
+| KH-DB-04 | 增量更新（ECO 后局部修改） | §4.6 IncrementalDB API |
+| KH-X-04 | 响亮失败（写失败非零 rc） | §1.4 / FR-DB-01 / §7 |
+| KH-X-01 | 同一真值源闭环 | G1 先于 L2 evaluation；§8 契约 |
 
 ---
 
 ## 10. 商业对照看板 + 演进 M0–M4
 
-### 10.1 看板
+### 10.1 数据完整性看板（vs Innovus/ICC2 OA）
 
-| 指标 | iEDA iDB | 商业（INVS/ICC2 DB） | 门槛 | 门禁 |
-|---|---|---|---|---|
-| 流片 GDS | 文本示意图 | 二进制 stream | gdstk/klayout 可读 | — |
-| GDS 几何一致 | 坐标差 2000×（死换算） | — | 抽样 0 偏差 | — |
-| 往返丢失 | 无矩阵 | OA 无损 | 清单内 0 | G1 |
-| 写失败可见 | rc 恒 0 | 响亮 | rc≠0 | G14 |
-| 峰值内存 | 未剖面 | — | 记录→预算 | G13 |
+| 指标 | iEDA iDB | Innovus/ICC2 OA | Δ | 门槛 | 门禁 |
+|---|---|---|---|---|---|
+| 流片 GDS | 文本示意图 | 二进制 stream | 格式错 | gdstk/klayout 可读 | — |
+| GDS 几何一致 | 坐标差 2000×（死换算） | 0 偏差 | 2000× | 抽样 0 偏差 | NFR-DB-02 |
+| 往返丢失（DEF） | 无矩阵 | 0（OA 无损） | 不可知 | 清单内 **0** | **G1** |
+| 往返丢失（Verilog） | 无矩阵 | 0 | 不可知 | 清单内 **0** | **G1** |
+| 往返丢失（GDS） | 无矩阵 + 无 reader | 0 | 不可知 | 清单内 **0** | **G1** |
+| 格式覆盖率（DEF 5.8） | 隐式（边界失明） | 明确子集标注 | 不透明 | 覆盖表进 CI | **G1** |
+| 属性保留（PROPERTY） | 未验证 | 100% | 未知 | 往返矩阵验证 | G1 |
+| 写失败可见 | rc 恒 0（假成功） | 响亮非零 | 3 层过滤 | rc≠0 | **G14** |
+| API 稳定性 | 无承诺 | 版本号 + deprecation | 无策略 | 分层契约（§8） | — |
 
-### 10.2 对照实验（杀假说）
+### 10.2 性能/容量看板（vs 商业 DB 大设计能力）
 
-| 实验 | 方法 | 杀死条件 |
-|---|---|---|
-| E-DB-01 | `file`/`xxd` 验当前产物 | 若已是二进制 → 本文档 §1.2-1 被杀（预期：ASCII `HEADER`） |
-| E-DB-02 | 修死换算前后坐标对比 | 若无变化 → §1.2-2 被杀（预期：差 micron_dbu 倍） |
-| E-DB-03 | 故意丢 STATUS 跑矩阵 | 矩阵不报 → 矩阵假（G1 防线） |
-| E-DB-04 | 注入写盘失败 | TCL rc==0 → §1.2-4 实锤（修复后必≠0） |
-| E-DB-05 | 文本模式进 release 流片脚本 | CI 拒（NFR-DB-03） |
+| 指标 | iEDA iDB | 商业基线 | Δ | 门槛 | 门禁 |
+|---|---|---|---|---|---|
+| 50 万实例 load 墙钟 | 未剖面 | — | 未知 | 记录→预算 | **G13** |
+| 50 万实例 save 墙钟 | 未剖面 | — | 未知 | 记录→预算 | **G13** |
+| 50 万实例峰值 RSS | 未剖面（memory/ 空壳） | — | 未知 | 记录→预算 | **G13** |
+| 100 万实例可行性 | 未测 | 可（内存池） | 未知 | 通过 or 写清瓶颈 | G13 |
+| 增量 save 加速比 | 无增量 API | ≥10×（ECO ≤100 net） | ∞（无 API） | ≥10× | — |
+| ECO 后全量 reload 墙钟 | 主瓶颈（iTO 循环） | 增量 API 避免 | — | 增量 API 存在 | — |
 
-### 10.3 演进
+### 10.3 对照实验（可执行设计，杀假说）
 
-```text
-M0 先量：E-DB-01/02 实锤报告（hex 头 + 坐标比）+ 空壳/假成功台账
-M1 可信：FR-DB-01（死换算+rc 透传）+ gtest；BinaryGdsWriter + E-DB-02/04 绿
-M2 主算法：GdsBinaryReader + 往返矩阵 CI（DEF/Verilog/GDS）
-M3 打平：layer_map 真实 PDK 全量 GDS 与金参考并排（12 联动）
-M4 纵深：OASIS、容量 100万、session 序列化选型
-```
+| ID | 实验 | 输入 | 命令/操作 | 判据（数值阈值） | 杀死假说/锁住契约 |
+|---|---|---|---|---|---|
+| **E-DB-01** | 验证当前 GDS 是文本 | 现有 GDS 产物 | `file gcd.gds; xxd gcd.gds \| head` | 若**不是** ASCII `HEADER` → §1.2-1 被杀（预期：是 ASCII） | 文本 GDS 实锤（M0） |
+| **E-DB-02** | 验证死换算 | 修前后 GDS 坐标 | 修 `transDB2Unit` → 比较坐标值 | 若修后坐标变化 = `_unit_microns` 倍 → 坐实死换算 | §1.2-2 实锤（M0） |
+| **E-DB-03** | 往返矩阵防假 | 故意丢 DEF STATUS | 跑矩阵 CI；矩阵是否报 fail | 若矩阵**不报** → 矩阵假（需修断言） | G1 防线有效性（M1） |
+| **E-DB-04** | 写失败传播 | 注入写盘失败（只读目录） | `save_def /readonly/x.def`；检查 TCL rc | 若 TCL rc==0 → §1.2-4 实锤（预期：修后≠0） | G14 响亮失败（M1） |
+| **E-DB-05** | 文本模式防护 | text_debug 进 release 流片脚本 | CI 检测 `gds.mode==text` | 若 CI 不拒 → 防护失效（预期：CI ERROR） | NFR-DB-03（M2） |
+| **E-DB-06** | 二进制 GDS 可读 | 二进制 GDS 产物 | `gdstk.read_gds(x.gds)` / klayout stream 模式 | 若打开失败 or 报格式错 → 二进制编码有 bug | NFR-DB-01（M2） |
+| **E-DB-07** | GDS 几何一致 | 同一 DEF，输出 DEF + GDS | 抽样 DEF 坐标 vs GDS 坐标；逐点比对 | 若偏差 >1 DBU → 坐标换算仍错 or layer map 错 | NFR-DB-02（M2） |
+| **E-DB-08** | 容量瓶颈定位 | 100 万实例合成网表 | load + heap profiler（valgrind massif） | 若 RSS >预算 → 写清瓶颈（哪类对象占比最大） | G13 容量（M3） |
+| **E-DB-09** | 增量正确性 | DEF base + ECO 10 net | 增量 save vs 全量 save；load 后比对 | 若 net 连接不一致 → 增量 merge 有 bug | 增量 API（M4） |
 
-退出门禁：M0→实锤报告入库；M1→NFR-DB-01/02；M2→NFR-DB-04；M3→G1 面积/几何行可解释；M4→非本阶段阻断。
+**实验设计原则**：
+1. **注入可控**：手工制造失败条件（只读目录、故意丢字段）= controlled experiment
+2. **判据机械**：文件头 magic/坐标数值/rc 值（非目视）
+3. **锁住边界**：E-DB-03 的"矩阵必报 fail"= G1 防线的验证（不许假通过）
+
+### 10.4 演进 M0–M4
+
+| 里程碑 | 目标 | 交付 | 退出门禁 |
+|---|---|---|---|
+| **M0 先量** | 实锤报告（E-DB-01/02）+ 空壳/假成功台账 | hex 头 + 坐标比 + KNOWN_LOSS 初稿 | 报告入库；边界失明可追溯 |
+| **M1 可信** | FR-DB-01（死换算+rc 透传）+ BinaryWriter + gtest | `transDB2Unit` 修复 + `CmdSaveGDS` 修复 + E-DB-02/04 绿 | NFR-DB-01/02；G14 响亮失败 |
+| **M2 主算法** | GdsBinaryReader + 往返矩阵 CI（DEF/Verilog/GDS）+ 格式覆盖表 | 三格式矩阵 + `idb-format-coverage.json` | **NFR-DB-04（G1）** |
+| **M3 打平** | 容量剖面（50万/100万）+ layer_map 真实 PDK 全量 GDS | `capacity_profile.csv` + 与金参考并排（12 联动） | **G13 容量基线** |
+| **M4 纵深** | 增量 API（IncrementalDB）+ session 序列化选型 + OASIS 评估 | 增量 API + E-DB-09 + G16 方案 | 增量正确性；非本阶段阻断 |
+
+**M0→M1→M2 是 G1 关键路径**（数据完整性可证）；**M3 是 G13 关键路径**（容量）；M4 为性能/G16 预留。
 
 ---
 
@@ -370,20 +513,43 @@ PR 切片：DB-0 实锤报告 → DB-1 死换算+rc 修复 → DB-2 BinaryWriter
 
 ## 14. 未验证 / 负面结论
 
-| # | 项 | 说明 |
-|---|---|---|
-| 1 | 现网脚本是否已依赖文本 GDS | 删/降级前须 grep `scripts/` + 用户 flow；**未验证** |
-| 2 | OASIS 是否需要 | 商业已普及；本里程碑不做 |
-| 3 | DEF 5.8 全属性集往返 | 矩阵裁决前不写"不丢" |
-| 4 | layer map 来源 | die/pin/net → (layer,datatype) 无 PDK 侧车；**deferred，缺即失败** |
-| 5 | G16 session 格式 | JSON 无 reader / DEF 往返未证 / 专用二进制 dump 三选一，**未决** |
-| 6 | SDC 是否进 iDB | 现由 iSTA 消费；G16 若要序列化约束需单独立项（D7） |
-| 7 | Verilog 双读路径 | Rust 新 vs `verilog_read.cpp` 1107 旧，切换与差异**未审计** |
+### 14.1 未验证（禁止写成事实）
 
-**不要重走**：
-- 不要在未修 `transDB2Unit` 前写二进制编码器——会把 2000× 错误坐标固化进二进制（比文本假成功更难发现）。
-- 不要扩展 `GdsiiTextWriter`「更像」二进制（加 record 样子）——文本流语义根本不是 record 流，重写编码层比重写文件名便宜。
-- 不要把"parser 目录存在"当"支持该格式"举证——GDS 目录 21 个文件无 reader 是本案原型。
+- 当前任意设计 vs OA 的真实往返丢失字段数（**M0 前未知**）。
+- DEF 5.8 全属性集（VERSION/PROPERTY/STATUS/REGION/GROUP/SLOT/MASK 等）的保留策略。
+- LEF 5.7 OBS/ANTENNAMODEL/DENSITY 等扩展特性的往返保真性。
+- Verilog 2001 generate/parameter/defparam 展开后的连接保真性。
+- SPEF 往返保真性（iRCX 写出 → iDB 读入 → 再写出，耦合 C 是否丢失）。
+- **SPEF 耦合电容是否真实落地到 `RcNet`**（iSTA SI 前置，类比 27 号文档 §14.1-5）。
+- `dmInst` 全局单例是否线程安全（多工具并发读）。
+- **50 万/100 万实例 load/save 墙钟/内存真实数值**（G13 基线，M0 打点产出）。
+- 现网脚本是否已依赖文本 GDS（删/降级前须 grep `scripts/` + 用户 flow）。
+- layer map 来源（die/pin/net → (layer,datatype) 无 PDK 侧车文件）——**deferred，缺即失败**。
+- G16 session 格式选型（JSON 补 reader / DEF 往返无损 / 专用二进制 dump 三选一）——**未决**。
+- Verilog 双读路径（Rust 新 vs `verilog_read.cpp` 1107 旧）切换逻辑与数值一致性。
+
+### 14.2 负面 / 不要重走
+
+| 项 | 结论 |
+|---|---|
+| 无 `transDB2Unit` 修复前写二进制编码器 | **禁止**——会把 2000× 错误坐标固化进二进制（比文本假成功更难发现）。D1 先行。 |
+| 扩展 `GdsiiTextWriter`「更像」二进制 | **禁止**——文本流语义根本不是 record 流；重写编码层比改文件名便宜。D2。 |
+| 把"parser 目录存在"当"支持该格式" | **禁止**——GDS 目录 21 个文件无 reader 是本案原型（§1.1 教训）。读写分开举证。 |
+| 无往返矩阵 CI 宣称"格式无损支持" | **禁止**——边界失明 = 假支持（KH-DB-02）；清单内丢失 = G1 红线。D4/D8。 |
+| 无格式覆盖表宣称"DEF 5.8 支持" | **禁止**——不知道跳过了哪些字段 = 假支持；对标 30 号 DRC 覆盖表纪律。§1.5-#5。 |
+| 先建内存池基础设施再测容量 | **不推荐**——无需求驱动；剖面数据定义内存策略（不是反过来）。D6。 |
+| 为 G16 提前把 SDC 搬进 iDB | **超范围**——SDC 现由 iSTA 消费；序列化选型未定。D7。 |
+| 用 JSON 作 session 格式但不补 reader | **禁止**——有写无读 = 单向门（§1.1）；G16 需要 restore。 |
+| 增量 API 内部自动识别脏数据 | **禁止**——隐式魔法易出 bug；显式契约可审计（§8）。D9。 |
+| ★ 无格式覆盖表前盲追 OA 100% 特性 | **禁止**——边界诚实先于能力虚报（D8）；清单可追溯 > 功能全但边界失明。 |
+
+### 14.3 相对 rv1.1 文档的纠偏与深化
+
+- 「iDB 主问题是 GDS」→ 补充：**数据完整性机制缺失才是结构症结**（往返无损不可证、格式覆盖表零建设、属性映射不透明）——§1.5 新增 15 项机制对比，GDS 只是其中 1 项（#7）。
+- 「memory/ 空壳是内存爬坡缺口」→ 深化为「容量剖面先落 benchmark 脚本，数据定义内存策略」——D6 + §4.4，不是反过来先建基础设施。
+- 「往返矩阵待补」→ 升级为「测试即规格，清单即边界承诺」——D4 + §4.3 FIELD_MANIFEST，清单内丢失 = G1 红线（不是软建议）。
+- 「格式支持隐式」→ 强化为「格式覆盖表 P0（边界诚实先于盲追 OA）」——D8 + §4.7，对标 30 号 DRC 覆盖表的 M0 前置地位。
+- rv1.1 未提「增量 API」→ rv2.0 新增 §4.6 IncrementalDB（性能线核心），因 iTO ECO 循环墙钟主瓶颈是全量 save→reload（§1.5-#11）。
 
 ---
 

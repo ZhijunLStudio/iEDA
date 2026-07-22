@@ -1,0 +1,29 @@
+{
+  "name": "s35932_ics55_b",
+  "top": "s35932",
+  "scale": "L",
+  "role": "iscas",
+  "description": "ISCAS89 benchmark s35932",
+  "pdk": "ics55",
+  "variant": "stdcell",
+  "inputs": {
+    "tech_lef": "$PDK/lef/ics55_tech.lef",
+    "cells_lef": "$PDK/lef/ics55_stdcell.lef",
+    "lib": "$PDK/lib/ics55_stdcell_tt_1v8_25c.lib",
+    "netlist": "netlist/s35932.v",
+    "sdc": "sdc/s35932.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 1200 1200",
+    "core_area": "120.0 120.0 1080.0 1080.0",
+    "core_utilization": 0.65
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "CK",
+      "period_ns": 8.0
+    }
+  ],
+  "strategy": "b"
+}

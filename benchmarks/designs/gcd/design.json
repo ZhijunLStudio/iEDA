@@ -1,0 +1,28 @@
+{
+  "name": "gcd",
+  "top": "gcd",
+  "scale": "XS",
+  "role": "smoke",
+  "description": "Greatest-common-divisor unit. Small smoke test design for sky130 PDK evaluation.",
+  "pdk": "sky130",
+  "variant": "fd_sc_hd",
+  "inputs": {
+    "tech_lef": "$PDK/lef/sky130_fd_sc_hd.tlef",
+    "cells_lef": "$PDK/lef/sky130_fd_sc_hd_merged.lef",
+    "lib": "$PDK/lib/sky130_fd_sc_hd__tt_025C_1v80.lib",
+    "netlist": "netlist/gcd.v",
+    "sdc": "sdc/gcd.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 150.0 150.0",
+    "core_area": "10.0 10.0 140.0 140.0",
+    "core_utilization": 0.50
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "clk",
+      "period_ns": 2.5
+    }
+  ]
+}

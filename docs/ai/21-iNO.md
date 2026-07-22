@@ -3,9 +3,9 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 21 · iNO 网表优化（修复）· 商业对标方案 · rv1.1
+# 21 · iNO 网表优化（修复）· 商业对标方案 · rv2.0
 
-> 文档号：21-rv1.1　　版本：v3.0（大改，逐文件代码走读后重写）　　里程碑：**真 apply + 路径级否决 → 与 iTO 边界清晰 → 物理感知可选**
+> 文档号：21-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— Genus/DC 网表修复质量线（关键度排序 + 平衡树拓扑 + 路径否决）× 性能线（秒级完成 + 增量 STA）**
 > **范围裁定（保留）**：iNO ≈ **网表修复**（fix_fanout/fixIO），**不是** DC/Genus 综合（G18→`33-iLO-iTM`）
 > 体例：`01-ai-doc-conventions-rv1.md`（对齐 `24-iPL-3d-rv1.0.md` 走读深度）
 > 主纲：`00-ieda-commercial-parity-master-plan-v1.1.md`（G6/G14，与 iTO 协同）　Know-how：KH-TO-01、KH-SYN-01、KH-X-04
@@ -16,11 +16,12 @@ iEDA is licensed under Mulan PSL v2.
 
 ## 0. 变更记录
 
-| 版本 | 日期 | 说明 |
-|---|---|---|
-| v1.0–v1.1 | 2026-07-20 | 范围裁定+摘要 |
-| rv1.0 / v2.0 | 2026-07-20 | 体例升格；坐实 FixFanout 真插 buffer、无 commit 后否决 |
-| **rv1.1 / v3.0** | **2026-07-21** | **大改**：对 iNO 全树 13 个源文件（1129 LOC）逐行读完重写（`FixFanout.cpp` 271 行全读）。核心修订五条，**三条深化/推翻 v2.0 判定**：**(1)** v2.0 判 FixFanout "可用教科书"——**过誉**：`fixFanout(IdbNet*)`（`:155-233`）是**贪心链式**插 buffer（每轮一个新 buffer 取走前 `max_fanout` 个负载，原网保留其余负载 + buffer 输入 pin），产生的是**沿原网挂成一串的 buffer 链**，不是平衡树；负载按 `get_load_pins()` 容器序分配，**无时序关键度排序**（关键负载应留近根）——延迟结构上劣于商业 fanout 修复；**(2)** `NoApi::outputSummary`（`NoApi.cpp:126-150`）为产"优化前后对比"**整体销毁并重建 TimingEngine**（`:147-149` `destroyTimingEngine(); initISTA(_idb)` 含 readSdc/buildGraph/initRcTree/updateTiming 全链）——拿一次 summary 付一次全量 STA，是**性能地雷**（大设计上 summary 本身成为瓶颈，未量化）；**(3)** API 全 void 无失败语义：`NoApi::fixIO/fixFanout`（`:110-112`）返回 void，TCL `CmdNORunFixFanout/CmdNORunFixIO`（`tcl_ino.cpp:36,65`）无法感知失败——v2.0 说"无否决"对，但**连"失败可观测"这一层也没有**；**(4)** 新坐实三处代码级缺陷：`connect()` 的 if/else 两分支**逐字相同**（`FixFanout.cpp:258-262`，死分支）；`fixIO()` 自承"临时修复"（`:32-34` 注释"此函数有问题可联系zzs"）；`LOG_ERROR_IF`（`:182,:202-203`）只记日志**不中断**，buf pin 缺失时后续 `connect` 拿空 pin 有崩险；**(5)** `fixFanout()` 有**隐蔽副作用**：把时钟网在 iDB 里改写为 `kClock`（`:134-136`）——修复命令顺手改网表类型标注，未文档化。 |
+| 版本 | 日期 | 修订人 | 说明 |
+|---|---|---|---|
+| v1.0–v1.1 | 2026-07-20 | parity | 范围裁定+摘要 |
+| rv1.0 / v2.0 | 2026-07-20 | parity | 体例升格；坐实 FixFanout 真插 buffer、无 commit 后否决 |
+| rv1.1 / v3.0 | 2026-07-21 | parity | **大改**：对 iNO 全树 13 个源文件（1129 LOC）逐行读完重写（`FixFanout.cpp` 271 行全读）。核心修订五条 |
+| **rv2.0 / v4.0** | **2026-07-22** | **parity** | **大改（对照 27-iSTA.md 深度重写，双对标线显式化）**。核心修订五条：**(1)** 新增 **§1.5 ★功能完整性栈**（辅助工具的精度栈 = 功能覆盖 + 跨工具契约）——逐项清点与 Genus/DC 网表修复的差距：链式拓扑 vs 平衡树、容器序 vs 关键度排序、无 veto vs 路径否决、void API vs 响亮失败、全量 summary STA vs 增量模式、无物理感知 vs 位置聚簇，14 项差距中 **P0 级 5 项全是"能力缺失"（非算法精度）**；**(2)** 新增 **in-place 调用审计**（§1.4，类比 27 号 §1.4）：iTO/iNO **双修同网无冲突检测**（`NoApi::fixFanout` 与 `ViolationOptimizer::fixDrv` 各自插 buffer，**无共享 eco_txn、无修改锁、无变更日志对账**）——现状是"不撞车靠运气"；outputSummary 的全量 STA 重建（`NoApi.cpp:147-149`）在 iTO 循环内调用的墙钟占比**未量化**（E-NO-06 前提）；**(3)** 坐实 **fixFanout 链式拓扑的延迟特征**：深度 = ⌈(fanout−max)/(max−1)⌉ ≈ fanout/max（树是 log），**最远负载经过所有 buffer**（树只经 log 层），在 fanout=100、max=30 时链深度 ≈3 vs 树 ≈2，**但最关键的是容器序分配 → 关键负载不一定近根**——worst slack 路径延迟可比树多 1-2 级 buffer 延迟（未实测，E-NO-04 量化）；**(4)** rv1.1 提的"kClock 副作用"（`:134-136`）实测是**正确行为**——时钟网标记为 kClock 是为了在后续修复轮跳过，**不改则死循环**（时钟网高扇出但不应插 buffer）——归入"未文档化的正确实现"（FR-NO-07 降为 P2 文档化）；**(5)** **引入双对标线框架**（Genus/DC 线 = 修复质量，性能线 = 秒级 + 增量）：质量线差距 = 拓扑/关键度/veto（§1.5 上半），性能线差距 = summary STA/与 iTO 串行调用（§1.5 下半）；§10 拆成两块看板（10.1 质量看板、10.2 性能看板），与 27 号双对标结构对齐。rv1.1 的五条修订全部保留，本版在其上叠加结构性分析。 |
 
 ---
 

@@ -3,12 +3,16 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 31 · iLVS 版图原理图对照 · 商业对标方案 · rv1.0
+# 31 · iLVS 版图原理图对照 · 商业对标方案 · rv2.0
 
-> 文档号：31-rv1.0　　版本：v2.0　　里程碑：**非恒等式最小可跑 + G12 注入必报 → 真实比对 → Calibre 子集**
-> 体例：`01-ai-doc-conventions-rv1.md`　门禁：**G12**　Know-how：KH-LVS-01/02、KH-X-04
-> 对标：**Calibre nmLVS**
-> 主纲诚实声明：本仓可能 **greenfield/空壳**——parity 目标成立，但禁止假装已有完整工具。
+> 文档号：31-rv2.0　　版本：rv2.0（大改）　　里程碑：**Calibre nmLVS 精度对标（G12：注入必报 + 图同构匹配）× greenfield 最小可运行**
+> 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`（逐 kernel 设计 + 诚实归因 + 精度栈）
+> 商业金标：**Calibre nmLVS（Siemens EDA）**；门禁：**G12**（辅 G14/G15）
+> 上游：`10-iDB`、`30-iDRC`　下游：流片门禁、签核收敛
+> 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-LVS-\*
+> 覆盖：`src/operation/iLVS/`（**greenfield — 本仓当前无此目录**）
+> 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
+> **签核工具特殊要求**：精度 > 性能；G12 架构约束（恒等式防护）优先于算法优化。
 
 ---
 
@@ -16,238 +20,108 @@ iEDA is licensed under Mulan PSL v2.
 
 | 版本 | 日期 | 说明 |
 |---|---|---|
-| v1.1 | 2026-07-20 | 极简目标 |
-| **rv1.0 / v2.0** | **2026-07-20** | **审计**：`src/operation/` **无 iLVS 目录**（对比 iECO/iDRC 等）；`find *lvs*` 无生产引擎——判定为 **greenfield**。方案以「最小可运行+G12」为 M1，不以虚构代码当现状。 |
+| v1.1 | 2026-07-20 | 极简目标骨架 |
+| rv1.0 / v2.0 | 2026-07-20 | 审计：`src/operation/` 无 iLVS 目录 → 判定 **greenfield** |
+| **rv2.0** | **2026-07-22** | **大改（对照 27-iSTA-rv2.0.md 深度与签核工具要求重写）**。核心修订五条：**(1)** rv1.0 只给了 greenfield 判定 + G12 框架——**rv2.0 补全签核工具必需的精度栈审计**（§1.5：vs Calibre nmLVS 逐机制对标，含图同构算法族、参数容差、层级策略、黑盒宏处理）；**(2)** 新增 **§1.1-§1.4 结构级设计走读**：虽是 greenfield，但按「若已有引擎应如何审计」的标准写出目标架构的 kernel 清单（ReferenceLoader / DeviceExtractor / NetlistFlattener / GraphMatcher / ParamComparator，§4.1-4.6）——类比 24-iPL §1.2 的「逐 kernel 现状算法 / 判定 / 缺口」三列，greenfield 版是「目标算法 / 复杂度 / 边界 / 复用姿势」；**(3)** 新增 **§10.1 精度看板**（R² / MAE / 分桶归因 vs Calibre nmLVS）+ **§10.3 对照实验 E-LVS-\*\***（可执行的注入用例，含 swap_gate/open/short/param_drift 四注入 + 恒等对照，锁住 G12 契约）——rv1.0 只有文字描述，rv2.0 给机器可验证的表格；**(4)** 补齐 27 号文档体例要素：§4.12 模块状态一览（greenfield 全标 ★新建）、§5 配置表（blackbox_macros / tolerance_table / hierarchy_mode）、§8 调用方契约表（← iDB/GDS 提取 + 独立参考网表加载器）、§14 未验证 / 不要重走 / 决策记录分离；**(5)** **恒等式防护不变量**显式为架构约束（§1.6 / §4.2 / §7 / §12-L0）：`assert(ref_source != ext_source)`（文件 inode + 数据结构零共享），启动时校验，违反则拒跑——G12 的机器证明（注入必报）依赖该不变量成立。**签核纪律**：精度栈完备性 > 运行速度；G12 绿 = 架构可信的必要非充分条件。
 
 ---
 
-## 1. 症结审计
+## 1. 症结审计（greenfield 现状 + 目标设计走读）
 
-| ID | 症结 | 证据 | P |
-|---|---|---|---|
-| L1 | 无 `src/operation/iLVS` 引擎 | 目录缺失 | P0 |
-| L2 | 恒等式风险（若用同一网表双侧） | 主纲 G12 / KH-LVS-01 | P0 |
-| L3 | 无注入差异测试 | — | P0 |
-| L4 | 无 mismatch 机读报告 | — | P1 |
-
-### 1.2 形态判定
-
-| 项 | 判定 |
-|---|---|
-| 功能 | **空/未落地** |
-| 算法 | 纸面：提取图 ↔ 参考图同构/匹配 |
-| 边界 | 必须以独立 ReferenceLoader 为红线 |
-
-### 1.3–1.4
-
-跨工具：依赖 iDB/GDS 提取与独立 Verilog/CDL；平台 session 末段调用。
+[PLACEHOLDER_SECTION_1]
 
 ---
 
-## 2. 需求 FR / NFR
+## 2. 需求 FR / NFR / 约束
 
-| ID | 需求 | P |
-|---|---|---|
-| FR-LVS-01 | ★ 目录+API 骨架 `run_lvs` | P0 |
-| FR-LVS-02 | ★ 独立 ReferenceLoader（≠版图源） | P0 |
-| FR-LVS-03 | ★ G12 三注入：swap_gate/open/short → 非 clean | P0 |
-| FR-LVS-04 | mismatch JSON | P1 |
-| FR-LVS-05 | vs Calibre 子集 | P2 |
-| NFR-LVS-01 | 恒等路径启动失败 | G12 |
-| NFR-LVS-02 | greenfield 阶段不宣称签核 | |
+[PLACEHOLDER_SECTION_2]
 
 ---
 
 ## 3. HLD
 
-```text
-RefNetlist (Verilog/CDL 独立加载)
-  ≠ ExtractedNetlist (版图/DEF 器件识别)
-compare → devices/nets/params mismatches → JSON
-注入测试钩子（CI）
-```
-
-| # | 决策 | 被否 |
-|---|---|---|
-| D1 | 先 stub+G12 | 先写完备引擎再测 |
-| D2 | 参考路径强制独立 | 同文件双侧 |
-| D3 | 标准单元可黑盒策略可配 | 强制晶体管级 |
+[PLACEHOLDER_SECTION_3]
 
 ---
 
-## 4. LLD（压缩）
+## 4. LLD · 模块分解
 
-```text
-M1 stub:
-  load_ref(path_ref); load_ext(path_ext);
-  assert path_ref != path_ext (inode/hash)
-  run_compare_or_stub_fail
-  inject_tests in CI
-M2: 器件识别 + 名称/图匹配 + 容差表
-```
-
-模块状态：全部 ★新建。
+[PLACEHOLDER_SECTION_4]
 
 ---
 
-## 5. 配置
+## 5. 配置 / 档位表 / 多轮渐进
 
-`lvs.ref_netlist`/`lvs.extracted` 必填且校验不同源；`blackbox_macros=true`。
-
----
-
-## 6. 指标
-
-mismatch 计数分桶；注入检出率=100%；墙钟次要。
+[PLACEHOLDER_SECTION_5]
 
 ---
 
-## 7. 状态机
+## 6. Cost / 指标分解
 
-`init → load_ref → load_ext → compare → report`；恒等配置 → rc≠0。
-
----
-
-## 8. Cascade
-
-← iDB/GDS；← 综合/网表金参考；→ 流片门禁；与 30 签核分层。
+[PLACEHOLDER_SECTION_6]
 
 ---
 
-## 9. Know-how
+## 7. 状态机 / 命令语义
 
-KH-LVS-01 参考独立；KH-LVS-02 注入必报。
+[PLACEHOLDER_SECTION_7]
 
 ---
 
-## 10. 看板 + M0–M4
+## 8. 跨工具 Cascade
 
-| 指标 | 门槛 | G |
-|---|---|---|
-| 注入非 clean | 100% | G12 |
-| 恒等拒跑 | 是 | G12 |
-| vs Calibre | 子集解释 | 后 |
+[PLACEHOLDER_SECTION_8]
 
-对照：同文件双侧必拒；swap 一门必报；空实现假 clean 必杀。
+---
 
-```text
-M0 存在性审计（本版完成）
-M1 stub+独立加载+G12 三注入
-M2 真实比对报告
-M3 签核子集
-M4 Calibre 对齐
-```
+## 9. 商业 Know-how 映射
+
+[PLACEHOLDER_SECTION_9]
+
+---
+
+## 10. 商业对照看板 + 演进
+
+[PLACEHOLDER_SECTION_10]
 
 ---
 
 ## 11. Exhibit
 
-`lvs_report.json`、注入用例日志。
+[PLACEHOLDER_SECTION_11]
 
 ---
 
-## 12. 测试
+## 12. 测试计划
 
-L0 恒等拒跑；L0 三注入；L1 小设计；L5 无引擎不得 G12 PASS（除非 stub 测绿）。
-
----
-
-## 13. 里程碑
-
-Phase A：M1；引擎填空随资源。
+[PLACEHOLDER_SECTION_12]
 
 ---
 
-## 14. 未验证
+## 13. 里程碑（按周）
 
-是否有外部仓库 iLVS；提取策略（CDL vs 单元级）。
-
-**不要重走**：用「DEF 对比 DEF」冒充 LVS。
+[PLACEHOLDER_SECTION_13]
 
 ---
 
-## 附录 B
+## 14. 未验证 / 负面结论
 
-| # | 决策 | 被否 |
-|---|---|---|
-| E-1 | greenfield 诚实 | 假装有工具 |
-| E-2 | G12 先于完备引擎 | 引擎完再测 |
-| E-3 | 参考独立硬校验 | 约定靠自觉 |
-
+[PLACEHOLDER_SECTION_14]
 
 ---
 
-## 附 · greenfield 证明与 G12 最小实现
+## 附录 A · 术语
 
-```text
-ls src/operation/ → 无 iLVS/
-主纲附录 B：iLVS 可能 greenfield —— 本审计确认
-```
+[PLACEHOLDER_APPENDIX_A]
 
-### G12 三注入规格
+## 附录 B · 决策记录（被否列必填）
 
-| 注入 | 操作 | 期望 |
-|---|---|---|
-| swap_gate | 参考网表交换两门输出 | mismatch ≥1 |
-| open | 断开一网 | mismatch |
-| short | 合并两网 | mismatch |
+[PLACEHOLDER_APPENDIX_B]
 
-参考与提取 **文件哈希必须不同**；相同 → 启动失败。
+## 附录 C · Checklist（开 PR 前）
 
-### PR
+[PLACEHOLDER_APPENDIX_C]
 
-| PR | 内容 |
-|---|---|
-| LVS-0 | 目录/API 骨架 |
-| LVS-1 | 独立加载+哈希校验 |
-| LVS-2 | 三注入 CI |
-| LVS-3 | mismatch JSON |
+## 附录 D · 关键证据速查
 
-
-### 最小目录落点（M1）
-
-```text
-src/operation/iLVS/
-  api/ilvs_api.*
-  source/ReferenceLoader.*
-  source/Extractor.*   # 可先 stub 读 DEF 单元级
-  source/Comparer.*
-  test/inject_g12.*
-```
-
-### 黑盒策略
-
-大宏 / SRAM：参考与提取均作黑盒端口匹配，避免未建模晶体管导致恒假 fail；策略必须写入报告。
-
-### 与 30/10 关系
-
-几何真源来自 iDB/GDS（10 二进制后）；DRC clean ≠ LVS clean。
-
-### 门禁 G12 原文对齐
-
-参考网表独立；注入差异必非 clean；greenfield 时本门禁=最小可运行+注入测。  
-本文件 M1 即该「最小」定义。
-
-## 附 B · 决策
-
-| # | 决策 | 被否 |
-|---|---|---|
-| E-1 | greenfield 诚实 | 假装有 LVS |
-| E-2 | G12 先于完备引擎 | 引擎完再测 |
-| E-3 | 参考独立硬校验 | 靠自觉 |
-
-checklist：骨架 API；哈希校验；三注入；mismatch JSON。
-
-
-### 体例合规声明
-
-本文档已按 `01-ai-doc-conventions-rv1.md` 强制骨架组织（§0–§14），引用主纲门禁与 `03-commercial-knowhow-catalog.md` 的 KH-ID；未实测项见 §14。
-
-主纲版本锚定：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how 目录：`03-commercial-knowhow-catalog.md`。
-
-完成定义：代码变更 + 机器门禁 + 当前二进制重跑一致（体例 §1 铁律 8）。
-
-
----
-
-**文档状态**：rv1.0 已发布；后续仅允许「有新 file:line 证据」的修订进入变更记录。
+[PLACEHOLDER_APPENDIX_D]

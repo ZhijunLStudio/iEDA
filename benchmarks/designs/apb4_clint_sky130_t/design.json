@@ -1,0 +1,29 @@
+{
+  "name": "apb4_clint_sky130_t",
+  "top": "apb4_clint",
+  "scale": "S",
+  "role": "peripheral",
+  "description": "APB4 core local interruptor",
+  "pdk": "sky130",
+  "variant": "fd_sc_hd",
+  "inputs": {
+    "tech_lef": "$PDK/lef/fd_sc_hd.tlef",
+    "cells_lef": "$PDK/lef/fd_sc_hd_merged.lef",
+    "lib": "$PDK/lib/fd_sc_hd__tt_025C_1v80.lib",
+    "netlist": "netlist/apb4_clint.v",
+    "sdc": "sdc/apb4_clint.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 500 500",
+    "core_area": "50.0 50.0 450.0 450.0",
+    "core_utilization": 0.55
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "PCLK",
+      "period_ns": 5.0
+    }
+  ],
+  "strategy": "t"
+}

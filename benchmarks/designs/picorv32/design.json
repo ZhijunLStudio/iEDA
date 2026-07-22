@@ -1,0 +1,28 @@
+{
+  "name": "picorv32",
+  "top": "picorv32",
+  "scale": "L",
+  "role": "processor",
+  "description": "PicoRV32 RISC-V processor. Large-scale design for scalability evaluation (~17K lines).",
+  "pdk": "sky130",
+  "variant": "fd_sc_hd",
+  "inputs": {
+    "tech_lef": "$PDK/lef/sky130_fd_sc_hd.tlef",
+    "cells_lef": "$PDK/lef/sky130_fd_sc_hd_merged.lef",
+    "lib": "$PDK/lib/sky130_fd_sc_hd__tt_025C_1v80.lib",
+    "netlist": "netlist/picorv32.v",
+    "sdc": "sdc/picorv32.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 1200.0 1200.0",
+    "core_area": "80.0 80.0 1120.0 1120.0",
+    "core_utilization": 0.65
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "clk",
+      "period_ns": 2.5
+    }
+  ]
+}

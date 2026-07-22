@@ -1,0 +1,29 @@
+{
+  "name": "aes_sky130_b",
+  "top": "aes",
+  "scale": "M",
+  "role": "timing",
+  "description": "AES encryption core",
+  "pdk": "sky130",
+  "variant": "fd_sc_hd",
+  "inputs": {
+    "tech_lef": "$PDK/lef/fd_sc_hd.tlef",
+    "cells_lef": "$PDK/lef/fd_sc_hd_merged.lef",
+    "lib": "$PDK/lib/fd_sc_hd__tt_025C_1v80.lib",
+    "netlist": "netlist/aes.v",
+    "sdc": "sdc/aes.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 800 800",
+    "core_area": "80.0 80.0 720.0 720.0",
+    "core_utilization": 0.6
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "clk",
+      "period_ns": 2.5
+    }
+  ],
+  "strategy": "b"
+}

@@ -1,0 +1,29 @@
+{
+  "name": "s38584_sky130_t",
+  "top": "s38584",
+  "scale": "L",
+  "role": "iscas",
+  "description": "ISCAS89 benchmark s38584",
+  "pdk": "sky130",
+  "variant": "fd_sc_hd",
+  "inputs": {
+    "tech_lef": "$PDK/lef/fd_sc_hd.tlef",
+    "cells_lef": "$PDK/lef/fd_sc_hd_merged.lef",
+    "lib": "$PDK/lib/fd_sc_hd__tt_025C_1v80.lib",
+    "netlist": "netlist/s38584.v",
+    "sdc": "sdc/s38584.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 1200 1200",
+    "core_area": "120.0 120.0 1080.0 1080.0",
+    "core_utilization": 0.65
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "CK",
+      "period_ns": 8.0
+    }
+  ],
+  "strategy": "t"
+}

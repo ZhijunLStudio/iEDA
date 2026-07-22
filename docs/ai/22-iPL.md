@@ -86,24 +86,28 @@ reportPLInfo(); writeBackSourceDataBase();
 
 ### 1.3 算法「内核不弱，杠杆缺」——逐 kernel 判定（细化 §1.2）
 
-| kernel | LOC | 现状算法 | 判定 |
-|---|---|---|---|
-| `initial_placer/RandomPlace` | — | 随机撒点 | **生产默认**（`PLAPI.cc:526`），教科书最低档 |
-| `initial_placer/CenterPlace` | — | 中心聚拢 | 存在，`:525` 注释禁用 |
-| `src/solver/qudratic_programming` | **0（TBD 空目录，见 11-solver）** | 无 | **v2.0 设想的 QP 资产不存在**——FR-PL-03 须重新立项（先建 QP 再接线） |
-| `NesterovPlace` 主循环 | 2055 | 预条件 Nesterov + eDensity + WA + overflow ramp | **成熟工业内核**；`_is_diverged` 多处置位，发散处 LOG_ERROR 后 return（约 `:1260`），**失败不离开 iPL** |
-| `evaluator/density/dct_process/DCT` | 862 | 真 DCT/FFT Poisson | 成熟（2D 家底，3D fork 重写过它——见 24-iPL-3d §1.5） |
-| `evaluator/wirelength/WAWirelengthGradient` | 536 | WA 值+梯度 | 成熟 |
-| `NesterovPlace` 拥塞段 | `:1360-1390` | **LUT-RUDY 拥塞驱动**（isOptCongestion 门控，iter≥200 起每 10 轮） | **真实存在但 opt-in**；GR 版注释 TODO；不经 iRT map、不经 eval 模块 |
-| `evaluator/timing/TimingAnnotation` | 395 | 时序标注基建 | **守卫殉葬品**（D4） |
-| `Legalizer`（Abacus） | 597 | `ieda_solver::LGMethodCreator`（`Legalizer.cc:32`）位移最小 DP | 成熟；bool 到 runFlow/TCL 两层被丢 |
-| `detail_placer` 五算子 | ≈3.2k | NFSpread/BinOpt/RowOpt/LocalReorder/InstanceSwap | **全仓最完整 DP**；默认 flow 不跑（D2）；`run_detail_placer` 单独命令可达（`ipl_io.cpp:226`） |
-| `buffer/BufferInserter` | 617 | 布局内插 buffer（isMaxLengthOpt 门控） | 隐蔽流程段；与 iNO/iTO 的 buffer 职责重叠未裁定 |
-| `macro_placer` | 一行 readme | 无 | **空壳+假成功**（D1） |
+| kernel | LOC | 现状算法 | 判定 | 复杂度/边界 |
+|---|---|---|---|---|
+| `initial_placer/RandomPlace` | — | 随机撒点 | **生产默认**（`PLAPI.cc:526`），教科书最低档 | O(N)；孤立 cell 风险 |
+| `initial_placer/CenterPlace` | — | 中心聚拢 | 存在，`:525` 注释禁用（易局部堆叠） | O(N) |
+| `src/solver/qudratic_programming` | **0（TBD 空目录，见 11-solver）** | 无 | **v2.0 设想的 QP 资产不存在**——FR-PL-03 须重新立项（先建 QP 再接线） | 理论 O(N^1.5) 稀疏 Cholesky |
+| `NesterovPlace` 主循环 | 2055 | 预条件 Nesterov + eDensity + WA + overflow ramp | **成熟工业内核**；`_is_diverged` 多处置位，发散处 LOG_ERROR 后 return（约 `:1260`），**失败不离开 iPL** | O(iters·(V+E))；发散→静默成功（D-fail） |
+| `evaluator/density/dct_process/DCT` | 862 | 真 DCT/FFT Poisson | 成熟（2D 家底，3D fork 重写过它——见 24-iPL-3d §1.5） | O(N log N) FFT |
+| `evaluator/wirelength/WAWirelengthGradient` | 536 | WA 值+梯度（log-sum-exp 平滑） | 成熟 | O(nets·pins) |
+| `NesterovPlace` 拥塞段 | `:1360-1390` | **LUT-RUDY 拥塞驱动**（isOptCongestion 门控，iter≥200 起每 10 轮）：`BinGrid::evalRouteDem → fastGaussianBlur → evalRouteUtil → updateWirelengthForceDirect` | **真实存在但 opt-in**；GR 版注释 TODO；不经 iRT map、不经 eval 模块 | O(bins·blur_radius) |
+| `evaluator/timing/TimingAnnotation` | 395 | 时序标注基建（net_crit → 净权重映射） | **守卫殉葬品**（D4） | O(nets)；守卫修复后可用 |
+| `Legalizer`（Abacus） | 597 | `ieda_solver::LGMethodCreator`（`Legalizer.cc:32`）位移最小 DP | 成熟；bool 到 runFlow/TCL 两层被丢 | O(N log N)；fail → unplaced 列表 |
+| `detail_placer` 五算子 | ≈3.2k | NFSpread/BinOpt/RowOpt/LocalReorder/InstanceSwap | **全仓最完整 DP**；默认 flow 不跑（D2）；`run_detail_placer` 单独命令可达（`ipl_io.cpp:226`） | O(N·window)；收益 5-15% HPWL（文献，**未实测**） |
+| `buffer/BufferInserter` | 617 | 布局内插 buffer（isMaxLengthOpt 门控） | 隐蔽流程段；与 iNO/iTO 的 buffer 职责重叠未裁定 | O(long_nets) |
+| `macro_placer` | 一行 readme | 无 | **空壳+假成功**（D1） | — |
 
-**四项缺失的工业杠杆**（对标 place_opt）：① 宏 force+SA/mixed-size（空壳）；② 解析初值（QP 资产不存在，须先建）；③ timing-driven 净权重（守卫死，基建 TimingAnnotation 在）；④ DP 回默认 flow（五算子就绪，纯粹接线问题——**性价比最高的修复**）。
+**假说 H1（可杀）**：现状 HPWL 偏高的主因是 DP 不跑（G）+ random 初值（B）+ 宏处理缺（A），而非 Nesterov 算法弱。
+**杀死实验 E-PL-01**：同一 gcd 设计，开 DP 回流（`enable_dp=true`）+ 关宏（无宏或 fixed）后，HPWL 若仍显著劣于 place_opt → 杀 H1，改查 Nesterov 参数/keep-best/density 调优。
 
-### 1.3 代码「操作化」——边界有，失败语义三层漏
+**假说 H2（rv2.0 新增）**：timing-driven 权重（D）守卫修复后，对 timing-critical 设计 post-CTS WNS 应改善 ≥10%（相对现状 timing-blind 布局）。
+**杀死实验 E-PL-02**：同设计 post-CTS，timing on/off A/B → 若 WNS 无显著差异（Δ<5%）→ 杀 H2，timing 权重维持关或查 crit 传播路径。
+
+### 1.4 代码「操作化」——边界有，失败语义三层漏（G14 症结）
 
 - **发散**：`_is_diverged` → LOG_ERROR + return（`NesterovPlace.cc:~1260`）；`runGP` 为 void（`PLAPI.cc:523`），runFlow 无从知晓 → 静默成功（KH-X-04 违反）。
 - **LG**：`runLG` 返 bool + LOG_ERROR_IF（`PLAPI.cc:532-537`）；runFlow 丢弃（`:411`）；TCL 不查（v2.0 已记）。
@@ -111,7 +115,50 @@ reportPLInfo(); writeBackSourceDataBase();
 - **日志**：`printNesterovDatabase`/`reportPLInfo` 有；per-iter CSV（HPWL/overflow/λ）无；失败码无。
 - **隐蔽 config 门控**：`isMaxLengthOpt`/`isEnableNetworkflow`/`isOptCongestion` 三个开关决定 flow 真实形状，不在任何文档（§14 的 config 默认值审计是 M0 前置）。
 
-### 1.4 跨工具协调
+### 1.5 与商业 place_opt 差距逐项（算法/实现/调用三层归因）
+
+| 能力 | Innovus/ICC2 | iPL 现状 | 差距归因 | 层级 | P |
+|---|---|---|---|---|---|
+| Macro place | force+SA+通道；mixed-size | 假成功（空壳） | **算法缺**（MP kernel 须新建）+ 接线缺 | 算法 | P0 |
+| Init | QP/B2B 15-30% 优于 random | RandomPlace 默认；QP 资产不存在 | **资产缺**（11-solver 联动立项）+ 接线缺 | 算法 | P1 |
+| GP 内核 | Nesterov/ePlace 类 | ✓ **成熟**（2055 LOC Nesterov + DCT 862 + WA 536） | **算法 OK**；发散断言/effort 档待工程化 | 实现 | P1 |
+| Detail place | 多算子**默认跑** | 五算子（~3.2k）**默认不跑** | **P0 工程死结**（被"守卫+注释"杀死） | 调用 | **P0** |
+| Timing-driven | 净权重注入 | 守卫死（基建 TimingAnnotation 395 在） | **P0 工程死结**（`isSTAStarted` 恒 false）+ 收益待验证 | 调用 | **P0**+P1 |
+| Congestion | GR/RUDY → density inflat | 内置 RUDY opt-in（`:1360-1390`） | **实现在**；默认化评估（A/B 定开/关） | 实现 | P1 |
+| Legalize | 失败即停（unplaced → rc≠0） | bool 两层丢弃 | **P0 工程**（G14 响亮失败） | 调用 | **P0** |
+| 多轮 effort | 快/精档；多轮渐进 IterParam | 单趟；config 散落 | **P1 工程**（封包 + 档位设计） | 实现 | P1 |
+| 调用模式 | 适合优化循环（iTO 可高频调用局部 re-place） | 批处理全量；无增量接口 | **P1 调用层缺**（§1.6） | 调用 | P1 |
+
+**§1.5 结论（三层归因）**：
+- **P0（工程死结，零算法工作量）**：DP 回流（D2）、发散/LG 失败上抛（D-fail/D3）、timing 守卫修复（D4）、宏假成功删除（D1）——**最高性价比修复在此**。
+- **P1（算法/资产）**：宏算法（MP force+SA）、QP 初值（11-solver 联动）、effort 档封包。
+- **算法层判定修正**：Nesterov GP 内核（C）**不是瓶颈**；差距主要在宏处理（A 缺）、初值（B 缺）、DP 不跑（G 工程死）三者。
+
+### 1.6 ★调用模式审计——批处理 vs in-design（性能线核心证据，类比 27-iSTA §1.4）
+
+Innovus place_opt 的 in-design 行为 = **可被优化器高频调用**：iTO 每次 ECO（插 buffer/sizing/move）后局部 re-place 受影响区域，而非全图重来。对 iPL 现状接口与调用点的审计：
+
+| 接口/调用点 | 现状形态 | 判定 |
+|---|---|---|
+| `PLAPI::runFlow()` | 全量批处理（MP → GP → LG → DP → writeBack），无粒度控制 | 只有「全图布局一次」模式 |
+| 增量/局部接口 | **不存在**；无 `runIncrPlace(dirty_cells)` / `reOptimizeRegion(bbox)` 类 API | 优化循环无法高频调用 |
+| `runIncrLG` | 存在（`PLAPI.cc:539+`），供 iTO/CTS 增量合法化 | **唯一增量接口**（仅 LG，不含 GP/DP） |
+| iTO 调用现状 | **未实测**（待审计 `src/operation/iTO/` 调用点） | 推测：iTO 不调 iPL re-place，只调 `runIncrLG`（待 §8 核实） |
+| 墙钟/内存打点 | **无**；`reportPLInfo` 只打 HPWL/overflow，无 wall_ms / peak_mem / per-stage breakdown | 性能剖面不可观测 |
+| 与 27-iSTA 对比 | iSTA 有 `incrUpdateTiming(dirty)` 锥增量（虽被下游 10:1 绕开）；iPL **连接口都无** | **调用层差距更大** |
+
+**与 Innovus 的调用差距**：
+
+| Innovus 行为 | iPL 现状 | 缺口落点 |
+|---|---|---|
+| iTO ECO 后局部 re-place 受影响 cell（增量 GP+LG） | 无增量 GP 接口；`runIncrLG` 仅 LG | §4.11 IncrPlace API 设计 |
+| 快速 estimate 档（布局期用 steiner HPWL 代理，不跑完整 Nesterov） | 只有全量 runFlow；无 effort 分级 | §5.2 effort 档 |
+| 性能剖面（wall/mem/stage breakdown）供调优 | 无打点 | §11 Exhibit 墙钟字段 |
+
+**假说 H3（可杀）**：增量 GP+LG 接口（§4.11）对 iTO 循环内调用的加速应 ≥5×（相对每次 ECO 全图 runFlow）。
+**杀死实验 E-PL-03**：实现后，iTO fix_drv 单轮 ECO（≤100 cell 变更）→ 对比全量 vs 增量墙钟；若增量 ≥ 全量 50% → 杀 H3，改查增量范围界定/重算开销。
+
+### 1.7 跨工具协调（上下游契约）
 
 | 方向 | 现状 | 判定 |
 |---|---|---|
@@ -119,20 +166,25 @@ reportPLInfo(); writeBackSourceDataBase();
 | iSTA → iPL | `PLAPI::isSTAStarted` 恒 false；`ExternalAPI` 层是活的 | **死在包装层**——修复成本一行（取消注释），风险是 TDP 路径多年未跑，需回归基线 |
 | iRT/eval → iPL | LUT-RUDY 内置环（opt-in）；eval::EvalAPI 版注释 | 内置 RUDY 与 12-evaluation 的 congestion_eval **是两套**（平行实现嫌疑，§14） |
 | iPL → iCTS/iRT | `writeBackSourceDataBase` 写回 | 通 |
-| iPL → iTO | `runIncrLG`（`PLAPI.cc:539+`） | API 在，Phase C 用 |
+| iPL → iTO | `runIncrLG`（`PLAPI.cc:539+`）；★增量 GP 无（§1.6） | 现状仅 LG 增量；iTO 是否调用 iPL re-place **未审计**（§8 待核实） |
 | iPL 内部 buffer vs iNO/iTO | BufferInserter 617 LOC 在布局内插 buffer | **三处 buffer 职责未裁定**（21-iNO/25-iTO 联动） |
 
-### 1.5 与商业 place_opt 差距（假说，待 G17）
+### 1.8 症结优先级表（§1 结论摘要，对齐 27-iSTA §1.8）
 
-| 能力 | Innovus/ICC2 | iPL 现状 | 差距归因 |
-|---|---|---|---|
-| Macro place | SA/MIP+通道 | 假成功 | P0 接线+算法 |
-| Init | QP/B2B | RandomPlace | P0（QP 资产先建） |
-| GP | Nesterov/ePlace 类 | ✓ 成熟 | 发散断言/effort 档 |
-| Detail | 多算子默认跑 | 五算子**默认不跑** | **P0 接线（D2）** |
-| Timing-driven | 净权重 | 守卫死（基建在） | P1 一行修复+回归 |
-| Congestion | GR inflat | 内置 RUDY opt-in | P1 默认化评估 |
-| Legalize | 失败即停 | bool 两丢 | P0 G14 |
+| ID | 症结 | 证据 | 对标线 | 层级 | P |
+|---|---|---|---|---|---|
+| **S1** | **DP 默认 flow 死亡**（~3.2k LOC 成熟算子不跑） | `PLAPI.cc:421-425` 守卫+注释；`ipl_io.cpp:65` 生产入口 | place_opt | 调用 | **P0** |
+| **S2** | **宏空壳+假成功**（有宏设计 GP 无约束） | `macro_placer/` 一行 readme；`ipl_io.cpp:170-181` 恒 true | place_opt | 算法 | **P0** |
+| **S3** | **发散/LG 失败静默**（bool 不上抛 → G14） | `runGP` void；`runFlow` `:411` 丢 bool | place_opt | 调用 | **P0** |
+| **S4** | **timing 守卫恒 false**（TDP 整条死） | `PLAPI.cc:842-846` 硬编码；`ExternalAPI.cc:40-43` 真查询被屏蔽 | place_opt | 调用 | **P0** |
+| **S9** | **无增量 GP 接口**（优化循环无法高频调用） | §1.6 表；只有 `runIncrLG` | Innovus | 调用 | P1 |
+| S5 | QP 初值资产不存在（random 默认） | `src/solver/qudratic_programming` 空目录 TBD | place_opt | 资产 | P1 |
+| S6 | 拥塞驱动 opt-in（默认化待评估） | `NesterovPlace.cc:1360-1390` | place_opt | 实现 | P1 |
+| S7 | 无 effort 档/多轮 IterParam | config 散落 | place_opt | 实现 | P1 |
+| S8 | 性能无打点（墙钟/内存/stage breakdown） | `reportPLInfo` 只打 QoR | Innovus | 实现 | P1 |
+| S10 | BufferInserter 与 iNO/iTO 职责重叠 | 三处并存未裁定 | 工程 | 文档 | P2 |
+
+**§1 最关键 4 条（P0 工程死结，零算法工作量）**：S1、S2、S3、S4。**修复后可能使 HPWL 显著改善**（H1），且无算法风险。
 
 ---
 

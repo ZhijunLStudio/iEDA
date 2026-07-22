@@ -1,0 +1,29 @@
+{
+  "name": "aes_core_ics55_b",
+  "top": "aes_core",
+  "scale": "M",
+  "role": "timing",
+  "description": "AES core module",
+  "pdk": "ics55",
+  "variant": "stdcell",
+  "inputs": {
+    "tech_lef": "$PDK/lef/ics55_tech.lef",
+    "cells_lef": "$PDK/lef/ics55_stdcell.lef",
+    "lib": "$PDK/lib/ics55_stdcell_tt_1v8_25c.lib",
+    "netlist": "netlist/aes_core.v",
+    "sdc": "sdc/aes_core.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 800 800",
+    "core_area": "80.0 80.0 720.0 720.0",
+    "core_utilization": 0.6
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "clk",
+      "period_ns": 2.5
+    }
+  ],
+  "strategy": "b"
+}

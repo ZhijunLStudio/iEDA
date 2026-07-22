@@ -1,0 +1,29 @@
+{
+  "name": "gcd_nangate45_t",
+  "top": "gcd",
+  "scale": "S",
+  "role": "reference",
+  "description": "Greatest common divisor",
+  "pdk": "nangate45",
+  "variant": "stdcell",
+  "inputs": {
+    "tech_lef": "$PDK/lef/NangateOpenCellLibrary.tech.lef",
+    "cells_lef": "$PDK/lef/NangateOpenCellLibrary.macro.mod.lef",
+    "lib": "$PDK/lib/NangateOpenCellLibrary_typical.lib",
+    "netlist": "netlist/gcd.v",
+    "sdc": "sdc/gcd.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 500 500",
+    "core_area": "50.0 50.0 450.0 450.0",
+    "core_utilization": 0.55
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "clk",
+      "period_ns": 10.0
+    }
+  ],
+  "strategy": "t"
+}

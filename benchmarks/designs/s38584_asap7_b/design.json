@@ -1,0 +1,29 @@
+{
+  "name": "s38584_asap7_b",
+  "top": "s38584",
+  "scale": "L",
+  "role": "iscas",
+  "description": "ISCAS89 benchmark s38584",
+  "pdk": "asap7",
+  "variant": "RVT",
+  "inputs": {
+    "tech_lef": "$PDK/lef/asap7_tech_RVT.lef",
+    "cells_lef": "$PDK/lef/asap7sc7p5t_RVT.lef",
+    "lib": "$PDK/lib/asap7sc7p5t_RVT_TT_nldm_201020.lib",
+    "netlist": "netlist/s38584.v",
+    "sdc": "sdc/s38584.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 1200 1200",
+    "core_area": "120.0 120.0 1080.0 1080.0",
+    "core_utilization": 0.65
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "CK",
+      "period_ns": 8.0
+    }
+  ],
+  "strategy": "b"
+}

@@ -300,7 +300,7 @@ NanoRoute signoff 级布线的 DRC=0 收敛性来自一整套互相咬合的机�
 
 ## 4. LLD · 模块分解
 
-### 4.0 目录落点
+### 4.0 落点
 
 ```text
 src/operation/iRT/
@@ -317,11 +317,11 @@ benchmark/qor/irt/
   iter_dr_series.schema.json
 ```
 
-### 4.A DetailedRouter · 反馈控制收敛（FR-RT-01/02/03）
+### 4.A DetailedRouter · 反馈控制收敛（FR-RT-02/03/04，NanoRoute 精度线主杠杆）
 
-**真实现状**：`routeDRModel` 硬编码九组；`stopIteration` 仅 clean 早停；有 keep-best。
+**真实现状**：`routeDRModel` 硬编码九组（`DetailedRouter.cpp:107-167`）；`stopIteration` 仅 clean 早停（`:2426-2432`）；有 keep-best（`:2388-2424`）。**内核成熟**（§1.3）：`routeDRBox` A* + PathFinder 代价（`:2659-2780` + `:1425-1574`）。
 
-#### 4.A.1 配置数据结构（★新增，缺省=现状）
+#### 4.A.1 配置数据结构（★新增，缺省=现状零回归）
 
 ```cpp
 struct DRIterParamRow {  // 与现 DRIterParam 字段对齐
@@ -344,87 +344,172 @@ struct DRScheduleConfig {
 // Config.hpp 增：DRScheduleConfig dr_schedule;
 ```
 
-#### 4.A.2 算法伪代码
+#### 4.A.2 算法伪代码 + 复杂度 + 边界
 
-```
-ALG-4.A-1  routeDRModel（标注）
+```text
+ALG-4.A-1  routeDRModel（标注新增部分）
+输入：nets, obstacles, tech_rules, cfg
+输出：routed_result, vio_num (or route_incomplete)
+
   list ← loadSchedule(cfg)          // [已有] 无 cfg 时用内置九组
   vio_series ← []
+  best_result ← ∅
+  
   for iter in 1..list.size:
-    setDRIterParam; initDRBoxMap; buildBoxSchedule; routeDRBoxMap  // [已有]
-    upload*; updateBestResult; updateSummary                      // [已有]
+    setDRIterParam(list[iter]);      // [已有] 设代价权重
+    initDRBoxMap();                  // [已有] 切分 GCell box
+    buildBoxSchedule();              // [已有] box 优先级排序
+    routeDRBoxMap();                 // [已有] 并行 box 内 A* 路由
+    uploadViolation();               // [已有] DRC 检查
+    updateBestResult(vio_score);     // [已有] keep-best (:2388-2424)
+    updateSummary();                 // [已有] 日志/CSV
+    
     vio_series.push(getRouteViolationNum)
-    if stopIteration_clean: break                                 // [已有] :2426
-    if cfg.enable_plateau and detectPlateau(vio_series, window):  // ★
-      act ← nextAction(level++)   // kBoxX2 | kReweightCost | kRipupHotspot | kGiveUp
-      RTLOG.info(plateau, iter, vio, act)
+    
+    if stopIteration_clean: break    // [已有] :2426 vio==0 早停
+    
+    ★ if cfg.enable_plateau and detectPlateau(vio_series, window):  // ★新增
+      level++
+      act ← nextAction(level)   // kBoxX2 | kReweightCost | kRipupHotspot | kGiveUp
+      RTLOG.info("plateau detected", iter, vio, act)
       apply(act)  // 改后续 list[i].size 或代价倍率或标记撕布 GCell
       if act==kGiveUp: break
-  selectBestResult
-  if residual_drc and cfg.fail_on_residual_drc: return Fail       // ★ G5
+      
+  selectBestResult()                 // [已有] 回灌历史最好
+  
+  ★ if residual_drc > 0 and cfg.fail_on_residual_drc:  // ★新增 G5
+      return route_incomplete
+
+复杂度：O(I · B · RouteBox)
+  I = 迭代数（9 或 plateau 延长）
+  B = box 数（设计相关，~数百到数千）
+  RouteBox = 单 box A* 成本 O((pins·gcells)·log(queue_size))
+  plateau 检测：O(window)，可忽略
+
+边界：
+  - window=0 或 enable_plateau=false → 行为≡现状九幕
+  - box_escalate 空 → 无 box 升级，仅代价/撕布
+  - 所有策略耗尽 + 仍有违例 → give_up 或 fail_on_residual
+  - list 为空 → LOG_ERROR，返回失败
+
+复用姿势：
+  - 自建调度器（封套层）+ 复用现有 routeDRBoxMap 内核
+  - **禁止**平行第二套 DR 或重写 A* 内核（D1）
 ```
 
+```text
+ALG-4.A-2  detectPlateau（★新增）
+输入：vio_series[], window
+输出：bool (是否 plateau)
+
+  if vio_series.size < window+1: return false
+  recent ← vio_series[−window:]
+  if all_equal(recent) and recent[0] > 0: return true
+  return false
+
+复杂度：O(window)，典型 window=2，可忽略
+边界：window=0 → 永远 false（禁用 plateau）
 ```
-ALG-4.A-2  detectPlateau
-  need size>=window+1
-  最近 window 轮 vio 全相等且 >0 → true
-```
 
-| 步 | 动作 | 钩子 |
-|---|---|---|
-| 1 | 每轮记录 `vio_num` → `iter_dr_series` | `updateSummary` 旁 |
-| 2 | `stopIteration` 旁调 plateau | `:2426` 附近 |
-| 3 | box 从调度表取，禁写死 12 | `:126-134` |
-| 4 | 策略耗尽 → 非假 clean | G5 |
+| 步 | 动作 | 钩子位置 | 复杂度影响 |
+|---|---|---|---|
+| 1 | 每轮记录 `vio_num` → `iter_dr_series` | `updateSummary` 旁 | O(1) |
+| 2 | `stopIteration` 旁调 plateau | `:2426` 附近 | O(window) |
+| 3 | box 从调度表取，禁写死 12 | `:126-134` | — |
+| 4 | 策略耗尽 → 非假 clean | G5 return 前 | O(1) |
 
-复杂度：外环 O(I·B·RouteBox)；plateau O(window)。边界：window=0 或 enable=false → 行为≡现状。复用：自建调度器，**禁止**平行第二套 DR。Know-how：KH-RT-01/02/03。
+Know-how：KH-RT-01/02/03（PathFinder 历史代价、plateau→策略、自适应 box）。
 
-### 4.B 时序驱动（FR-RT-04）
+### 4.B 时序驱动（FR-RT-06/07，NanoRoute 性能线）
 
-**真实现状**：调用槽在；`updateTiming` 空；代价无 slack。
+**真实现状**：调用槽在（`DetailedRouter.cpp:3248-3263`）；`updateTiming` 空（`RTInterface.cpp:1522+`）；代价无 slack（`:1425-1574`）。
 
-```
-ALG-4.B-1  复活报告路径（P0）
+```text
+ALG-4.B-1  复活报告路径（P0，前置）
   恢复 RTInterface::updateTiming 真实现（或 Composition 调 iSTA API）
   enable_timing=1 → clock_timing_map 非空（可测）
-  仍不改布线 → 仅报告（诚实命名）
+  仍不改布线 → 仅报告（诚实命名：timing-aware reporting，不是 timing-driven routing）
 ```
 
-```
+```text
 ALG-4.B-2  Phase1 关键网排序（★缺省 enable_timing_sort=0）
-  每轮 DR 前：
-    if !enable_timing_sort: return
-    slack_map ← STA（须 G7 可信）
-    stable_sort(nets, slack 更负更先)
+输入：nets[], slack_map (from iSTA)
+输出：sorted_nets[]
+
+  if !enable_timing_sort: return nets  // 缺省关 → 零回归
+  
+  slack_map ← STA::getSlackMap()  // 须 G7 可信
+  stable_sort(nets, [&](a, b) {
+    return slack_map[a] < slack_map[b];  // 更负更先（setup）
+  });
+  RTLOG.info("timing-driven sort enabled", crit_net_count)
+  return nets
+
+复杂度：O(N log N)，N=net 数；stable_sort 保证同 slack 的原序
+边界：
+  - enable_timing_sort=0 → 现状顺序，零回归
+  - slack_map 空或 iSTA 未 ready → LOG_ERROR，回退原序
+  - 每轮 DR 前调用（增量成本相对 DR 可忽略）
 ```
 
-```
-ALG-4.B-3  Phase2 slack-aware 代价（单独 PR）
-  wire/via/ripup_cost *= (1 + w·crit(net))
-  w 默认 0
-```
+```text
+ALG-4.B-3  Phase2 slack-aware 代价（★单独 PR，缺省 weight=0）
+输入：net, slack, base_cost
+输出：adjusted_cost
 
-| 条件 | 行为 |
-|---|---|
-| `enable_timing=0` | 现状；文档禁止称 timing-driven |
-| `enable_timing=1` 且实现仍空 | **G14 响亮失败**（禁止假报告） |
-| T-B1 | sort 开后 DEF 必异（真化验收） |
+  if slack_cost_weight == 0: return base_cost  // 缺省关
+  
+  crit ← max(0, (slack_threshold − slack) / slack_threshold)  // [0,1]
+  adjusted ← base_cost · (1 + slack_cost_weight · crit)
+  return adjusted
 
-Know-how：KH-RT-04。依赖：`27-iSTA` G7。
-
-### 4.C ViolationReporter · 终态归因（FR-RT-05）
-
-**真实现状**：`report()` → `uploadViolation`（经 DRCEngine 重算）→ summary 含 within/among × type × layer（`:181-257`）；`outputJson` 需 `enable_notification`（`:503-507`）。
-
-```
-ALG-4.C-1  violation_summary.json（★）
-  始终可写（或独立 enable_violation_json，默认建议开给 harness）
-  source = "DR_final" | "VR"
-  by_layer_type[]: layer, type, count, bboxes[]
-  禁读 TA/中间 iter 当签核态（除非标明 debug）
+复杂度：O(1) per arc；总增量 O(E·crit_net_ratio)
+边界：
+  - weight=0 → 现状代价
+  - slack 为正（非关键）→ crit=0 → 不加权
+  - 依赖 G7（iSTA slack 可信）
 ```
 
-契约：总数与日志 `total_violation_num` 一致（T-C1）。Know-how：KH-X-04、G5。
+| 条件 | 行为 | 验收 |
+|---|---|---|
+| `enable_timing=0` | 现状；文档禁止称 timing-driven | — |
+| `enable_timing=1` 且实现仍空 | **G14 响亮失败**（禁止假报告） | T-B0 |
+| T-B1 | sort 开后 DEF 必异（真化验收） | diff 对比 |
+| T-B2 | Phase2 开后 crit_net WL 应 ≤ base（单调） | 统计验证 |
+
+Know-how：KH-RT-04（关键网优先）。依赖：`27-iSTA` G7 可信 slack。
+
+### 4.C ViolationReporter · 终态归因（FR-RT-08，G5 harness 前置）
+
+**真实现状**：`report()` → `uploadViolation`（经 DRCEngine 重算，`ViolationReporter.cpp:181-257`）→ summary 含 within/among × type × layer；`outputJson` 需 `enable_notification`（`:503-507`）。
+
+```text
+ALG-4.C-1  violation_summary.json（★新增独立开关）
+输入：final_violation_list (from DRCEngine)
+输出：JSON
+
+{
+  "source": "DR_final" | "VR",
+  "total_count": int,
+  "by_layer_type": [
+    {"layer": "M1", "type": "short", "count": int, "bboxes": [...]},
+    ...
+  ],
+  "route_incomplete": bool  // ★G5
+}
+
+契约：
+  - 总数与日志 `total_violation_num` 一致（T-C1）
+  - 禁读 TA/中间 iter 当签核态（除非标明 debug）
+  - 独立开关 enable_violation_json（默认建议 harness 开）
+
+复杂度：O(V)，V=违例数；JSON 序列化可忽略
+边界：
+  - V=0 → 空数组，route_incomplete=false
+  - DRCEngine 返回空但 DR 认为有违例 → LOG_ERROR，数据不一致
+```
+
+Know-how：KH-X-04（响亮失败 + 结构化产物）、G5（DRC=0 或诚实拒绝）。
 
 ### 4.D ECO route（FR-RT-06，Phase C）
 

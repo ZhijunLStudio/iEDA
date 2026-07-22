@@ -1,0 +1,28 @@
+{
+  "name": "aes",
+  "top": "aes",
+  "scale": "M",
+  "role": "timing",
+  "description": "AES encryption core. Medium-scale design for timing and congestion evaluation (~17K lines).",
+  "pdk": "sky130",
+  "variant": "fd_sc_hd",
+  "inputs": {
+    "tech_lef": "$PDK/lef/sky130_fd_sc_hd.tlef",
+    "cells_lef": "$PDK/lef/sky130_fd_sc_hd_merged.lef",
+    "lib": "$PDK/lib/sky130_fd_sc_hd__tt_025C_1v80.lib",
+    "netlist": "netlist/aes.v",
+    "sdc": "sdc/aes.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 800.0 800.0",
+    "core_area": "50.0 50.0 750.0 750.0",
+    "core_utilization": 0.60
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "clk",
+      "period_ns": 2.5
+    }
+  ]
+}

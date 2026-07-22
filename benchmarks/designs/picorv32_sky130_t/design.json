@@ -1,0 +1,29 @@
+{
+  "name": "picorv32_sky130_t",
+  "top": "picorv32",
+  "scale": "L",
+  "role": "cpu",
+  "description": "RISC-V CPU core",
+  "pdk": "sky130",
+  "variant": "fd_sc_hd",
+  "inputs": {
+    "tech_lef": "$PDK/lef/fd_sc_hd.tlef",
+    "cells_lef": "$PDK/lef/fd_sc_hd_merged.lef",
+    "lib": "$PDK/lib/fd_sc_hd__tt_025C_1v80.lib",
+    "netlist": "netlist/picorv32.v",
+    "sdc": "sdc/picorv32.sdc"
+  },
+  "floorplan": {
+    "die_area": "0.0 0.0 1200 1200",
+    "core_area": "120.0 120.0 1080.0 1080.0",
+    "core_utilization": 0.65
+  },
+  "clocks": [
+    {
+      "name": "core_clock",
+      "port": "clk",
+      "period_ns": 5.0
+    }
+  ],
+  "strategy": "t"
+}

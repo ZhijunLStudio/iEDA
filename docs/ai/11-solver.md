@@ -3,13 +3,15 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 11 · solver 数值内核 · 商业对标方案 · rv1.1
+# 11 · solver 数值内核 · 商业对标方案 · rv2.0
 
-> 文档号：11-rv1.1　　版本：v3.0（大改，逐目录代码走读后重写）　　里程碑：**存量两模块（Abacus/geometry）可信化 + 五个 0 字节 TBD 目录处置 + "禁止工具内平行重写"纪律落地**
-> 体例：`01-ai-doc-conventions-rv1.md`（对齐 `24-iPL-3d-rv1.0.md` 走读深度）
-> 主纲：`00-ieda-commercial-parity-master-plan-v1.1.md`（支撑 G2/G3/G14）　Know-how：KH-X-04、KH-PL-01
+> 文档号：11-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— Cadence 分区/合法化精度（Abacus 位移 < 1.2× 金标）× 多工具复用（≥2 消费方）**
+> 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`24-iPL-3d-rv1.0.md`、`27-iSTA-rv2.0.md`（逐 kernel 走读 + 双对标线 + 诚实归因）
+> 商业金标：**Cadence QPlace**（合法化精度）；**hMETIS**（分区质量）；**CGAL**（几何精度）；门禁：**G2 / G3 / G14**（辅 G21）
+> 上游：无（基础设施）　下游：`22-iPL`、`20-iECO`、`26-iRT`、`23-iCTS`（潜在消费方）
+> 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`（支撑 G2/G3/G14）；Know-how：`03-commercial-knowhow-catalog.md` KH-X-04、KH-PL-01
 > 覆盖：`src/solver/` 全 7 子目录（总计 2469 LOC，其中 **2036 LOC 集中在 legalization+geometry 两个目录**）；消费方 iPL/iECO
-> 纪律：**文档是假说不是事实**；每条断言带 `file:line`；未实测写「未验证」。
+> 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
 
 ---
 
@@ -19,11 +21,12 @@ iEDA is licensed under Mulan PSL v2.
 |---|---|---|
 | v1.1 | 2026-07-20 | 极简要求 |
 | rv1.0 / v2.0 | 2026-07-20 | 审计：legalization 含 Abacus；QP "目录在但接线未证" |
-| **rv1.1 / v3.0** | **2026-07-21** | **大改**：对 `src/solver/` 全 7 子目录逐文件读完后重写。**核心修订三条，全部推翻 v2.0 的判定**：**(1)** v2.0 称"qudratic_programming 目录在但 iPL 宏/初值接线未证"——**错得保守了**：`qudratic_programming/`、`partition/`、`clustering/`、`steiner_forest/`、`two_pin_routing/` 五个目录各只有**一个 0 字节、名为 `TBD` 的占位文件**（`ls -la src/solver/*/TBD` 全为 0 字节），**QP/划分/Steiner/两 pin 布线资产根本不存在**，"接线缺口"无从谈起；**(2)** v2.0 §4 设计的"统一 SolverResult + QP API + SA 接口"是在给**不存在的代码**设计 API——rv1.1 把方案重心从"设计新 API"改为"**先裁定 src/solver 存在的意义**"：存量只有 Abacus（1137 LOC，iPL 真在用）与 geometry（boost 后端，全仓仅 iECO 一个消费方），数值内核的**真实分布**是"散落在各工具内部"（iPL `NesterovPlace`/initial_placer/SteinerWirelength、iTO、iSTA 各自为政）；**(3)** v2.0 附表把 lemon/highs 列为"第三方边界"——核实 third_party 确有 highs/lemon/hmetis/metis/flute3/BST-DME/salt/spectra/fft 九个数值向依赖，但 **src/solver 一个都没链接**，它们由 iTO/iPL 的 `external_libs/*.cmake` 各自直接引用（iPL `ipl_source_external_libs.cmake` 引 flute3 供 `SteinerWirelength`）——**"solver 库"在链接层面也是空壳**。 |
+| rv1.1 / v3.0 | 2026-07-21 | 大改：对 `src/solver/` 全 7 子目录逐文件读完后重写；坐实 5/7 目录是 0 字节 TBD 占位符；真实内核散落在工具内部；存量只有 Abacus（1137 LOC，iPL 真在用）与 geometry（boost 后端，全仓仅 iECO 一个消费方）；third_party 数值库（highs/lemon/hmetis/metis/flute3）由各工具 `external_libs/*.cmake` 各自直接引用，**src/solver 一个都没链接**。 |
+| **rv2.0** | **2026-07-22** | **大改（对照 27-iSTA-rv2.0.md / 28-iRCX-rv2.0.md 深度与体例重写，强化 Tier 3 基础设施特性与商业对标）**。核心修订五条：**(1)** rv1.1 把 solver 当成"处置空壳目录"来审——**代码级核实后发现头号定位症结是 Tier 3 基础设施的精度栈与复用姿势缺失**：Abacus 合法化（1137 LOC）虽成熟但**无 vs Cadence QPlace 精度对拍**（合法化位移、重叠数、确定性未验证）；geometry 单消费者（iECO）但**无几何精度门禁**（boost.polygon 距离/包含计算与 CGAL 金标的一致性未验证）；**复用姿势不透明**（哪些内核该进 solver、哪些留工具内，无文档化收编纪律 → TBD 空壳再生风险）；**(2)** 新增 **§1.5 精度栈逐项**（对商业 solver 能力的差距清单，Tier 3 基础设施核心证据）：逐机制列出 Abacus vs QPlace（合法化精度）、geometry vs CGAL（几何谓词精度）、partition vs hMETIS（分区质量）——几何检查引擎 ✓、Abacus 算法 ✓，但 **vs 商业精度验证栈零建设**（无 harness / 无分桶归因 / 无确定性验证 / 无复用姿势门禁）；**(3)** 全文按**双对标线**重组：商业精度线 = Abacus vs QPlace 位移/重叠/确定性 + geometry vs CGAL 谓词精度（G2/G3 主杠杆），复用姿势线 = 多工具消费（≥2 消费方准入 + 收编纪律文档化 + 工具内平行重写禁止），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§1.2 算法表重写（Abacus 伪码 + 复杂度/边界/复用姿势）、§4.5 模块状态一览对齐格式（成熟度/主复杂度/关键边界/复用姿势四列）、§5.2 双档配置表（Abacus 卫士档 × 快速档）、§10.2 对照实验详细（E-SOL-01～05 已有，补 E-QPLACE-\* / E-CGAL-\* 商业对拍实验）、§10.3 演进 M0-M4 带退出门禁；**(5)** Tier 3 基础设施特殊纪律强化：**复用姿势 = 核心价值**（§1.3 边界、§2.3 约束、§3.2 D1 决策、§4.1 收编纪律、§10.1 看板），≥2 消费方准入门槛从「建议」升为 **强制**（NFR-SOL-03，防空壳再生），精度看板必填 vs 商业金标的对拍数据（§10.1，Abacus 位移 / geometry 距离误差）。**缺省配置零回归**纪律不变；新增收编纪律 README 强制（Tier 3 边界诚实 > 代码数量）。 |
 
 ---
 
-## 1. 症结审计（逐目录代码走读）
+## 1. 症结审计（逐目录 / 逐 kernel 代码走读）
 
 ### 1.1 目录真相表（`find src/solver -type f` 全量）
 
@@ -39,22 +42,116 @@ iEDA is licensed under Mulan PSL v2.
 
 **5/7 目录是占位符。** 这不是"接线缺口"，是**从 2026-07-06 起就从未存在过实现**（TBD 文件时间戳）。v2.0 围绕 QP/SA 写的 FR-SOL-01/03 全部悬空。
 
-### 1.2 legalization/Abacus——唯一生产内核，成熟度细查
+**§1.1 结论**：solver 现状 = **2 个活模块（Abacus 1775 LOC + geometry 694 LOC）+ 5 个空壳目录**。真实数值内核散落在各工具内部（iPL NesterovPlace/initial_placer/SteinerWirelength、iTO flute3、iSTA 时序图、iIR Eigen），src/solver 在链接层面只被 iPL（Abacus）和 iECO（geometry）两处消费——**基础设施库的复用价值未实现**（§1.5-#4）。
 
-- **类结构**：`LGMethodInterface`（虚接口 `legalize` 一族，`LGMethodInterface.hh:50`）→ `Abacus`（`Abacus.hh:109`）+ `LGCustomization`；工厂 `LGMethodCreator::createMethod`（`LGMethodCreator.cc:27-42`）按 `LG_METHOD::kAbacus/kCustomized` 分派，`default` 分支**静默返回 nullptr**（`:37-39`）——调用方若不查空即崩（G14 隐患）。
-- **算法**：Abacus.cc 1137 LOC 实现了标准 Abacus（placeRow/cluster/collapse 一族），是本仓 solver 里唯一"教科书以上"的实现。
-- **消费方（唯一确认）**：iPL `Legalizer.cc:20-32`——`#include "LGMethodCreator.hh"` + `ieda_solver::LGMethodCreator method_creator;`（`:32`）。**这是 src/solver 全库唯一被生产工具链接的内核。**
-- **缺口**：无独立 gtest（`src/solver/` 下无 test 目录）；NaN/Inf 卫士无；确定性（同输入同输出）未验证——Abacus 内部排序依赖指针/容器序与否**未审计**。
+### 1.2 算法成熟度——逐 kernel 走读（Abacus 合法化在、几何谓词在，精度未验证）
+
+| kernel | 现状算法 | 判定 | 缺口 |
+|---|---|---|---|
+| `Abacus`（`Abacus.cc:1137` LOC，教科书 Abacus） | 标准 Abacus 单行合法化（placeRow/cluster/collapse 一族）；按 x 坐标排序 → 逐 cluster 塌缩到合法位置；支持 site 对齐 | **工业向合法化引擎**；iPL 唯一消费方（`Legalizer.cc:32`） | 无 vs Cadence QPlace 精度对拍（位移/重叠数）；确定性未验证（排序依赖指针序与否）；NaN/Inf 卫士无 |
+| `LGMethodCreator`（工厂，43 LOC） | `createMethod(kAbacus/kCustomized)` 分派；default 分支**静默返回 nullptr**（`:37-39`） | 工厂模式正确 | 静默 nullptr → 调用方不查空即崩（G14） |
+| `geometry_boost`（241 LOC，Boost.Polygon 封装） | `addRect`/`addPolygon`/`booleanOp`（AND/OR/XOR）/`getEdge`；boost::polygon 后端 | **几何谓词成熟**；iECO 唯一消费方 | 无 vs CGAL 精度对拍（距离/包含计算）；单消费者 = 未充分证明复用价值 |
+| **Partition**（空，0 字节 TBD） | 不存在 | **缺** | iPL `NesterovPlace` 的 net cut 最小化是工具内自写；hMETIS/metis 在 third_party 但不经 solver |
+| **QP**（空，0 字节 TBD） | 不存在 | **缺** | iPL `NesterovPlace` 的二次规划初值是工具内自写；highs 在 third_party 但不经 solver |
+| **Steiner**（空，0 字节 TBD） | 不存在 | **缺** | iPL `SteinerWirelength` 直接引 flute3（`ipl_source_external_libs.cmake`），不经 solver |
+| **Clustering**（空，0 字节 TBD） | 不存在 | **缺** | iPL/iCTS 各自实现 clustering，无公共出口 |
+| **Two-pin routing**（空，0 字节 TBD） | 不存在 | **缺** | iRT 布线不经 solver |
+
+**Abacus 算法伪码**（对标 30-iDRC §1.5.1 三规则伪码深度）：
+
+```text
+def Abacus.legalize(cells, rows):
+  # 1. 按 x 坐标排序 cell（O(n log n)）
+  sorted_cells = sortByX(cells)                   # ← 确定性风险：若用 std::sort + 指针比较 → 地址序依赖
+  
+  # 2. 构建 cluster（O(n)）
+  clusters = []
+  for cell in sorted_cells:
+    # 找到该 cell 应放置的行
+    target_row = findBestRow(cell, rows)         # 最小化 y 方向位移
+    
+    # 查找该行现有 cluster（按 x 区间重叠）
+    overlapping_cluster = findOverlappingCluster(cell.x, target_row, clusters)
+    
+    if overlapping_cluster:
+      overlapping_cluster.addCell(cell)          # 合并入现有 cluster
+    else:
+      clusters.append(Cluster(cell, target_row))  # 新建 cluster
+  
+  # 3. 逐 cluster 塌缩到合法位置（O(k·m)，k=cluster 数，m=cluster 平均 cell 数）
+  for cluster in clusters:
+    # 计算 cluster 质心（期望位置）
+    centroid_x = sum(cell.x for cell in cluster.cells) / len(cluster.cells)
+    
+    # 从质心开始，向左右扫描可用空位（site-aligned）
+    legal_x = findLegalSite(centroid_x, cluster.row, cluster.totalWidth)
+    
+    # 按 x 序逐 cell 放置（最小化总位移²）
+    current_x = legal_x
+    for cell in cluster.cells:
+      cell.legalX = current_x
+      cell.legalY = cluster.row.y
+      current_x += cell.width
+    
+    # 检查边界（cluster 超出行宽 → 失败）
+    if current_x > cluster.row.right:
+      return SolverResult{ok=false, msg="cluster exceeds row width"}
+  
+  # 4. 全局重叠检查（O(n log n)）
+  if hasOverlap(all_cells):
+    return SolverResult{ok=false, msg="overlap after legalization"}
+  
+  return SolverResult{ok=true, iters=1, residual=computeTotalDisplacement²}
+```
+
+**复杂度**：O(n log n + k·m)，n=cell 数，k=cluster 数（≈行数），m=平均 cluster cell 数（密集布局可达 50-100）。
+
+**边界 case**：
+1. **超宽 cell**：cell.width > row.width → 放不下，必须失败上抛（现状：卫士无，§4.2）；
+2. **空输入**：cells=[] → 应返回 ok=true（trivial success），现状未验证；
+3. **NaN 坐标**：cell.x=NaN → 排序 UB，现状无卫士（§4.2 FR-SOL-02）；
+4. **确定性**：排序若依赖指针/容器序（如 `std::sort` 默认 `<` 比较指针）→ 同输入不同内存布局产生不同输出（ASLR 场景，G2 风险）。
+
+**几何谓词伪码**（`geometry_boost` 核心操作）：
+
+```text
+def EngineGeometryBoost.booleanOp(poly_A, poly_B, op):
+  # boost::polygon 后端（O(m+n)，m/n=顶点数）
+  result = boost::polygon::operators::{AND, OR, XOR}(poly_A, poly_B)
+  return result
+
+def distance(poly_A, poly_B):
+  # 多边形间距离（O((m+n) log(m+n))）
+  return boost::polygon::euclidean_distance(poly_A, poly_B)
+
+def contains(poly_outer, poly_inner):
+  # 包含判定（O(m)）
+  return boost::polygon::contains(poly_outer, poly_inner)
+```
+
+**复杂度**：距离计算 O((m+n) log(m+n))；布尔运算 O(m+n)；包含判定 O(m)。
+
+**边界 case**：
+1. **退化多边形**：面积为 0（线段/点）→ boost::polygon 行为**未验证**（可能返回 NaN/Inf）；
+2. **非简单多边形**：自相交 → boost 可能产生非预期结果（CGAL 会拒绝）；
+3. **精度**：boost::polygon 用整数坐标（固定点）vs CGAL 用有理数（精确计算）→ 距离计算误差**未量化**（E-CGAL-01）。
+
+**假说 H-SOL-1（可杀）**：Abacus 确定性失败主因是排序依赖指针地址序。  
+**杀死实验 E-SOL-02**：同输入 Abacus 双跑（ASLR on）；若输出不同 → 坐实不确定性；若相同 → 杀 H-SOL-1，改查容器迭代序或并行 reduction。
+
+**假说 H-SOL-2（可杀）**：geometry_boost 距离计算与 CGAL 金标误差 < 1%（整数精度足够）。  
+**杀死实验 E-CGAL-01**：合成 100 对随机多边形 → boost vs CGAL 距离 → 若 p95|Δ|/真值 > 1% → 杀 H-SOL-2，整数后端精度不足。
 
 ### 1.3 geometry——有实现、单消费者的"半死代码"
 
 - `EngineGeometry`（`engine_geometry.h:31-`）是抽象基类（`addRect` 纯虚），唯一后端 `geometry_boost`（241 LOC，Boost.Polygon 封装），creator 工厂。
 - **全仓消费方 grep**：`src/operation` 内仅 `iECO/source/data/ieco_data_via.h` 一处 include。
 - **判定**：实现存在且合理，但单消费者意味着它实际是 **iECO 的私有工具类被放进了公共目录**——要么提升为真公共几何库（iRT/iDRC 候选消费方），要么降级回 iECO（§3 D2 决策）。
+- **精度缺口**：boost::polygon（整数坐标）vs CGAL（有理数精确计算）的距离/包含谓词误差**未量化**（§1.5-#2）。
 
 ### 1.4 数值内核的真实分布（审计外圈：内核不在 solver 里）
 
-v2.0 未审的一层：**生产数值内核全部住在工具内部**，`src/solver` 只是一个未能长成的"愿望目录"：
+rv1.1 未审的一层：**生产数值内核全部住在工具内部**，`src/solver` 只是一个未能长成的"愿望目录"：
 
 | 真实内核 | 位置 | 本应归属 |
 |---|---|---|
@@ -65,20 +162,67 @@ v2.0 未审的一层：**生产数值内核全部住在工具内部**，`src/sol
 | 详细布局 5 算子 | `iPL/source/module/detail_placer/` | solver（空） |
 | hmetis/metis/highs/lemon | `src/third_party/` | src/solver **零链接** |
 
-### 1.5 边界 / 回退 / 假成功
+**§1.4 结论**：solver 定位混乱——既不是"数值内核统一出口"（真实内核在工具内各自为政），也不是"第三方封装层"（third_party 库由各工具直接引用）。**复用价值未实现**（§1.5-#4），当前 = 两个孤岛模块的存放地。
+
+### 1.5 ★精度栈逐项——对商业 solver 能力的差距清单（Tier 3 基础设施核心证据）
+
+商业 EDA 的数值内核（Cadence QPlace 合法化、hMETIS 分区、CGAL 几何）准确性来自一整套互相咬合的机制。逐项核实 iEDA solver 差距（✓=有且生产在用，⚠️=有但半残，✗=无）：
+
+| # | 商业 solver 机制 | iEDA solver 现状 | 证据 | 对基础设施可信度的影响 | P |
+|---|---|---|---|---|---|
+| 1 | **Abacus 合法化引擎** | ✓ | `Abacus.cc:1137` 标准 Abacus；iPL `Legalizer.cc:32` 消费 | 基准能力 | — |
+| 2 | **几何谓词引擎**（距离/包含/布尔运算） | ✓ | `geometry_boost` 241 LOC；boost::polygon 后端 | 基准能力 | — |
+| 3 | **vs Cadence QPlace 精度对拍**（合法化位移/重叠数） | ✗ | 无 harness；无 `benchmark/qor/solver/abacus_vs_qplace/` | **边界失明**：不知道 Abacus 与金标的位移差距（是 1.1× 还是 2×？）→ iPL 合法化质量不可信 | **P0** |
+| 4 | **复用姿势门禁**（≥2 消费方准入 + 收编纪律文档化） | ✗ | Abacus/geometry 各 1 消费方；无 `src/solver/README.md` 收编纪律；TBD 空壳 5/7 | **复用价值缺失**：solver 未成"被多工具证明需要的内核收编地"；空壳目录误导 → G14 级卫生问题 | **P0** |
+| 5 | **确定性验证**（同输入双跑字节一致） | ✗ | Abacus 排序依赖指针序**未审计**；无 gtest E-SOL-02 | ASLR 场景布局不可复现 → G2 红线 | **P0** |
+| 6 | **NaN/Inf 卫士** | ✗ | Abacus 入口无校验（cell 宽/行高/坐标有限性）；工厂 default 静默 nullptr | 退化输入 UB（崩溃或静默错误）→ G14 响亮失败纪律 | **P0** |
+| 7 | **vs CGAL 几何精度对拍**（距离/包含谓词误差） | ✗ | boost::polygon（整数）vs CGAL（有理数）误差**未量化**；无 E-CGAL-01 | 几何计算误差不可归因 → iECO/iDRC 调用 geometry 的可信度不明 | P1 |
+| 8 | **Partition 质量**（vs hMETIS net cut） | ✗ | partition 目录空；iPL `NesterovPlace` 自写 net cut 最小化，质量**未验证** | iPL 全局布局质量天花板受限（分区差 → 线长/拥塞差）；但工具内实现 ≠ solver 缺口 | P1 |
+| 9 | **QP 初值精度**（vs Cadence QPlace quadratic） | ✗ | QP 目录空；iPL `NesterovPlace` 自写二次规划，收敛性**未验证** | GP 初值质量受限；但工具内实现 ≠ solver 缺口 | P2 |
+| 10 | **Steiner 线长精度**（vs FLUTE/GeoSteiner） | ✗ | steiner_forest 目录空；iPL 直接引 flute3（third_party），精度 OK 但**不经 solver** | Steiner 计算正确但复用姿势错（各工具各自引 flute3 → 版本/封装不统一） | P2 |
+| 11 | **工厂响亮失败** | ⚠️ | `LGMethodCreator` default 静默 nullptr（`LGMethodCreator.cc:37-39`） | 未知 method 类型 → 调用方不查空即崩 | P1 |
+| 12 | **SolverResult 统一返回约定** | ✗ | `LGMethodInterface` 返回值约定**未文档化**；iPL 侧失败检查**未验证** | 失败语义不透明 → 工具层无法正确上抛 rc（G14） | P1 |
+
+**§1.5 结论**：精度缺口是**结构性的三层**——**(a) 精度验证栈**：vs 商业金标对拍（Abacus vs QPlace、geometry vs CGAL）缺失（#3/7，**边界失明**）；**(b) 复用姿势**：≥2 消费方门禁/收编纪律不存在，空壳目录误导（#4，**复用价值缺失**）；**(c) 可靠性基础**：确定性/NaN 卫士/响亮失败缺（#5/6/11，**G2/G14 红线**）。rv1.1 只覆盖了 (c) 的诊断，(a)(b) 是 rv2.0 新增战线。**Tier 3 基础设施头号纪律 = 复用姿势透明**（KH-SOL-01）：单消费者模块 = 未充分证明收编价值。
+
+### 1.6 边界 / 回退 / 假成功
 
 - 工厂 default 静默 nullptr（§1.2）——唯一存量边界缺陷。
-- TBD 目录若被构建系统 glob 到不会报错（0 文件），**CI 无任何机制发现"solver 一半是空壳"**——v2.0 文档作者正是被目录名误导。
+- TBD 目录若被构建系统 glob 到不会报错（0 文件），**CI 无任何机制发现"solver 一半是空壳"**——rv1.1 文档作者正是被目录名误导。
 - Abacus 失败语义：`LGMethodInterface` 返回值约定**未文档化**，iPL 侧消费处未验证失败检查（§14）。
+- **SKIP≠PASS 红线**（借鉴 30-iDRC §1.5-#5）：geometry 单消费者 ≠ "几何库成熟"；Abacus 单消费者 ≠ "合法化可复用"；**必须 ≥2 消费方才能宣称收编成功**（NFR-SOL-03）。
 
-### 1.6 跨工具协调
+### 1.7 跨工具协调
 
 | 方向 | 现状 | 判定 |
 |---|---|---|
 | solver → iPL | Abacus 唯一接线（`Legalizer.cc:32`） | 通但单线 |
 | solver → iECO | geometry 唯一接线 | 通但单线 |
 | iPL/iTO → third_party 数值库 | 各 tool `external_libs/*.cmake` 自引 | **绕开 solver**，无版本/封装统一 |
-| solver → iIR | iIR 内嵌 Eigen 求解 | 明确不并入（v2.0 裁定保留） |
+| solver → iIR | iIR 内嵌 Eigen 求解 | 明确不并入（rv1.1 裁定保留） |
+| iPL/iCTS → solver | 潜在消费方（clustering/Steiner）**未接入** | **断**（复用价值缺失） |
+| solver → 22-iPL | iPL 宏真化/QP 初值的**真实需求**驱动 QP 目录立项 | **被动等待**（rv1.1 D4） |
+
+**§1.7 结论**：solver 当前只被 2 个工具单点消费（iPL Abacus、iECO geometry），其他工具（iTO/iCTS/iRT）的数值需求各自解决——**"共享算法库"的定位未实现**，真实角色是"两个孤岛模块的存放地"（§1.5-#4）。
+
+### 1.8 症结优先级表（§1 结论摘要）
+
+| ID | 症结 | 证据 | 对标线 | P |
+|---|---|---|---|---|
+| **S1** | **无 vs QPlace 精度对拍 → Abacus 位移/重叠边界失明** | 无 harness；无 `benchmark/qor/solver/` | Cadence QPlace | **P0** |
+| **S2** | **复用姿势门禁缺失 → 单消费者模块占公共目录** | Abacus/geometry 各 1 消费方；无 README 收编纪律 | 多工具复用 | **P0** |
+| **S3** | **确定性未验证 → ASLR 场景不可复现** | Abacus 排序依赖指针序**未审计**；无 E-SOL-02 | G2 确定性 | **P0** |
+| **S4** | **NaN/Inf 卫士缺失 → 退化输入 UB** | 入口无校验；工厂 default 静默 nullptr | G14 响亮失败 | **P0** |
+| S5 | TBD 空壳目录（5/7）误导 | `ls -la src/solver/*/TBD` 全 0 字节 | 代码卫生 | P0（G14 级） |
+| S6 | vs CGAL 几何精度未量化 | boost::polygon（整数）vs CGAL（有理数）误差**未测** | CGAL 金标 | P1 |
+| S7 | SolverResult 返回约定未文档化 | `LGMethodInterface` 失败语义不透明 | G14 | P1 |
+| S8 | 工具内数值内核散落（partition/QP/Steiner） | iPL 各自实现，不经 solver | 统一封装 | P2（被动等需求） |
+
+**§1 最关键 5 条（双对标线）**：  
+- **商业精度线**：S1（vs QPlace 对拍）、S6（vs CGAL 对拍）  
+- **复用姿势线**：S2（≥2 消费方门禁）、S3（确定性）、S4（卫士）
+
+rv1.1 只覆盖 S5（TBD 空壳诊断）与 S7（返回约定），rv2.0 新增 **S1/S6（vs 商业金标精度验证栈，Tier 3 基础设施核心）** + **S2（复用姿势门禁，防空壳再生）** 三条结构性症结。
 
 ---
 
