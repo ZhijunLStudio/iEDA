@@ -56,7 +56,10 @@ bool PowerIO::autoRunPower(std::string path)
   }
 
   /// run
-  reportSummaryPower();
+  if (!reportSummaryPower()) {
+    LOG_ERROR << "power analysis failed";
+    return false;
+  }
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
@@ -75,16 +78,23 @@ bool PowerIO::reportSummaryPower()
   auto* timing_engine = ista::TimingEngine::getOrCreateTimingEngine();
 
   if (!timing_engine->isBuildGraph()) {
-    timing_engine->buildGraph();
-    timing_engine->updateTiming();
+    if (!timing_engine->buildGraph()) {
+      LOG_ERROR << "failed to build timing graph for power analysis";
+      return false;
+    }
+  }
+  if (!dmInst->get_config().get_spef_path().empty() && !staInst->runSpef()) {
+    return false;
+  }
+  if (!staInst->updateTiming()) {
+    LOG_ERROR << "failed to update timing for power analysis";
+    return false;
   }
 
   ista::Sta* ista = ista::Sta::getOrCreateSta();
   ipower::Power* ipower = ipower::Power::getOrCreatePower(&(ista->get_graph()));
 
-  ipower->runCompleteFlow();
-
-  return true;
+  return ipower->runCompleteFlow() != 0;
 }
 
 }  // namespace iplf

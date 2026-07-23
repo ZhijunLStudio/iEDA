@@ -43,13 +43,23 @@ bool DataManager::initDef(string def_path)
   _idb_def_service = _idb_builder->buildDef(def_path);
   _design = get_idb_design();
 
+  if (_idb_def_service == nullptr || _design == nullptr) {
+    return false;
+  }
+
   /// make original coordinate on (0,0)
   if (isNeedTransformByDie()) {
     /// transform
     transformByDie();
   }
 
-  return _idb_def_service == nullptr ? false : true;
+  ieda::platform::DesignMetadata metadata;
+  const int dbu = _design->get_units()->get_micron_dbu();
+  metadata.units["distance_dbu_per_micron"] = std::to_string(dbu);
+  metadata.provenance["input_type"] = "DEF";
+  metadata.provenance["input_path"] = def_path;
+  _design_state.reset(std::move(metadata));
+  return true;
 }
 
 bool DataManager::initVerilog(string verilog_path, string top_module)
@@ -58,7 +68,19 @@ bool DataManager::initVerilog(string verilog_path, string top_module)
   // _idb_def_service = _idb_builder->buildVerilog(verilog_path, top_module);
   _design = get_idb_design();
 
-  return _idb_def_service == nullptr ? false : true;
+  if (_idb_def_service == nullptr || _design == nullptr) {
+    return false;
+  }
+
+  ieda::platform::DesignMetadata metadata;
+  if (_layout != nullptr && _layout->get_units() != nullptr) {
+    metadata.units["distance_dbu_per_micron"] = std::to_string(_layout->get_units()->get_micron_dbu());
+  }
+  metadata.provenance["input_type"] = "Verilog";
+  metadata.provenance["input_path"] = verilog_path;
+  metadata.provenance["top_module"] = top_module;
+  _design_state.reset(std::move(metadata));
+  return true;
 }
 
 }  // namespace idm

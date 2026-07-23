@@ -33,6 +33,7 @@
 
 #include "FormatUtils.hh"
 #include "PathUtils.hh"
+#include "json/json.hpp"
 #include "libfort/fort.hpp"
 #include "log/Log.hh"
 
@@ -103,6 +104,111 @@ struct SummaryErrors
   ErrorStats ccap;
   ErrorStats p2p;
 };
+
+struct CorrelationStats
+{
+  std::size_t count = 0;
+  std::size_t relative_count = 0;
+  double signed_bias = 0.0;
+  double mean_absolute_error = 0.0;
+  double relative_mae = 0.0;
+  double relative_p50 = 0.0;
+  double relative_p90 = 0.0;
+  double relative_p95 = 0.0;
+  double relative_max = 0.0;
+  std::optional<double> r_squared;
+};
+
+auto quantile(const std::vector<double>& sorted_values, double probability) -> double
+{
+  if (sorted_values.empty()) {
+    return 0.0;
+  }
+  const double position = probability * static_cast<double>(sorted_values.size() - 1);
+  const auto lower = static_cast<std::size_t>(std::floor(position));
+  const auto upper = static_cast<std::size_t>(std::ceil(position));
+  const double weight = position - static_cast<double>(lower);
+  return sorted_values[lower] * (1.0 - weight) + sorted_values[upper] * weight;
+}
+
+template <typename Row>
+auto collectCorrelationStats(const std::vector<Row>& rows) -> CorrelationStats
+{
+  CorrelationStats stats;
+  if (rows.empty()) {
+    return stats;
+  }
+
+  double reference_sum = 0.0;
+  double signed_error_sum = 0.0;
+  double absolute_error_sum = 0.0;
+  std::vector<double> absolute_relative_errors;
+  absolute_relative_errors.reserve(rows.size());
+  for (const auto& row : rows) {
+    if (!std::isfinite(row.reference) || !std::isfinite(row.test)) {
+      continue;
+    }
+    ++stats.count;
+    reference_sum += row.reference;
+    signed_error_sum += row.test - row.reference;
+    absolute_error_sum += std::abs(row.test - row.reference);
+    if (row.relative_delta.has_value() && std::isfinite(*row.relative_delta)) {
+      absolute_relative_errors.push_back(std::abs(*row.relative_delta));
+    }
+  }
+  if (stats.count == 0) {
+    return stats;
+  }
+
+  stats.signed_bias = signed_error_sum / static_cast<double>(stats.count);
+  stats.mean_absolute_error = absolute_error_sum / static_cast<double>(stats.count);
+  stats.relative_count = absolute_relative_errors.size();
+  if (!absolute_relative_errors.empty()) {
+    std::sort(absolute_relative_errors.begin(), absolute_relative_errors.end());
+    double relative_error_sum = 0.0;
+    for (const double error : absolute_relative_errors) {
+      relative_error_sum += error;
+    }
+    stats.relative_mae = relative_error_sum / static_cast<double>(absolute_relative_errors.size());
+    stats.relative_p50 = quantile(absolute_relative_errors, 0.50);
+    stats.relative_p90 = quantile(absolute_relative_errors, 0.90);
+    stats.relative_p95 = quantile(absolute_relative_errors, 0.95);
+    stats.relative_max = absolute_relative_errors.back();
+  }
+
+  const double reference_mean = reference_sum / static_cast<double>(stats.count);
+  double residual_sum_squares = 0.0;
+  double total_sum_squares = 0.0;
+  for (const auto& row : rows) {
+    if (!std::isfinite(row.reference) || !std::isfinite(row.test)) {
+      continue;
+    }
+    const double residual = row.test - row.reference;
+    const double centered_reference = row.reference - reference_mean;
+    residual_sum_squares += residual * residual;
+    total_sum_squares += centered_reference * centered_reference;
+  }
+  if (stats.count >= 2 && total_sum_squares > 0.0) {
+    stats.r_squared = 1.0 - residual_sum_squares / total_sum_squares;
+  }
+  return stats;
+}
+
+auto statsToJson(const CorrelationStats& stats) -> nlohmann::ordered_json
+{
+  nlohmann::ordered_json json;
+  json["count"] = stats.count;
+  json["relative_error_count"] = stats.relative_count;
+  json["signed_bias"] = stats.signed_bias;
+  json["mean_absolute_error"] = stats.mean_absolute_error;
+  json["relative_mae"] = stats.relative_mae;
+  json["relative_p50"] = stats.relative_p50;
+  json["relative_p90"] = stats.relative_p90;
+  json["relative_p95"] = stats.relative_p95;
+  json["relative_max"] = stats.relative_max;
+  json["r_squared"] = stats.r_squared.has_value() ? nlohmann::ordered_json(*stats.r_squared) : nlohmann::ordered_json(nullptr);
+  return json;
+}
 
 auto openReport(const std::filesystem::path& path) -> std::ofstream
 {
@@ -364,6 +470,61 @@ auto writeSummaryReport(const std::filesystem::path& output_dir, const Config& c
   return true;
 }
 
+auto writeJsonReport(const std::filesystem::path& output_dir, const Config& config, const Result& result) -> bool
+{
+  nlohmann::ordered_json json;
+  json["schema_version"] = "ieda.rcx.compare.v1";
+  json["status"] = "measured";
+  json["test_file"] = config.test_file;
+  json["reference_file"] = config.reference_file;
+  json["coverage"] = {
+      {"reference_net_count", result.summary.reference_net_count},
+      {"test_net_count", result.summary.test_net_count},
+      {"matched_net_count", result.summary.matched_net_count},
+      {"reference_only_net_count", result.summary.reference_only_net_count},
+      {"test_only_net_count", result.summary.test_only_net_count},
+      {"reference_coupling_count", result.summary.reference_coupling_count},
+      {"test_coupling_count", result.summary.test_coupling_count},
+      {"reference_only_coupling_count", result.summary.reference_only_coupling_count},
+      {"test_only_coupling_count", result.summary.test_only_coupling_count}};
+  json["thresholds"] = {
+      {"total_cap_absolute", config.tcap_threshold},
+      {"coupling_cap_absolute", config.ccap_abs_threshold},
+      {"coupling_cap_relative", config.ccap_rel_threshold},
+      {"resistance_absolute", config.res_threshold}};
+  json["metrics"]["total_capacitance"] = statsToJson(collectCorrelationStats(result.tcap_rows));
+  json["metrics"]["ground_capacitance"] = statsToJson(collectCorrelationStats(result.gcap_rows));
+  json["metrics"]["coupling_capacitance"] = statsToJson(collectCorrelationStats(result.ccap_rows));
+  json["metrics"]["point_to_point_resistance"] = statsToJson(collectCorrelationStats(result.p2p_rows));
+
+  const auto report_path = output_dir / "compare.json";
+  const auto temporary_path = report_path.string() + ".tmp";
+  {
+    std::ofstream output(temporary_path, std::ios::trunc);
+    if (!output.is_open()) {
+      LOG_ERROR << "compare_spef failed: cannot open JSON report " << temporary_path;
+      return false;
+    }
+    output << json.dump(2) << '\n';
+    output.flush();
+    if (!output) {
+      LOG_ERROR << "compare_spef failed: cannot write JSON report " << temporary_path;
+      return false;
+    }
+  }
+
+  std::error_code error;
+  std::filesystem::remove(report_path, error);
+  error.clear();
+  std::filesystem::rename(temporary_path, report_path, error);
+  if (error) {
+    std::filesystem::remove(temporary_path);
+    LOG_ERROR << "compare_spef failed: cannot publish JSON report " << report_path << ": " << error.message();
+    return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 namespace {
@@ -424,7 +585,11 @@ auto writeReports(const std::filesystem::path& output_dir, const Config& config,
     }
   }
 
-  return std::all_of(ok.begin(), ok.end(), [](bool value) { return value; });
+  const bool text_reports_ok = std::all_of(ok.begin(), ok.end(), [](bool value) { return value; });
+  if (!text_reports_ok) {
+    return false;
+  }
+  return !config.emit_compare_json || writeJsonReport(output_dir, config, result);
 }
 
 }  // namespace

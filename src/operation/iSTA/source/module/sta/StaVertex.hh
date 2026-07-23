@@ -240,9 +240,11 @@ class StaVertex {
 
   void set_is_fwd_reset() { _is_fwd_reset = 1; }
   unsigned is_fwd_reset() const { return _is_fwd_reset; }
+  void reset_is_fwd_reset() { _is_fwd_reset = 0; }
 
   void set_is_bwd_reset() { _is_bwd_reset = 1; }
   unsigned is_bwd_reset() const { return _is_bwd_reset; }
+  void reset_is_bwd_reset() { _is_bwd_reset = 0; }
 
   void addFanoutEndVertex(StaVertex* fanout_end_vertex) {
     LOG_FATAL_IF(!fanout_end_vertex) << "insert end vertex:nullptr.";

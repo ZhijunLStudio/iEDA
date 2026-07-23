@@ -24,6 +24,7 @@
  */
 #include "iIR.hh"
 
+#include <cmath>
 #include <optional>
 #include <string_view>
 
@@ -67,6 +68,10 @@ unsigned iIR::readInstancePowerDB(std::string_view instance_power_file_path) {
 
 unsigned iIR::setInstancePowerData(
     std::vector<IRInstancePower> instance_power_data) {
+  if (instance_power_data.empty()) {
+    LOG_ERROR << "cannot set empty instance power data for IR analysis";
+    return 0;
+  }
   _nominal_voltage = instance_power_data[0]._nominal_voltage;
 
   RustVec c_instance_power_data;
@@ -85,6 +90,14 @@ unsigned iIR::setInstancePowerData(
 unsigned iIR::solveIRDrop(const char* net_name) {
   if (!_rc_data) {
     LOG_ERROR << "no " << net_name << " RC data to solve IR drop";
+    return 0;
+  }
+  if (!_power_data) {
+    LOG_ERROR << "no instance power/current data to solve " << net_name << " IR drop";
+    return 0;
+  }
+  if (net_name == nullptr || *net_name == '\0' || !std::isfinite(_nominal_voltage) || _nominal_voltage <= 0.0) {
+    LOG_ERROR << "IR solve requires a net name and a positive finite nominal voltage";
     return 0;
   }
 
@@ -123,6 +136,12 @@ unsigned iIR::solveIRDrop(const char* net_name) {
   }
 
   auto grid_voltages = (*ir_solver)(G_matrix, J_vector);
+  const auto& solve_report = ir_solver->get_report();
+  if (!solve_report.converged() || grid_voltages.size() != static_cast<std::size_t>(G_matrix.rows())) {
+    LOG_ERROR << "IR solve refused unconverged result for net " << net_name << ": " << solve_report.reason
+              << ", abs_residual=" << solve_report.absolute_residual << ", rel_residual=" << solve_report.relative_residual;
+    return 0;
+  }
 
   std::optional<std::pair<std::string, double>> max_ir_drop;
   std::optional<std::pair<std::string, double>> min_ir_drop;
@@ -130,6 +149,10 @@ unsigned iIR::solveIRDrop(const char* net_name) {
   auto instance_node_ids = get_instance_node_ids(_rc_data, net_name);
   uintptr_t* instance_id;
   FOREACH_VEC_ELEM(&instance_node_ids, uintptr_t, instance_id) {
+    if (*instance_id >= grid_voltages.size()) {
+      LOG_ERROR << "IR instance node id " << *instance_id << " is outside solved voltage vector";
+      return 0;
+    }
     double ir_drop = grid_voltages[*instance_id];
     std::string instance_name =
         get_instance_name(_rc_data, net_name, *instance_id);
@@ -151,6 +174,11 @@ unsigned iIR::solveIRDrop(const char* net_name) {
     }
 
     _net_to_instance_ir_drop[net_name][instance_name] = ir_drop;
+  }
+
+  if (!max_ir_drop.has_value() || !min_ir_drop.has_value()) {
+    LOG_ERROR << "IR solve produced no instance-level voltage samples for net " << net_name;
+    return 0;
   }
 
   LOG_INFO << "solve " << net_name << " IR drop end";

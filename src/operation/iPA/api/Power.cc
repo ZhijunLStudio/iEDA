@@ -109,9 +109,15 @@ unsigned Power::setupClock(PwrClock&& fastest_clock,
 unsigned Power::readRustVCD(const char* vcd_path,
                             const char* top_instance_name) {
   LOG_INFO << "read vcd start";
-  _rust_vcd_wrapper.readVcdFile(vcd_path);
-  _rust_vcd_wrapper.buildAnnotateDB(top_instance_name);
-  _rust_vcd_wrapper.calcScopeToggleAndSp(top_instance_name);
+  if (!_rust_vcd_wrapper.readVcdFile(vcd_path)) {
+    return 0;
+  }
+  if (!_rust_vcd_wrapper.buildAnnotateDB(top_instance_name)) {
+    return 0;
+  }
+  if (!_rust_vcd_wrapper.calcScopeToggleAndSp(top_instance_name)) {
+    return 0;
+  }
   LOG_INFO << "read vcd end";
 
   return 1;

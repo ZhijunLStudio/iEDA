@@ -25,6 +25,7 @@
 #include "TimingEngine.hh"
 
 #include <cassert>
+#include <chrono>
 #include <iostream>
 #include <optional>
 
@@ -680,26 +681,54 @@ std::map<std::string, double> TimingEngine::getVirtualRCTreeAllNodeDelay(
  * @return TimingEngine&
  */
 TimingEngine& TimingEngine::incrUpdateTiming() {
+  if (!incrUpdateTimingChecked()) {
+    LOG_ERROR << "Incremental timing update failed at " << _last_incremental_result.failed_stage;
+  }
+  return *this;
+}
+
+bool TimingEngine::incrUpdateTimingChecked() {
+  const auto start = std::chrono::steady_clock::now();
+  _last_incremental_result = {};
+  _last_incremental_result.forward_seed_count = _incr_func.pendingFwdCount();
+  _last_incremental_result.backward_seed_count = _incr_func.pendingBwdCount();
+
   resetPathData();
 
-  _incr_func.applyFwdQueue();
+  if (!_incr_func.applyFwdQueue()) {
+    _last_incremental_result.failed_stage = "forward_propagation";
+    _incr_func.clearQueues();
+  }
 
-  StaGraph& the_graph = _ista->get_graph();
+  if (_last_incremental_result.failed_stage.empty()) {
+    StaGraph& the_graph = _ista->get_graph();
 
-  the_graph.exec([](StaGraph* the_graph) -> unsigned {
-    StaAnalyze analyze_path;
-    unsigned is_ok = analyze_path(the_graph);
+    const unsigned analyze_ok = the_graph.exec([](StaGraph* the_graph) -> unsigned {
+      StaAnalyze analyze_path;
+      unsigned is_ok = analyze_path(the_graph);
 
-    StaApplySdc apply_sdc_post_analyze(
-        StaApplySdc::PropType::kApplySdcPostProp);
-    is_ok &= apply_sdc_post_analyze(the_graph);
+      StaApplySdc apply_sdc_post_analyze(
+          StaApplySdc::PropType::kApplySdcPostProp);
+      is_ok &= apply_sdc_post_analyze(the_graph);
 
-    return is_ok;
-  });
+      return is_ok;
+    });
+    if (!analyze_ok) {
+      _last_incremental_result.failed_stage = "path_analysis";
+      _incr_func.clearQueues();
+    }
+  }
 
-  _incr_func.applyBwdQueue();
+  if (_last_incremental_result.failed_stage.empty() && !_incr_func.applyBwdQueue()) {
+    _last_incremental_result.failed_stage = "backward_propagation";
+    _incr_func.clearQueues();
+  }
 
-  return *this;
+  const auto stop = std::chrono::steady_clock::now();
+  _last_incremental_result.wall_time_us =
+      std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
+  _last_incremental_result.success = _last_incremental_result.failed_stage.empty();
+  return _last_incremental_result.success;
 }
 
 /**
@@ -1072,20 +1101,38 @@ void TimingEngine::repowerInstance(const char* instance_name,
 void TimingEngine::moveInstance(const char* instance_name,
                                 std::optional<unsigned> update_level,
                                 PropType prop_type) {
+  if (!invalidateInstance(instance_name, update_level, prop_type)) {
+    LOG_ERROR << "Cannot invalidate timing cone for instance " << (instance_name == nullptr ? "<null>" : instance_name);
+  }
+}
+
+bool TimingEngine::invalidateInstance(const char* instance_name,
+                                      std::optional<unsigned> update_level,
+                                      PropType prop_type) {
+  if (instance_name == nullptr || *instance_name == '\0') {
+    return false;
+  }
   auto* ista = _ista;
   auto* design_netlist = ista->get_netlist();
+  if (design_netlist == nullptr) {
+    return false;
+  }
   auto* instance = design_netlist->findInstance(instance_name);
+  if (instance == nullptr) {
+    return false;
+  }
   auto& the_graph = ista->get_graph();
 
   Pin* pin;
   FOREACH_INSTANCE_PIN(instance, pin) {
     auto the_vertex = the_graph.findVertex(pin);
-    LOG_FATAL_IF(!the_vertex);
+    if (!the_vertex) {
+      return false;
+    }
     if (pin->isInput()) {
       if (prop_type == PropType::kFwd || prop_type == PropType::kFwdAndBwd) {
         FOREACH_SNK_ARC((*the_vertex), the_arc) {
           auto* src_vertex = the_arc->get_src();
-          _incr_func.insertFwdQueue(src_vertex);
 
           StaResetPropagation reset_fwd_prop;
           reset_fwd_prop.set_incr_func(&_incr_func);
@@ -1100,7 +1147,6 @@ void TimingEngine::moveInstance(const char* instance_name,
       if (prop_type == PropType::kBwd || prop_type == PropType::kFwdAndBwd) {
         FOREACH_SRC_ARC((*the_vertex), the_arc) {
           auto* snk_vertex = the_arc->get_snk();
-          _incr_func.insertBwdQueue(snk_vertex);
 
           StaResetPropagation reset_bwd_prop;
           reset_bwd_prop.set_is_bwd();
@@ -1114,6 +1160,7 @@ void TimingEngine::moveInstance(const char* instance_name,
       }
     }
   }
+  return true;
 }
 
 /**

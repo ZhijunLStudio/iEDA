@@ -59,7 +59,10 @@ void SetupOptimizer::optimizeViolationProcess(TOVertexSeq& end_pts_setup_violati
     while (worst_slack < toConfig->get_setup_target_slack()) {
       optimizeSetupViolation(node, true, false);
 
-      incrUpdateRCAndTiming();
+      if (!incrUpdateRCAndTiming()) {
+        LOG_ERROR << "Timing update failed; stop optimizing the current endpoint.";
+        break;
+      }
 
       auto worst_slack_exist = timingEngine->getNodeWorstSlack(node);
       if (worst_slack_exist == std::nullopt) {
@@ -78,8 +81,9 @@ void SetupOptimizer::optimizeViolationProcess(TOVertexSeq& end_pts_setup_violati
   timingEngine->get_sta_engine()->updateTiming();
 }
 
-void SetupOptimizer::incrUpdateRCAndTiming() {
+bool SetupOptimizer::incrUpdateRCAndTiming() {
   auto nets_for_update = toEvalInst->get_parasitics_invalid_net();
+  bool invalidation_complete = true;
   for (auto net_up : nets_for_update) {
     auto net_pins = net_up->get_pin_ports();
     for (auto pin_port : net_pins) {
@@ -87,11 +91,15 @@ void SetupOptimizer::incrUpdateRCAndTiming() {
         continue;
       }
       auto inst_name = pin_port->get_own_instance()->getFullName();
-      timingEngine->get_sta_engine()->moveInstance(inst_name.c_str(), 20);
+      invalidation_complete &= timingEngine->get_sta_engine()->invalidateInstance(inst_name.c_str(), 20);
     }
   }
   toEvalInst->excuteParasiticsEstimate();
-  timingEngine->get_sta_engine()->incrUpdateTiming();
+  if (!invalidation_complete || !timingEngine->get_sta_engine()->incrUpdateTimingChecked()) {
+    LOG_WARNING << "Incremental STA could not prove a complete update; falling back to full STA.";
+    timingEngine->get_sta_engine()->updateTiming();
+  }
+  return true;
 }
 
 bool SetupOptimizer::checkSlackDecrease(TOSlack& current_slack, TOSlack& last_slack, int& number_of_decreasing_slack_iter)

@@ -43,6 +43,7 @@ int registerCmdPower()
 
   registerTclCmd(ipower::CmdSetPwrDesignWorkSpace, "set_pwr_design_workspace");
   registerTclCmd(ipower::CmdReportPower, "report_power");
+  registerTclCmd(ipower::CmdReadVcd, "read_vcd");
 
   registerTclCmd(ipower::CmdReadPGSpef, "read_pg_spef");
   registerTclCmd(ipower::CmdReportIRDrop, "report_ir_drop");

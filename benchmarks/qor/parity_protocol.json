@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "effort": "standard",
+  "report_points": ["floorplan", "placement", "cts", "post_route"],
+  "strict_gates": [
+    "G7_spef_backed_sta",
+    "G7_constraint_coverage",
+    "G9_activity_backed_power",
+    "G5_congestion_summary",
+    "G11_drc_clean",
+    "G10_ir_drop",
+    "GDS_signoff"
+  ],
+  "route_iteration_sweep": [1, 3, 5],
+  "benchmark_sets": {
+    "smoke": ["aes_asap7_a"],
+    "daily": ["aes_sky130_a", "aes_nangate45_a", "aes_asap7_a", "aes_ics55_a"],
+    "weekly": ["aes13"],
+    "scale": [],
+    "holdout": []
+  },
+  "signoff": {
+    "sta": "external_or_correlated_iSTA",
+    "rcx": "external_or_correlated_iRCX",
+    "drc": "external_or_correlated_iDRC",
+    "power": "activity_backed_iPA"
+  }
+}

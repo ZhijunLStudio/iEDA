@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ieda.oscc.cc/schemas/qor_metrics.schema.json",
+  "title": "iEDA QoR evidence summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "design",
+    "pdk",
+    "strategy",
+    "stage",
+    "timestamp",
+    "quality_gate",
+    "overall_status",
+    "manifest",
+    "provenance",
+    "metrics",
+    "gates"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "design": {"type": "string", "minLength": 1},
+    "pdk": {"type": "string", "minLength": 1},
+    "strategy": {"type": "string", "minLength": 1},
+    "stage": {"const": "post_route"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "quality_gate": {"enum": ["report", "strict"]},
+    "overall_status": {"enum": ["pass", "fail", "incomplete"]},
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputs", "build", "artifacts"],
+      "properties": {
+        "inputs": {"type": "array", "items": {"$ref": "#/$defs/file"}},
+        "build": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["binary", "git_commit", "dirty"],
+          "properties": {
+            "binary": {"anyOf": [{"$ref": "#/$defs/file"}, {"type": "null"}]},
+            "git_commit": {"type": ["string", "null"]},
+            "dirty": {"type": ["boolean", "null"]}
+          }
+        },
+        "artifacts": {"type": "array", "items": {"$ref": "#/$defs/file"}}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["route_iterations", "spef", "activity", "constraints"],
+      "properties": {
+        "route_iterations": {"type": "integer", "minimum": 1},
+        "spef": {"$ref": "#/$defs/evidence"},
+        "activity": {"$ref": "#/$defs/evidence"},
+        "constraints": {"$ref": "#/$defs/evidence"}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/metric"}
+    },
+    "gates": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/gate"}
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["source", "status", "reason"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "status": {"enum": ["checked", "skipped", "unsupported", "refused"]},
+        "reason": {"type": ["string", "null"]},
+        "path": {"type": ["string", "null"]},
+        "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "source", "status", "reason", "confidence"],
+      "properties": {
+        "value": {"type": ["number", "integer", "string", "boolean", "null"]},
+        "unit": {"type": "string"},
+        "source": {"type": "string", "minLength": 1},
+        "status": {"enum": ["checked", "skipped", "unsupported", "refused"]},
+        "reason": {"type": ["string", "null"]},
+        "confidence": {"enum": ["high", "medium", "low", "none"]}
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason", "evidence"],
+      "properties": {
+        "status": {"enum": ["pass", "fail", "not_run"]},
+        "reason": {"type": ["string", "null"]},
+        "evidence": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

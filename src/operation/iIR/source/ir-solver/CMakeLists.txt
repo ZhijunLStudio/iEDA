@@ -19,10 +19,12 @@ endif()
 
 target_include_directories(ir_solver PRIVATE ${HOME_THIRDPARTY}/spectra/include)
 
-target_link_libraries(ir_solver PUBLIC usage)
+target_link_libraries(ir_solver PUBLIC usage Eigen3::Eigen log)
+
+add_executable(ir_solver_gate_test EXCLUDE_FROM_ALL tests/IRSolverGateTest.cc)
+target_include_directories(ir_solver_gate_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(ir_solver_gate_test PRIVATE ir_solver)
 
 if (CUDA_IR_SOLVER)
     target_link_libraries(ir_solver PUBLIC ir-solver-cuda)
 endif()
-
-

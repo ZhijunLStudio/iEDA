@@ -42,10 +42,11 @@ unsigned CmdSTARun::exec()
   TclOption* option = getOptionOrArg(TCL_OUTPUT_PATH);
   auto path = option->getStringVal() != nullptr ? option->getStringVal() : "";
 
-  if (iplf::tmInst->autoRunSTA(path)) {
-    std::cout << "iSTA run successfully." << std::endl;
+  if (!iplf::tmInst->autoRunSTA(path)) {
+    LOG_ERROR << "run_sta failed";
+    return 0;
   }
-
+  std::cout << "iSTA run successfully." << std::endl;
   return 1;
 }
 

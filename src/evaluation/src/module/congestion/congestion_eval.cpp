@@ -14,6 +14,7 @@
 #include <fstream>
 #include <iostream>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 
@@ -21,12 +22,102 @@
 #include "idm.h"
 #include "init_egr.h"
 #include "init_idb.h"
+#include "log/Log.hh"
 #include "wirelength_lut.h"
 
 namespace ieval {
 
 #define EVAL_INIT_EGR_INST (ieval::InitEGR::getInst())
 #define EVAL_INIT_IDB_INST (ieval::InitIDB::getInst())
+
+namespace {
+
+std::optional<std::filesystem::path> resolveOverflowMapPath(const std::string& rt_dir_path, const std::string& file_name)
+{
+  std::vector<std::filesystem::path> candidates;
+  const std::filesystem::path requested_dir(rt_dir_path);
+  candidates.push_back(requested_dir / file_name);
+  candidates.push_back(requested_dir / "egr_congestion_map" / file_name);
+  if (requested_dir.has_parent_path() && requested_dir.parent_path().has_parent_path()) {
+    candidates.push_back(requested_dir.parent_path().parent_path() / "egr_congestion_map" / file_name);
+  }
+  candidates.push_back(std::filesystem::path(getDefaultOutputPath()) / "egr_congestion_map" / file_name);
+  const std::string& feature_path = dmInst->get_config().get_feature_path();
+  if (!feature_path.empty()) {
+    candidates.push_back(std::filesystem::path(feature_path) / "egr_congestion_map" / file_name);
+  }
+
+  for (const auto& candidate : candidates) {
+    std::error_code error;
+    if (std::filesystem::is_regular_file(candidate, error) && !error) {
+      return candidate;
+    }
+  }
+  LOG_ERROR << "EGR overflow map not found: " << file_name << ", requested routing directory: " << rt_dir_path;
+  return std::nullopt;
+}
+
+std::optional<std::vector<int32_t>> readOverflowValues(const std::string& rt_dir_path, const std::string& file_name)
+{
+  const auto file_path = resolveOverflowMapPath(rt_dir_path, file_name);
+  if (!file_path) {
+    return std::nullopt;
+  }
+  std::ifstream file(*file_path);
+  if (!file.is_open()) {
+    LOG_ERROR << "failed to open EGR overflow map: " << file_path->string();
+    return std::nullopt;
+  }
+
+  std::vector<int32_t> values;
+  std::string line;
+  size_t row = 0;
+  try {
+    while (std::getline(file, line)) {
+      ++row;
+      std::istringstream stream(line);
+      std::string token;
+      size_t column = 0;
+      while (std::getline(stream, token, ',')) {
+        ++column;
+        const size_t first = token.find_first_not_of(" \t\r\n");
+        const size_t last = token.find_last_not_of(" \t\r\n");
+        if (first == std::string::npos) {
+          LOG_ERROR << "empty EGR overflow value in " << file_path->string() << " at " << row << ':' << column;
+          return std::nullopt;
+        }
+        const std::string normalized = token.substr(first, last - first + 1);
+        size_t parsed_length = 0;
+        const double parsed = std::stod(normalized, &parsed_length);
+        if (parsed_length != normalized.size() || !std::isfinite(parsed) || parsed < 0.0 || parsed > INT32_MAX
+            || std::floor(parsed) != parsed) {
+          LOG_ERROR << "invalid EGR overflow value '" << normalized << "' in " << file_path->string() << " at " << row << ':' << column;
+          return std::nullopt;
+        }
+        values.push_back(static_cast<int32_t>(parsed));
+      }
+    }
+  } catch (const std::exception& error) {
+    LOG_ERROR << "failed to parse EGR overflow map " << file_path->string() << ": " << error.what();
+    return std::nullopt;
+  }
+  if (values.empty()) {
+    LOG_ERROR << "EGR overflow map is empty: " << file_path->string();
+    return std::nullopt;
+  }
+  return values;
+}
+
+std::optional<std::string> overflowFileName(const std::string& stage, const std::string& overflow_type)
+{
+  if (overflow_type != "horizontal" && overflow_type != "vertical" && overflow_type != "union") {
+    LOG_ERROR << "unsupported EGR overflow type: " << overflow_type;
+    return std::nullopt;
+  }
+  return stage + "_egr_" + overflow_type + "_overflow.csv";
+}
+
+}  // namespace
 
 CongestionEval* CongestionEval::_congestion_eval = nullptr;
 
@@ -576,113 +667,48 @@ double CongestionEval::getLUT(int32_t pin_num, int32_t aspect_ratio, double l_ne
 
 int32_t CongestionEval::evalTotalOverflow(string stage, string rt_dir_path, string overflow_type)
 {
-  int32_t total_overflow = 0;
-  std::string file_name;
-
-  if (overflow_type == "horizontal") {
-    file_name = stage + "_egr_horizontal_overflow.csv";
-  } else if (overflow_type == "vertical") {
-    file_name = stage + "_egr_vertical_overflow.csv";
-  } else if (overflow_type == "union") {
-    file_name = stage + "_egr_union_overflow.csv";
-  } else {
+  const auto file_name = overflowFileName(stage, overflow_type);
+  if (!file_name) {
     return -1;
   }
-
-  std::string file_path_str = dmInst->get_config().get_feature_path() + "/egr_congestion_map/" + file_name;
-
-  std::ifstream file(file_path_str);
-  if (!file.is_open()) {
+  const auto values = readOverflowValues(rt_dir_path, *file_name);
+  if (!values) {
     return -1;
   }
-
-  std::string line;
-  while (std::getline(file, line)) {
-    std::istringstream iss(line);
-    std::string value;
-    while (std::getline(iss, value, ',')) {
-      total_overflow += std::stoi(value);
-    }
+  const int64_t total = std::accumulate(values->begin(), values->end(), int64_t{0});
+  if (total > INT32_MAX) {
+    LOG_ERROR << "EGR total overflow exceeds int32 range in " << *file_name << ": " << total;
+    return -1;
   }
-
-  file.close();
-  return total_overflow;
+  return static_cast<int32_t>(total);
 }
 
 int32_t CongestionEval::evalMaxOverflow(string stage, string rt_dir_path, string overflow_type)
 {
-  int32_t max_overflow = -1;
-  std::string file_name;
-
-  if (overflow_type == "horizontal") {
-    file_name = stage + "_egr_horizontal_overflow.csv";
-  } else if (overflow_type == "vertical") {
-    file_name = stage + "_egr_vertical_overflow.csv";
-  } else if (overflow_type == "union") {
-    file_name = stage + "_egr_union_overflow.csv";
-  } else {
+  const auto file_name = overflowFileName(stage, overflow_type);
+  if (!file_name) {
     return -1;
   }
-  std::string file_path_str = dmInst->get_config().get_feature_path() + "/egr_congestion_map/" + file_name;
-
-
-  std::ifstream file(file_path_str);
-  if (!file.is_open()) {
+  const auto values = readOverflowValues(rt_dir_path, *file_name);
+  if (!values) {
     return -1;
   }
-
-  std::string line;
-  while (std::getline(file, line)) {
-    std::istringstream iss(line);
-    std::string value;
-    while (std::getline(iss, value, ',')) {
-      int32_t current_value = std::stoi(value);
-      max_overflow = std::max(max_overflow, current_value);
-    }
-  }
-
-  file.close();
-  return max_overflow;
+  return *std::max_element(values->begin(), values->end());
 }
 
 float CongestionEval::evalAvgOverflow(string stage, string rt_dir_path, string overflow_type)
 {
-  float avg_overflow = 0.0f;
-  std::string file_name;
-
-  if (overflow_type == "horizontal") {
-    file_name = stage + "_egr_horizontal_overflow.csv";
-  } else if (overflow_type == "vertical") {
-    file_name = stage + "_egr_vertical_overflow.csv";
-  } else if (overflow_type == "union") {
-    file_name = stage + "_egr_union_overflow.csv";
-  } else {
+  const auto file_name = overflowFileName(stage, overflow_type);
+  if (!file_name) {
     return -1;
   }
-  std::string file_path_str = dmInst->get_config().get_feature_path() + "/egr_congestion_map/" + file_name;
-
-  std::ifstream file(file_path_str);
-  if (!file.is_open()) {
+  auto values = readOverflowValues(rt_dir_path, *file_name);
+  if (!values) {
     return -1;
   }
+  std::sort(values->begin(), values->end(), std::greater<int32_t>());
 
-  std::vector<int32_t> values;
-
-  std::string line;
-  while (std::getline(file, line)) {
-    std::istringstream iss(line);
-    std::string value;
-    while (std::getline(iss, value, ',')) {
-      int32_t current_value = std::stoi(value);
-      values.push_back(current_value);
-    }
-  }
-
-  file.close();
-
-  std::sort(values.begin(), values.end(), std::greater<int32_t>());
-
-  size_t size = values.size();
+  size_t size = values->size();
   size_t idx_0_5_percent = std::max(size_t(1), static_cast<size_t>(std::ceil(size * 0.005)));
   size_t idx_1_percent = std::max(size_t(1), static_cast<size_t>(std::ceil(size * 0.01)));
   size_t idx_2_percent = std::max(size_t(1), static_cast<size_t>(std::ceil(size * 0.02)));
@@ -700,28 +726,28 @@ float CongestionEval::evalAvgOverflow(string stage, string rt_dir_path, string o
 
   // 0-0.5%
   for (size_t i = 0; i < idx_0_5_percent; ++i) {
-    sum_05 += values[i];
+    sum_05 += (*values)[i];
   }
   sum_1 = sum_05;
 
   // 0.5%-1%
   for (size_t i = idx_0_5_percent; i < idx_1_percent; ++i) {
-    sum_1 += values[i];
+    sum_1 += (*values)[i];
   }
   sum_2 = sum_1;
 
   // 1%-2%
   for (size_t i = idx_1_percent; i < idx_2_percent; ++i) {
-    sum_2 += values[i];
+    sum_2 += (*values)[i];
   }
   sum_5 = sum_2;
 
   // 2%-5%
   for (size_t i = idx_2_percent; i < idx_5_percent; ++i) {
-    sum_5 += values[i];
+    sum_5 += (*values)[i];
   }
 
-  avg_overflow = (sum_05 * weight_05 + sum_1 * weight_1 + sum_2 * weight_2 + sum_5 * weight_5) / 4.0;
+  const float avg_overflow = (sum_05 * weight_05 + sum_1 * weight_1 + sum_2 * weight_2 + sum_5 * weight_5) / 4.0F;
 
   return avg_overflow;
 }

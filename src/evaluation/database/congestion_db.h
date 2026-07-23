@@ -61,17 +61,24 @@ struct RUDYMapSummary
 
 struct OverflowSummary
 {
-  int32_t total_overflow_horizontal;
-  int32_t total_overflow_vertical;
-  int32_t total_overflow_union;
+  int32_t total_overflow_horizontal{-1};
+  int32_t total_overflow_vertical{-1};
+  int32_t total_overflow_union{-1};
 
-  int32_t max_overflow_horizontal;
-  int32_t max_overflow_vertical;
-  int32_t max_overflow_union;
+  int32_t max_overflow_horizontal{-1};
+  int32_t max_overflow_vertical{-1};
+  int32_t max_overflow_union{-1};
 
-  float weighted_average_overflow_horizontal;
-  float weighted_average_overflow_vertical;
-  float weighted_average_overflow_union;
+  float weighted_average_overflow_horizontal{-1.0F};
+  float weighted_average_overflow_vertical{-1.0F};
+  float weighted_average_overflow_union{-1.0F};
+
+  bool isValid() const
+  {
+    return total_overflow_horizontal >= 0 && total_overflow_vertical >= 0 && total_overflow_union >= 0 && max_overflow_horizontal >= 0
+           && max_overflow_vertical >= 0 && max_overflow_union >= 0 && weighted_average_overflow_horizontal >= 0.0F
+           && weighted_average_overflow_vertical >= 0.0F && weighted_average_overflow_union >= 0.0F;
+  }
 };
 
 struct UtilizationSummary

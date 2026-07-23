@@ -68,7 +68,7 @@ class SetupOptimizer
   int getFanoutNumber(Pin* pin);
   bool netConnectToOutputPort(Net* net);
   bool netConnectToPort(Net* net);
-  void incrUpdateRCAndTiming();
+  bool incrUpdateRCAndTiming();
   bool checkSlackDecrease(TOSlack& current_slack, TOSlack& last_slack, int& number_of_decreasing_slack_iter);
 
   // gate sizing function

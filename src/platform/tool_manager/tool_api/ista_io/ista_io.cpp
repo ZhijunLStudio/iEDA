@@ -51,7 +51,10 @@ bool StaIO::autoRunSTA(std::string path)
   readIdb();
   runSDC();
   /// run
-  reportTiming();
+  if (!reportTiming()) {
+    LOG_ERROR << "post-route timing analysis failed";
+    return false;
+  }
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
@@ -163,9 +166,7 @@ unsigned StaIO::buildGraph()
 bool StaIO::runSTA(std::string path)
 {
   /// run
-  reportTiming();
-
-  return true;
+  return reportTiming();
 }
 
 /**
@@ -221,15 +222,19 @@ bool StaIO::runSDC(std::string path)
 
 bool StaIO::runSpef(std::string path)
 {
-  /// get parameters from db config
-  auto db_config = dmInst->get_config();
+  auto& db_config = dmInst->get_config();
+  const std::string& configured_path = db_config.get_spef_path();
+  const std::string spef_path = path.empty() ? configured_path : path;
+  if (spef_path.empty()) {
+    LOG_ERROR << "SPEF path is empty";
+    return false;
+  }
 
-  /// sdc
   auto* timing_engine = ista::TimingEngine::getOrCreateTimingEngine();
-
-  auto spef_path = db_config.get_spef_path();
-  timing_engine->readSpef(spef_path.c_str());
-
+  if (!timing_engine->get_ista()->readSpef(spef_path.c_str())) {
+    LOG_ERROR << "failed to read SPEF: " << spef_path;
+    return false;
+  }
   return true;
 }
 /**
@@ -284,8 +289,17 @@ bool StaIO::reportTiming()
 {
   auto* timing_engine = ista::TimingEngine::getOrCreateTimingEngine();
 
-  timing_engine->buildGraph();
-  timing_engine->updateTiming();
+  if (!timing_engine->buildGraph()) {
+    LOG_ERROR << "failed to build timing graph";
+    return false;
+  }
+  if (!dmInst->get_config().get_spef_path().empty() && !runSpef()) {
+    return false;
+  }
+  if (!updateTiming()) {
+    LOG_ERROR << "failed to update timing";
+    return false;
+  }
   timing_engine->reportTiming();
 
   return true;

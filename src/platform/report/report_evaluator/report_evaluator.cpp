@@ -186,9 +186,15 @@ std::shared_ptr<ieda::ReportTable> ReportEvaluator::createCongestionReport()
 
   CONGESTION_API_INST->egrMap("place");                                                 // hard code , only for place stage
   ieval::OverflowSummary overflow_summary = CONGESTION_API_INST->egrOverflow("place");  // hard code , only for place stage
-  *tbl << ieda::Str::printf("%.2f", overflow_summary.weighted_average_overflow_union)
-       << ieda::Str::printf("%.2f", overflow_summary.total_overflow_union) << ieda::Str::printf("%.2f", overflow_summary.max_overflow_union)
-       << TABLE_ENDLINE;
+  if (overflow_summary.isValid()) {
+    *tbl << ieda::Str::printf("%.2f", overflow_summary.weighted_average_overflow_union)
+         << ieda::Str::printf("%d", overflow_summary.total_overflow_union)
+         << ieda::Str::printf("%d", overflow_summary.max_overflow_union) << TABLE_ENDLINE;
+  } else {
+    *tbl << "N/A"
+         << "N/A"
+         << "N/A" << TABLE_ENDLINE;
+  }
 
   // Release wrapped congestion instance objects.
   // std::thread([](std::vector<eval::CongInst*>&& insts) { freeWrapped(insts); }, std::move(cong_inst)).detach();

@@ -29,9 +29,51 @@
 
 #include "idm.h"
 
+#include <string_view>
+
 namespace idm {
 
 DataManager* DataManager::_instance = nullptr;
+
+namespace {
+
+void appendCanonicalField(std::string& record, std::string_view value)
+{
+  record.append(std::to_string(value.size()));
+  record.push_back(':');
+  record.append(value);
+}
+
+}  // namespace
+
+DataManager::DataManager()
+{
+  _design_state.registerCanonicalProvider("idb.instances", [this] {
+    std::vector<std::string> records;
+    if (_design == nullptr || _design->get_instance_list() == nullptr) {
+      return records;
+    }
+
+    records.reserve(_design->get_instance_list()->get_instance_list().size());
+    for (auto* instance : _design->get_instance_list()->get_instance_list()) {
+      if (instance == nullptr) {
+        continue;
+      }
+      std::string record;
+      appendCanonicalField(record, instance->get_name());
+      appendCanonicalField(record, std::to_string(instance->get_id()));
+      appendCanonicalField(record, instance->get_cell_master() == nullptr ? "" : instance->get_cell_master()->get_name());
+      auto* coordinate = instance->get_coordinate();
+      appendCanonicalField(record, coordinate == nullptr ? "" : std::to_string(coordinate->get_x()));
+      appendCanonicalField(record, coordinate == nullptr ? "" : std::to_string(coordinate->get_y()));
+      appendCanonicalField(record, std::to_string(static_cast<uint8_t>(instance->get_orient())));
+      appendCanonicalField(record, std::to_string(static_cast<uint8_t>(instance->get_status())));
+      appendCanonicalField(record, std::to_string(static_cast<uint8_t>(instance->get_type())));
+      records.push_back(std::move(record));
+    }
+    return records;
+  });
+}
 
 bool DataManager::initConfig(string config_path)
 {

@@ -29,7 +29,13 @@ IEDA_BIN = REPO_ROOT / "bin" / "iEDA"
 YOSYS_BIN = Path("/home/lxq/AiEDA/micromamba/envs/ieda3d/bin/yosys")
 KLAYOUT_BIN = shutil.which("klayout")
 BUILD_LIB = Path("/home/lxq/AiEDA/micromamba/envs/ieda-build/lib")
-FLOW_ARTIFACT_VERSION = 1
+FLOW_ARTIFACT_VERSION = 2
+
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from benchmarks.qor.quality_metrics import build_quality_summary  # noqa: E402
+from benchmarks.qor.validate_qor import validate_summary  # noqa: E402
 RTL_ROOT = Path(
     "/home/lxq/AiEDA/HS-3D_Problem/baseline/Open3DBench/"
     "OpenROAD-3D/flow/designs/src/aes"
@@ -184,8 +190,9 @@ STAGES = (
     Stage("cts", "iCTS_script/run_iCTS.tcl", "iCTS_result.def"),
     Stage("legalization", "iPL_script/run_iPL_legalization.tcl", "iPL_lg_result.def"),
     Stage("routing", "iRT_script/run_iRT.tcl", "iRT_result.def"),
-    Stage("timing", "custom/run_timing.tcl", None, False),
-    Stage("power", "custom/run_power.tcl", None, False),
+    Stage("rcx", "custom/run_rcx.tcl"),
+    Stage("timing", "custom/run_timing.tcl", "timing/aes_cipher_top.rpt", False),
+    Stage("power", "custom/run_power.tcl", "power/aes_cipher_top.pwr", False),
     Stage("metrics", "custom/run_metrics.tcl", "report/wirelength.rpt", False),
     Stage("drc", "iRT_script/run_iRT_DRC.tcl", "report/drc/iRT_drc.rpt", False),
     Stage("filler", "iPL_script/run_iPL_filler.tcl", "iPL_filler_result.def", False),
@@ -198,6 +205,9 @@ FATAL_LOG_PATTERNS = (
     re.compile(r"segmentation fault", re.IGNORECASE),
     re.compile(r"floating point exception", re.IGNORECASE),
     re.compile(r"std::bad_alloc", re.IGNORECASE),
+    re.compile(r"\b(?:run_sta|run_power|read_vcd|init_rcx|run_rcx|report_rcx) failed\b", re.IGNORECASE),
+    re.compile(r"failed to (?:read SPEF|calculate VCD activity|parse VCD)", re.IGNORECASE),
+    re.compile(r"VCD (?:file does not exist|scope not found|path is empty|file has no root scope)", re.IGNORECASE),
 )
 
 TARGET_UTILIZATION = {"a": 0.35, "b": 0.30, "t": 0.25, "baseline": 0.30}
@@ -365,17 +375,105 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def build_input_signature(name: str, pdk_name: str, pdk: PDKConfig, netlist: Path) -> dict:
-    paths = (netlist, IEDA_BIN, pdk.tech_lef, *pdk.cell_lefs, *pdk.sta_libs)
+def build_input_signature(
+    name: str,
+    pdk_name: str,
+    pdk: PDKConfig,
+    netlist: Path,
+    run_config: dict,
+    evidence_paths: Iterable[Path],
+) -> dict:
+    config = load_design(name)
+    sdc = DESIGNS_ROOT / name / config["inputs"]["sdc"]
+    paths = tuple(dict.fromkeys((netlist, IEDA_BIN, sdc, pdk.tech_lef, *pdk.cell_lefs, *pdk.sta_libs, *evidence_paths)))
     return {
         "artifact_version": FLOW_ARTIFACT_VERSION,
         "design": name,
         "pdk": pdk_name,
+        "run_config": run_config,
         "inputs": [
             {"path": str(path), "sha256": file_sha256(path)}
             for path in paths
         ],
     }
+
+
+def build_effective_sdc(
+    name: str,
+    config: dict,
+    pdk: PDKConfig,
+    netlist: Path,
+    output_dir: Path,
+    args: argparse.Namespace,
+) -> Path:
+    source = DESIGNS_ROOT / name / config["inputs"]["sdc"]
+    if args.constraint_policy == "existing":
+        return source.resolve()
+
+    text = source.read_text(encoding="utf-8", errors="replace").rstrip()
+    clock = config["clocks"][0]
+    period = float(clock["period_ns"])
+    clock_name = str(clock["name"])
+    clock_port = str(clock["port"])
+    driving_cell = args.driving_cell or pdk.cts_buffers[0]
+    netlist_text = netlist.read_text(encoding="utf-8", errors="replace")
+    top = "aes_cipher_top" if netlist.name == "aes_cipher_top.v" else str(config["top"])
+    module_match = re.search(
+        rf"(?ms)^\s*module\s+{re.escape(top)}\b.*?^\s*endmodule\b",
+        netlist_text,
+    )
+    if module_match is None:
+        raise RuntimeError(f"{name}: top module {top!r} was not found in {netlist}")
+    module_text = module_match.group(0)
+
+    def ports_for(direction: str) -> list[str]:
+        ports = []
+        for declaration in re.findall(
+            rf"(?m)^\s*{direction}\s+(?:wire\s+|reg\s+)?(?:\[[^\]]+\]\s*)?([^;]+);",
+            module_text,
+        ):
+            for token in declaration.split(","):
+                name_token = token.strip().split()[-1].lstrip("\\")
+                if name_token:
+                    ports.append(name_token)
+        return sorted(set(ports))
+
+    input_ports = [port for port in ports_for("input") if port != clock_port]
+    output_ports = ports_for("output")
+    if not input_ports or not output_ports:
+        raise RuntimeError(f"{name}: failed to derive explicit top-level I/O ports from {netlist}")
+    input_collection = "[get_ports {" + " ".join(input_ports) + "}]"
+    output_collection = "[get_ports {" + " ".join(output_ports) + "}]"
+    additions = [
+        "",
+        "# Added by aes13_flow.py --constraint-policy complete.",
+    ]
+    if not re.search(r"(?m)^\s*set_input_delay\b", text):
+        additions.append(f"set_input_delay {period * args.io_delay_pct:.6g} -clock {clock_name} [all_inputs]")
+    if not re.search(r"(?m)^\s*set_output_delay\b", text):
+        additions.append(f"set_output_delay {period * args.io_delay_pct:.6g} -clock {clock_name} [all_outputs]")
+    if not re.search(r"(?m)^\s*set_clock_uncertainty\b", text):
+        additions.append(
+            f"set_clock_uncertainty {period * args.clock_uncertainty_pct:.6g} [get_clocks {clock_name}]"
+        )
+    if not re.search(r"(?m)^\s*set_driving_cell\b", text):
+        additions.append(
+            f"set_driving_cell -lib_cell {driving_cell} -pin {args.driving_pin} {input_collection}"
+        )
+    if not re.search(r"(?m)^\s*set_load\b", text):
+        additions.append(f"set_load {args.output_load:.6g} {output_collection}")
+    additions.extend(
+        (
+            "",
+            f"# iEDA constraint policy: io_delay_pct={args.io_delay_pct:.6g}, "
+            f"clock_uncertainty_pct={args.clock_uncertainty_pct:.6g}, "
+            f"output_load={args.output_load:.6g}, driving_cell={driving_cell}/{args.driving_pin}",
+        )
+    )
+    effective = output_dir / "inputs/effective.sdc"
+    effective.parent.mkdir(parents=True, exist_ok=True)
+    effective.write_text(text + "\n" + "\n".join(additions) + "\n", encoding="utf-8")
+    return effective.resolve()
 
 
 def workspace_requires_reset(output_dir: Path, signature: dict, floorplan: dict) -> bool:
@@ -538,15 +636,24 @@ db_init -config $::env(CONFIG_DIR)/db_default_config.json -output_dir_path $::en
 source $::env(TCL_SCRIPT_DIR)/DB_script/db_path_setting.tcl
 source $::env(TCL_SCRIPT_DIR)/DB_script/db_init_lef.tcl
 """
+    rcx = common + """def_init -path $::env(RESULT_DIR)/iRT_result.def
+init_rcx -config $::env(RCX_CONFIG)
+run_rcx
+report_rcx
+flow_exit
+"""
     timing = common + """source $::env(TCL_SCRIPT_DIR)/DB_script/db_init_lib.tcl
 source $::env(TCL_SCRIPT_DIR)/DB_script/db_init_sdc.tcl
 def_init -path $::env(RESULT_DIR)/iRT_result.def
+if {[info exists ::env(SPEF_FILE)]} { db_init -spef_path $::env(SPEF_FILE) }
 run_sta -output $::env(RESULT_DIR)/timing/
 flow_exit
 """
     power = common + """source $::env(TCL_SCRIPT_DIR)/DB_script/db_init_lib.tcl
 source $::env(TCL_SCRIPT_DIR)/DB_script/db_init_sdc.tcl
 def_init -path $::env(RESULT_DIR)/iRT_result.def
+if {[info exists ::env(SPEF_FILE)]} { db_init -spef_path $::env(SPEF_FILE) }
+if {[info exists ::env(VCD_FILE)]} { read_vcd $::env(VCD_FILE) -top_name $::env(VCD_TOP_NAME) }
 run_power -output $::env(RESULT_DIR)/power/
 flow_exit
 """
@@ -555,6 +662,7 @@ report_wirelength -path $::env(RESULT_DIR)/report/wirelength.rpt
 report_congestion -path $::env(RESULT_DIR)/report/congestion.rpt
 flow_exit
 """
+    (custom / "run_rcx.tcl").write_text(rcx, encoding="ascii")
     (custom / "run_timing.tcl").write_text(timing, encoding="ascii")
     (custom / "run_power.tcl").write_text(power, encoding="ascii")
     (custom / "run_metrics.tcl").write_text(metrics, encoding="ascii")
@@ -655,13 +763,20 @@ def prepare_workspace(name: str, config: dict, output_dir: Path, reset: bool) ->
 
 
 def build_environment(
-    name: str, config: dict, netlist: Path, workspace: Path
+    name: str,
+    config: dict,
+    netlist: Path,
+    workspace: Path,
+    route_iterations: int,
+    spef_path: Path | None,
+    vcd_path: Path | None,
+    vcd_top: str | None,
+    rcx_config: Path | None,
+    sdc_path: Path,
 ) -> tuple[dict[str, str], dict]:
     pdk_name = design_pdk(name, config)
     pdk = PDKS[pdk_name]
     result_dir = workspace / "result"
-    design_dir = DESIGNS_ROOT / name
-    sdc = design_dir / config["inputs"]["sdc"]
     top = "aes_cipher_top" if netlist.name == "aes_cipher_top.v" else config["top"]
     clock = config["clocks"][0]
     floorplan = compute_floorplan(name, pdk_name, pdk, netlist)
@@ -689,7 +804,7 @@ def build_environment(
             "TOP_NAME": top,
             "CLK_PORT_NAME": str(clock["port"]),
             "NETLIST_FILE": str(netlist),
-            "SDC_FILE": str(sdc),
+            "SDC_FILE": str(sdc_path),
             "DIE_AREA": floorplan["die_area"],
             "CORE_AREA": floorplan["core_area"],
             "DIE_BBOX": floorplan["die_area"],
@@ -713,11 +828,52 @@ def build_environment(
             "LEF_STDCELL": " ".join(map(str, pdk.cell_lefs)),
             "LIB_STDCELL": " ".join(map(str, pdk.sta_libs)),
             "GDS_FILE": str(result_dir / "final.gds"),
-            "IEDA_RT_MAX_ITERATIONS": "1",
+            "IEDA_RT_MAX_ITERATIONS": str(route_iterations),
             "LD_LIBRARY_PATH": f"{BUILD_LIB}:{old_ld}" if old_ld else str(BUILD_LIB),
         }
     )
+    if spef_path is not None:
+        env["SPEF_FILE"] = str(spef_path)
+    if vcd_path is not None:
+        env["VCD_FILE"] = str(vcd_path)
+        env["VCD_TOP_NAME"] = vcd_top or top
+    if rcx_config is not None:
+        env["RCX_CONFIG"] = str(rcx_config)
     return env, floorplan
+
+
+def resolve_design_path(value: str | None, design: str) -> Path | None:
+    if value is None:
+        return None
+    return Path(value.format(design=design)).expanduser().resolve()
+
+
+def discover_rcx_spef(
+    config_path: Path,
+    top: str,
+    corner: str | None,
+    not_before_ns: int,
+) -> Path:
+    with config_path.open(encoding="utf-8") as stream:
+        config = json.load(stream)
+    output_value = config.get("output", ".")
+    output_dir = Path(output_value)
+    if not output_dir.is_absolute():
+        output_dir = (config_path.parent / output_dir).resolve()
+    candidates = sorted(
+        path
+        for path in output_dir.glob(f"{top}_*.spef")
+        if path.stat().st_size > 0 and path.stat().st_mtime_ns >= not_before_ns
+    )
+    if corner:
+        candidates = [path for path in candidates if f"_{corner}_" in path.name or path.name.startswith(f"{top}_{corner}.")]
+    if len(candidates) != 1:
+        detail = ", ".join(path.name for path in candidates) or "none"
+        raise RuntimeError(
+            f"iRCX must produce exactly one SPEF for the selected scenario; found {detail} in {output_dir}. "
+            "Use --rcx-corner when the config contains multiple corners."
+        )
+    return candidates[0].resolve()
 
 
 def log_has_fatal_error(log_text: str) -> str | None:
@@ -749,6 +905,7 @@ def run_stage(
     script = workspace / "script" / stage.script
     log_file = result_dir / "logs" / f"{stage.name}.log"
     print(f"    [{stage.name}] running", flush=True)
+    started_epoch_ns = time.time_ns()
     started = time.monotonic()
     try:
         stage_env = env.copy()
@@ -798,6 +955,7 @@ def run_stage(
     return {
         "status": status,
         "elapsed_sec": round(elapsed, 3),
+        "started_epoch_ns": started_epoch_ns,
         "returncode": returncode,
         "log": str(log_file),
         "artifact": str(expected) if expected else None,
@@ -870,6 +1028,8 @@ def write_design_summary(output_dir: Path, summary: dict) -> None:
         f"- Status: {summary['status']}",
         f"- PDK: {summary['pdk']}",
         f"- Strategy: {summary['strategy']}",
+        f"- Route iterations: {summary['route_iterations']}",
+        f"- QoR quality: {summary['quality']['overall_status']}",
         f"- DEF files: {len(artifacts['def'])}",
         f"- GDS files: {len(artifacts['gds'])}",
         f"- Reports: {len(artifacts['reports'])}",
@@ -897,7 +1057,8 @@ def run_design(
 ) -> dict:
     config = load_design(name)
     pdk_name = design_pdk(name, config)
-    output_dir = OUTPUT_ROOT / name
+    output_root = Path(args.output_root)
+    output_dir = output_root / name
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n[{name}] PDK={pdk_name} strategy={strategy_for(name)}", flush=True)
     if args.synthesize:
@@ -908,7 +1069,39 @@ def run_design(
         netlist = generated_netlist if generated_netlist.is_file() else configured_netlist
     pdk = PDKS[pdk_name]
     floorplan = compute_floorplan(name, pdk_name, pdk, netlist)
-    signature = build_input_signature(name, pdk_name, pdk, netlist)
+    sdc_path = build_effective_sdc(name, config, pdk, netlist, output_dir, args)
+    spef_path = resolve_design_path(args.spef, name)
+    vcd_path = resolve_design_path(args.vcd, name)
+    rcx_config = resolve_design_path(args.rcx_config, name)
+    ir_report = resolve_design_path(args.ir_report, name)
+    for label, path in (
+        ("SPEF", spef_path),
+        ("VCD", vcd_path),
+        ("iRCX config", rcx_config),
+        ("IR report", ir_report),
+    ):
+        if path is not None and (not path.is_file() or path.stat().st_size == 0):
+            raise FileNotFoundError(f"{name}: {label} is missing or empty: {path}")
+    evidence_paths = tuple(path for path in (sdc_path, spef_path, vcd_path, rcx_config, ir_report) if path is not None)
+    run_config = {
+        "route_iterations": args.rt_max_iterations,
+        "spef": str(spef_path) if spef_path else None,
+        "vcd": str(vcd_path) if vcd_path else None,
+        "vcd_top": args.vcd_top,
+        "rcx_config": str(rcx_config) if rcx_config else None,
+        "rcx_corner": args.rcx_corner,
+        "ir_report": str(ir_report) if ir_report else None,
+        "constraints": {
+            "policy": args.constraint_policy,
+            "effective_sdc": str(sdc_path),
+            "io_delay_pct": args.io_delay_pct,
+            "clock_uncertainty_pct": args.clock_uncertainty_pct,
+            "output_load": args.output_load,
+            "driving_cell": args.driving_cell or pdk.cts_buffers[0],
+            "driving_pin": args.driving_pin,
+        },
+    }
+    signature = build_input_signature(name, pdk_name, pdk, netlist, run_config, evidence_paths)
     reset = (not args.resume and (output_dir / "workspace").exists()) or (
         args.resume and workspace_requires_reset(output_dir, signature, floorplan)
     )
@@ -916,15 +1109,48 @@ def run_design(
     with (workspace / "input_signature.json").open("w", encoding="utf-8") as stream:
         json.dump(signature, stream, indent=2)
         stream.write("\n")
-    env, floorplan = build_environment(name, config, netlist, workspace)
+    env, floorplan = build_environment(
+        name,
+        config,
+        netlist,
+        workspace,
+        args.rt_max_iterations,
+        spef_path,
+        vcd_path,
+        args.vcd_top,
+        rcx_config,
+        sdc_path,
+    )
     result_dir = workspace / "result"
     stage_results = {}
     status = "prepared"
     if not args.prepare_only:
         status = "success"
         for stage in STAGES:
+            if stage.name == "rcx" and rcx_config is None:
+                stage_results[stage.name] = {
+                    "status": "not_run",
+                    "reason": "external SPEF supplied" if spef_path else "no --rcx-config supplied",
+                }
+                if args.stop_after == stage.name:
+                    status = "partial"
+                    break
+                continue
             stage_result = run_stage(stage, workspace, env, args.timeout, args.resume and not reset)
             stage_results[stage.name] = stage_result
+            if stage.name == "rcx" and stage_result["status"] == "success":
+                try:
+                    spef_path = discover_rcx_spef(
+                        rcx_config,
+                        env["DESIGN_TOP"],
+                        args.rcx_corner,
+                        stage_result["started_epoch_ns"],
+                    )
+                    env["SPEF_FILE"] = str(spef_path)
+                    stage_result["artifact"] = str(spef_path)
+                except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
+                    stage_result["status"] = "failed"
+                    stage_result["reason"] = str(exc)
             if stage_result["status"] == "failed" and stage.required:
                 status = "failed"
                 break
@@ -945,22 +1171,53 @@ def run_design(
         "timestamp": datetime.now().astimezone().isoformat(),
         "netlist": str(netlist),
         "workspace": str(workspace),
+        "route_iterations": args.rt_max_iterations,
         "floorplan": floorplan,
         "stages": stage_results,
         "artifacts": collect_artifacts(result_dir),
     }
+    spef_source = "ircx" if rcx_config is not None and spef_path is not None else ("provided" if spef_path else "none")
+    quality = build_quality_summary(
+        design=name,
+        pdk=pdk_name,
+        strategy=strategy_for(name),
+        workspace=workspace,
+        repo_root=REPO_ROOT,
+        input_signature=signature,
+        route_iterations=args.rt_max_iterations,
+        quality_gate=args.quality_gate,
+        stages=stage_results,
+        spef_path=spef_path,
+        spef_source=spef_source,
+        vcd_path=vcd_path,
+        vcd_top=args.vcd_top or env["DESIGN_TOP"],
+        ir_report=ir_report,
+    )
+    validation_errors = validate_summary(quality)
+    if validation_errors:
+        raise RuntimeError("invalid quality summary: " + "; ".join(validation_errors))
+    quality_path = output_dir / "quality_summary.json"
+    quality_path.write_text(json.dumps(quality, indent=2) + "\n", encoding="utf-8")
+    summary["quality"] = {
+        "path": str(quality_path),
+        "overall_status": quality["overall_status"],
+        "gates": {name: item["status"] for name, item in quality["gates"].items()},
+    }
+    if args.quality_gate == "strict" and quality["overall_status"] != "pass":
+        summary["status"] = "failed"
+        summary["quality"]["reason"] = "one or more strict quality gates failed"
     write_design_summary(output_dir, summary)
     return summary
 
 
-def write_batch_summary(summaries: list[dict]) -> None:
-    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+def write_batch_summary(summaries: list[dict], output_root: Path) -> None:
+    output_root.mkdir(parents=True, exist_ok=True)
     batch = {
         "timestamp": datetime.now().astimezone().isoformat(),
         "design_count": len(summaries),
         "summaries": summaries,
     }
-    with (OUTPUT_ROOT / "summary.json").open("w", encoding="utf-8") as stream:
+    with (output_root / "summary.json").open("w", encoding="utf-8") as stream:
         json.dump(batch, stream, indent=2)
         stream.write("\n")
     lines = [
@@ -983,7 +1240,7 @@ def write_batch_summary(summaries: list[dict]) -> None:
             "`workspace/result/timing`, and `workspace/result/power` directories.",
         )
     )
-    (OUTPUT_ROOT / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (output_root / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def parse_args() -> argparse.Namespace:
@@ -1000,6 +1257,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stop-after", choices=[stage.name for stage in STAGES])
     parser.add_argument("--timeout", type=int, default=7200, help="Per-stage timeout in seconds")
     parser.add_argument("--jobs", type=int, default=1, help="Number of designs to run concurrently")
+    parser.add_argument("--rt-max-iterations", type=int, default=1)
+    parser.add_argument("--spef", help="SPEF path; {design} is expanded for batch runs")
+    parser.add_argument("--rcx-config", help="iRCX JSON config; {design} is expanded for batch runs")
+    parser.add_argument("--rcx-corner", help="Select one iRCX corner when a config emits multiple SPEFs")
+    parser.add_argument("--vcd", help="VCD path; {design} is expanded for batch runs")
+    parser.add_argument("--vcd-top", help="VCD hierarchy scope, for example tb/dut/aes_cipher_top")
+    parser.add_argument("--ir-report", help="Existing iIR report used as signoff evidence")
+    parser.add_argument("--constraint-policy", choices=("complete", "existing"), default="complete")
+    parser.add_argument("--io-delay-pct", type=float, default=0.20)
+    parser.add_argument("--clock-uncertainty-pct", type=float, default=0.05)
+    parser.add_argument("--output-load", type=float, default=0.01, help="Output load in the Liberty capacitance unit")
+    parser.add_argument("--driving-cell", help="Override the PDK-specific input driving buffer")
+    parser.add_argument("--driving-pin", default="Y", help="Driving cell output pin")
+    parser.add_argument("--quality-gate", choices=("report", "strict"), default="report")
+    parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)
     parser.set_defaults(synthesize=True)
     return parser.parse_args()
 
@@ -1007,8 +1279,21 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     names = tuple(args.design or AES13_DESIGNS)
+    args.output_root = args.output_root.expanduser().resolve()
+    if args.rt_max_iterations < 1:
+        raise ValueError("--rt-max-iterations must be at least 1")
+    if args.spef and args.rcx_config:
+        raise ValueError("--spef and --rcx-config are mutually exclusive")
+    if args.vcd_top and not args.vcd:
+        raise ValueError("--vcd-top requires --vcd")
+    if not 0.0 <= args.io_delay_pct < 1.0:
+        raise ValueError("--io-delay-pct must be in [0, 1)")
+    if not 0.0 <= args.clock_uncertainty_pct < 1.0:
+        raise ValueError("--clock-uncertainty-pct must be in [0, 1)")
+    if args.output_load < 0.0:
+        raise ValueError("--output-load must be non-negative")
     check_inputs(names, args.synthesize)
-    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    args.output_root.mkdir(parents=True, exist_ok=True)
     if args.jobs < 1:
         raise ValueError("--jobs must be at least 1")
 
@@ -1041,8 +1326,8 @@ def main() -> int:
                 name = futures[future]
                 by_name[name] = future.result()
         summaries = [by_name[name] for name in names]
-    write_batch_summary(summaries)
-    print(f"\nSummary: {OUTPUT_ROOT / 'summary.md'}", flush=True)
+    write_batch_summary(summaries, args.output_root)
+    print(f"\nSummary: {args.output_root / 'summary.md'}", flush=True)
     return 1 if failures or any(item["status"] == "failed" for item in summaries) else 0
 
 

@@ -192,6 +192,7 @@ TclCompareSpef::TclCompareSpef(const char* cmd_name) : TclCmd(cmd_name)
   addOption(new TclSwitchOption("-c"));
   addOption(new TclSwitchOption("-d"));
   addOption(new TclSwitchOption("-delay_pin_load"));
+  addOption(new TclSwitchOption("-json"));
 }
 
 unsigned TclCompareSpef::check()
@@ -232,6 +233,7 @@ unsigned TclCompareSpef::exec()
   config.compare_capacitance = isOptionSet(getOptionOrArg("-c"));
   config.compare_delay = isOptionSet(getOptionOrArg("-d"));
   config.delay_pin_load = isOptionSet(getOptionOrArg("-delay_pin_load"));
+  config.emit_compare_json = isOptionSet(getOptionOrArg("-json"));
 
   if (!setIntOption(getOptionOrArg("-cores"), "-cores", config.cores)
       || !setDoubleOption(getOptionOrArg("-tcap"), "-tcap", config.tcap_threshold)

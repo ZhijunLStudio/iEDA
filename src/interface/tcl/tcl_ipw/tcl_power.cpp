@@ -42,10 +42,11 @@ unsigned CmdPowerRun::exec()
   TclOption* option = getOptionOrArg(TCL_OUTPUT_PATH);
   auto path = option->getStringVal() != nullptr ? option->getStringVal() : "";
 
-  if (iplf::tmInst->autoRunPower(path)) {
-    std::cout << "iPA run successfully." << std::endl;
+  if (!iplf::tmInst->autoRunPower(path)) {
+    LOG_ERROR << "run_power failed";
+    return 0;
   }
-
+  std::cout << "iPA run successfully." << std::endl;
   return 1;
 }
 

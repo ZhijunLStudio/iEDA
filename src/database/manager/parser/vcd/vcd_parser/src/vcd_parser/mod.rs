@@ -305,6 +305,10 @@ mod tests {
 
     use super::*;
 
+    fn test_vcd_path() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("benchmark/test1.vcd")
+    }
+
     fn process_pair(pair: Pair<Rule>) {
         // A pair is a combination of the rule which matched and a span of input
         println!("Rule:    {:?}", pair.as_rule());
@@ -435,7 +439,11 @@ mod tests {
     
     $upscope $end
     
-    $enddefinitions $end"#;
+    $enddefinitions $end
+    #0
+    $dumpvars
+    0!
+    $end"#;
         let parse_result = VCDParser::parse(Rule::vcd_file, input_str);
 
         print_parse_result(parse_result);
@@ -443,11 +451,10 @@ mod tests {
 
     #[test]
     fn test_parse_vcd_file_path() {
-        let vcd_path =
-            "/home/taosimin/iEDA/src/database/manager/parser/vcd/vcd_parser/benchmark/test1.vcd";
+        let vcd_path = test_vcd_path();
 
-        let input_str = std::fs::read_to_string(vcd_path)
-            .unwrap_or_else(|_| panic!("Can't read file: {}", vcd_path));
+        let input_str = std::fs::read_to_string(&vcd_path)
+            .unwrap_or_else(|_| panic!("Can't read file: {}", vcd_path.display()));
         let parse_result = VCDParser::parse(Rule::vcd_file, input_str.as_str());
 
         print_parse_result(parse_result);
@@ -455,9 +462,8 @@ mod tests {
 
     #[test]
     fn test_build_vcd_data() {
-        let vcd_path =
-            "/home/taosimin/iEDA/src/database/manager/parser/vcd/vcd_parser/benchmark/test1.vcd";
-        let parse_result = parse_vcd_file(vcd_path);
+        let vcd_path = test_vcd_path();
+        let parse_result = parse_vcd_file(vcd_path.to_str().unwrap());
         assert!(parse_result.is_ok());
     }
 }

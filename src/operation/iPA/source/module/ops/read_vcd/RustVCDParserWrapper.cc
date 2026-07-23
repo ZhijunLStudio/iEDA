@@ -1,53 +1,132 @@
 #include "RustVCDParserWrapper.hh"
 
+#include <filesystem>
+#include <string>
+#include <vector>
+
 #include "string/Str.hh"
 
 namespace ipower {
 
+namespace {
+
+std::vector<std::string> splitScopePath(const char* scope_path) {
+  std::vector<std::string> components;
+  if (scope_path == nullptr) {
+    return components;
+  }
+  std::string path(scope_path);
+  size_t begin = 0;
+  while (begin < path.size()) {
+    const size_t end = path.find('/', begin);
+    const std::string component = path.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+    if (!component.empty()) {
+      components.push_back(component);
+    }
+    if (end == std::string::npos) {
+      break;
+    }
+    begin = end + 1;
+  }
+  return components;
+}
+
+RustVCDScope* findDirectChild(RustVCDScope* parent, const std::string& name) {
+  if (parent == nullptr) {
+    return nullptr;
+  }
+  auto children = parent->children_scope;
+  void* child;
+  FOREACH_VEC_ELEM(&children, void, child) {
+    void* child_ptr = rust_convert_rc_ref_cell_scope(child);
+    RustVCDScope* child_scope = rust_convert_vcd_scope(child_ptr);
+    if (child_scope != nullptr && ieda::Str::equal(child_scope->name, name.c_str())) {
+      return child_scope;
+    }
+  }
+  return nullptr;
+}
+
+RustVCDScope* findScopeByName(RustVCDScope* parent, const std::string& name) {
+  if (parent == nullptr) {
+    return nullptr;
+  }
+  if (ieda::Str::equal(parent->name, name.c_str())) {
+    return parent;
+  }
+  auto children = parent->children_scope;
+  void* child;
+  FOREACH_VEC_ELEM(&children, void, child) {
+    void* child_ptr = rust_convert_rc_ref_cell_scope(child);
+    RustVCDScope* child_scope = rust_convert_vcd_scope(child_ptr);
+    if (auto* found = findScopeByName(child_scope, name); found != nullptr) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
+RustVCDScope* findScope(RustVCDScope* root, const char* scope_path) {
+  const auto components = splitScopePath(scope_path);
+  if (root == nullptr || components.empty()) {
+    return nullptr;
+  }
+  if (components.size() == 1) {
+    return findScopeByName(root, components.front());
+  }
+
+  RustVCDScope* current = nullptr;
+  size_t index = 0;
+  if (ieda::Str::equal(root->name, components.front().c_str())) {
+    current = root;
+    index = 1;
+  } else {
+    current = findScopeByName(root, components.front());
+    index = 1;
+  }
+  for (; current != nullptr && index < components.size(); ++index) {
+    current = findDirectChild(current, components[index]);
+  }
+  return current;
+}
+
+}  // namespace
+
 unsigned RustVcdParserWrapper::readVcdFile(const char* vcd_file_path) {
+  if (vcd_file_path == nullptr || vcd_file_path[0] == '\0') {
+    LOG_ERROR << "VCD path is empty";
+    return 0;
+  }
+  std::error_code error;
+  if (!std::filesystem::is_regular_file(vcd_file_path, error) || error) {
+    LOG_ERROR << "VCD file does not exist: " << vcd_file_path;
+    return 0;
+  }
   RustVcdReader vcd_reader;
   _vcd_file_ptr = vcd_reader.readVcdFile(vcd_file_path);
+  if (_vcd_file_ptr == nullptr) {
+    LOG_ERROR << "failed to parse VCD file: " << vcd_file_path;
+    return 0;
+  }
   _vcd_file = rust_convert_vcd_file(_vcd_file_ptr);
-
-  return 1;
+  if (_vcd_file == nullptr || _vcd_file->scope_root == nullptr) {
+    LOG_ERROR << "VCD file has no root scope: " << vcd_file_path;
+    return 0;
+  }
+  return 1U;
 }
 
 unsigned RustVcdParserWrapper::buildAnnotateDB(const char* top_instance_name) {
-  std::function<RustVCDScope*(RustVCDScope*)> traverse_scope =
-      [&traverse_scope,
-       &top_instance_name](RustVCDScope* parent_scope) -> RustVCDScope* {
-    auto children_scopes = parent_scope->children_scope;
-    void* children_scope;
-    FOREACH_VEC_ELEM(&children_scopes, void, children_scope) {
-      void* children_scope_ptr = rust_convert_rc_ref_cell_scope(children_scope);
-      RustVCDScope* cur_vcd_scope = rust_convert_vcd_scope(children_scope_ptr);
-      if (ieda::Str::equal(cur_vcd_scope->name, top_instance_name)) {
-        return cur_vcd_scope;
-      }
-    }
-
-    FOREACH_VEC_ELEM(&children_scopes, void, children_scope) {
-      void* children_scope_ptr = rust_convert_rc_ref_cell_scope(children_scope);
-      RustVCDScope* cur_vcd_scope = rust_convert_vcd_scope(children_scope_ptr);
-      auto* found_scope = traverse_scope(cur_vcd_scope);
-      if (found_scope) {
-        return found_scope;
-      }
-    }
-
-    return nullptr;
-  };
-
-  auto* root_scope = static_cast<RustVCDScope*>(_vcd_file->scope_root);
-  RustVCDScope* found_scope = nullptr;
-
-  if (ieda::Str::equal(root_scope->name, top_instance_name)) {
-    found_scope = root_scope;
-  } else {
-    found_scope = traverse_scope(root_scope);
+  if (_vcd_file == nullptr || _vcd_file->scope_root == nullptr) {
+    LOG_ERROR << "build VCD annotation failed: no VCD file was loaded";
+    return 0;
   }
-  LOG_FATAL_IF(!found_scope) << "not found the scope " << top_instance_name;
-
+  auto* root_scope = static_cast<RustVCDScope*>(_vcd_file->scope_root);
+  RustVCDScope* found_scope = findScope(root_scope, top_instance_name);
+  if (found_scope == nullptr) {
+    LOG_ERROR << "VCD scope not found: " << (top_instance_name == nullptr ? "<null>" : top_instance_name);
+    return 0;
+  }
   _top_instance_scope = found_scope;
 
   // TODO(to shaozheqing),config the annotate simualtion time and time scale.
@@ -93,6 +172,10 @@ unsigned RustVcdParserWrapper::buildAnnotateDB(const char* top_instance_name) {
         FOREACH_VEC_ELEM(&scope_signals, void, scope_signal) {
           void* signal_ptr = rust_convert_rc_ref_cell_signal(scope_signal);
           RustVCDSignal* signal = rust_convert_vcd_signal(signal_ptr);
+          if (signal == nullptr || signal->name == nullptr) {
+            LOG_WARNING << "skip invalid VCD signal record";
+            continue;
+          }
 
           if (signal->signal_type != VCDVariableType::kVarWire) {
             continue;
@@ -104,8 +187,10 @@ unsigned RustVcdParserWrapper::buildAnnotateDB(const char* top_instance_name) {
             void* c_bus_index = signal->bus_index;
 
             if (c_bus_index) {
-                Indexes* bus_index = rust_convert_signal_index(c_bus_index);
-                signal_name+= "[" + std::to_string(bus_index->lindex) + "]";
+              Indexes* bus_index = rust_convert_signal_index(c_bus_index);
+              if (bus_index != nullptr) {
+                signal_name += "[" + std::to_string(bus_index->lindex) + "]";
+              }
             }
 
             auto annotate_signal =
@@ -114,7 +199,15 @@ unsigned RustVcdParserWrapper::buildAnnotateDB(const char* top_instance_name) {
           } else {
             // bus signal
             void* c_bus_index = signal->bus_index;
+            if (c_bus_index == nullptr) {
+              LOG_WARNING << "skip VCD bus signal without an index: " << signal->name;
+              continue;
+            }
             Indexes* bus_index = rust_convert_signal_index(c_bus_index);
+            if (bus_index == nullptr) {
+              LOG_WARNING << "skip VCD bus signal with an invalid index: " << signal->name;
+              continue;
+            }
             int lindex = bus_index->lindex;
             int rindex = bus_index->rindex;
             for (auto i = rindex; i <= lindex; ++i) {
@@ -134,7 +227,9 @@ unsigned RustVcdParserWrapper::buildAnnotateDB(const char* top_instance_name) {
               rust_convert_rc_ref_cell_scope(child_scope);
           RustVCDScope* cur_child_scope =
               rust_convert_vcd_scope(children_scope_ptr);
-          build_scope_instance_signal(cur_child_scope, the_scope_instance_ptr);
+          if (cur_child_scope != nullptr) {
+            build_scope_instance_signal(cur_child_scope, the_scope_instance_ptr);
+          }
         }
       };
 
@@ -145,10 +240,18 @@ unsigned RustVcdParserWrapper::buildAnnotateDB(const char* top_instance_name) {
 
 unsigned RustVcdParserWrapper::calcScopeToggleAndSp(
     const char* top_instance_name) {
+  if (_vcd_file_ptr == nullptr || _top_instance_scope == nullptr || top_instance_name == nullptr || top_instance_name[0] == '\0') {
+    LOG_ERROR << "calculate VCD activity failed: VCD file or scope is not initialized";
+    return 0;
+  }
   LOG_INFO << "calculate toggle and sp for scope " << top_instance_name;
 
   RustTcAndSpResVecs* res_vecs =
       rust_calc_scope_tc_sp(top_instance_name, _vcd_file_ptr);
+  if (res_vecs == nullptr) {
+    LOG_ERROR << "failed to calculate VCD activity for scope " << top_instance_name;
+    return 0;
+  }
   auto signal_tc_vec = res_vecs->signal_tc_vec;
   auto signal_sp_vec = res_vecs->signal_duration_vec;
 
@@ -189,6 +292,10 @@ unsigned RustVcdParserWrapper::calcScopeToggleAndSp(
           auto* cur_signal_sp = signal_map[std::string(signal_name)].second;
 
           // set toggle
+          if (cur_signal_tc == nullptr || cur_signal_sp == nullptr) {
+            LOG_WARNING << "incomplete VCD activity record for signal " << signal_name;
+            continue;
+          }
           auto cur_tc = cur_signal_tc->signal_tc;
           AnnotateToggle annotate_toggle;
           annotate_toggle.set_TC(cur_tc);

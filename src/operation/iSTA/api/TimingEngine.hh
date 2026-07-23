@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <optional>
 
 #include "TimingDBAdapter.hh"
@@ -37,6 +38,14 @@ class RctNode;
 
 class TimingEngine {
  public:
+  struct IncrementalTimingResult {
+    bool success = false;
+    size_t forward_seed_count = 0;
+    size_t backward_seed_count = 0;
+    uint64_t wall_time_us = 0;
+    std::string failed_stage;
+  };
+
   /**
    * @brief The net info of the same timing path.
    *
@@ -252,6 +261,8 @@ class TimingEngine {
       const char* rc_tree_name);
 
   TimingEngine &incrUpdateTiming();
+  bool incrUpdateTimingChecked();
+  const IncrementalTimingResult& getLastIncrementalTimingResult() const { return _last_incremental_result; }
 
   TimingEngine &updateTiming() {
     updateAllRCTree();
@@ -302,6 +313,9 @@ class TimingEngine {
   void moveInstance(const char *instance_name,
                     std::optional<unsigned> update_level = std::nullopt,
                     PropType prop_type = PropType::kFwdAndBwd);
+  bool invalidateInstance(const char *instance_name,
+                          std::optional<unsigned> update_level = std::nullopt,
+                          PropType prop_type = PropType::kFwdAndBwd);
 
   void setNetDelay(double wl, double ucap, const char *net_name,
                    const char *load_pin_name, ModeTransPair mode_trans);
@@ -424,6 +438,7 @@ class TimingEngine {
 
   std::unique_ptr<TimingDBAdapter> _db_adapter;
   StaIncremental _incr_func;
+  IncrementalTimingResult _last_incremental_result;
 
   std::map<std::string, RcTree>
       _virtual_rc_trees;  //!< The virtual rc tree is maybe not complete net.

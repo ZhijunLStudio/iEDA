@@ -40,6 +40,7 @@ struct Config
   bool compare_resistance = false;
   bool compare_delay = false;
   bool delay_pin_load = false;
+  bool emit_compare_json = false;
 
   std::string corner;
   std::string match_mode = "name";
