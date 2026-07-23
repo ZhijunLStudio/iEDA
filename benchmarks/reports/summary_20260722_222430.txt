@@ -1,0 +1,26 @@
+========================================
+批量运行总结
+========================================
+结束时间: 2026年 07月 22日 星期三 22:25:29 CST
+
+总计: 13
+成功: 0
+失败: 13
+
+失败的设计:
+  - aes_sky130_a
+  - aes_sky130_b
+  - aes_sky130_t
+  - aes_nangate45_a
+  - aes_nangate45_b
+  - aes_nangate45_t
+  - aes_asap7_a
+  - aes_asap7_b
+  - aes_asap7_t
+  - aes_ics55_a
+  - aes_ics55_b
+  - aes_ics55_t
+  - aes_core_sky130_a
+
+详细日志: /home/lxq/AiEDA/iEDA.ai/benchmarks/reports/batch_run_20260722_222430.log
+总结报告: /home/lxq/AiEDA/iEDA.ai/benchmarks/reports/summary_20260722_222430.txt

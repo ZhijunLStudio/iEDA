@@ -2,10 +2,10 @@
   "version": "1.0",
   "total_designs": 279,
   "pdks": [
-    "sky130",
     "asap7",
+    "ics55",
     "nangate45",
-    "ics55"
+    "sky130"
   ],
   "designs": [
     {

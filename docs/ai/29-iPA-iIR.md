@@ -3,13 +3,14 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 29 · iPA / iIR 功耗与压降 · 商业对标优化方案 · rv2.0
+# 29 · iPA / iIR 功耗与压降 · 商业对标优化方案 · rv2.1
 
-> 文档号：29-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— PTPX 签核精度（G9：活动源诚实）× RedHawk in-design 调用（快速准确）**
+> 文档号：29-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**双对标 —— PTPX 签核精度（G9：活动源诚实）× RedHawk in-design 调用（多保真、可校准、可增量）**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`（逐 kernel 走读 + 诚实归因 + 被否方案）
 > 商业金标：**PrimeTime PX / Joules**（签核级功耗精度）；**RedHawk / Voltus**（签核级 IR Drop 精度 + in-design 快速分析）；门禁：**G9 / G10 / G14 / G17**
 > 上游：`10-iDB`、`27-iSTA`、`28-iRCX`　下游：`12-evaluation`、iPDN、flow 决策
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-PA-\*、KH-IR-\*
+> 联合架构：`04-ppa-technical-review-and-optimization-rv1.md`；闭环工作台：`51-agent-native-eda-detailed-plan-v1.0.md`
 > 覆盖：`src/operation/iPA/`（~8.3k LOC 含 Rust wrapper）、`src/operation/iIR/`（~1.6k LOC）
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
 
@@ -23,6 +24,7 @@ iEDA is licensed under Mulan PSL v2.
 | v1.1 | 2026-07-20 | 算法摘要；篇幅不足 |
 | rv1.0 / v2.0 | 2026-07-20 | 逐行坐实 `RustVCDParserWrapper.cc:49` hierarchical scope 用**单名** DFS 匹配，`/` 路径会 `LOG_FATAL` 崩进程；`Power.hh:208` `_default_toggle=0.02` 存在假数风险；IR 侧 `IRSolver.cc:209+` CG+残差有实现但门禁未接。修订旧稿「≥5 处 FATAL」为**可分级清单**（数据缺失 vs 逻辑错误）。 |
 | **rv2.0** | **2026-07-21** | **大改（对照 27-iSTA-rv2.0.md 的深度与丰富度重写，并把目标显式拆成双对标线）**。核心修订五条：**(1)** rv1.0 审计定位在「功能形态 + FATAL 位置」——**代码级核实后发现 iPA/iIR 的头号结构症结是活动源可信度体系缺失**：VCD 层级路径不支持（`RustVCDParserWrapper.cc:16-49` 单名匹配）、默认 toggle 静默替代（`Power.hh:208` `_default_toggle=0.02`）、活动源标记缺失（报告无 `activity_source` 字段）、VCD 缺失时生产行为未契约化——功耗数字的**可信度无法向下游传递**（G9 症结）；**(2)** 新增 **iPA 精度栈审计**（§1.5，PTPX 对标的核心证据）：VCD annotate 路径存在但层级受限、toggle 传播算法成熟（PwrPropagateToggleSP 等）、P=αCV²f+internal+leakage 三分量算子完备、**但活动源与功耗数字解耦** — 无源时静默用默认值而非拒报，导致功耗报告可信度不明（类比 27 号文档 iSTA 单位混乱的精度口径问题）；**(3)** 新增 **iIR 精度栈审计**（§1.6）：CG/LU/GS 三求解器实现完整（`IRSolver.cc:160-350`），残差跟踪存在（`:215-301` L2 norm），**但无残差/peak 门禁** — 撞 max_iter 或 peak ∉[1,100]mV 时不报错，导致 IR 报告可信度不明（G10 症结）；电流源与 iPA 实例功耗链路**未验证**；**(4)** 全文按**双对标线**重组：PTPX/RedHawk 线 = 签核精度栈（活动源诚实 + 三分量完备 + vs PTPX R²>0.95 → G9/G17），in-design 线 = 优化循环调用栈（分级 effort + 快速评估 + 残差门禁 → 又快又准），§10 拆成两块看板；**(5)** 补齐 27 号文档体例要素：§1.2 算法成熟度表（kernel/算法/判定/缺口）、§4.12 模块状态一览（成熟度/复杂度/边界/复用姿势）、§5 双档配置表、§8 调用方契约表、§10.3 对照实验（每假说附 E-XXX-NN 编号）、§14 未验证/不要重走/兄弟仓库实测发现。**缺省新特性关闭 → 零回归**的纪律不变。 |
+| **rv2.1** | **2026-07-23** | 实现评审：活动来源提升为按实例/网统计的 provenance 与覆盖率；IR 门禁采用相对/绝对残差和数值健康检查；补 PCG 热启动、预条件器复用、dirty PG 增量求解，以及基于时间窗电流的动态 IR 最小实现。 |
 
 ---
 
@@ -250,7 +252,8 @@ else:  # 默认 CG
 | FR-PA-05 | vs PTPX harness ≤5% | ✗ | P2 |
 | FR-IR-01 | ★ residual/peak 门禁（G10） | 有残差无门禁 | P0 |
 | FR-IR-02 | ★ 电流=iPA 实例链路 | ❓ | P1 |
-| FR-IR-03 | 动态 IR 时间窗 | ✗ | Phase C |
+| FR-IR-03 | ★ 动态 IR 时间窗（VCD/SAIF event bucket → peak/percentile waveform） | ✗ | Phase C |
+| FR-IR-04 | ★ in-design dirty PG/current 增量求解 + full oracle | ✗ | P1 |
 | NFR-PA-01 | 层级 VCD 崩溃率 | 0 | G14 |
 | NFR-IR-01 | peak drop ∈[1,100] mV 或归因 | G10 | |
 | NFR-IR-02 | 撞 max_iter ≠ 假收敛 | G10 | |
@@ -310,10 +313,11 @@ _top_instance_scope = node
 
 复杂度 O(|scopes|)；边界：空名、重复名、仅 leaf 名歧义→ERROR。
 
-### 4.2 ★ ActivitySource 枚举 `[新增]`
+### 4.2 ★ Activity provenance `[新增]`
 
 ```cpp
 enum class ActivitySource { kVcd, kSaif, kToggleDefault, kRefuse };
+// 每个 instance/net 保留 source + window + annotation coverage；summary 聚合各来源比例
 // report: source 字段必填；kRefuse → 不写可信 mW 或写 NaN + ERROR
 // _default_toggle 仅当用户显式 set 且 source=kToggleDefault
 ```
@@ -323,12 +327,26 @@ enum class ActivitySource { kVcd, kSaif, kToggleDefault, kRefuse };
 **现状**：CG 循环 `IRSolver.cc:235-301` 已打 residual 日志。
 
 ```text
-if iter>=max_iter and residual>ε: return FAIL (rc≠0)
+先验证 G 矩阵对称性、正对角、连通参考节点；p·Ap≤0 / NaN / Inf 立即数值失败
+使用 rel_residual = ||b-GV||₂ / max(||b||₂, eps) 与 abs_residual 双门禁
+if iter>=max_iter and (rel_residual>rel_tol or abs_residual>abs_tol): return FAIL (rc≠0)
 if peak_mv not in [1,100] and not explained: FAIL or WARN+归因
 缺 PG 作用域: WARN + 降级，禁 LOG_FATAL（对齐主纲 G10）
 ```
 
-### 4.4 模块状态
+in-design 重复求解：拓扑稀疏结构未变时复用符号结构/预条件器并以上次电压热启动 PCG；DirtySet 只更新变动电导和电流 RHS。拓扑变化或 dirty ratio 超阈值才重建矩阵/预条件器；每 K 次增量求解跑 full oracle，对 peak/节点电压误差设 guardband。预条件器从 Jacobi 起步，是否引入 incomplete Cholesky/AMG 由迭代数和内存 profile 决定，不预先永久否决。
+
+### 4.4 ★ 动态 IR 最小实现（FR-IR-03）
+
+```text
+VCD/SAIF events → 按 clock/用户 window 分 bucket → instance current waveform
+  → 对每 bucket 求 G·V(t)=I(t)（静态序列基线）
+  → 报 peak drop、p99、发生时间、热点持续时间及 activity coverage
+```
+
+MVP 先忽略 Ldi/dt，但报告模型边界；后续若引入 package RLC，必须使用经验证的瞬态积分器与独立波形对照。无时间分辨活动源时只能输出 vectorless/average 标签，禁止称 dynamic signoff。
+
+### 4.5 模块状态
 
 | 模块 | 状态 | 动作 |
 |---|---|---|
@@ -349,6 +367,10 @@ if peak_mv not in [1,100] and not explained: FAIL or WARN+归因
 | `default_toggle` | 0.02 | 仅显式允许时 |
 | `ir.max_iter` / `ir.tol` | 现有 | |
 | `ir.peak_mv_range` | [1,100] | G10 |
+| `ir.rel_tol` / `ir.abs_tol` | 协议冻结 | 双残差门禁 |
+| `ir.reuse_preconditioner` | false | 校准通过后开启；版本号防陈旧复用 |
+| `ir.full_oracle_interval` | 1 | 增量求解校验频率 |
+| `ir.dynamic.window` | N/A | 动态 IR bucket；缺时间活动时拒绝 dynamic 标签 |
 
 ---
 
@@ -359,8 +381,10 @@ if peak_mv not in [1,100] and not explained: FAIL or WARN+归因
 | P_total / P_switch / P_int / P_leak | mW | G17/G9 |
 | P_clock | mW | G19 协同 |
 | activity_source | enum | G9 |
+| activity_coverage_by_source | % per source | G9；默认活动比例不得隐藏 |
 | peak_ir_mv | mV | G10 |
 | residual_final | — | G10 |
+| ir_iters / preconditioner_reused / full_oracle_error | count/bool/mV | in-design 性能与正确性 |
 | wall_s | s | G21 |
 
 ---
@@ -421,6 +445,8 @@ CmdReadVcd（CmdReadVcd.cc:46+）缺选项 → ERROR 非 FATAL（目标）
 | **E-IR-02** | iPA 功耗×2（人为翻倍实例电流） | 比较 IR `peak_drop` 变化 | peak_drop 增加 **>50%**（证明电流链路活）；若 peak_drop 不变 → 电流源=常数假设被杀 | 电流可追溯性（D4） |
 | **E-PA-04** | 同设计 vs PTPX 功耗报告 | 对齐三分量（switch/internal/leak） | 各分量偏差 **≤10%** 或归因（如 VCD 时间窗不同） | PTPX 签核精度对标（G9/G17） |
 | **E-IR-03** | peak_drop ∉[1,100]mV（注入极低/极高电流） | `solve_ir` | 响亮 WARNING 或 ERROR（不许静默输出 0.001 mV 或 500 mV） | G10 门禁范围 |
+| **E-IR-04** | 连续小幅 stripe resize / current RHS 变化 | 冷启动 full matrix vs dirty PCG warm start | 节点电压/peak 差在 tol 内；若迭代数或墙钟无显著下降，禁止默认复用 preconditioner | 增量求解收益与一致性 |
+| **E-IR-05** | 构造两个窄高电流脉冲但平均功耗相同的 VCD | dynamic bucket vs average current | dynamic peak 应高于 average 且峰值时间落入注入窗；否则动态模型无效 | FR-IR-03 时间窗语义 |
 
 **实验设计原则**（对照 27-iSTA §10.2）：
 1. **可机械判定**：判据有数值阈值（>50%、≤10%）或布尔状态（rc≠0、字段存在）；
@@ -471,9 +497,9 @@ grep -i "not converge\|residual" ieda.log      # 日志必须响亮报错（非�
 ```text
 M0 先量：FATAL 清单+层级 VCD 复现
 M1 可信：path 下钻+G9 activity_source
-M2 主算法：G10 residual/peak 门禁+电流链路
+M2 主算法：G10 双残差/数值健康门禁+电流链路+PCG 增量基线
 M3 打平：vs PTPX/Voltus
-M4 纵深：动态 IR 窗口（KH-IR-02）
+M4 纵深：动态 IR 窗口（KH-IR-02）+ package RLC 是否立项由波形对照决定
 ```
 
 ---

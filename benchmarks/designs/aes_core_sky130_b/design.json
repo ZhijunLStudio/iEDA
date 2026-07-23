@@ -7,9 +7,9 @@
   "pdk": "sky130",
   "variant": "fd_sc_hd",
   "inputs": {
-    "tech_lef": "$PDK/lef/fd_sc_hd.tlef",
-    "cells_lef": "$PDK/lef/fd_sc_hd_merged.lef",
-    "lib": "$PDK/lib/fd_sc_hd__tt_025C_1v80.lib",
+    "tech_lef": "$PDK/lef/sky130_fd_sc_hd.tlef",
+    "cells_lef": "$PDK/lef/sky130_fd_sc_hd_merged.lef",
+    "lib": "$PDK/lib/sky130_fd_sc_hd__tt_025C_1v80.lib",
     "netlist": "netlist/aes_core.v",
     "sdc": "sdc/aes_core.sdc"
   },

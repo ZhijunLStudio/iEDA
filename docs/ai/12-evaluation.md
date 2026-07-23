@@ -3,14 +3,15 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 12 · evaluation 评测地基 · 商业对标优化方案 · rv1.1
+# 12 · evaluation 评测地基 · 商业对标优化方案 · rv1.2
 
-> 文档号：12-rv1.1　　版本：v3.0（大改，逐文件代码走读后重写）　　里程碑：**工具内 L1 评估器 → L2 QoR 度量地基（schema + parity harness + G1/G15/G17–G21）**
+> 文档号：12-rv1.2　　版本：v3.1（联合门禁/manifest 修订）　　里程碑：**工具内 L1 评估器 → L2 QoR 度量地基（schema + parity harness + G1/G15/G17–G21）**
 > 体例：`01-ai-doc-conventions-rv1.md`（对齐 `24-iPL-3d-rv1.0.md` 走读深度）
 > 主纲：`00-ieda-commercial-parity-master-plan-v1.1.md`（§1bis、G1/G1b/G15/G17–G21）
 > Know-how：`03-commercial-knowhow-catalog.md`（KH-EV-01/02、KH-X-01/08、KH-PLAT-02）
 > 覆盖：`src/evaluation/` 全树（8463 LOC）：`src/module/{congestion,density,wirelength,timing,eval_io}`、`src/util/{init_sta,init_egr,init_idb,init_flute,...}`、`api/`、`apps/`、`database/`
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；budget 外生。
+> 技术细则：基准分层、联合门禁、manifest 与性能统计见 `04-ppa-technical-review-and-optimization-rv1.md` §2。
 
 ---
 
@@ -21,6 +22,7 @@ iEDA is licensed under Mulan PSL v2.
 | v1.0–v1.2 | 2026-07-20 | harness/schema/L1-L2 设想；章节未对齐体例 |
 | rv1.0 / v2.0 | 2026-07-20 | 体例重排；重申 L1 行数证据 |
 | **rv1.1 / v3.0** | **2026-07-21** | **大改**：对 `src/evaluation/` 全树 30 个源文件逐一读完重写。核心修订四条：**(1)** v2.0 §S1 说 L1 "被 iTO EvalAPI 消费"——**不准**：全仓消费方实测为 **iPL**（`ExternalAPI.cc` + `NesterovPlace.cc:1359-1387`，GP 主循环内嵌 LUT-RUDY 拥塞驱动优化）与 **iPNP**（`CongestionEval.cpp` 50 LOC 薄封装，**非平行重写**，v2.0 担心的重复实现不成立）、`iPL/test/CongEvalAPITest.cc`；iTO 侧未见 include（**未验证是否经其他通道**）；**(2)** L1 内核实测比 v2.0 印象**更全**：congestion 有 EGR/RUDY/LUT-RUDY 三族九入口（`congestion_eval.cpp:58-100`），其中 **EGR 依赖 iRT 落盘目录 `rt_dir_path`**（`:58-70`）——跨工具顺序陷阱不只 init_sta 一处；**(3)** `init_sta.cc`（1946 LOC）的重不止于"启 STA"：include 面含 `RTInterface.hpp`、`api/PowerEngine.hh`、`api/TimingEngine.hh`、`salt/base/flute.h`（`:29-35`）——一个 "init" util 直连 iRT/iPW/iSTA/flute 四个外部栈，是**全树耦合度最高的文件**；**(4)** `database/summary_db.cpp` 是 **19 行空壳**（仅空 ctor/dtor）——L2 的"数据库"占位早已存在但无任何字段，v2.0 把 L2 当纯 greenfield 不准确：greenfield 是对的，但**有一个会误导后来者的空壳需要先处置**。 |
+| **rv1.2 / v3.1** | **2026-07-23** | 按 `04` 增加 input/build/artifact manifest、smoke/daily/weekly/scale/holdout 分层；G7/G8 从单相关系数升级为 coverage/bias/分位数/worst/rank 联合 schema；性能按 ≥5 次 median/MAD，二进制身份改 SHA-256。 |
 
 ---
 
@@ -84,6 +86,8 @@ iEDA is licensed under Mulan PSL v2.
 | FR-EV-08 | ★ EGR↔iRT 目录契约文档化 + 缺目录响亮失败 | 未文档化 | P1 |
 | FR-EV-09 | ★ 单例复跑语义（destroyInst 成对）审计 + gtest | 未验证 | P1 |
 | FR-EV-10 | ★ `summary_db` 空壳处置（填实为 L2 schema 载体或删除） | 空壳 | P0 |
+| FR-EV-11 | ★ Input/Build/Artifact manifest + smoke/daily/weekly/scale/holdout 分层 | ✗ | P0 |
+| FR-EV-12 | ★ STA/RCX 联合指标（coverage/bias/P95/worst/rank/component buckets） | ✗ | P0 |
 | NFR-EV-01 | L2 只读最终产物 | — | G15 |
 | NFR-EV-02 | 逐指标独立转绿，禁加权总分 | — | G17/KH-EV-02 |
 
@@ -138,18 +142,22 @@ src/evaluation/database/summary_db.cpp   # 删除（19 行空壳，D5）
 
 ```json
 {
-  "version": "1",
+  "version": "2",
   "primary_pnr": "innovus|icc2",
   "effort": "standard",
   "report_points": ["post_place","post_cts","post_route","signoff_sta"],
   "delta": {"wns":0.05,"hpwl":0.05,"wl":0.08,"power":0.05},
-  "epsilon_runs": 2,
-  "designs_daily": ["gcd","aes","jpeg","sky130_gcd","ics55_gcd"],
+  "performance_repeats": 5,
+  "benchmark_sets": {"smoke":[],"daily":[],"weekly":[],"scale":[],"holdout":[]},
+  "manifest": {"input_sha256":"...","binary_sha256":"...","build_manifest_sha256":"..."},
+  "sta_gate": {"endpoint_coverage_min":0.99,"critical_false_negative_max":0,
+                "wns_abs_ps_max":10,"topk_precision_min":0.95,"topk_recall_min":0.95},
+  "rcx_gate": {"components":["ground_c","coupling_c","wire_r","via_r","elmore"]},
   "signoff": {"sta":"pt","rcx":"starrc","drc":"calibre","power":"ptpx"}
 }
 ```
 
-summary 字段纪律：`unit`/`source` 必填；`budget` 仅 protocol 白名单；`activity_source`；`skipped_drc_rules`；`binary_hash`（变 → G1 基线陈旧）。
+summary 字段纪律：`unit`/`source` 必填；`budget` 仅 protocol 白名单；`activity_source`；`checked/skipped/unsupported`；`binary_sha256` 与 input/artifact hashes（任一变化 → G1 基线陈旧）。设计族和 PDK 派生实例数量分开汇总。
 
 ### 4.2 ★ 判定算法（FR-EV-02/03）
 

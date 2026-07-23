@@ -1,6 +1,6 @@
 {
   "name": "aes_nangate45_t",
-  "top": "aes",
+  "top": "aes_cipher_top",
   "scale": "M",
   "role": "timing",
   "description": "AES encryption core",
@@ -8,9 +8,9 @@
   "variant": "stdcell",
   "inputs": {
     "tech_lef": "$PDK/lef/NangateOpenCellLibrary.tech.lef",
-    "cells_lef": "$PDK/lef/NangateOpenCellLibrary.macro.mod.lef",
+    "cells_lef": "$PDK/lef/NangateOpenCellLibrary.macro.lef",
     "lib": "$PDK/lib/NangateOpenCellLibrary_typical.lib",
-    "netlist": "netlist/aes.v",
+    "netlist": "netlist/aes_cipher_top.v",
     "sdc": "sdc/aes.sdc"
   },
   "floorplan": {

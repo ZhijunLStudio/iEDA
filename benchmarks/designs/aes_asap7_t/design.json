@@ -7,9 +7,9 @@
   "pdk": "asap7",
   "variant": "RVT",
   "inputs": {
-    "tech_lef": "$PDK/lef/asap7_tech_RVT.lef",
-    "cells_lef": "$PDK/lef/asap7sc7p5t_RVT.lef",
-    "lib": "$PDK/lib/asap7sc7p5t_RVT_TT_nldm_201020.lib",
+    "tech_lef": "$PDK/lef/asap7_tech_1x_201209.lef",
+    "cells_lef": "$PDK/lef/asap7sc7p5t_27_R_1x_201211.lef",
+    "lib": "$PDK/lib/asap7sc7p5t_SIMPLE_RVT_TT_nldm_201020.lib",
     "netlist": "netlist/aes.v",
     "sdc": "sdc/aes.sdc"
   },

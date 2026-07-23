@@ -3,13 +3,14 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 25 · iTO 时序优化 · 商业对标方案 · rv2.0
+# 25 · iTO 时序优化 · 商业对标方案 · rv2.1
 
-> 文档号：25-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— ICC2/Innovus route_opt 收敛精度（G17：WNS δ≤5%）× in-design 调用效率（单步事务 + 快速增量）**
+> 文档号：25-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**双对标 —— ICC2/Innovus route_opt 收敛精度（setup/hold/DRV/合法性联合）× in-design 调用效率（冲突消解批处理 + 快速增量）**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`（双对标线 + 逐 kernel 走读 + 诚实归因 + 被否方案）
 > 商业金标：**ICC2 route_opt / Innovus postroute_opt（签核收敛准确性）**；**Innovus in-design opt（优化循环效率）**；门禁：**G6 / G16 / G17**（依赖 G7 背书）
 > 上游：`27-iSTA`、`28-iRCX`、`23-iCTS`　下游：`26-iRT`、`22-iPL`（`runIncrLG`）　评测：`12-evaluation`
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-TO-\*
+> 联合架构：`04-ppa-technical-review-and-optimization-rv1.md` 的 `DesignState + DirtySet + MoveTxn`；闭环工作台：`51-agent-native-eda-detailed-plan-v1.0.md`
 > 覆盖：`src/operation/iTO/`（fix_setup/ · fix_hold/ · fix_drv/ · timing_engine/ · module/placer/ · solver/buffer/vg/ · tcl_ito/，约 15k LOC）
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
 
@@ -23,6 +24,7 @@ iEDA is licensed under Mulan PSL v2.
 | v1.1–v1.2 | 2026-07-20 | 功能矩阵 + 简版 LLD；篇幅远薄于 24-iPL-3d，缺逐 kernel 走读 / IterParam / 状态机 / Exhibit |
 | rv1.0 / v2.0 | 2026-07-20 | 大改对齐体例：对 `SetupOptimizer_gate_sizing.cpp`、`SetupOptimizer_buffers.cpp`、`SetupOptimizer_process.cpp`、`HoldOptimizer*`、`ViolationOptimizer*`、`timing_engine_inst.cpp`、`module/placer/Placer.cpp`、`iTO.cpp`、`tcl_ito.cpp` 逐文件重判。核心修订三条：(1) sizing 仍是局部贪心阈值 `eq_cell_delay < 0.5*delay`（`gate_sizing.cpp:74`），无路径级 re-time 否决——v1.2 假说坐实；(2) buffer 真 apply（`createInstance`），但 setup 主循环硬编 `perform_buf=false`（`process.cpp:60`），VG 缓冲在 AutoRun 主路径上半死；(3) buffer/resize 后无 `iPL::runIncrLG`——仅 `ito::Placer::findNearestSpace` 行内就近占位（`timing_engine_inst.cpp:47`）。另纠正：`runTO` 序为 drv→hold→setup（`iTO.cpp:37-45`），不是商业惯例的 drv→setup→hold→复扫 |
 | **rv2.0** | **2026-07-21** | **大改（对照 27-iSTA-rv2.0.md 深度重写，显式拆成双对标线）**。核心修订五条：**(1)** rv1.0 三症结（T1/T2/T3）全保留，但把审计深度提升到**逐 kernel 算法 + 复杂度 + 边界**（§1.2 扩充 10→15 行，类比 27 号文档表格密度）；**(2)** 新增**商业工具核心算法对照**（§1.6）：ICC2/Innovus route_opt 的核心是「sensitivity-driven resize（灵敏度 > 阈值才 commit）+ buffering with path gain model + incremental PBA + coordinated DRV/setup/hold sequence」，iTO 缺**四项工业杠杆**：路径收益否决（re-time veto）、pass 末 incr legalize、DRV→setup→hold→setup 复扫固定序、VT-swap（廉价手柄）；**(3)** 全文按**双对标线**重组：route_opt 线 = 收敛精度栈（path veto + incr LG + 固定序 + VT → G17 WNS δ≤5%），in-design 线 = 调用效率栈（单步事务 + 快速增量 STA + 少调用次数 → 优化循环占比 ≤30%），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§4.12 模块状态一览（成熟度/复杂度/边界/复用姿势）、§5 双档配置表（effort 分级）、§8 调用方契约表、§10.3 对照实验扩充到 12 条（E-TO-01～E-TO-12）、§14 未验证/不要重走/兄弟仓库实测发现三分段；**(5)** **重新定位 iTO 的核心算法层缺口**：不是「没有 VG」（VG 真 apply 代码已在），而是「**VG/resize 的接受判据停在教科书贪心（局部延迟 < 阈值），缺商业工具的路径级增益模型（Δslack > ε 才 commit，否则 rollback）+ 固定优化序（现状 hold 在 setup 前会让 hold buffer 恶化 setup）+ 合法化闭环（现状 ito::Placer 只是行空隙搜索，不是真 LG）**」——这三项是 G17 的主杠杆。**缺省新特性关闭 → 零回归**的纪律不变。 |
+| **rv2.1** | **2026-07-23** | 实现评审：接受条件从 `ΔTNS/ΔWNS` 二元判断升级为连接/合法/DRV/setup/hold/route/power 分层门禁；候选用灵敏度排序并按冲突图批量验证；事务覆盖 iDB、放置、RC cache、STA version；补 periodic full oracle 与 VG 非支配 DP。并清理附录后重复的第 1～3 章。 |
 
 ---
 
@@ -144,6 +146,8 @@ init → readConfig → timingEngine(sta/rcx/idb) → Reporter
 | FR-TO-10 | SI-aware opt | ✗ | 依赖 27/28；后期 |
 | FR-TO-11 | ★ vs route_opt 苹果对苹果 | 无 harness | ★ G17（§10） |
 | FR-TO-12 | useful skew | ✗（正确：不在 iTO） | 接口消费 CTS 预算即可；**禁止** iTO 内平行 skew 引擎 |
+| FR-TO-13 | ★ 候选灵敏度排序 + 冲突图批处理 | 逐点贪心 | resize/VT/buffer/pin-swap 共用候选协议 |
+| FR-TO-14 | ★ periodic full RC/STA oracle | 无 | 校验增量漂移；超 guardband 回滚批次并重建缓存 |
 
 ### 2.2 NFR
 
@@ -156,6 +160,8 @@ init → readConfig → timingEngine(sta/rcx/idb) → Reporter
 | NFR-TO-05 | G17 | 双方 PT 读；WNS/TNS δ≤5% 或 ≤10 ps（取松）；hold/DRV 独立列 |
 | NFR-TO-06 | 墙钟 | opt 段进 G21 分项；否决开启后回滚率告警阈值可配（默认 50%） |
 | NFR-TO-07 | 零回归 | 新杠杆缺省 **关**；旧 `0.5` 可作可选预筛 hint |
+| NFR-TO-08 | 联合硬门 | connectivity/legal/local DRC 必过；DRV 不得产生更高优先级违例；setup/hold 均不得越过 guardband |
+| NFR-TO-09 | 增量一致性 | 每 N 批 full RC/STA；增量与全量 WNS/TNS/DRV 差在协议容差内，超差立即重建 |
 
 ### 2.3 约束（红线）
 
@@ -185,7 +191,8 @@ init → readConfig → timingEngine(sta/rcx/idb) → Reporter
         │  每 move:                                                     │
         │    MoveTxn.begin → apply(resize|buffer|vt)                    │
         │      → invalidNetRC(锥) → iSTA incrUpdateTiming               │
-        │      → ★ Veto(ΔWNS/ΔTNS/path) → commit | rollback             │
+        │      → ★ JointGate(legal/DRV/setup/hold/route/PPA)            │
+        │        → commit | rollback                                    │
         │  每 pass 末: ★ iPL.runIncrLG(changed) 失败则 rollbackPass     │
         │  Exhibit: ito_pass_report.json + CSV                          │
         └─────────────────────────────────────────────────────────────┘
@@ -234,7 +241,7 @@ benchmark/qor/ito/                     ← ★ parity harness
 
 ```cpp
 struct MoveRecord {
-  enum Kind { kResize, kBuffer, kVtSwap } kind;
+  enum Kind { kResize, kBuffer, kVtSwap, kPinSwap } kind;
   std::string inst_name;
   std::string old_cell_master;
   std::vector<std::string> created_insts;   // buffer
@@ -246,7 +253,7 @@ class MoveTxn {
   void begin();
   void record(const MoveRecord&);
   void commit();
-  void rollback();  // 恢复 iDB master/拓扑 + RC dirty
+  void rollback();  // 恢复 iDB/放置、RC cache、STA graph/version 与 DirtySet
 };
 
 struct VetoDecision {
@@ -259,17 +266,21 @@ VetoDecision evaluateAfterMove(/* 受影响锥 */);
 
 ```
 ALG-4.A-1  每次 resize/buffer [★]
-  1  txn.record(旧 cell / 拓扑快照)
-  2  [已有] apply: repowerInstance / createInstance+attach
-  3  invalidNetRC 扩到劈网两侧+扇出锥（加强现 :85 / :106-107）
-  4  Sta::incrUpdateTiming(dirty)   // 复用 27 增量契约
-  5  路径收益：优先 worst path through 移动点；备选 ΔWNS/ΔTNS
-  6  accept iff (ΔTNS > eps_tns) AND (ΔWNS >= -eps_wns_guard)
-  7  else txn.rollback()；rolled_back++
-  8  [可选预筛] eq_cell_delay < ratio_hint * delay  （默认 ratio_hint=0.5，可关）
+  1  基于局部延迟/负载/切换/关键度估计 sensitivity，生成 resize/VT/buffer/pin-swap 候选
+  2  按共享 net/row/timing cone 建冲突图；同色候选组成一个确定性 batch
+  3  txn.record(旧 cell/拓扑/坐标/RC cache key/STA version)，批量 apply
+  4  local legalize → local route/DRC feasibility；失败直接 rollback
+  5  DirtySet 覆盖劈网两侧、受影响 RC arcs、setup+hold cones；依次 dirty RC → incr STA
+  6  字典序硬门：connectivity/legal/DRC → DRV → setup+hold guardband → route capacity
+  7  硬门全过后才比较 TNS/WNS、area、leakage/dynamic power、congestion 的 Pareto 改善
+  8  reject 则完整 rollback；accept 则原子递增 DesignState/RC/STA versions
+  9  每 N 批或 dirty_ratio/误差超阈值跑 full RC+STA oracle；漂移超限回滚该批并重建缓存
+  10 [可选预筛] eq_cell_delay < ratio_hint * delay（只作廉价筛选，不能替代门禁）
 ```
 
-复杂度：每 move O(增量锥 STA)；边界：锥空 → 拒收；STA 未 init → 响亮失败（G14）。复用：iSTA incr；**禁止**平行第二套时序引擎。
+复杂度：候选排序 O(C log C)，冲突图按倒排 net/row/cone 构建避免 O(C²)；每 batch O(局部 LG/RC/STA)。边界：锥空 → 拒收；STA/RC 未 init → 响亮失败（G14）。复用：iSTA/iRCX/iPL；**禁止**平行第二套时序或寄生引擎。
+
+VG buffering 使用 van Ginneken 风格 DP：沿候选 Steiner/tree points 合并状态 `(cap, required_time, slew, area, power)`，先过滤 cap/slew/DRV 硬违规，再做非支配剪枝；最终候选仍必须经过上述真实 apply + 联合门禁，不能用 DP 估计值直接 commit。
 
 ### 4.B 增量 legalize（FR-TO-04）· KH-TO-04 · G16
 
@@ -364,6 +375,9 @@ ALG-4.F-1  [★]
 | `setup/hold_target_slack` | 0.0 | 设计相关 | 已有 |
 | `drv_optimize_iter_number` | 1 | ≥2 可选 | 已有 |
 | `rollback_rate_warn` | 0.5 | 0.5 | 报告告警 |
+| `candidate_batch_size` | 1 | profile 决定 | >1 时只合并冲突图独立集 |
+| `full_oracle_interval` | 1 | 校准后放宽 | N 批一次 full RC/STA；1 为最保守 |
+| `setup_guardband` / `hold_guardband` | 协议给定 | 协议给定 | 两类时序独立硬门 |
 
 **多轮 effort（示意）**：
 
@@ -408,7 +422,7 @@ init(config) → [optimize_drv] → [optimize_setup] → [optimize_hold] → [op
 | `run_to_buffering` | 单网 VG 成功 | net 不存在 |
 | `run_to` / AutoRun | 全 pass 按序成功 | 任一 pass FAIL → 非零；**禁止**恒 `return 1` |
 
-脏状态：rollback 后 iDB 应与 move 前一致（T-A2）；失败 pass 须 `dirty=1` 进 JSON。
+脏状态：rollback 后 iDB、放置、RC cache、STA graph/version 均应与 move 前一致（T-A2）；失败 pass 须 `dirty=1` 进 JSON。仅拓扑 hash 相同不足以证明回滚正确。
 
 ---
 
@@ -606,177 +620,3 @@ init(config) → [optimize_drv] → [optimize_setup] → [optimize_hold] → [op
 - [ ] TCL 失败非零 rc
 - [ ] L0/L1 相关单测绿；E-TO-02 构造用例在
 - [ ] 未声称 G17 除非协议文件 + PT 数字齐全
-### 1.3 边界 / 回退——有「变差停」，无「单步回滚」
-
-- **setup 迭代守卫有**：`checkSlackDecrease`（`SetupOptimizer_process.cpp:97-118`）在 slack 变差超 2% 或连续变差超 `_number_iter_allowed_decreasing_slack`（默认 50，`ToConfig.h:163`）时跳出；WNS 达 target 也停。这是**整 endpoint 循环级**止损，**不是**单次 resize/buffer 的事务回滚。
-- **hold**：插 0 buffer 则 break（`HoldOptimizer_process.cpp:131-133`）；面积/数量 cap（`:119-120`）。无 rollback。
-- **DRV**：按 `drv_optimize_iter_number`（`ToConfig.h:155`，默认 1）可多轮；无单步回滚。
-- **VG 边界**：时钟网跳过（`SetupOptimizer_buffers.cpp:28`）；深度超 `_max_buffer_depth`（默认 20，`ToConfig.h:173`）裁剪。
-- **TCL 假成功风险**：`CmdTOAutoRun::exec` 调 `autoRunTO` 后**无论成败 `return 1`**（`tcl_ito.cpp:46-50`）；打印 "successfully" 仅看 bool，但失败路径仍可能返回成功码——需对照 `tool_manager` 实测（标「未验证」细节，形态上违反 KH-X-04）。
-- **结构化报告弱**：`Reporter` 文本 WNS/TNS + buffer/resize 计数（`Reporter.cpp:52-168`）；**无** `ito_pass_report.json`、无回滚率、无 per-move 轨迹（§11 补）。
-- **空网/空引脚守卫**：`checkNet` 空 driver/load → skip（多处）；但无 **全局**网表拓扑合法性前置检查。
-
-### 1.4 跨工具协调——STA 通，LG/CTS skew 断
-
-| 方向 | 现状 | 判定 | 缺口 |
-|---|---|---|---|
-| iSTA → iTO | `timing_engine` 包 `TimingEngine`；`incrUpdateTiming`（`process.cpp:94`） | **通**：引擎=iSTA；增量 API 存在 | 27-iSTA §1.4 的 10:1 全量调用问题在 iTO 侧体现为「每次优化后全量」 |
-| iTO → iDB | `TimingIDBAdapter::createInstance/repower/place`（`timing_engine_inst.cpp`） | **通**：真 apply | — |
-| iTO → iPL incr LG | **零调用**；自建 `ito::Placer` | **断**：G16 | **应 `PLAPI::runIncrLG`**（T3） |
-| iCTS → iTO | 时钟网 DRV 跳过（`ViolationOptimizer.cpp:97`）；无 useful skew 预算接口 | **扁平**：skew 优化不在 iTO | **正确**：useful skew 应属 CTS（§2.3 红线） |
-| iTO → iRT | 改网表后期望 re-route / ECO | 无显式 ECO 契约 | Phase C / 32-iECO |
-| iRCX → iTO | `EstimateParasitics` dirty net → `rcx_run.updateRCTimingIncrementally` | 通 | 若缺寄生（SPEF 空），归因 G6「缺寄生」 |
-| iTO → eval | 无机读报告 | **弱** | G15：`ito_pass_report.json` |
-
-### 1.5 ★调用效率审计——iTO 内部单步效率 vs 调用频率（Innovus in-design 对标核心）
-
-类比 27-iSTA §1.4 的「10:1 全量 vs 增量」审计，iTO 的 in-design 性能来自两个维度：
-
-| 维度 | 现状 | 判定 | 对 Innovus 差距 |
-|---|---|---|---|
-| **单步事务成本**（每次 resize/buffer 墙钟） | apply → invalidNetRC → **全量** `updateTiming()` | 每步调 iSTA 全图传播 | Innovus = 锥增量 STA（27 §4.4）；iTO 应驱动 27 增量契约 |
-| **单 pass 调用次数** | setup：while slack < target 循环（可数百次）；每次一个 endpoint | 多次全量累积 | 合理（endpoint 循环是必需语义）；**瓶颈在单步成本** |
-| **Pass 间协调** | drv → hold → setup（无复扫） | hold buffer 可能恶化 setup 且无修复 | Innovus = drv → setup → hold → setup 复扫（KH-TO-03） |
-| **合法化频率** | 每 buffer 本地 Placer（40 行扫描） | 弱 LG 累积误差 | Innovus = pass 末批量 incr LG（G16） |
-
-**量化估算（未实测，E-TO-03 验证）**：setup pass 100 个 endpoint 优化 × 每次全量 STA（假设 2s）= 200s STA 墙钟；若改锥增量（假设单步 0.2s）= 20s，**理论加速 10×**——前提是 27 增量契约落地（27 §4.4）。
-
-**假说 H3（可杀）**：iTO 优化循环墙钟大头是 STA 全量调用，而非 VG 求解或 Placer。
-**杀死实验 E-TO-03**：setup pass 打点记录 STA / VG / Placer / 其他墙钟占比；若 STA < 50% → 杀 H3，改查 VG 或拓扑修改路径。
-
-### 1.6 ★商业工具核心算法对照（route_opt / postroute_opt 对标线的算法层证据）
-
-ICC2 `route_opt` / Innovus `postroute_opt` 的核心能力（引自 KH-TO-\* 与业界实测，非 iEDA 代码）：
-
-| 商业能力 | 核心算法 | iTO 现状 | 差距归因 |
-|---|---|---|---|
-| Sensitivity-driven resize | 灵敏度分析（∂slack/∂size）+ 路径增益模型（apply → Δslack > ε 才 commit） | 局部阈值 `eq_cell_delay < 0.5*delay` 即 commit | **T1 · 无路径否决**；贪心非全局最优 |
-| Buffering with path gain | VG 生成候选树 + **路径级增益模型**（commit 前量 ΔWNS/ΔTNS） | VG 算法在；选解只比 required arrival；setup 主路径关 VG | **T2/T2b**；选解局部可行 ≠ 全局收益 |
-| Incremental PBA | 优化后局部 PBA 验证路径收益 | 无 PBA（依赖 27 §4.3） | 阻塞于 27-iSTA G7 |
-| Coordinated DRV/setup/hold | drv → setup → hold → **setup 复扫**（hold 修完重检 setup） | drv → **hold → setup**（颠倒）+ 无复扫 | **KH-TO-03**；序错 + 无闭环 |
-| Incremental legalization | Pass 末批量 `runIncrLG`（Abacus/类似） | 每 buffer 行空隙搜索（`ito::Placer`，最多 40 行） | **T3 / G16**；弱 LG 累积误差 |
-| VT-swap | 多 VT 库（LVT/HVT/SVT）按关键度分配 | 无 VT 分组逻辑 | **KH-TO-02**；廉价手柄缺失 |
-| SI-aware opt | 耦合 Δdelay 进 slack 计算 → opt 目标 | 无 | 27/28 SI live 前置 |
-| Useful skew integration | 消费 CTS skew budget 搬 setup/hold 裕量 | 无接口 | **正确不做**：skew 属 CTS（23 §X） |
-
-**§1.6 结论**：iTO 的算法层缺口是**结构性的三层**——(a) 判据层：贪心阈值 vs 路径增益模型（T1/T2）；(b) 编排层：错位序 + 无复扫 + 无 incr LG（AutoRun 序 + T3）；(c) 手段层：VT 缺失（KH-TO-02）。rv1.0 只覆盖了 (a)(b) 的一部分，(c) 是 rv2.0 新增战线。
-
-### 1.7 症结优先级表（§1 结论摘要）
-
-| ID | 症结 | 证据 | 对标线 | P |
-|---|---|---|---|---|
-| **T1** | **Resize 贪心阈值、无路径 re-time 否决** | `gate_sizing.cpp:74`（`eq_cell_delay < 0.5 * delay`）→ `:81` 直接 apply | route_opt | P0 |
-| **T2** | **Buffer 真 apply 但无路径否决** | `buffers.cpp:61-68` 只比 required arrival；commit 后无 Δslack 验证 | route_opt | P0 |
-| **T2b** | **VG 主路径关闭** | `process.cpp:60` `perform_buf=false` | route_opt | P0 |
-| **T3** | **Buffer/resize 后无 incr LG** | `timing_engine_inst.cpp:47` `toPlacer->findNearestSpace`；`iTO/` 无 `runIncrLG` | Innovus / G16 | P0 |
-| **T4** | **AutoRun 序错位（hold→setup 颠倒）+ 无复扫** | `iTO.cpp:45,59` drv→hold→setup；hold 后无 `optimize_setup` 二次调用 | route_opt / KH-TO-03 | P0 |
-| T5 | 单步事务调 STA 全量（非锥增量） | `process.cpp:94` `incrUpdateTiming`；但 27 §1.4 实际是全量 | Innovus in-design | P1（依赖 27 §4.4） |
-| T6 | TCL 假成功（恒 return 1） | `tcl_ito.cpp:46-50` | KH-X-04 | P1 |
-| T7 | VT-swap 缺失 | 全树无 VT 分组 | route_opt / KH-TO-02 | P1 |
-| T8 | 无机读报告 | 无 `ito_pass_report.json` | G15 | P1 |
-| T9 | SI-aware 缺失 | 无耦合进目标 | route_opt | P2（依赖 27/28） |
-
-**§1 最关键 5 条**：T1、T2/T2b、T3、T4（route_opt 线）+ T5（Innovus in-design 线，但阻塞于 27）。
-
----
-
-## 2. 需求 FR / NFR / 约束
-
-### 2.1 FR（★ = 相对现状新增）
-
-| ID | 功能 | 现状 | rv2.0 |
-|---|---|---|---|
-| FR-TO-01 | Gate sizing 真 apply | ✓ `repowerInstance` | 保留；校准可归因 |
-| FR-TO-02 | ★ **路径级 re-time 否决环**（resize/buffer） | ✗ 局部 0.5 | ★核心（§4.A）；apply → Δslack → 判据 → commit/rollback |
-| FR-TO-03 | VG / split buffering 真 apply | ✓ 代码在；主路径关 VG | ★ 主路径可配打开（`enable_vg_in_setup`）+ 挂否决 |
-| FR-TO-04 | ★ **Pass 末 `iPL::runIncrLG`** | ✗ 本地 Placer | ★（§4.B / G16） |
-| FR-TO-05 | Hold fix | ✓ | ★ 纳入固定序（setup 后） |
-| FR-TO-06 | DRV fix | ✓ | ★ 固定序最前 |
-| FR-TO-07 | ★ **AutoRun 固定序**：drv→setup→hold→setup 复扫 | ✗ 现 drv→hold→setup | ★（KH-TO-03 / §4.C） |
-| FR-TO-08 | ★ VT-swap（多 VT 库） | ✗ | P2；走同一否决环 |
-| FR-TO-09 | ★ **`ito_pass_report.json`** | ✗ 文本 | ★ G15 / §11 |
-| FR-TO-10 | SI-aware opt | ✗ | 依赖 27/28；后期 |
-| FR-TO-11 | ★ **vs route_opt harness（苹果对苹果）** | 无 harness | ★ G17（§10） |
-| FR-TO-12 | useful skew | ✗（正确：不在 iTO） | 接口消费 CTS 预算即可；**禁止** iTO 内平行 skew 引擎 |
-| FR-TO-13 | ★ **单步事务驱动 27 增量契约** | 全量 `updateTiming` | ★（§4.A-3 / 依赖 27 §4.4） |
-
-### 2.2 NFR（可测数字）
-
-| ID | 项 | 指标 | 对标线 |
-|---|---|---|---|
-| NFR-TO-01 | 否决环单步 | apply→incr STA→判据→rollback 路径可测；构造「局部优全局劣」必 rollback | route_opt |
-| NFR-TO-02 | 回归 | 开否决后：同设计 TNS 不恶化、hold 违例不增（相对关否决基线） | 零回归 |
-| NFR-TO-03 | legality | buffer 批后 `runIncrLG` 成功；重叠=0 | **G16** |
-| NFR-TO-04 | G6 | post-route WNS ≥ −50 ps **或** 成因定位报告（主纲原文） | **G6** |
-| NFR-TO-05 | G17 | 双方 PT 读；WNS/TNS δ≤5% 或 ≤10 ps（取松）；hold/DRV 独立列 | **G17** |
-| NFR-TO-06 | 墙钟 | opt 段进 G21 分项；否决开启后回滚率告警阈值可配（默认 50%） | G21 |
-| NFR-TO-07 | 零回归 | 新杠杆缺省 **关**；旧 `0.5` 可作可选预筛 hint | 零回归 |
-| **NFR-TO-08** | ★ **单 pass STA 占比** | setup/hold pass 墙钟中 STA 占比 ≤ 30%（开 27 增量后；现状未测，先量后定） | Innovus in-design |
-| **NFR-TO-09** | ★ **终局一致性** | 开否决环 + 固定序后：终局 WNS/TNS vs 现状（全关）Δ ≤ 1 ps（验证无劣化） | 零回归 |
-
-### 2.3 红线约束
-
-- **金标 = ICC2/Innovus route_opt（精度）/ Innovus in-design（效率）**；G17 时序行最终以双方 DEF 经 PT 读数为准——iTO G6 绿 ≠ 自动 G17 绿。
-- **无 G7 背书，不准关闭 G17 时序打平**（依赖 27-iSTA §1.5 精度栈）。
-- **无否决不加新手段**（VT / SI / 更激进 buffer）——先止损再抬 QoR。
-- **incr LG Composition 复用 iPL**，禁止第三套 legalizer（`ito::Placer` 应降级 fallback）。
-- **useful skew 归属 CTS**（KH-CTS-02 / 23 §X）；iTO 只消费 budget，不重写时钟树。
-- 魔法字面量 `0.5`：**删除为硬门槛**；可降为 `local_delay_ratio_hint` 预筛，预筛通过仍必须路径否决。
-- **缺省新特性关闭 → 零回归**（否决 / VG / 固定序 / incr LG 均显式开关）。
-
----
-
-## 3. HLD
-
-### 3.1 数据流——单引擎双档（route_opt 收敛精度档 × in-design 快速迭代档）
-
-```text
-                    iSTA (slack/path/incr)     iRCX/SPEF (寄生)
-                         │                          │
-Verilog/iDB ──► iTO ─────┴──────────────────────────┴──► DRV/setup/hold 优化
-                 │                                            │
-             ToConfig ──► effort 分级                         │
-                          ├ 收敛档（route_opt 对标）            │
-                          │  enable_path_veto=true            │
-                          │  enable_vg_in_setup=true          │
-                          │  enable_incr_lg=true              │
-                          │  autorun_order=kh（固定序）        │
-                          │                                  │
-                          └ 快速档（in-design）                │
-                             enable_path_veto=false           │
-                             local_delay_ratio_hint=0.5      │
-                             驱动 27 增量契约（待 27 §4.4）     │
-                                                             │
-         ┌───────────────────────────────────────────────────┤
-         │ 每 move:                                          │
-         │   MoveTxn.begin → apply(resize|buffer)            │
-         │     → invalidNetRC(锥) → iSTA incr/全量            │
-         │     → ★ Veto(ΔWNS/ΔTNS) → commit | rollback       │
-         │ 每 pass 末: ★ iPL.runIncrLG(changed) → legality   │
-         └───────────────────────────────────────────────────┤
-                                                             ▼
-                         iRT / iECO（脏网 ECO）              Exhibit
-                                                        ito_pass_report.json
-                                                             │
-                                                             ▼
-                                                   G17 看板（§10.1）
-                                             in-design 看板（§10.2）
-```
-
-**核心架构判断**：route_opt 线与 in-design 线**共用同一套 iTO 代码、同一个 iSTA 引擎**——差别只在「否决开关（收敛精度 vs 快速迭代）」和「STA 调用粒度（全量 vs 锥增量，后者依赖 27 §4.4）」。这与 27-iSTA 双对标线完全同构；也直接否定「为快而再写一套轻量 opt」的路线（已有 `ito::Placer` 教训）。
-
-### 3.2 关键设计决策（含被否）
-
-| ID | 决策 | 被否方案 | 理由 |
-|---|---|---|---|
-| D1 | **先 harness 再大改算法** | 先重写 VG/resize | 无 vs route_opt 数据则无法归因（杀 H1 需基线） |
-| D2 | **否决环先于 VT/SI** | 无否决先堆 VT-swap | 放大有害 commit；先止损（T1/T2） |
-| D3 | **incr LG 复用 `PLAPI::runIncrLG`** | 继续加强 `ito::Placer` 成第二套 LG | `ito::Placer` 40 行扫描 ≪ Abacus（G16） |
-| D4 | **AutoRun 内建 drv→setup→hold→复扫** | 继续靠用户脚本拼序 | 现 hold 在 setup 前（T4）；固定序是 route_opt 标配（KH-TO-03） |
-| D5 | **`0.5` 降级为可选预筛** | 保留为唯一 accept 条件 | 预筛通过仍必须路径否决（§4.A） |
-| D6 | **useful skew 不进 iTO 内核** | 在 iTO 内做 clock retime | 与 CTS 打架（§2.3 红线）；skew 属 23 |
-| D7 | **新杠杆缺省关 → 零回归** | 默认全开赌 QoR | NFR-TO-07 / 与 27-iSTA D6 一致 |
-| **D8** | **单步事务先建框架，STA 增量依赖 27** | 等 27 增量完成再做否决 | 否决环是 route_opt 精度主杠杆（T1/T2 P0）；STA 增量是加速项（T5 P1，可后置） |
-| **D9** | **VT-swap 排 P2，不挡 G17 主线** | 先 VT 再否决 | nangate45 单 VT；否决 + 固定序 + incr LG 已是三大主杠杆 |
-
----

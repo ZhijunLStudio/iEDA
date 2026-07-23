@@ -3,13 +3,14 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 26 · iRT 布线 · 商业对标优化方案 · rv2.0
+# 26 · iRT 布线 · 商业对标优化方案 · rv2.1
 
-> 文档号：26-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— NanoRoute 精度（G5: DRC=0）× Innovus 性能/调用（plateau 反馈 + 时序驱动 + ECO）**
+> 文档号：26-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**双对标 —— NanoRoute 精度（G5: DRC=0）× Innovus 性能/调用（冲突分量反馈 + 时序预算 + ECO）**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`（逐 kernel 走读 + 双对标线 + 模块状态一览 + 双看板）
 > 商业金标：**Innovus NanoRoute / ICC2 route**（精度：DRC=0 收敛性；性能：反馈控制 + 墙钟）；门禁：**G5 / G17 / G21**（辅 G14）
 > 上游：`22-iPL`、`23-iCTS`、`25-iTO`、`24-iPDN`　下游：`28-iRCX`、`27-iSTA`、`30-iDRC`
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-RT-\*
+> 联合架构：`04-ppa-technical-review-and-optimization-rv1.md` 的 `DesignState + DirtySet + MoveTxn`；闭环工作台：`51-agent-native-eda-detailed-plan-v1.0.md`
 > 覆盖：`src/operation/iRT/`（interface/ 1800 LOC、early_router/ 3651、pin_accessor/ 5521、detailed_router/ 4331、其余八模块 ~16k，全树 ~38k LOC）
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
 
@@ -22,6 +23,7 @@ iEDA is licensed under Mulan PSL v2.
 | v1.0–v1.2 | 2026-07-20 | 功能矩阵 + 简版 LLD；篇幅薄于 24 号深度 |
 | rv1.0 / v2.0 | 2026-07-20 | 体例对齐 24-iPL-3d：坐实管线漏 TG/SR、DR 调度硬编码九组、timing 死实现、无 ECO；纠偏管线真相（ER 在 runERT） |
 | **rv2.0** | **2026-07-21** | **大改（对照 27-iSTA-rv2.0.md 深度重写，并把目标显式拆成双对标线）**。核心修订五条：**(1)** rv1.0 把 iRT 当「一个管线缺几个控制」审——**代码级核实后发现头号算法症结是内核成熟、外环原始**：DR 内核是 **PathFinder-like 历史代价传播**（`routeDRBoxMap` 网络依赖 `routed_rect` 与 `violation` 加权，`DetailedRouter.cpp:1425-1574`）+ A* 类详布（`routeDRBox` 弧展开+优先队列，`:2659-2780`），**工业级内核**；但外环是**固定九幕剧本**（字面量调度表，`:126-134`），无 plateau 检测（`stopIteration` 仅 clean 早停，`:2426-2432`），无策略升级机制——对标 NanoRoute「plateau→换 box/代价/撕布」的反馈控制，**外环收敛控制是核心差距**（§1.2，类比 27 号 §1.4「in-design 调用 10:1」的结构症结）；**(2)** 新增 **逐 kernel 走读**（§1.2 表：ER/PA/SA/TG/LA/SR/TA/DR/VR/DE 十模块的现状算法 / 判定 / 缺口三列）：PA 5521 LOC 重型成熟、TG 依赖 Flute、DR 内核 4331 LOC 含 A*/patch/min-area、VR 有层×类型汇总——**架构不弱，缺口在控制器与时序接线**；**(3)** 全文按**双对标线**重组：NanoRoute 线 = 精度栈（DRC=0 收敛性 + 可诊断违例归因 → G5），Innovus 线 = 性能/调用栈（plateau 反馈 + 时序驱动排序/代价 + 墙钟 → G17/G21），§10 拆成两块看板；**(4)** 补齐 27 号体例要素：§4.12 模块状态一览（十模块成熟度/复杂度/边界/复用姿势）、§5 双档配置表（effort 包 low/medium/high + plateau 关）、§8 跨工具契约表（iRT→iDRC 接通 vs iRT→iSTA 死）、§10.3 对照实验（E-RT-01~08，每个假说附能杀死它的实验）、§14 未验证/负面结论明确区分；**(5)** 新增 **算法复杂度与边界分析**（§4.A-G 各模块算法伪代码、O() 标注、edge case 边界、复用姿势禁止平行重写）。**缺省新杠杆关闭 → 零回归**纪律不变。 |
+| **rv2.1** | **2026-07-23** | 实现评审：plateau 从“违例数相等”升级为完备率/加权严重度/热点集合/线长 via 状态向量；只升级连通冲突分量；修复时序 criticality 归一化和验收；补 box 冲突图并行提交、ECO 冻结哈希与数据布局/分配剖面。 |
 
 ---
 
@@ -71,7 +73,7 @@ initRT → [runERT: ER独立] → runRT: PA → SA → TG → LA → SR → TA �
 
 | # | 杠杆 | 代码事实 | 落点 |
 |---|---|---|---|
-| ① | **plateau→换策略**（box×2 / 代价重加权 / 热点撕布） | `stopIteration` 仅 clean 早停；无 plateau API | §4.A |
+| ① | **stagnation→局部换策略**（冲突分量扩 halo / 历史代价 / 选择性撕布） | `stopIteration` 仅 clean 早停；无反馈 API | §4.A |
 | ② | **自适应 / 可配 box** | `size=12` 九组字面量 | §4.A / §5 |
 | ③ | **时序驱动排序或代价** | `enable_timing` 不进 wire/via/violation cost；`updateTiming` 空 | §4.B |
 | ④ | **ECO 局部拆线重布** | `ecos` = notification only | §4.D |
@@ -109,7 +111,7 @@ rv1.0 的隐含前提是「DR 整体能力弱」。**代码级核实：错。内
 | NanoRoute/ICC2 行为 | iRT 现状 | 缺口落点 |
 |---|---|---|
 | plateau 检测（违例连平窗口） | 无检测 API | §4.A plateau 算法 |
-| 策略升级（box×2、代价重加权、热点撕布） | 固定九幕，无分支 | §4.A 策略表 |
+| 策略升级（稳定热点冲突分量扩 halo、历史代价、选择性撕布） | 固定九幕，无分支 | §4.A 策略表 |
 | 可配调度表（box/offset/cost/effort） | 字面量嵌死 `.cpp` | §5.1 配置外置 |
 | 违例残留诚实拒绝 | 可能静默完成+残留 DRC | §4.A.2 fail_on_residual |
 | 时序驱动（关键网排序/slack 代价） | `updateTiming` 空+不进代价 | §4.B |
@@ -203,8 +205,8 @@ NanoRoute signoff 级布线的 DRC=0 收敛性来自一整套互相咬合的机�
 | ID | 功能 | 现状 | rv2.0 |
 |---|---|---|---|
 | FR-RT-01 | GR/TA/DR 八段管线（PA→SA→TG→LA→SR→TA→DR→VR） | ✓ | 保留；文档纠偏 TG/SR |
-| FR-RT-02 | ★ **plateau 检测**（违例序列窗口连平且 >0） | 无；仅 clean 早停 | ★ 缺省关；`enable_plateau=0` 零回归 |
-| FR-RT-03 | ★ **策略升级**（box×2 / 代价重加权 / 热点撕布） | 固定九幕 | ★ 缺省关；plateau 触发后升级 |
+| FR-RT-02 | ★ **stagnation 检测**（完备率/加权严重度/热点集合/WL-via 状态向量） | 无；仅 clean 早停 | ★ 缺省关；`enable_plateau=0` 零回归 |
+| FR-RT-03 | ★ **冲突分量策略升级**（局部窗口/历史代价/选择性撕布） | 固定九幕 | ★ 只处理稳定热点的连通分量，禁止全局盲目 box×2 |
 | FR-RT-04 | ★ **可配 DR 调度表**（box/offset/代价倍率/effort） | 字面量 size=12 | ★ 外置 JSON/内嵌表；默认表≡今日九组 |
 | FR-RT-05 | ★ **DRC 残留诚实拒绝**（`route_incomplete` + 非假 clean） | 静默跑完 | ★ G5；`fail_on_residual_drc` 建议默认 true |
 | FR-RT-06 | ★ **时序驱动 Phase1**（关键网排序） | 死 `updateTiming` + 无 slack 读取 | ★ 缺省关；依赖 G7（iSTA 可信） |
@@ -336,8 +338,10 @@ struct DRIterParamRow {  // 与现 DRIterParam 字段对齐
 struct DRScheduleConfig {
   std::vector<DRIterParamRow> iters;  // 默认 = DetailedRouter.cpp:126-134
   bool enable_plateau = false;        // ★缺省关
-  int plateau_window = 2;
-  std::vector<int> box_escalate = {12, 24, 48};
+  int plateau_window = 3;
+  double min_relative_improvement = 0.02;
+  double hotspot_jaccard_threshold = 0.85;
+  std::vector<int> local_halo_escalate = {1, 2, 4};
   bool enable_ripup_hotspot = false;  // ★缺省关
   bool fail_on_residual_drc = false;  // G14/G5；建议生产默认 true（正确性）
 };
@@ -364,15 +368,20 @@ ALG-4.A-1  routeDRModel（标注新增部分）
     updateBestResult(vio_score);     // [已有] keep-best (:2388-2424)
     updateSummary();                 // [已有] 日志/CSV
     
-    vio_series.push(getRouteViolationNum)
+    state = {route_completeness,
+             weighted_vio_severity(type,layer),
+             hotspot_component_set,
+             wirelength, via_count}
+    state_series.push(state)
     
     if stopIteration_clean: break    // [已有] :2426 vio==0 早停
     
-    ★ if cfg.enable_plateau and detectPlateau(vio_series, window):  // ★新增
+    ★ if cfg.enable_plateau and detectStagnation(state_series, window):
       level++
-      act ← nextAction(level)   // kBoxX2 | kReweightCost | kRipupHotspot | kGiveUp
+      component ← highest_severity_stable_hotspot()
+      act ← nextAction(component, level)  // kExpandLocalHalo | kReweightHistory | kRipupComponent | kGiveUp
       RTLOG.info("plateau detected", iter, vio, act)
-      apply(act)  // 改后续 list[i].size 或代价倍率或标记撕布 GCell
+      applyOnly(component, act)  // 不扩大无关区域，不饿死普通网
       if act==kGiveUp: break
       
   selectBestResult()                 // [已有] 回灌历史最好
@@ -388,7 +397,7 @@ ALG-4.A-1  routeDRModel（标注新增部分）
 
 边界：
   - window=0 或 enable_plateau=false → 行为≡现状九幕
-  - box_escalate 空 → 无 box 升级，仅代价/撕布
+  - 无稳定热点分量 → 继续原调度，不做全局升级
   - 所有策略耗尽 + 仍有违例 → give_up 或 fail_on_residual
   - list 为空 → LOG_ERROR，返回失败
 
@@ -398,18 +407,22 @@ ALG-4.A-1  routeDRModel（标注新增部分）
 ```
 
 ```text
-ALG-4.A-2  detectPlateau（★新增）
-输入：vio_series[], window
-输出：bool (是否 plateau)
+ALG-4.A-2  detectStagnation（★新增）
+输入：state_series[], window
+输出：bool + stable_hotspot_components
 
-  if vio_series.size < window+1: return false
-  recent ← vio_series[−window:]
-  if all_equal(recent) and recent[0] > 0: return true
-  return false
+  if state_series.size < window+1: return false
+  improvement = (severity_old-severity_new)/max(severity_old, eps)
+  stable = Jaccard(hotspots_old, hotspots_new) ≥ hotspot_jaccard_threshold
+  complete_not_better = route_completeness_new ≤ route_completeness_old + eps
+  cost_not_better = normalized(WL,via)_new ≥ normalized(WL,via)_old - eps
+  return improvement < min_relative_improvement && stable && complete_not_better && cost_not_better
 
-复杂度：O(window)，典型 window=2，可忽略
-边界：window=0 → 永远 false（禁用 plateau）
+违例按 rule severity、层和影响长度加权；单纯“总数相等”不能区分一个 short 与多个轻微 spacing。
+复杂度：热点集合已排序时 O(window·V)；window=0 → 禁用。
 ```
+
+并行提交：为 DR boxes 建共享边界/网/违例分量冲突图，图着色后每色并行计算 thread-local route delta；barrier 处按 `(color, box_id, net_id)` 确定性提交并统一更新 history cost。禁止多个线程直接竞争写全局 occupancy/violation 容器。
 
 | 步 | 动作 | 钩子位置 | 复杂度影响 |
 |---|---|---|---|
@@ -459,14 +472,22 @@ ALG-4.B-3  Phase2 slack-aware 代价（★单独 PR，缺省 weight=0）
 
   if slack_cost_weight == 0: return base_cost  // 缺省关
   
-  crit ← max(0, (slack_threshold − slack) / slack_threshold)  // [0,1]
-  adjusted ← base_cost · (1 + slack_cost_weight · crit)
-  return adjusted
+  setup_crit = clamp((-setup_slack + setup_guardband) / max(clock_period, eps), 0, 1)
+  hold_crit  = clamp((-hold_slack  + hold_guardband)  / max(hold_norm, eps), 0, 1)
+  crit = max(setup_crit, clamp(hold_weight * hold_crit, 0, 1))
+  base_cost = history_congestion + preferred_wire + nonpreferred_wire + via + bend
+  adjusted = history_congestion
+           + preferred_wire
+           + (1 + w_np·crit)·nonpreferred_wire
+           + (1 + w_via·crit)·via
+           + (1 + w_bend·crit)·bend
+  同时给 net 设置 delay budget/层偏好；history_congestion 保持正、有界且不被 criticality 抵消
+  return adjusted  # 加大绕行/via/非优选层相对代价，推动关键网选择低延迟路径
 
 复杂度：O(1) per arc；总增量 O(E·crit_net_ratio)
 边界：
   - weight=0 → 现状代价
-  - slack 为正（非关键）→ crit=0 → 不加权
+  - clock_period/hold_norm≤0 → 配置错误，响亮失败；crit 始终截断到 [0,1]
   - 依赖 G7（iSTA slack 可信）
 ```
 
@@ -474,8 +495,8 @@ ALG-4.B-3  Phase2 slack-aware 代价（★单独 PR，缺省 weight=0）
 |---|---|---|
 | `enable_timing=0` | 现状；文档禁止称 timing-driven | — |
 | `enable_timing=1` 且实现仍空 | **G14 响亮失败**（禁止假报告） | T-B0 |
-| T-B1 | sort 开后 DEF 必异（真化验收） | diff 对比 |
-| T-B2 | Phase2 开后 crit_net WL 应 ≤ base（单调） | 统计验证 |
+| T-B1 | sort 开后 critical nets 的 route order 可观测；DEF 是否变化不是 QoR 门禁 | critical order trace + WNS/TNS/DRV/DRC |
+| T-B2 | Phase2 开后关键路径 delay/WNS 改善且 DRC、非关键网完成率不退化 | 双方 PT + 分桶 route 指标 |
 
 Know-how：KH-RT-04（关键网优先）。依赖：`27-iSTA` G7 可信 slack。
 
@@ -517,10 +538,10 @@ Know-how：KH-X-04（响亮失败 + 结构化产物）、G5（DRC=0 或诚实拒
 // RTInterface.hpp ★
 struct EcoRouteResult { bool ok; int touched_nets; int residual_drc; };
 EcoRouteResult routeECO(const std::vector<std::string>& net_names);
-// 拆局部 → 受限窗口 TA/DR → 其余网坐标逐位不变（契约测试 E-RT-06）
+// 拆局部 → 受限冲突分量 TA/DR → 其余网 canonical geometry hash 不变（E-RT-06）
 ```
 
-**真实现状**：仅 `sendNotification`。复用：调用现有 box DR，禁平行 ECO 引擎。Know-how：KH-RT-07。
+**真实现状**：仅 `sendNotification`。目标实现先冻结 out-of-scope shapes、fixed PG/clock NDR 与不可修层，事务内只允许白名单 net/region 产生 typed delta；提交前对非白名单几何做排序归一后的 canonical hash 校验。失败恢复 route graph、occupancy、history cost、violation cache。复用：调用现有 box DR，禁平行 ECO 引擎。Know-how：KH-RT-07。
 
 ### 4.E 前置模块（ER/PA/SA/TG/LA/SR/TA）· 保持与边界
 
@@ -589,7 +610,9 @@ ALG-4.F-1  getConfigValue 关键
 | `-enable_notification` | 0 | 已有 |
 | `-output_inter_result` | 0 | 已有 |
 | ★ `-enable_plateau` | 0 | FR-RT-01 |
-| ★ `-plateau_window` | 2 | |
+| ★ `-plateau_window` | 3 | |
+| ★ `-plateau_min_relative_improvement` | 0.02 | 加权严重度最小改善 |
+| ★ `-hotspot_jaccard_threshold` | 0.85 | 稳定热点集合判据 |
 | ★ `-dr_schedule_path` | ""（内置九组） | FR-RT-02 |
 | ★ `-enable_timing_sort` | 0 | FR-RT-04 |
 | ★ `-slack_cost_weight` | 0 | Phase2 |
@@ -624,6 +647,8 @@ effort 包（★）：`low`=前 3；`medium`=9（现状）；`high`=9+plateau es
 | Wall time | t | Monitor per stage | **G21** |
 
 **禁止**单一「route score」掩盖 DRC>0。
+
+性能优化顺序固定为：先用 per-stage/per-box profile 确认 priority queue、邻接访问、DRC 查询与内存分配占比；再做连续 id/SoA 热数组、arena/pool 复用、减少重复 R-tree 查询，最后才增加线程。每项必须报告 CPU time、cache miss（可用时）、分配次数、峰值内存和 QoR hash，避免线程数上升但 barrier/allocator 争用更重。
 
 ---
 
@@ -701,8 +726,8 @@ initRT → [runERT] → runRT → [routeECO] → destroyRT
 | ID | 假说 | 方法 | 杀死条件 |
 |---|---|---|---|
 | E-RT-01 | 「存在隐式 plateau」 | 读 iter 违例序列 | 连平可检出且代码无分支→假说死；有分支则更新文档 |
-| E-RT-02 | box 不敏感 | 12/24/48 A/B | 违例与耗时无响应→自适应价值存疑 |
-| E-RT-03 | enable_timing 改变布线 | 0/1 DEF diff | **现应相同**；sort 真化后应异 |
+| E-RT-02 | 局部冲突分量扩 halo 有效 | 1/2/4 halo A/B | 稳定热点严重度不降或无关区域扰动/墙钟显著增加→局部升级策略被杀 |
+| E-RT-03 | timing 杠杆改善终局 | 0/1 固定 seed，记录 order + 双方 PT | 仅 DEF 改变但 WNS/TNS 无改善，或 DRC/非关键网完成率退化→策略不晋级 |
 | E-RT-04 | VR 读的是最终态 | VR vs 末 DR summary | 不一致→纪律失败 |
 | E-RT-05 | QoR 已打平 | vs 商业同输入 | 任一指标超 δ→G17 未过 |
 | E-RT-06 | ECO 冻结他网 | 改 1 网 | 他网坐标变→契约死 |
@@ -742,7 +767,7 @@ P0 序列可见 → JSON 可诊断 → plateau 反馈（G5）→ 关键网排序
 | 级 | ID | 内容 | 门禁 |
 |---|---|---|---|
 | L0 | gtest schedule load | 默认表≡字面量九组 | 回归 |
-| L0 | detectPlateau | 连平/上升/清零用例 | FR-RT-01 |
+| L0 | detectStagnation | 严重度改善/热点迁移/稳定热点/清零用例 | FR-RT-01 |
 | L1 | 小设计 runRT | 管线跑通；VR 总数 | 冒烟 |
 | L1 | T-A1/A2 | plateau on/off；box 12/24/48 | G5 |
 | L1 | T-B1 | timing_sort 0/1 DEF | FR-RT-04 |

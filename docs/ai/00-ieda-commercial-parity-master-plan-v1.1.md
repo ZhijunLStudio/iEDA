@@ -3,13 +3,14 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 00 · iEDA 商业能力对标 · 优化主纲领 · v1.1
+# 00 · iEDA 商业能力对标 · 优化主纲领 · v1.6
 
-> 日期：2026-07-20（v1.0）/ 2026-07-20（v1.1 修订）
-> 目标：**给定相同 netlist（及同 PDK / 同约束包），iEDA 全流程与商业流程（Innovus 或 ICC2 + PrimeTime + Calibre）的 PPA 接近打平；端到端与关键步骤运行时间接近，力争更短。**
+> 日期：2026-07-20（v1.0）/ 2026-07-23（v1.6 技术评审修订）
+> 目标：**在冻结的首个产品切片内，给定相同 netlist（及同 PDK / 同约束包），iEDA 全流程与商业流程（Innovus 或 ICC2 + PrimeTime + Calibre）的 PPA 接近打平；端到端与关键步骤运行时间接近，力争更短。**
 > 能力定义 = **功能覆盖 + QoR 质量 + 规模/性能 + 可签核可信度** 四者齐备，缺一条都不算"达到"。
 > 体例：沿用 `HS-3D_Problem/thirdparty/iEDA-3D/docs/3d/design/`——**每条验收机器可判定；没有实测写"未验证"，不补白；文档是假说不是事实。**
 > 执行面：本纲领面向 **Claude / Cursor agent 分工具落地**——每个工作包必须可独立认领、有对照实验、有门禁绑定；禁止"先写一大坨再测"。
+> 技术细则：跨工具架构、联合门禁和底层算法顺序以 [`04-ppa-technical-review-and-optimization-rv1.md`](04-ppa-technical-review-and-optimization-rv1.md) 为准；本文保留目标、门禁编号和阶段治理。
 
 ### 修订记录
 
@@ -22,13 +23,14 @@ iEDA is licensed under Mulan PSL v2.
 | v1.3 | 2026-07-20 | 新增 `03-commercial-knowhow-catalog.md`；全工具方案补 Know-how 专节；补齐 11/12/31–33/40–42 |
 | v1.4 | 2026-07-20 | 全工具方案升 v1.1+：技术/算法/实现 LLD + 商业对照看板 + M0–M4 演进策略 |
 | **v1.5** | **2026-07-20** | **体例对齐 `24-iPL-3d-rv1.0`**：新增 `01-ai-doc-conventions-rv1.md`；主战场 22/23/25/26/27/28 升 **rv1.0**（逐 kernel 走读 + ALG + IterParam + Exhibit + L0–L5）；其余工具同骨架升 rv1.0（篇幅按 01 指引） |
+| **v1.6** | **2026-07-23** | 技术评审纠偏：冻结首个产品切片；G7/G8/G21 从单指标改为联合门禁；工具/输入/产物改用 SHA-256 manifest；新增 `04` 的 DesignState/DirtySet/MoveTxn 与算法路线。文件名暂保留 `v1.1` 以避免既有链接失效。 |
 
 ---
 
 ## 0. 一句话
 
 iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开事实），能跑通 netlist→GDS；
-**v1.1 = 同输入商业对标下，实现链 PPA 打平（或更优）+ 签核可信项全绿 + 运行时接近/更短 + 每设计可自动寻优。**
+**v1.6 = 冻结产品切片和同输入商业对标下，实现链 PPA 打平（或更优）+ 签核可信项全绿 + 运行时接近/更短 + 每设计可自动寻优。**
 
 四条主线（不可颠倒优先级）：
 
@@ -36,6 +38,12 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 2. **签核真值源**：iSTA/iRCX/iDRC/iPA 先可信，再谈下游优化。
 3. **实现链 QoR**：iFP→iPL→iCTS→iRT→iTO 逐工具打平。
 4. **性能/规模**：同质量下墙钟时间与内存接近商业；大设计不崩。
+
+### 0.1 首个产品切片（v1.6 冻结建议）
+
+首阶段只承诺：门级 Verilog + LEF/DEF + Liberty NLDM + SDC + 单/双角 SPEF；单电压域、标准单元为主、有限硬宏；floorplan/place/tree CTS/route/post-route timing opt；GBA+CPPR+top-N PBA、2.5D RC 与 in-design DRC 子集。完整 UPF、advanced-node 全规则、signoff SI/POCV/LVF、mesh CTS、动态 IR 和 full-chip LVS 在支持矩阵转绿前均为 `unsupported`，不得静默降级。
+
+能力成熟度使用 `04 §1.1` 的 D0–D4 证据等级；文档版本号、目录存在或伪代码不等于实现完成。
 
 ---
 
@@ -83,6 +91,7 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 | 电源意图 | 有 UPF 则双方都加载；无则双方都不加载 |
 | 设计边界 | 同一 die/core（或同一 util 目标由 iFP/商业 floorplan 各自产出后**记录面积差**，面积进 G17 独立指标） |
 | 随机性 | iEDA 固定 seed；商业侧关闭随机扰动或记录 seed；两次复跑 QoR 波动计入不确定度带 |
+| 身份/追溯 | 输入、二进制、构建参数和阶段产物记录 SHA-256；`git HEAD` 仅作辅助，dirty build 必须显式标记 |
 
 ### 流程等价（允许实现差异，不允许目标偷换）
 
@@ -112,10 +121,10 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 - `src/evaluation/` 已存在——PPA 闭环落点在。
 - 本仓已有三套流程痕迹（`ics55` / `sky130` / `nangate45`）——Phase 0 复用。
 - **子文档已实读审计并升版（功能/算法 + 分阶段交付）**：
-  - `22-iPL.md` **rv1.0**：逐 kernel 走读 + LLD/ALG（宏/QP/收敛/时序/拥塞）+ vs place_opt；体例对齐 24-iPL-3d。
-  - `27-iSTA.md` **v1.2**：LLD（PBA/harness/MCMM/增量）+ vs PT 评测路线（模板文档）。
-  - `26-iRT.md` **v1.2**：LLD（plateau/违例 JSON/时序排序）+ vs NanoRoute 评测路线。
-  - `25-iTO.md` **v1.2**：LLD（否决环/incr LG/报告）+ vs route_opt 评测路线。
+  - `22-iPL.md` **rv2.1**：宏硬约束编码、解析初值 A/B、IncrPlace、DP 晋级门禁 + vs place_opt。
+  - `27-iSTA.md` **rv2.1**：PBA/harness/MCMM/真实增量 + vs PT 评测路线。
+  - `26-iRT.md` **rv2.1**：冲突分量停滞反馈、终态违例 JSON、时序预算、ECO 冻结契约 + vs NanoRoute。
+  - `25-iTO.md` **rv2.1**：联合门禁事务、冲突图批处理、incr LG/RC/STA/full oracle + vs route_opt。
 
 ### 2.2 诚实的未决（除标注外均为"待 Phase 0 实测"）
 
@@ -138,7 +147,7 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 
 ## 3. v1.1 验收表（机器可判定门禁）
 
-**v1.1 完成 = 下表全绿。** 判据落到"脚本读产物、断言数字"，不许人工目测。
+**v1.6 完成 = 下表全绿。** 判据落到"脚本读产物、断言数字"，不许人工目测。
 
 ### 3.1 地基与可信度
 
@@ -168,8 +177,8 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 
 | # | 门禁 | 判据 | 归属 |
 |---|---|---|---|
-| G7 | **`sta-correlates`** | iSTA vs **PrimeTime**：同网表+SPEF，逐路径 slack R² > 0.98，endpoint 差 < 1%；MCMM 逐角 | iSTA/iRCX |
-| G8 | **`rcx-accuracy`** | iRCX vs **StarRC**：逐网 total C 差 < 5%、耦合 C 差 < 10%（90 分位） | iRCX |
+| G7 | **`sta-correlates`** | iSTA vs **PrimeTime**：同输入逐场景联合门禁；endpoint 覆盖 ≥99%、支持清单内约束覆盖 100%、PT 临界路径 false-negative=0、`|ΔWNS|≤10ps`，并报告 signed bias/MAE/P95/top-K P/R；R²>0.98 仅作诊断。细则见 `04 §2.3` | iSTA/iRCX |
+| G8 | **`rcx-accuracy`** | iRCX vs **StarRC**：ground C/coupling C/wire R/via R/拓扑/Elmore 分桶，P50/P90/P95/max 与绝对误差同时报告；同一 STA 读取两份 SPEF 后关键 slack 不越 guardband。初始阈值由 Phase 0 冻结，细则见 `04 §2.4` | iRCX |
 | G11 | **`drc-coverage`** | 目标 PDK rule deck 覆盖表进 repo；Calibre 可比子集违例一致或逐条解释 | iDRC |
 
 ### 3.4 商业 QoR / 性能打平（决策③，用户目标）
@@ -191,7 +200,7 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 | G18 | **`qor-parity-synth`** | iNO/iLO/iTM vs DC/Genus：EPFL/ISCAS+基准，面积/延迟 ≤5% 或更优；greenfield 工具先达"可跑+基线"再谈 δ | iNO/iLO/iTM |
 | G19 | **`qor-parity-cts`** | 并入 G17 的 CTS 三指标；本行保留为 CTS 专项 CI 标签（避免只跑全流程才发现 CTS 回退） | iCTS |
 | G20 | **`qor-parity-scale`** | G13 大设计上 G17 成立 | all |
-| G21 | **`perf-parity`**（v1.1 新增） | 五套日常基准：端到端墙钟 **≤ 1.5×** 商业主对标方，且至少 2/5 设计 **≤ 1.0×**（持平或更快）；关键步骤（place/cts/route/sta）分项剖面进 JSON；大设计（G20）放宽至 **≤ 3×** 且附瓶颈定位 | all |
+| G21 | **`perf-parity`** | 受控 runner 上每配置 ≥5 次有效重复，按 median 判定：五套日常端到端 **≤1.5×**，且至少 2/5 个设计 **≤1.0×**；报告 MAD/置信区间、冷/热缓存、共同大阶段、cgroup peak memory 与硬件/线程/绑核/build manifest；大设计 **≤3×** 且附复杂度与热点归因。细则见 `04 §2.6` | all |
 
 **红线（每次改动后复验）**：`ctest` 全绿 · 三 PDK 回归全绿 · G1/G1b 新鲜。
 
@@ -239,7 +248,7 @@ G1/G1b harness ──┬── G14/G15 静默失败与假指标
 - **缺口**：commit 后重计时否决；物理坐标感知。
 - **门禁**：G6、G14、G18。
 
-### 4.4 iPL ⚠️（详见 `22-iPL.md` v1.1）
+### 4.4 iPL ⚠️（详见 `22-iPL.md` rv2.1）
 - **已证实缺口（代码）**：宏布局空模块+假成功；GP=RandomPlace；发散/LG 失败不上抛；`isSTAStarted()`=false；拥塞驱动缺独立环。
 - **算法主攻**：宏力导向+SA；QP 初值；Nesterov 收敛断言；timing/congestion effort 证真。
 - **门禁**：G2/G3/G5/G14/G17/G21。**优先**：见 §5 Phase B1/B2。
@@ -252,12 +261,12 @@ G1/G1b harness ──┬── G14/G15 静默失败与假指标
 - **缺口**：真功耗驱动网格；EM/IR 感知条宽。
 - **门禁**：G10 前置。
 
-### 4.7 iTO ⚠️（详见 `25-iTO.md` v1.1）
+### 4.7 iTO ⚠️（详见 `25-iTO.md` rv2.1）
 - **已证实**：真 apply（非只 plan）；贪心 `0.5*delay`；无路径级 re-time 否决；未见 incr LG。
 - **算法主攻**：否决环 → incr LG → VT-swap/编排 → SI-aware。
 - **门禁**：G6/G7/G16/G17。**排期**：在 iSTA 增量契约与 iPL incr LG 之后（§5 Phase B3）。
 
-### 4.8 iRT ⚠️（详见 `26-iRT.md` v1.1）
+### 4.8 iRT ⚠️（详见 `26-iRT.md` rv2.1）
 - **已证实缺口**：DR 硬编码、无 plateau；timing 疑似只报告；无 ECO。
 - **算法主攻**：反馈控制收敛；关键网排序；违例机读归因。
 - **门禁**：G5/G13/G16/G17/G21。
@@ -359,7 +368,7 @@ Phase0 ──┬── T0 harness
 | **重点工具** | **iSTA**（第一优先）；伴生 **iRCX**（G8 起步） |
 | **实施路径** | 见 `27-iSTA.md` §9：单位/增量契约 → **top-N PBA** → R² 爬坡 → MCMM 外挂（可与 B3 重叠）→ delay_mode 文档化；并行 StarRC 逐网对比试点 |
 | **交付内容** | `StaPathBased.*`；GBA/PBA 双值报告；`benchmark/qor/sta/` 多轮对比；增量 gtest |
-| **测试验证** | T-A1/A2/B1（27 文档）；**G7** 向 0.98 爬坡；无 G7 背书不得关闭 G17 时序行 |
+| **测试验证** | T-A1/A2/B1（27 文档）；**G7** 按 `04 §2.3` 联合门禁逐桶爬坡；无 G7 背书不得关闭 G17 时序行 |
 
 ---
 
@@ -528,32 +537,35 @@ WP-<tool>-<nn> · <一句话目标>
 > 每份方案 = 症结审计 → FR/NFR → HLD/LLD → **商业 Know-how（引用 `03`）** → 门禁 → Exhibit → 测试 → 里程碑 → 未验证。  
 > 横切 Know-how 目录：[`03-commercial-knowhow-catalog.md`](03-commercial-knowhow-catalog.md)。
 
-| 文档 | 对象 | 商业对标 | 绑定门禁 | 状态（v1.5） |
+| 文档 | 对象 | 商业对标 | 绑定门禁 | 状态（v1.6） |
 |---|---|---|---|---|
-| `01-ai-doc-conventions-rv1.md` | 文档体例 | — | 全文档 | **rv1.0** |
+| `01-ai-doc-conventions-rv1.md` | 文档体例 | — | 全文档 | **rv1.1** |
 | `01-baseline-report.md` | 逐工具真实基线 | — | G1/G1b | Phase 0 产出 |
 | `02-fork-divergence-audit.md` | fork↔本仓 | — | 决策④ | Phase A |
-| `03-commercial-knowhow-catalog.md` | 商业手法推演目录 | 全工具 | 全文引用 | **v1.0** |
+| `03-commercial-knowhow-catalog.md` | 商业手法推演目录 | 全工具 | 全文引用 | **v1.1** |
+| `04-ppa-technical-review-and-optimization-rv1.md` | 横向技术评审、联合门禁、底层算法路线 | 全工具 | G7/G8/G17/G21 | **rv1.0（规范性细则）** |
 | `10-iDB-database.md` | iDB | OpenAccess | G1/G13/G16 | **rv1.0** |
 | `11-solver.md` | solver | 数值内核 | G2/G3/G5/G15 | **rv1.0** |
-| `12-evaluation.md` | evaluation | QoR/Perf 地基 | G1/G15/G17–G21 | **rv1.0** |
-| `20-iFP.md` | 布图 | floorplan | G3/G17 | **rv1.0** |
-| `21-iNO.md` | 网表修复 | DC topo 局部 | G6/G18 边界 | **rv1.0** |
-| `22-iPL.md` | 布局 | place_opt | G2/G3/G5/G17/G21 | **rv1.0（旗舰）** |
-| `23-iCTS.md` | 时钟树 | ccopt | G4/G19 | **rv1.0** |
-| `24-iPDN-iPNP.md` | 电源 | PG/Voltus | G10/G17 | **rv1.0** |
-| `25-iTO.md` | 时序优化 | route_opt | G6/G17 | **rv1.0** |
-| `26-iRT.md` | 布线 | NanoRoute | G5/G13/G17/G21 | **rv1.0** |
-| `27-iSTA.md` | STA | **PrimeTime** | G7/G6 | **rv1.0** |
-| `28-iRCX.md` | 提取 | **StarRC** | G8/G7 | **rv1.0** |
-| `29-iPA-iIR.md` | 功耗/IR | **PTPX**/Voltus | G9/G10 | **rv1.0** |
-| `30-iDRC.md` | DRC | **Calibre** | G11/G5 | **rv1.0** |
-| `31-iLVS.md` | LVS | nmLVS | G12 | **rv1.0（greenfield）** |
-| `32-iECO.md` | ECO | eco/Conformal | G16/G17 | **rv1.0** |
-| `33-iLO-iTM.md` | 逻辑/映射 | DC/Genus | G18 | **rv1.0（空壳）** |
+| `12-evaluation.md` | evaluation | QoR/Perf 地基 | G1/G15/G17–G21 | **rv1.2** |
+| `20-iFP.md` | 布图 | floorplan | G3/G17 | **rv2.1** |
+| `21-iNO.md` | 网表修复 | DC topo 局部 | G6/G18 边界 | **rv2.1** |
+| `22-iPL.md` | 布局 | place_opt | G2/G3/G5/G17/G21 | **rv2.1（旗舰）** |
+| `23-iCTS.md` | 时钟树 | ccopt | G4/G19 | **rv2.1** |
+| `24-iPDN-iPNP.md` | 电源 | PG/Voltus | G10/G17 | **rv2.0** |
+| `25-iTO.md` | 时序优化 | route_opt | G6/G17 | **rv2.1** |
+| `26-iRT.md` | 布线 | NanoRoute | G5/G13/G17/G21 | **rv2.1** |
+| `27-iSTA.md` | STA | **PrimeTime** | G7/G6 | **rv2.1** |
+| `28-iRCX.md` | 提取 | **StarRC** | G8/G7 | **rv2.1** |
+| `29-iPA-iIR.md` | 功耗/IR | **PTPX**/Voltus | G9/G10 | **rv2.1** |
+| `30-iDRC.md` | DRC | **Calibre** | G11/G5 | **rv2.1** |
+| `31-iLVS.md` | LVS | nmLVS | G12 | **draft/D0（greenfield 最小切片已设计）** |
+| `32-iECO.md` | ECO | eco/Conformal | G16/G17 | **rv2.1** |
+| `33-iLO-iTM.md` | 逻辑/映射 | DC/Genus | G18 | **draft/D0（先集成成熟后端）** |
 | `40-platform.md` | 平台 | session | G1/G14/G15/G16 | **rv1.0** |
 | `41-interface.md` | 接口 | TCL/Python | G14 | **rv1.0** |
-| `42-perf-parity.md` | 性能 | 墙钟/内存 | G21/G20 | **rv1.0** |
+| `42-perf-parity.md` | 性能 | 墙钟/内存 | G21/G20 | **rv2.1** |
+| `50-agent-era-eda-master-plan-v1.0.md` | AI/Agent 战略研究轨 | 过程工具 | 继承 G7/G17/G21 | **v1.1（不放宽商业门禁）** |
+| `51-agent-native-eda-detailed-plan-v1.0.md` | Agent-native Timing Closure Lab | 事务化 ECO | 复用 G7/G14/G16 | **v1.0（工程化展开）** |
 
 ### 附录 B.1 · Know-how → 阶段速查
 

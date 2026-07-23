@@ -3,12 +3,13 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 21 · iNO 网表优化（修复）· 商业对标方案 · rv2.0
+# 21 · iNO 网表优化（修复）· 商业对标方案 · rv2.1
 
-> 文档号：21-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— Genus/DC 网表修复质量线（关键度排序 + 平衡树拓扑 + 路径否决）× 性能线（秒级完成 + 增量 STA）**
+> 文档号：21-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**双对标 —— Genus/DC 网表修复质量线（关键度排序 + 平衡树拓扑 + 路径否决）× 性能线（秒级完成 + 增量 STA）**
 > **范围裁定（保留）**：iNO ≈ **网表修复**（fix_fanout/fixIO），**不是** DC/Genus 综合（G18→`33-iLO-iTM`）
 > 体例：`01-ai-doc-conventions-rv1.md`（对齐 `24-iPL-3d-rv1.0.md` 走读深度）
 > 主纲：`00-ieda-commercial-parity-master-plan-v1.1.md`（G6/G14，与 iTO 协同）　Know-how：KH-TO-01、KH-SYN-01、KH-X-04
+> 联合架构：`04-ppa-technical-review-and-optimization-rv1.md` 的 `MoveTxn + DirtySet`；闭环工作台：`51-agent-native-eda-detailed-plan-v1.0.md`
 > 覆盖：`src/operation/iNO/` 全树（1129 LOC）：`FixFanout.{h,cpp}`、`NoApi.cpp`、`iNO.{h,cpp}`、`io/{JsonParser,DbInterface,Reporter}`、`config/NoConfig.h`、`test/run_no.cpp`
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」。
 
@@ -22,6 +23,7 @@ iEDA is licensed under Mulan PSL v2.
 | rv1.0 / v2.0 | 2026-07-20 | parity | 体例升格；坐实 FixFanout 真插 buffer、无 commit 后否决 |
 | rv1.1 / v3.0 | 2026-07-21 | parity | **大改**：对 iNO 全树 13 个源文件（1129 LOC）逐行读完重写（`FixFanout.cpp` 271 行全读）。核心修订五条 |
 | **rv2.0 / v4.0** | **2026-07-22** | **parity** | **大改（对照 27-iSTA.md 深度重写，双对标线显式化）**。核心修订五条：**(1)** 新增 **§1.5 ★功能完整性栈**（辅助工具的精度栈 = 功能覆盖 + 跨工具契约）——逐项清点与 Genus/DC 网表修复的差距：链式拓扑 vs 平衡树、容器序 vs 关键度排序、无 veto vs 路径否决、void API vs 响亮失败、全量 summary STA vs 增量模式、无物理感知 vs 位置聚簇，14 项差距中 **P0 级 5 项全是"能力缺失"（非算法精度）**；**(2)** 新增 **in-place 调用审计**（§1.4，类比 27 号 §1.4）：iTO/iNO **双修同网无冲突检测**（`NoApi::fixFanout` 与 `ViolationOptimizer::fixDrv` 各自插 buffer，**无共享 eco_txn、无修改锁、无变更日志对账**）——现状是"不撞车靠运气"；outputSummary 的全量 STA 重建（`NoApi.cpp:147-149`）在 iTO 循环内调用的墙钟占比**未量化**（E-NO-06 前提）；**(3)** 坐实 **fixFanout 链式拓扑的延迟特征**：深度 = ⌈(fanout−max)/(max−1)⌉ ≈ fanout/max（树是 log），**最远负载经过所有 buffer**（树只经 log 层），在 fanout=100、max=30 时链深度 ≈3 vs 树 ≈2，**但最关键的是容器序分配 → 关键负载不一定近根**——worst slack 路径延迟可比树多 1-2 级 buffer 延迟（未实测，E-NO-04 量化）；**(4)** rv1.1 提的"kClock 副作用"（`:134-136`）实测是**正确行为**——时钟网标记为 kClock 是为了在后续修复轮跳过，**不改则死循环**（时钟网高扇出但不应插 buffer）——归入"未文档化的正确实现"（FR-NO-07 降为 P2 文档化）；**(5)** **引入双对标线框架**（Genus/DC 线 = 修复质量，性能线 = 秒级 + 增量）：质量线差距 = 拓扑/关键度/veto（§1.5 上半），性能线差距 = summary STA/与 iTO 串行调用（§1.5 下半）；§10 拆成两块看板（10.1 质量看板、10.2 性能看板），与 27 号双对标结构对齐。rv1.1 的五条修订全部保留，本版在其上叠加结构性分析。 |
+| **rv2.1** | **2026-07-23** | **Codex** | 实现评审：tree 模式拆为布局前有界扇出树与布局后容量约束几何聚簇；接受条件改为 DRV/合法性/时序/面积功耗的字典序门禁；共享 `MoveTxn/DirtySet` 与冲突图；禁止借改 `kClock` 充当遍历状态。 |
 
 ---
 
@@ -83,7 +85,7 @@ iEDA is licensed under Mulan PSL v2.
 | FR-NO-04 | ★ 空 insert_buffer 响亮失败（配置校验前置） | 弱（cout） | P0 |
 | FR-NO-05 | ★ 平衡树 fanout 修复（关键负载近根 + slack 排序） | ✗（链式） | P1（§4.2） |
 | FR-NO-06 | ★ `connect()` 死分支清理 + `LOG_ERROR_IF` 后崩险修复 | ✗ | P0（卫生） |
-| FR-NO-07 | ★ kClock 改写副作用文档化或移除 | 隐蔽 | P1 |
+| FR-NO-07 | ★ 时钟识别只读化：使用 STA clock 查询或局部 visited，移除持久 `kClock` 改写 | 隐蔽副作用 | P1 |
 | FR-NO-08 | ★ `outputSummary` 改 incr STA（禁全量重建）或标注成本 | 全量重建 | P1 |
 | FR-NO-09 | 有坐标才启用物理感知放置（经 40 incr LG） | ✗ | P1 |
 | NFR-NO-01 | 假成功 0（配置/修复/汇报三层） | G14 | |
@@ -100,7 +102,7 @@ iEDA is licensed under Mulan PSL v2.
 高扇出/IO 违例
   → 配置校验（★空 buffer 响亮失败）
   → FixFanout/FixIO（TimingIDBAdapter 改 iDB）
-  → ★ incr STA / veto（与 25-iTO 共享 eco_txn：Δslack>0 且 DRV 不恶化才 commit）
+  → ★ dirty RC + setup/hold incr STA + veto（与 25-iTO 共享 MoveTxn/DirtySet）
   → ★ IncrLegalizeAfterCommit（40，若已有坐标）
   → 报告（inserts/rollbacks/ΔWNS 独立列）
 ```
@@ -115,6 +117,7 @@ iEDA is licensed under Mulan PSL v2.
 | D4 | 平衡树修复做成**可选模式**（`fanout.mode=chain|tree`，默认 chain 零回归） | 直接替换默认行为 |
 | D5 | `outputSummary` 保留但标注全量重建成本；incr 化排 P1 | 立即重写（影响面未审计） |
 | D6 | 布局前可不 LG；布局后必经 40 incr LG | 从不合法化 |
+| D7 | 时钟网跳过使用只读查询或局部 `visited` 集 | 把持久 `net_type=kClock` 当临时遍历标记；语义污染会泄漏给 CTS/STA |
 
 ---
 
@@ -139,12 +142,17 @@ ALG-4.1-1  失败语义三层修复
 
 ```text
 ALG-4.2-1  treeFixFanout(net)   # ★ 新增，与 chain 并存（D4）
-  loads = net.load_pins 按 slack 升序（关键在前）   # 需 incr STA 供给
-  while |剩余负载| > max:
-    取 slack 最松的 max 个负载挂新 buffer（关键负载留近根）
-    buffer 挂到当前层的下一级 → 深度 ⌈log_{max}(fanout)⌉ 的平衡树
-  复杂度 O(fanout log fanout)；边界：fanout≤max 不动；时钟网跳过（现状保留）
-  验收：同设计 chain vs tree，critical load 到达时间不劣化、总 buffer 数不增
+  if pre_place:
+    以 (cap,slew,max_fanout) 为容量约束，自底向上构造近似平衡树；
+    关键负载只决定靠近根的层级，不用 slack 排序代替拓扑/容量约束
+  else:
+    loads 按坐标做 capacitated clustering（递归二分或有容量 k-median）
+    每簇满足 ΣCload≤Cmax、fanout≤Fmax、估算 slew≤Smax；
+    cluster root 取合法 site 候选，关键负载在同等容量下靠近上游
+  对每个候选 buffer master 做离散 DP，状态=(cap,delay,slew,area,power)，支配剪枝
+  复杂度：聚簇 O(fanout log fanout)，master DP 与库候选数成正比
+  边界：fanout≤max 不动；真实 clock net 只读跳过；无合法位置则报告不可修而非污染 net type
+  验收：DRV 清、setup/hold guardband 满足、总 buffer/area/power 独立报告
 ```
 
 **复用姿势**：自建（修复拓扑是 iNO 本体职责）；veto 复用 25-iTO eco_txn（D2）。
@@ -152,13 +160,19 @@ ALG-4.2-1  treeFixFanout(net)   # ★ 新增，与 chain 并存（D4）
 ### 4.3 ★ veto 环（FR-NO-02，P0，与 25 对齐）
 
 ```text
-txn = begin()
-apply fix（chain 或 tree）
-Δ = incr_sta(dirty_region)
-if Δslack > 0 or DRV 不恶化: commit else rollback
-if placed: platform IncrLegalizeAfterCommit
+txn = MoveTxn.begin(design_state_version)
+apply fix（chain 或 tree）；产出 DirtySet{insts,nets,rc_arcs,timing_cones,rows}
+if placed and !IncrLegalizeAfterCommit(dirty.rows): rollback(kIllegal)
+update_rc(dirty.nets); incr_sta_setup_hold(dirty.timing_cones)
+按字典序验收：
+  1. connectivity/legal 必须 PASS；目标 fanout/cap/slew DRV 必须减少且不得新增更高优先级 DRV
+  2. setup/hold 均不得越过 guardband；“为修 DRV 允许局部 slack 小幅下降”必须显式预算
+  3. 在 1/2 均通过后，才比较 area/power/buffer_count 的 Pareto 改善
+通过则 commit 并递增 state/RC/STA version；否则恢复 iDB、放置、RC cache、STA version
 配置键与 iTO 同一：eco.max_slack_degrade（缺省关 → 零回归 NFR-NO-02）
 ```
+
+多个 net 可先生成候选，再按共享 net/row/timing cone 建冲突图；同一颜色批量提交、批末一次增量 RC/STA。这样减少逐 move 固定开销，同时保持确定性提交顺序。
 
 ### 4.4 `outputSummary` 成本标注（FR-NO-08，P1）
 
@@ -168,7 +182,7 @@ if placed: platform IncrLegalizeAfterCommit
 
 | 模块 | 现状成熟度 | 主复杂度 | 关键边界 | 复用姿势（现状→目标） |
 |---|---|---|---|---|
-| `fixFanout` 主循环 | 可用 | O(nets) | kClock 副作用（FR-NO-07） | 保留 + 文档化 |
+| `fixFanout` 主循环 | 可用 | O(nets) | kClock 持久语义副作用（FR-NO-07） | 保留遍历，改为只读 clock 查询/局部 visited |
 | `fixFanout(net)` 链式修复 | 教科书以下 | O(fanout²/max)（while 重取 load_pins） | fanout≤max 不动；port 网改名 | 保留为 chain 模式；★tree 并存 |
 | `fixIO` | 自承"临时" | O(io_pins) | 方向匹配启发式 | 保留 + 失败语义 |
 | `connect` | 有死分支 | O(buf_pins) | null pin 崩险 | 修（§4.1） |
@@ -187,6 +201,8 @@ if placed: platform IncrLegalizeAfterCommit
 | `max_fanout` | 现状 | |
 | `fanout.mode` | `chain` | ★ `tree` 可选（FR-NO-05，D4 零回归） |
 | `enable_timing_veto` | false | ★ FR-NO-02；与 iTO 同 `eco.*` 键族 |
+| `eco.setup_guardband` / `eco.hold_guardband` | 协议给定 | DRV 修复允许的显式时序预算，禁止隐式 `Δslack>0` |
+| `eco.batch_size` | 1 | >1 时按冲突图着色批量验证 |
 
 ---
 
@@ -336,7 +352,7 @@ PR 切片：NO-0 台账 → NO-1 失败语义+卫生 → NO-2 veto 环 → NO-3 
 - [ ] NoApi 返 bool；TCL rc 透传
 - [ ] veto 环（eco_txn 与 25 同库同键）
 - [ ] 40 IncrLegalizeAfterCommit 接线
-- [ ] kClock 副作用文档化
+- [ ] clock net 只读跳过；遍历使用局部 visited，禁止修改持久语义类型
 - [ ] tree 模式（E-NO-04 裁决后）
 - [ ] outputSummary 成本标注 / incr 化
 

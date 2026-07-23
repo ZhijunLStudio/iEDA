@@ -3,11 +3,12 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 01 · iEDA 商业对标方案 · 文档体例规范 · rv1.0
+# 01 · iEDA 商业对标方案 · 文档体例规范 · rv1.1
 
 > 参照实现体例：`HS-3D_Problem/thirdparty/iEDA-3D/docs/3d/design/24-iPL-3d-rv1.0.md`（929 行，逐 kernel 走读）  
 > 适用范围：`iEDA/docs/ai/` 全部工具方案（含主纲领引用的子文档）  
 > 纪律：**文档是假说不是事实**；每条断言带 `file:line` 或实测；没实测写「未验证」；每个理论附能杀死它的对照。
+> 技术评审：联合门禁、成熟度等级、跨工具增量契约和算法优先级见 `04-ppa-technical-review-and-optimization-rv1.md`。
 
 ---
 
@@ -21,13 +22,13 @@ iEDA is licensed under Mulan PSL v2.
 | 1 | **症结审计（逐 kernel / 逐模块代码走读）** | ≥4 小节：功能形态、算法成熟度、边界/回退、跨工具协调；表格式 kernel 判定；死代码/假成功显式点名 |
 | 2 | 需求 FR/NFR/约束 | FR 用 ★ 标新增；NFR 给可测数字；红线约束单独列 |
 | 3 | HLD | ASCII 数据流图 + ≥5 条关键设计决策（含被否方案） |
-| 4 | **LLD · 模块分解** | 每模块：真实现状签名 → 深化算法伪代码 → 复杂度 → 边界 → 复用姿势；末表「模块状态一览」 |
+| 4 | **LLD · 模块分解** | 每模块：真实现状签名 → 深化算法伪代码 → 复杂度/内存 → 增量失效边界 → 失败/回滚 → 复用姿势；末表「模块状态一览」 |
 | 5 | 配置 / IterParam / 多轮渐进 | 可配表；缺省=现状零回归 |
 | 6 | Cost / 指标分解 | 多维独立记录，禁单一标量掩盖 |
 | 7 | 状态机 / 命令语义 | init/run/reset；失败 rc |
 | 8 | 跨工具 Cascade | 上/下游信号表 |
 | 9 | 商业 Know-how 映射 | 引用 `03` 的 KH-ID → 本工具 § |
-| 10 | 商业对照看板 + 演进 M0–M4 | 指标表 + 对照实验 + 里程碑退出门禁 |
+| 10 | 商业对照看板 + 演进 M0–M4 | 多维联合指标表 + 对照实验 + holdout + 里程碑退出门禁；单 `R²`/均值不得作充分条件 |
 | 11 | Exhibit | CSV/JSON/text（+可选 plot）四档 |
 | 12 | 测试计划 | L0 gtest / L1 集成 / L4 基准 / L5 红线 |
 | 13 | 里程碑（按周） | P0 先量 → Pn；每阶段交付物+验收 |
@@ -48,6 +49,10 @@ iEDA is licensed under Mulan PSL v2.
 6. **复用姿势**：自建 / Composition / 收编 / 禁止平行重写。  
 7. **商业对照**：同输入、同报告点；强项不掩弱项。  
 8. **完成定义**：代码 + 机器门禁 + 当前二进制重跑一致。
+9. **身份可追溯**：输入/二进制/产物用 SHA-256；`git HEAD` 不能代表 dirty build。
+10. **性能改动有证据链**：profile → 理论复杂度/数据局部性判断 → A/B；禁止无剖面先全面并行或上 GPU。
+11. **增量改动有 full oracle**：dirty cone/region 的结果必须周期性与全量重算对拍，rollback 后 canonical hash 一致。
+12. **AI 是建议层**：候选排序、调参或归因必须有确定性校验、OOD 拒答和 baseline fallback。
 
 ---
 
@@ -73,5 +78,6 @@ iEDA is licensed under Mulan PSL v2.
 
 ## 4. 版本号
 
-- 达到本规范 = 文档头标注 `rv1.0` 或内容版 `v2.0（体例对齐 24-iPL-3d）`。  
-- 未达标的旧稿不得宣称「已 rv」。
+- 文档版本只表示文本修订，不表示功能成熟。功能统一使用 `04 §1.1` 的 D0–D4：D0 想法、D1 代码路径、D2 单元可信、D3 流程可用、D4 商业对标可信。
+- 状态表必填 `code_ref`、`test_ref`、`artifact_ref`、`binary_sha256`、`measured_at`；缺字段最高只能标 D1。
+- 含 placeholder、只有标题、只有伪代码或空目录的文档必须显式标 `DRAFT/D0`，不得因标题为 `rv2.0` 宣称实现完成。

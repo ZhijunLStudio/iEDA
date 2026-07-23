@@ -95,6 +95,15 @@ auto convertLibCapToPf(idb::LibCell* lib_cell, double cap_value) -> double
   return cap_value;
 }
 
+auto convertRawLibCapToPf(idb::LibCell* lib_cell, double cap_value) -> double
+{
+  auto* owner_lib = lib_cell != nullptr ? lib_cell->get_owner_lib() : nullptr;
+  if (owner_lib == nullptr) {
+    return cap_value;
+  }
+  return idb::ConvertCapUnit(owner_lib->get_cap_unit(), idb::CapacitiveUnit::kPF, cap_value);
+}
+
 auto convertLibTimeToNs(idb::LibCell* lib_cell, double time_value) -> double
 {
   auto* owner_lib = lib_cell != nullptr ? lib_cell->get_owner_lib() : nullptr;
@@ -130,10 +139,14 @@ auto queryLibPortCapacitancePf(idb::LibCell* lib_cell, idb::LibPort* lib_port) -
   }
 
   double cap_value = lib_port->get_port_cap();
-  cap_value = std::max(cap_value, lib_port->get_port_cap(idb::AnalysisMode::kMax, idb::TransType::kRise).value_or(0.0));
-  cap_value = std::max(cap_value, lib_port->get_port_cap(idb::AnalysisMode::kMax, idb::TransType::kFall).value_or(0.0));
-  cap_value = std::max(cap_value, lib_port->get_port_cap(idb::AnalysisMode::kMin, idb::TransType::kRise).value_or(0.0));
-  cap_value = std::max(cap_value, lib_port->get_port_cap(idb::AnalysisMode::kMin, idb::TransType::kFall).value_or(0.0));
+  for (const auto analysis_mode : {idb::AnalysisMode::kMax, idb::AnalysisMode::kMin}) {
+    for (const auto trans_type : {idb::TransType::kRise, idb::TransType::kFall}) {
+      const auto directional_cap = lib_port->get_port_cap(analysis_mode, trans_type);
+      if (directional_cap.has_value()) {
+        cap_value = std::max(cap_value, convertRawLibCapToPf(lib_cell, *directional_cap));
+      }
+    }
+  }
   return convertLibCapToPf(lib_cell, cap_value);
 }
 

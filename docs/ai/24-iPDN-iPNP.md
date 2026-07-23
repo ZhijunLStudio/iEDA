@@ -3,11 +3,12 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 24 · iPDN / iPNP 电源网络 · 商业对标方案 · rv1.1
+# 24 · iPDN / iPNP 电源网络 · 商业对标方案 · rv2.0
 
-> 文档号：24-rv1.1　　版本：v3.0（大改，逐文件代码走读后重写）　　里程碑：**模板网格可信 → SA 成本模型核验 → 功耗/IR 驱动优化边界清晰 → vs create_pg / Voltus**
+> 文档号：24-rv2.0　　版本：rv2.0（实现评审优化）　　里程碑：**模板网格可信 → 有误差界的快速评估 → 功耗/IR/EM 驱动优化 → vs create_pg / Voltus**
 > 体例：`01-ai-doc-conventions-rv1.md`（对齐 `24-iPL-3d-rv1.0.md` 走读深度）
 > 主纲：`00-ieda-commercial-parity-master-plan-v1.1.md`（G10 前置/G17/G21）　Know-how：KH-IR-01、KH-X-04
+> 联合架构：`04-ppa-technical-review-and-optimization-rv1.md` 的 `MoveTxn + DirtySet`；闭环工作台：`51-agent-native-eda-detailed-plan-v1.0.md`
 > 对标：**ICC2 create_pg / Innovus PG + Voltus**
 > 上游：`20-iFP`（core/IO）、`29-iPA`（功耗预算）　下游：`29-iIR`（签核）、`26-iRT`（避障）
 > 覆盖：`src/operation/iPDN/`（api + pdn_plan/pdn_via ≈3.0k LOC）与 `src/operation/iPNP/`（≈4.7k LOC，含独立 main.cpp）
@@ -22,6 +23,7 @@ iEDA is licensed under Mulan PSL v2.
 | v1.0–v1.1 | 2026-07-20 | 双工具边界摘要 |
 | rv1.0 / v2.0 | 2026-07-20 | 体例升格；坐实 iPDN 模板 API 与 iPNP SA 存在；「功耗驱动是否真进 cost 未验证」 |
 | **rv1.1 / v3.0** | **2026-07-21** | **大改**：对 iPDN/iPNP 两树逐文件走读后重写。核心修订五条，**三条推翻/深化 v2.0**：**(1)** v2.0 的悬案「SA cost 项 live？」——**实锤 live，且代价惊人**：`SimulatedAnnealing::evaluateCost`（`:358-380`）对**每个候选解**执行 `saveToIdb → EGR 拥塞评估 → IREval → 还原`，而 `IREval::runIREval`（`IREval.cpp:33-45`）驱动的是**真实 `PowerEngine`**（`buildPGNetWireTopo + runIRAnalysis + reportIRAnalysis`）——**SA 每步 move 付一次全量 IR 求解**，cost 是活的，性能模型是崩的（大设计上 SA 不可行，§1.3-B1，待 E-PDN-02 量化）;**(2)** v2.0 判「IREval 估计 ≠ iIR 签核」——**需修正**：IREval 不是独立估计器，是**包在真 PowerEngine 外的薄壳**（127 LOC），与 iIR 签核是否同源同参须 29-iIR 裁决（§14）；真正的风险不是精度口径而是「每 move 一次签核级求解」的成本;**(3)** iPDN 也有空壳：`pdn_router/`、`pdn_sim/`、`solver/`、`utility/` 四个目录**只有 0 字节 CMakeLists**，`test/` 零用例——iPDN 真实资产 = `pdn_plan`（788+791+344）+ `pdn_via`（197）+ api（147）;**(4)** 生产 flow 的双段结构坐实：iPDN 在 **iFP 阶段**经 `pdn.tcl` 建模板（`create_grid` met1 + `create_stripe` met4，`run_iFP.tcl:85` → `module/pdn.tcl:11-13`），iPNP 在**后段** `run_pnp`（`run_iEDA.sh:41`）→ `iPNP_result.def/v`——**PG 真源确实有两棒**，交接语义（覆盖 or 增量）未文档化;**(5)** iPNP 有**独立 `main.cpp`**（169 LOC，自带 TCL console 注册 `run_pnp`）——与 iEDA 主二进制并存的第二入口，架构归属需裁定。 |
+| **rv2.0** | **2026-07-23** | 实现评审：候选由 typed delta 表达、禁止 iDB 充当临时画布；用固定尺度、局部电导敏感度、周期 full IR 与不确定性触发构成有误差界的 SA 内环；补 PCG 热启动/预条件器复用、EM/IR/容量驱动条带推导和 false-feasible/rank-regret 验收。 |
 
 ---
 
@@ -122,7 +124,7 @@ iPNP 段: run_pnp ──► PdnOptimizer(global|region)
 |---|---|---|
 | D1 | iPDN=模板（iFP 段）；iPNP=优化（后段）；iIR=签核 | 两套都当签核生成器 |
 | D2 | 真源 stamp + 交接语义文档化 | 双写不合并、互不理睬 |
-| D3 | **先量化 SA 成本（E-PDN-02）再决定换代理模型** | 直接上 ML 代理/增量 IR（未量先改） |
+| D3 | **先量化，再采用可校准的物理敏感度模型；ML 不是首选** | 无误差界地按固定间隔跳过 IR，或直接上黑盒 ML |
 | D4 | IREval 维持薄壳；同源裁定后再谈统一 | 在 iPNP 内另写估计器 |
 | D5 | iPDN 空壳×4 删除；test 从零建 | 保留占位 |
 | D6 | iPNP 独立 main 暂保留并文档化 | 立刻合并二进制（影响面未审） |
@@ -141,26 +143,49 @@ ALG-4.1-1  PG 真源协议
   断言：两棒之间无第三方改写 special net（flow 契约，40 联动）
 ```
 
-### 4.2 ★ SA 成本预算化（FR-PNP-01，P0）
+### 4.2 ★ SA typed delta + 多保真评估（FR-PNP-01/03，P0）
 
 **现状签名（真实）**：`CostResult SimulatedAnnealing::evaluateCost(const PNPGridManager&, const PNPGridManager&)`（`SimulatedAnnealing.cpp:358`）。
 
 ```text
-ALG-4.2-1  三步走
-  Step 1（量）: E-PDN-02 —— 统计 SA 迭代数、单次 evaluateCost 分解墙钟
-                (saveToIdb / EGR / IR / restore 四段计时)
-  Step 2（省）: 增量评估 —— EGR 只对变动区域；IR 按候选代数降频（每 k 步全真，中间用上次 IR + Δ 代理）
-  Step 3（证）: 降频 IR 的 cost 排序与全真一致率 ≥95%（Spearman），否则回退全真
-边界：缺省 behavior 不变（配置 sa.ir_eval_interval=1 = 现状）
+ALG-4.2-1  evaluate(candidate_delta)
+  baseline = immutable PGGraph + current accepted solution
+  delta = {add/remove/resize_strap, add/remove/via_array, affected_tiles}
+  先查 hard constraints: connectivity, min width/spacing, via enclosure,
+                        EM current density, routing-capacity reserve；失败候选不进 SA cost
+  congestion_delta = local EGR(affected_tiles + halo)
+  ir_delta, uncertainty = sensitivity(G, V, delta)
+    # 首选局部 conductance-matrix update / Schur complement；
+    # 多候选同一电流目标时可用 adjoint voltage sensitivity 排序
+  normalized_cost 使用 protocol 冻结的 baseline scale，禁止按每个候选 min/max/avg 重标
+  if uncertainty > guardband or accepted_since_exact >= K or candidate 接近预算边界:
+    exact = full_ir(candidate, warm_start=last_voltage)
+    更新敏感度误差模型；若预测与 exact 符号相反则回滚并收紧 guardband
+  MoveTxn 只在 accept 后把 typed delta 原子提交到 iDB；reject/崩溃不改变生产 DB
+
+ALG-4.2-2  full_ir 加速
+  PG 稀疏结构不变（仅宽度/电阻变）时复用符号分解/预条件器，PCG 从上次 V 热启动
+  稀疏结构变化时仅局部重建，超过 dirty_ratio 阈值才全量重建 preconditioner
+
+验收不只看 Spearman：同时报告 top-k rank regret、false-feasible rate、peak-IR 误差 p95；
+任何候选被代理判可行而 full IR 判超预算均计 false-feasible，生产目标必须为 0（guardband 后）。
+边界：缺省 `sa.eval_mode=exact` 保持现状；fast 模式只有校准集和 holdout 门禁都通过才可生产开启。
 ```
 
 ### 4.3 ★ 条带宽度预算推导（FR-PDN-03，P1）
 
 ```text
-I_budget = f(P_inst, V)         # iPA 功耗
-w_strap ≥ max(EM_rule, IR_est(pitch, R_sheet))
+对每个 region/layer:
+  I_peak = activity_window_peak(P_inst / Vdd)，并保留 simultaneity/decap 假设来源
+  w_em ≥ I_peak / (J_limit(layer,temp) · metal_thickness)
+  R_strap = R_sheet(layer) · length / width；via_array 由单 via R 与 I_limit 决定
+  用网络灵敏度求满足 max_drop≤budget 的最小 Δconductance，并转成候选 width/pitch/via count
+  w_strap = snap_up(max(w_em, w_ir, min_width), manufacturing_grid)
+  再检查：可用 routing tracks、spacing、macro blockage、总 PG metal budget
 产出 pdn 参数建议 → pdn.tcl 模板变量化（不再硬编 0.48/1.60）
 ```
+
+平均功耗只用于 early estimate；生产条带/EM 门禁必须使用带来源的峰值或时间窗电流。无法获得动态活动时，报告保守假设和不确定性，不得把平均电流当峰值真值。
 
 ### 4.4 iPDN 空壳与测试（FR-PDN-04，P0）
 
@@ -188,8 +213,11 @@ w_strap ≥ max(EM_rule, IR_est(pitch, R_sheet))
 |---|---|---|
 | `pdn.source_of_truth` | `ipdn` → SA 后 `ipnp` | stamp（FR-PDN-02） |
 | `pnp.enable` | 现状（flow 已调） | — |
-| `sa.ir_eval_interval` | 1（=现状） | ★ >1 启用降频 IR（FR-PNP-01） |
+| `sa.eval_mode` | `exact` | `exact|sensitivity_guarded`；fast 模式需 holdout 门禁 |
+| `sa.exact_interval` | 1（=现状） | fast 模式中至多 K 个 accepted move 一次 full IR |
+| `sa.uncertainty_guardband` | 协议给定 | 超阈值或近预算边界立即 full IR |
 | `sa.ir_drop_weight` / `sa.overflow_weight` | 现状 | 报告已分列 |
+| `sa.cost_scale.{ir,overflow,metal,power}` | baseline 固定值 | 一次 run 内冻结，禁止候选自归一化 |
 | `pdn.width_from_budget` | false | ★ FR-PDN-03，缺省关零回归 |
 
 ---
@@ -259,15 +287,16 @@ iPNP: load → optimize(global|region) → final saveToIdb → stamp(ipnp) → d
 |---|---|---|
 | E-PDN-01 | 双真源冲突注入（两棒间第三方改写） | 无 stamp 链检测 → FR-PDN-02 必要性实锤 |
 | **E-PDN-02** | SA 迭代数 × 单次 evaluateCost 四段计时，外推 50k inst | 外推 ≤ G21 预算 → 「B1 不可扩展」被杀（维持现状） |
-| E-PDN-03 | 降频 IR（interval=k）cost 排序一致率 | <95% → 降频方案被杀，回全真 |
+| E-PDN-03 | sensitivity_guarded vs 每候选 full IR（校准集+holdout） | false-feasible>0、top-k rank regret 超阈值或 peak-IR p95 误差超 guardband → fast 模式被杀，回 exact |
 | E-PDN-04 | 跳过 iIR 直接引用 IREval peak 报 G10 | 协议拒（NFR-PDN-02） |
+| E-PDN-05 | 同一拓扑连续 resize 候选：冷启动 vs PCG 热启动+预条件器复用 | 解差超过 tol 或迭代/墙钟无显著下降 → 复用策略不晋级 |
 
 ### 10.3 演进
 
 ```text
 M0 先量：空壳/双入口台账；E-PDN-02 成本分解；真源 stamp 设计
 M1 可信：stamp 链 + 空壳清理 + iPDN gtest 从零
-M2 主算法：SA 降频/增量评估（E-PDN-03 裁决）；iPA 预算接线
+M2 主算法：SA sensitivity_guarded 多保真评估（E-PDN-03 裁决）；iPA 预算接线
 M3 打平：vs create_pg 几何可比
 M4 纵深：网格自适应 / region SA 策略
 ```
@@ -302,7 +331,7 @@ M4 纵深：网格自适应 / region SA 策略
 |---|---|---|
 | W0 | 台账 + E-PDN-02 报告 | M0 |
 | W1 | stamp 链 + 空壳清理 + gtest 骨架 | M1 |
-| W2 | 降频 IR（E-PDN-03 裁决） | M2 |
+| W2 | sensitivity_guarded + full-IR guard（E-PDN-03 裁决） | M2 |
 | W3 | iPA 预算接线 | M2 |
 | W4+ | vs create_pg | M3 |
 
@@ -334,7 +363,7 @@ PR 切片：PDN-0 台账 → PDN-1 stamp → PDN-2 空壳+gtest → PDN-3 SA 预
 - [ ] E-PDN-02 成本分解报告（四段计时 × 迭代数 × 外推）
 - [ ] 真源 stamp（iPDN/iPNP/契约断言）
 - [ ] iPDN 空壳×4 删除 + gtest 从零
-- [ ] SA 降频/增量 IR（E-PDN-03）
+- [ ] typed delta + sensitivity_guarded + full-IR guard（E-PDN-03）
 - [ ] SA 事务化（FR-PNP-03）
 - [ ] iPA 预算→宽度推导（FR-PDN-03）
 - [ ] IREval↔iIR 同源裁定（联动 29）
@@ -356,7 +385,7 @@ PR 切片：PDN-0 台账 → PDN-1 stamp → PDN-2 空壳+gtest → PDN-3 SA 预
 
 - **两棒 PG**：iFP 段 iPDN 模板 → 后段 iPNP 优化的生产结构（本案命名）
 - **stamp**：`pdn_generator=ipdn|ipnp` 真源标记
-- **SA 降频 IR**：每 k 步全真 IR、中间用代理（FR-PNP-01 Step 2）
+- **sensitivity_guarded**：局部物理敏感度评估；由不确定性、预算边界和 accepted-move 上限触发 full IR
 - **EGR**：early global route 拥塞估计（iPNP 经 CongestionEval 调用）
 
 ## 附录 D · 证据摘录（file:line 最小集）

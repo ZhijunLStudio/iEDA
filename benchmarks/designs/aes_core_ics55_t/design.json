@@ -8,8 +8,8 @@
   "variant": "stdcell",
   "inputs": {
     "tech_lef": "$PDK/lef/ics55_tech.lef",
-    "cells_lef": "$PDK/lef/ics55_stdcell.lef",
-    "lib": "$PDK/lib/ics55_stdcell_tt_1v8_25c.lib",
+    "cells_lef": "$PDK/lef/ics55_cells.lef",
+    "lib": "$PDK/lib/ics55_typical.lib",
     "netlist": "netlist/aes_core.v",
     "sdc": "sdc/aes_core.sdc"
   },

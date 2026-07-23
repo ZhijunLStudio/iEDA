@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/build-aes13/src/operation/iIR/source/iir-rust/CMakeFiles/iir"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/build-aes13/src/operation/iIR/source/iir-rust/CMakeFiles/iir.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/build-aes13/src/operation/iIR/source/iir-rust/CMakeFiles/iir-complete.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/operation/iIR/source/iir-rust/iir/src/iir-stamp/iir-build.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/operation/iIR/source/iir-rust/iir/src/iir-stamp/iir-configure.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/operation/iIR/source/iir-rust/iir/src/iir-stamp/iir-download.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/operation/iIR/source/iir-rust/iir/src/iir-stamp/iir-install.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/operation/iIR/source/iir-rust/iir/src/iir-stamp/iir-mkdir.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/operation/iIR/source/iir-rust/iir/src/iir-stamp/iir-patch.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/operation/iIR/source/iir-rust/iir/src/iir-stamp/iir-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"iir"
+		],
+		"name" : "iir"
+	}
+}

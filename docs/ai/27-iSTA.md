@@ -3,15 +3,16 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 27 · iSTA 静态时序分析 · 商业对标方案 · rv2.0
+# 27 · iSTA 静态时序分析 · 商业对标方案 · rv2.1
 
-> 文档号：27-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— PT 签核精度（G7：R²>0.98）× Innovus in-design 调用（又快又准）**
+> 文档号：27-rv2.1　　版本：rv2.1（门禁纠偏）　　里程碑：**双对标 —— PT 联合相关性门禁（覆盖/偏差/分位数/临界漏报/排序）× Innovus in-design 调用（又快又准）**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`24-iPL-3d-rv1.0.md`（逐 kernel 走读 + 诚实归因 + 被否方案）
 > 商业金标：**PrimeTime（签核收敛准确性）**；**Innovus（物理设计过程中的 in-design 时序调用）**；门禁：**G7 / G17 / G21**（辅 G6/G14/G15）
 > 上游：`10-iDB`、`28-iRCX`　下游：`22-iPL`、`25-iTO`、`23-iCTS`、`26-iRT`、`12-evaluation`
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-STA-\*
 > 覆盖：`src/operation/iSTA/`（sta/ 21.8k LOC、sdc-cmd/ 3.6k、delay/+cuda 6.5k、api/ ~4.3k，全树 ~45k LOC 含测试）
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
+> 联合门禁与增量 oracle：见 `04-ppa-technical-review-and-optimization-rv1.md` §2.3/§4.2；`R²` 只作诊断，不单独代表 G7 通过。
 
 ---
 
@@ -22,6 +23,7 @@ iEDA is licensed under Mulan PSL v2.
 | v1.0–v1.2 | 2026-07-20 | 审计骨架 + LLD 切片 |
 | rv1.0 | 2026-07-20 | 体例对齐 01；坐实「无 PBA / 缺省 BFS GBA / 单位注释矛盾 / SI 注释掉 / MCMM 无场景表」；纠偏「增量有实现缺契约」「AOCV 已进传播」 |
 | **rv2.0** | **2026-07-21** | **大改（对照 24-iPL-3d-rv1.0.md 的深度与丰富度重写，并把目标显式拆成双对标线）**。核心修订五条：**(1)** rv1.0 把 iSTA 当成「一个引擎缺几个特性」来审——**代码级核实后发现头号结构症结是三套平行时序栈**：真引擎 `ista::TimingEngine`、布局期 `ieval::TimingAPI`（独立 TimingInstanceGraph/TimingWireGraph，`src/evaluation/api/timing_api.hh`）、CTS 私有 fast_sta（`iCTS/source/module/timing/TimingEngine.{hh,cc}`，304 LOC）——iPL 布局期时序**根本不经 iSTA**（§1.3，类比 24 号文档 §1.5 的「复用率≈0%」判定）；**(2)** 新增 **in-design 调用审计**（§1.4，Innovus 对标的核心证据）：iTO 全树 **10 处全量 `updateTiming()` vs 1 处 `incrUpdateTiming()`**，每次优化迭代都是 `resetSdcConstrain+resetGraphData+resetPathData` 全图清光重算（`Sta.cc:2878-2880`），iRT 的 `RTInterface::updateTiming` 函数体大段注释（`RTInterface.cpp:1522+`）——现状调用结构是**批处理**而非 in-design；**(3)** delay 栈逐模型走读（§1.2/§1.5）：坐实「四模型并存但生产硬编一条、`delay_mode` 未外露」「Ceff π-model 迭代存在但从未对拍」「CCS 模板被解析但接收端电容/CCSN 不进生产」「LVF/POCV 零支持」；**(4)** 全文按**双对标线**重组：PT 线 = 签核精度栈（PBA/SI/AOCV·POCV/CCS/CPPR/单位口径 → G7 R²>0.98），Innovus 线 = in-design 调用栈（统一引擎 + dirty-cone 增量 + effort 分级 → 又快又准），§10 拆成两块看板；**(5)** 补齐 24 号文档体例要素：§4.12 模块状态一览（成熟度/复杂度/边界/复用姿势）、§5 双档配置表、§8 调用方契约表、§14 未验证/不要重走/兄弟仓库实测发现。**缺省新特性关闭 → 零回归**的纪律不变。 |
+| **rv2.1** | **2026-07-23** | 按 `04` 把 G7 从单 `R²` 改为 endpoint/constraint 覆盖、signed bias、MAE/P95、临界 false-negative、top-K precision/recall 联合门禁；增加路径语义键，防不同 scenario/exception 路径被错误配对。 |
 
 ---
 
@@ -205,7 +207,7 @@ PT 签核收敛时的准确性来自一整套互相咬合的机制。逐项核�
 | FR-STA-02 | CPPR | ✓ | 保留；纳入 vs PT 分桶 |
 | FR-STA-03 | WNS/TNS/top-N 路径报告 | ✓ | 报告单位统一 ns |
 | FR-STA-04 | ★ **top-N PBA**（`StaPathBased`） | ✗ | ★ 缺省关；`path_based_top_n=0` 零回归；穷尽档预留 |
-| FR-STA-05 | ★ **vs PT path harness**（JSON+R²+分桶） | ✗ | ★ G7 前置 |
+| FR-STA-05 | ★ **vs PT path harness**（JSON+coverage/bias/P95/critical-FN/top-K+分桶） | ✗ | ★ G7 前置；R² 仅诊断 |
 | FR-STA-06 | ★ **MCMM 外挂 ScenarioManager** | ✗ | ★ 缺省单场景=现状 |
 | FR-STA-07 | ★ **单位出口纪律** | 混乱 | ★ 内部仍 fs，出口/JSON 一律 ns |
 | FR-STA-08 | ★ **SDC 覆盖表 + 未支持响亮失败** | 未普查 | ★ G14；先修 §14.3 的 core dump |
@@ -225,14 +227,14 @@ PT 签核收敛时的准确性来自一整套互相咬合的机制。逐项核�
 
 | ID | 项 | 指标 | 对标线 |
 |---|---|---|---|
-| NFR-STA-01 | G7 相关 | 同网表+SPEF+SDC+lib：top-1000 slack **R² > 0.98**；endpoint 集合差 **< 1%** | PT |
-| NFR-STA-02 | G7 误差带 | 只收紧；目标 P95\|Δslack\| ≤ 协议 δ（初值 15-30 ps，实测替换） | PT |
+| NFR-STA-01 | G7 覆盖/临界安全 | 同输入逐场景：endpoint coverage ≥99%；支持清单内 constraint coverage=100%；PT slack≤guardband 的 false-negative=0 | PT |
+| NFR-STA-02 | G7 数值/排序 | `|ΔWNS|≤10ps`、signed bias≤5ps；MAE/P95/max 与 top-K P/R/NDCG 由协议冻结；R²>0.98 仅诊断 | PT |
 | NFR-STA-03 | PBA 单调 | setup：`slack_pba ≥ slack_gba`；hold 对称；违规计入报告 | PT |
-| NFR-STA-04 | PBA 成本 | top_n=1000、深度≤50：PBA 墙钟 ≤ 10% 全图 GBA | PT |
+| NFR-STA-04 | PBA 成本 | top_n/search budget/beam 与耗时进入 accuracy-latency curve；Phase 0 后冻结生产预算，预算耗尽报告 `pba_exhausted` | PT |
 | NFR-STA-05 | 增量正确性 | T-F1：脏锥外 endpoint slack 变化 ≤ 1 ps | Innovus |
 | **NFR-STA-09** | ★ **增量速度** | ECO ≤100 cell：锥增量墙钟 ≤ 全量 10%；≤1000 cell：≤ 30% | Innovus |
 | **NFR-STA-10** | ★ **in-design 端到端** | iTO fix_drv+fix_hold 全流程 STA 墙钟占比 ≤ 30%（现状未测，先量后定） | Innovus |
-| **NFR-STA-11** | ★ **引擎一致性** | 同一网表+同一 RC：ieval 快档 vs iSTA GBA 的 endpoint slack **R² ≥ 0.99**（布局期口径对齐） | Innovus |
+| **NFR-STA-11** | ★ **引擎一致性** | 同一网表+同一 RC：ieval 快档 vs iSTA GBA 的 coverage/bias/P95/critical-FN 联合对拍；R²≥0.99 仅诊断 | Innovus |
 | NFR-STA-06 | 零回归 | 所有 ★ 开关缺省 off/0 → 与当前二进制路径报告一致（浮点 ε） | 双 |
 | NFR-STA-07 | G21 sta 分项 | `updateTiming` 墙钟剖面进 parity JSON；日常设计 ≤ 1.5× PT | PT/速度 |
 | NFR-STA-08 | 内存 | 峰值记录；bucket `_n_worst` 可配并报告 | 双 |
@@ -498,9 +500,12 @@ struct StaScenario { std::string name, mode, corner; std::vector<std::string> li
 ```text
 ★ export_paths(tool=ista|pt) → JSON
   unit: "ns" 必填
-  key: endpoint+startpoint+clock+edge；冲突用 pins Jaccard≥0.8
+  key: scenario+check_type+endpoint+startpoint+launch/capture clock+edge
+  pins Jaccard≥0.8 只能作次级匹配，不得跨 exception 合并
 ★ classify_diff.py → align_report.json
-  r2_slack, endpoint_coverage_diff_pct, MAE/P95, buckets[...]
+  endpoint/constraint coverage, signed_bias, MAE/P95/max,
+  critical_false_negative, topk_precision/recall, NDCG@K, r2_slack,
+  buckets[scenario/check_type/cell/net/clock/cppr/constraint]
 ```
 
 分桶：`reconvergence_suspect` / `clock_path_cppr` / `cell_delay` / `net_delay` / `sdc_mismatch` / `unmatched`。
@@ -691,10 +696,13 @@ struct StaScenario { std::string name, mode, corner; std::vector<std::string> li
 |---|---|---|---|---|---|
 | WNS (ns) | | | | ≤10 ps 或协议 % | G6/G7 |
 | TNS (ns) | | | | ≤5% | G7 |
-| #endpoints | | | % | <1% | **G7** |
-| R²(slack) top-1000 | | 1.0 | — | **>0.98** | **G7** |
-| MAE / P95\|Δslack\| | | — | ns | 只收紧 | G7 |
-| 分桶占比 | | — | — | reconvergence↓ after PBA | — |
+| endpoint coverage | | 100% | % | ≥99%；未匹配逐项归因 | **G7** |
+| 支持清单内 constraint coverage | | 100% | % | 100%；unsupported 拒绝 | **G7/G14** |
+| signed bias / MAE / P95 / max `|Δslack|` | | 0 | ns | bias ≤5 ps；其余 Phase 0 冻结 | **G7** |
+| PT slack≤guardband 的 false-negative | | 0 | count | **0** | **G7** |
+| top-K precision/recall + NDCG@K | | 1.0 | — | P/R ≥0.95；K 入协议 | **G7** |
+| R²(slack) top-1000 | | 1.0 | — | >0.98，**仅诊断** | — |
+| 分桶占比 | | — | — | scenario/check/cell/net/clock/CPPR/constraint 独立 | G7 |
 | `updateTiming` 墙钟 | | | × | ≤1.5×（日常） | **G21** |
 | 峰值内存 | | | × | 记录 | G21 |
 
@@ -735,7 +743,7 @@ struct StaScenario { std::string name, mode, corner; std::vector<std::string> li
 | **M0 先量** | harness+schema+至少 1 设计 align_report；单位注释修正；§1.4 调用剖面实测化（打点） | 有 R² 数字；E-UNIT-01；in-design 看板基线行 |
 | **M1 可信** | delay/SDC/单位校准；GBA R²≥0.90（无 PBA）；SDC core dump 修复（§14.3） | 分桶稳定；G14 SDC 清单起步 |
 | **M2 主算法** | top-N PBA；双值报告；E-PT-04 通过 | 重收敛设计 R²≥0.95；NFR-STA-03 |
-| **M3 打平** | 五套 daily **G7**（R²>0.98，endpoint<1%） | **G7**；允许启动 G17 时序行评审 |
+| **M3 打平** | 五套 daily 按 `04 §2.3` 通过 coverage/bias/P95/critical-FN/top-K 联合门禁；R² 仅诊断 | **G7**；允许启动 G17 时序行评审 |
 | **M4 in-design** | §4.4 契约落地 + iTO 10→1+N 切换；增量 NFR-STA-05/09；eval 对拍 E-EVAL-01 | **NFR-STA-09/10/11**；E-INCR-03 |
 | **M5 纵深** | MCMM 逐角、SI live、CCS 接收端、G21 sta 分项、GPU 一致性 | G7 MCMM；NFR-STA-07/12；**G21** 剖面 |
 

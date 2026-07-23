@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/build-aes13/src/database/manager/parser/vcd/CMakeFiles/vcd_parser"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/build-aes13/src/database/manager/parser/vcd/CMakeFiles/vcd_parser.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/build-aes13/src/database/manager/parser/vcd/CMakeFiles/vcd_parser-complete.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/vcd/vcd_parser/src/vcd_parser-stamp/vcd_parser-build.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/vcd/vcd_parser/src/vcd_parser-stamp/vcd_parser-configure.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/vcd/vcd_parser/src/vcd_parser-stamp/vcd_parser-download.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/vcd/vcd_parser/src/vcd_parser-stamp/vcd_parser-install.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/vcd/vcd_parser/src/vcd_parser-stamp/vcd_parser-mkdir.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/vcd/vcd_parser/src/vcd_parser-stamp/vcd_parser-patch.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/vcd/vcd_parser/src/vcd_parser-stamp/vcd_parser-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"vcd_parser"
+		],
+		"name" : "vcd_parser"
+	}
+}

@@ -586,8 +586,19 @@ void NesterovPlace::initFillerNesInstance()
     edge_y_sum += edge_y_assemble[i];
   }
 
-  int avg_edge_x = static_cast<int>(edge_x_sum / (max_idx - min_idx));
-  int avg_edge_y = static_cast<int>(edge_y_sum / (max_idx - min_idx));
+  // Avoid division by zero
+  int idx_range = max_idx - min_idx;
+  if (idx_range <= 0) {
+    LOG_WARNING << "Invalid index range for filler calculation (min_idx=" << min_idx << ", max_idx=" << max_idx << "), using fallback values";
+    idx_range = 1;
+    if (!edge_x_assemble.empty()) {
+      edge_x_sum = edge_x_assemble[0];
+      edge_y_sum = edge_y_assemble[0];
+    }
+  }
+
+  int avg_edge_x = static_cast<int>(edge_x_sum / idx_range);
+  int avg_edge_y = static_cast<int>(edge_y_sum / idx_range);
 
   Rectangle<int32_t> core_shape = _nes_database->_placer_db->get_layout()->get_core_shape();
   int64_t core_area = static_cast<int64_t>(core_shape.get_width()) * static_cast<int64_t>(core_shape.get_height());
@@ -602,8 +613,17 @@ void NesterovPlace::initFillerNesInstance()
 
   // int32_t filler_cnt = total_filler_area / (avg_edge_x * avg_edge_y);
 
-  // test
-  int32_t filler_cnt = std::ceil(static_cast<int32_t>(static_cast<float>(total_filler_area / (avg_edge_x * avg_edge_y))));
+  // Avoid division by zero - check if avg_edge dimensions are valid
+  int32_t filler_cnt = 0;
+  if (avg_edge_x > 0 && avg_edge_y > 0 && total_filler_area > 0) {
+    int64_t filler_area_per_cell = static_cast<int64_t>(avg_edge_x) * static_cast<int64_t>(avg_edge_y);
+    filler_cnt = std::ceil(static_cast<float>(total_filler_area) / static_cast<float>(filler_area_per_cell));
+  } else {
+    LOG_WARNING << "Invalid filler parameters: avg_edge_x=" << avg_edge_x
+                << ", avg_edge_y=" << avg_edge_y
+                << ", total_filler_area=" << total_filler_area
+                << " - skipping filler insertion";
+  }
 
   for (int i = 0; i < filler_cnt; i++) {
     auto rand_x = rand_val();

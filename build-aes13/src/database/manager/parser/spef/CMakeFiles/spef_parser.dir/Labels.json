@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/build-aes13/src/database/manager/parser/spef/CMakeFiles/spef_parser"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/build-aes13/src/database/manager/parser/spef/CMakeFiles/spef_parser.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/build-aes13/src/database/manager/parser/spef/CMakeFiles/spef_parser-complete.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/spef/spef-parser/src/spef_parser-stamp/spef_parser-build.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/spef/spef-parser/src/spef_parser-stamp/spef_parser-configure.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/spef/spef-parser/src/spef_parser-stamp/spef_parser-download.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/spef/spef-parser/src/spef_parser-stamp/spef_parser-install.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/spef/spef-parser/src/spef_parser-stamp/spef_parser-mkdir.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/spef/spef-parser/src/spef_parser-stamp/spef_parser-patch.rule"
+		},
+		{
+			"file" : "/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/spef/spef-parser/src/spef_parser-stamp/spef_parser-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"spef_parser"
+		],
+		"name" : "spef_parser"
+	}
+}

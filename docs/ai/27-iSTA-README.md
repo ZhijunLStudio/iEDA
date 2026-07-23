@@ -1,247 +1,82 @@
-# iSTA 商业对标与AI创新 - 文档导航
+# iSTA 商业对标与 AI 研究 - 文档导航
 
-## 📚 文档结构
+> 更新：2026-07-23
+> 规则：本文只作导航。规范性门禁依次来自 `00`、`04`、`27-iSTA.md`；benchmark 的 AI/ML 章节和 HTML 看板是研究草图，未实测数字不得当作现状或承诺。
 
-### 1. 核心技术文档
-- **[27-iSTA.md](./27-iSTA.md)** (66KB)
-  - 完整的 rv2.0 审计文档
-  - 逐模块代码走读 + 症结分析
-  - 双对标线：PT 签核精度 × Innovus in-design 性能
-  - 包含 HLD/LLD、算法、配置、演进路线图
+## 1. 文档结构
 
-### 2. Benchmark 测试计划
-- **[27-iSTA-benchmark-plan.md](./27-iSTA-benchmark-plan.md)** (20KB)
-  - **工艺库覆盖**：nangate45, sky130, asap7, ics55, nangate45_3D_HS
-  - **设计规模分级**：Tiny → XLarge (< 1K gates → > 1M gates)
-  - **逐子模块横向对比**：
-    - 电容提取 (vs StarRC/Quantus)
-    - 电阻网络 (RC 树拓扑)
-    - Slew 转换时间 (3层验证)
-    - Cell Delay (NLDM/CCS 对比)
-    - Net Delay (4档精度)
-    - 时序传播 (BFS/DFS/增量)
-    - Setup/Hold 分析 (4层门禁)
-  - **AI/ML 技术创新**：
-    - 神经网络加速 Cell Delay (40× 加速)
-    - GNN Net Delay 估算 (20× 加速)
-    - LLM SDC 生成 (12× 加速)
-    - 强化学习 buffer 插入
-    - Transformer 趋势预测
-    - 知识蒸馏 (PT → iSTA)
+### 核心技术方案
 
-### 3. 可视化看板
-- **[27-iSTA-visualization.html](./27-iSTA-visualization.html)** (25KB)
-  - 交互式 HTML 页面
-  - 双对标看板 (PT + Innovus)
-  - 子模块对比表格
-  - AI/ML 创新卡片
-  - 模块状态一览
-  - 里程碑路线图 (M0-M5)
-  - 关键验证实验
+- [`27-iSTA.md`](27-iSTA.md)：rv2.1，iSTA 代码审计、确定性 STA/PBA/MCMM/增量 LLD、PT 联合相关性门禁和 Innovus in-design 调用路线。
+- [`04-ppa-technical-review-and-optimization-rv1.md`](04-ppa-technical-review-and-optimization-rv1.md)：跨工具 DesignState/DirtySet/MoveTxn、G7 联合指标、性能和 AI 保护边界。
 
-## 🎯 核心目标
+### Benchmark 计划
 
-### PT 精度对标 (G7)
-| 指标 | 目标 |
-|------|------|
-| R²(slack) | **> 0.98** |
-| Endpoint 覆盖 | **> 99%** |
-| WNS 误差 | **< 10ps** |
-| MAE(slack) | **< 15ps** |
+- [`27-iSTA-benchmark-plan.md`](27-iSTA-benchmark-plan.md)：输入/设计/PDK 分层、RC/cell/net/path 对拍和回归脚本草图。
+- §1/§2/§4/§5 是 benchmark 工作计划；§3 是研究 backlog，不是 G7 的实现路线。
 
-### Innovus in-design 对标
-| 指标 | 目标 |
-|------|------|
-| 全量 vs 增量调用 | **1:N** (从 10:1) |
-| 增量墙钟 / 全量 | **< 10%** |
-| STA 占优化墙钟 | **< 30%** |
-| 引擎统一性 | **1套** (从 3套) |
+### 可视化草图
 
-### AI 加速目标
-| 项目 | 加速比 |
-|------|--------|
-| Cell delay 查询 | **40×** |
-| Net delay 估算 | **20×** |
-| SDC 生成 | **12×** |
+- [`27-iSTA-visualization.html`](27-iSTA-visualization.html)：历史可视化页面。
+- 页面中 AI 加速比、模型精度和里程碑数字未有 artifact 证明时均为假说；最终看板应从 schema 化 JSON 生成，不能手填状态。
 
-## 🗺️ 演进路线图
+## 2. G7 联合门禁
 
-```
-M0 先量 (1周)
-  └─ harness + 首个 align_report
-  
-M1 可信 (2-3周)
-  └─ GBA R² ≥ 0.90
-  
-M2 主算法 (3-5周)
-  └─ top-N PBA + R² ≥ 0.95
-  
-M3 打平 (5-7周) 🎯
-  └─ G7 达标 (R²>0.98)
-  
-M4 in-design (6-8周)
-  └─ 增量契约 + 10→1+N
-  
-M5 纵深 (8-10周)
-  └─ MCMM + SI + GPU + AI
+`R² > 0.98` 保留为诊断项，但不能单独通过 G7。每个 scenario/check type 至少同时报告：
+
+| 维度 | 指标 | 初始规则 |
+|---|---|---|
+| 输入/约束 | input hash、constraint coverage、unsupported | 支持清单内 100%；unsupported 拒绝 |
+| endpoint | matched coverage | ≥99%，未匹配逐项归因 |
+| 绝对误差 | `|ΔWNS|`、signed bias、MAE/P95/max | WNS ≤10 ps、bias ≤5 ps；其余 Phase 0 冻结 |
+| 临界安全 | PT slack≤guardband 的 false-negative | 0 |
+| 排序 | top-K precision/recall、NDCG@K | P/R ≥0.95；K 由协议冻结 |
+| 分解 | cell/net/clock/CPPR/constraint bucket | P50/P95/max 独立报告 |
+
+路径匹配主键包含 scenario、setup/hold、rise/fall、startpoint/endpoint、launch/capture clock 和 edge。pin Jaccard 只能作次级匹配。
+
+## 3. In-design 指标
+
+| 指标 | 目标用途 |
+|---|---|
+| ECO dirty cone / full graph | 证明增量范围有效 |
+| incremental / full wall time | 证明高频调用收益 |
+| 锥外 slack 漂移 | 漏失效检测 |
+| iTO 中 STA 墙钟占比 | 端到端热点归因 |
+| 每 N 批 full rescore 差异 | 增量 oracle |
+| 1/2/4/8/16 threads | 可扩展性和 Amdahl 归因 |
+
+estimate/in-design/correlated 三档共享同一 DesignState、单位、SDC 语义和确定性 graph。禁止新增平行的第五套 timing stack。
+
+## 4. AI/ML 边界
+
+允许：候选路径/优化动作排序、参数策略、误差 bucket 推荐、早期 surrogate。
+
+强制保护：
+
+- 按 design family + PDK 切 holdout，禁止同设计 path 随机泄漏。
+- 输出 uncertainty/calibration/OOD，分歧或 guardband 内回落确定性 STA。
+- AI 不自动增加 false/multicycle path，不修改签核约束，不替代 full rescore。
+- NN 必须比较包含数据准备、拷贝和启动开销的端到端延迟；不能预设比 Liberty LUT 快。
+- learned correction 先排除单位/SDC/RC/拓扑错误，只能作有界、可关闭的 residual。
+
+以下旧结论已撤销：`Cell Delay 40x`、`GNN 20x`、`SDC 12x`、`50ps→5ps`。在受控 runner 和 holdout artifact 出现前，它们都不是事实。
+
+## 5. 实施顺序
+
+```text
+M0 input/build/artifact manifest + PT path alignment v2
+ → M1 单位/约束/RC/cell/net/clock/CPPR 分桶归因
+ → M2 dirty-cone incremental + full oracle
+ → M3 top-N PBA + MCMM scenario manager
+ → M4 accuracy-latency curve + in-design 接入
+ → M5 可选 AI ranking/surrogate，受 uncertainty 和 exact fallback 保护
 ```
 
-## 🔬 测试覆盖
+每一阶段必须输出当前 binary SHA-256、输入/产物 hash、运行配置、覆盖清单和机器可判定结果。
 
-### 工艺库 (PDK)
-- ✅ **nangate45** (45nm, P0) - 开源标准库
-- ✅ **sky130** (130nm, P0) - Skywater 开源 PDK
-- ⏳ **asap7** (7nm, P1) - 先进工艺
-- ⏳ **nangate45_3D_HS** (P2) - 3D 集成
-- ⏳ **ics55** (55nm, P2) - 工业参考
+## 6. 当前状态
 
-### Benchmark 来源
-```bash
-# OpenROAD 开源套件
-git clone https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git
-
-# ISPD/ICCAD 竞赛
-- ISPD 2013 Gate Sizing Contest
-- ICCAD 2015 Incremental Timing Contest
-- TAU 2015 Timing Analysis Contest
-
-# 内部测试集
-/home/lxq/AiEDA/iEDA.ai/scripts/design/{sky130,nangate45}_gcd/
-```
-
-## 🤖 AI/ML 技术栈
-
-### 1. 神经网络加速
-```python
-# Cell Delay Predictor (PyTorch)
-class CellDelayNN(nn.Module):
-    """40× 加速，MAE < 1ps"""
-    
-# Net Delay GNN (DGL)
-class NetDelayGNN(nn.Module):
-    """20× 加速，图结构建模"""
-```
-
-### 2. LLM SDC 助手
-```python
-# CodeLlama-34B + RAG
-class SDCAssistant:
-    """1M+ SDC 案例库，12× 加速"""
-```
-
-### 3. 强化学习优化
-```python
-# PPO Agent (stable-baselines3)
-class TimingOptEnv(gym.Env):
-    """自动 buffer 插入策略"""
-```
-
-### 4. 知识蒸馏
-```python
-# Teacher (PT) → Student (iSTA)
-"""系统偏差 50ps → 5ps"""
-```
-
-## 🚀 快速开始
-
-### 查看可视化看板
-```bash
-# 在浏览器中打开
-firefox /home/lxq/AiEDA/iEDA.ai/docs/ai/27-iSTA-visualization.html
-# 或
-google-chrome /home/lxq/AiEDA/iEDA.ai/docs/ai/27-iSTA-visualization.html
-```
-
-### 运行 Daily Regression
-```bash
-cd /home/lxq/AiEDA/iEDA.ai
-# 待开发
-# bash scripts/benchmark/daily_sta_regression.sh
-```
-
-### 逐模块对比测试
-```bash
-# 电容提取对比
-# python3 scripts/benchmark/compare_capacitance.py \
-#   --ista result/nangate45/gcd/rcx.spef \
-#   --starrc golden/nangate45/gcd/starrc.spef
-
-# Cell Delay 验证
-# python3 scripts/benchmark/validate_cell_delay.py \
-#   --lib /home/lxq/AiEDA/Foundary/nangate45/lib/NangateOpenCellLibrary_typical.lib
-```
-
-## 📊 关键数据结构
-
-### PT 对拍 JSON Schema
-```json
-{
-  "tool": "ista|pt",
-  "design": "aes_cipher",
-  "pdk": "nangate45",
-  "unit": "ns",
-  "paths": [
-    {
-      "endpoint": "reg_name/D",
-      "startpoint": "reg_name/Q",
-      "slack": -0.025,
-      "arrival": 1.234,
-      "required": 1.209,
-      "cppr": 0.003
-    }
-  ]
-}
-```
-
-### 增量传播 Trace
-```json
-{
-  "call_site": "iTO::SetupOptimizer",
-  "effort": "incremental",
-  "n_dirty": 50,
-  "n_cone_vertex": 1234,
-  "wall_ms": 25
-}
-```
-
-## 📦 交付物清单
-
-### 代码模块
-- [ ] `src/ai/delay_predictor.py` (NN cell delay)
-- [ ] `src/ai/net_delay_gnn.py` (GNN net delay)
-- [ ] `src/ai/sdc_assistant.py` (LLM SDC)
-- [ ] `src/ai/timing_opt_rl.py` (RL buffer)
-
-### Benchmark 脚本
-- [ ] `benchmark/qor/sta/` (5 设计 × 2 PDK)
-- [ ] `scripts/benchmark/compare_sta.py`
-- [ ] `scripts/benchmark/daily_regression.sh`
-- [ ] `scripts/benchmark/compare_capacitance.py`
-- [ ] `scripts/benchmark/validate_cell_delay.py`
-
-### 训练数据
-- [ ] `data/cell_delay_dataset/` (100K+ SPICE)
-- [ ] `data/sdc_corpus/` (10K+ 真实 SDC)
-- [ ] `data/timing_opt_traces/` (1K+ 优化轨迹)
-
-## 🔗 相关文档
-
-- [00-ieda-commercial-parity-master-plan-v1.1.md](./00-ieda-commercial-parity-master-plan-v1.1.md) - 总纲
-- [03-commercial-knowhow-catalog.md](./03-commercial-knowhow-catalog.md) - Know-how 目录
-- [24-iPL-3d-rv1.0.md](./24-iPL-3d-rv1.0.md) - 布局器深度审计范例
-
-## 📞 联系方式
-
-- **作者**：iEDA.ai Team
-- **机构**：Southeast University EDA Lab
-- **日期**：2026-07-21
-- **版本**：rv2.0 + Benchmark Plan v1.0
-
----
-
-**核心理念**：
-1. **双对标线**：PT 签核精度 × Innovus in-design 性能
-2. **逐模块对比**：每个子模块独立验证，量化门槛
-3. **AI/ML 创新**：神经网络加速 + LLM 辅助 + 强化学习优化
-4. **可量化验证**：R²、MAE、加速比等硬指标
-5. **工业级 Benchmark**：多工艺、多规模、daily 回归
+- 代码能力与缺口以 `27-iSTA.md §1/§4` 为准。
+- 商业并排基线、联合门禁 schema 和 AI 性能收益尚未在本导航中验证。
+- benchmark runner 尚未落地的命令必须继续标“待开发”，不能用文档代码块冒充可运行脚本。

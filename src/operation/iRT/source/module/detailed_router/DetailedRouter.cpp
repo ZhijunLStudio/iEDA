@@ -16,6 +16,8 @@
 // ***************************************************************************************
 #include "DetailedRouter.hpp"
 
+#include <cstdlib>
+
 #include "DRBox.hpp"
 #include "DRBoxId.hpp"
 #include "DRCEngine.hpp"
@@ -133,6 +135,17 @@ void DetailedRouter::routeDRModel(DRModel& dr_model)
   dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 4, 3, 4 * fixed_rect_unit, 4 * routed_rect_unit, 4 * violation_unit, 15, 10);
   dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 8, 3, 4 * fixed_rect_unit, 4 * routed_rect_unit, 4 * violation_unit, 15, 10);
   // clang-format on
+  if (const char* max_iter_env = std::getenv("IEDA_RT_MAX_ITERATIONS")) {
+    char* parse_end = nullptr;
+    long requested_max_iter = std::strtol(max_iter_env, &parse_end, 10);
+    if (parse_end != max_iter_env && *parse_end == '\0' && requested_max_iter > 0
+        && requested_max_iter < static_cast<long>(dr_iter_param_list.size())) {
+      dr_iter_param_list.resize(static_cast<size_t>(requested_max_iter));
+      RTLOG.info(Loc::current(), "Limit detailed routing to ", requested_max_iter, " iteration(s) via IEDA_RT_MAX_ITERATIONS");
+    } else if (parse_end == max_iter_env || *parse_end != '\0' || requested_max_iter <= 0) {
+      RTLOG.warn(Loc::current(), "Ignore invalid IEDA_RT_MAX_ITERATIONS value: ", max_iter_env);
+    }
+  }
   initRoutingState(dr_model);
   for (int32_t i = 0, iter = 1; i < static_cast<int32_t>(dr_iter_param_list.size()); i++, iter++) {
     Monitor iter_monitor;

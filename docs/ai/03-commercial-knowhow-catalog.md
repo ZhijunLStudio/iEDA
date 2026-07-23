@@ -3,12 +3,13 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 03 · 商业 EDA Know-how 推演目录 · v1.0
+# 03 · 商业 EDA Know-how 推演目录 · v1.1
 
 > 日期：2026-07-20  
 > 目的：把 **Innovus / ICC2 / PrimeTime / StarRC / Calibre / PTPX / Voltus / Genus / DC** 等商业工具里「不写进用户手册、但决定 QoR 上限」的工程手法，整理成可落地的假说清单，供各工具方案引用。  
 > 纪律：**推演 ≠ 逆向工程**；下列条目是行业公开论文、contest、工具行为观察与工程常识的综合假说；每条必须绑定「能杀死它的对照实验」；未验证前不得写成「商业已证实如此」。  
 > 用法：各 `2x-*.md` 的「§ 商业 Know-how」引用本目录编号 `KH-<域>-nn`。
+> v1.1（2026-07-23）：按 `04` 技术评审补统一事务/增量 oracle、联合门禁、数据局部性、冲突图并行和 AI 保护边界。
 
 ---
 
@@ -24,6 +25,12 @@ iEDA is licensed under Mulan PSL v2.
 | KH-X-06 | **热点导向迭代** | 不全图盲迭代；对 worst region/path/net 加码 | iPL/iRT/iTO/iCTS | 热点外指标几乎不变 |
 | KH-X-07 | **物理感知贯穿** | 综合→CTS→opt 都吃 placement/route 估计 | iNO/iTO/iCTS | 关物理估计 QoR 变差 |
 | KH-X-08 | **不确定度带** | 两次复跑波动计入对比 | parity ε | 波动 >δ 则不宣称打平 |
+| KH-X-09 | **事务化物理修改** | propose→apply→incr evaluate→accept/rollback | DesignState/DirtySet/MoveTxn | 注入有害 move，状态 hash 必恢复 |
+| KH-X-10 | **增量结果必须有 full oracle** | 增量快但漏失效会形成隐蔽错误 | iSTA/iRCX/iPL/iRT 周期性全量对拍 | 随机 ECO 后 incr 与 full 一致 |
+| KH-X-11 | **联合门禁** | 高相关不代表低偏差或无关键漏报 | G7/G8：coverage+bias+P95+worst+rank | 构造整体偏移，单 R² 应被拒绝 |
+| KH-X-12 | **热数据连续、提交点串行** | SoA/arena/线程本地 merge 常比对象细锁更可扩展 | iDB/STA/RCX/DRC | cache miss/alloc/线程曲线 A/B |
+| KH-X-13 | **冲突图并行** | 相邻 region/move 不能无序同时提交 | iRT box / iTO batch / DRC tile | 同色批次无 halo 交叠；结果确定 |
+| KH-X-14 | **AI 建议、确定性验收** | learned heuristic 可排候选，不能绕过物理不变量 | `04 §6` | OOD/分歧时 abstain 并回落 baseline |
 
 ---
 

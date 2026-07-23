@@ -1,0 +1,11 @@
+{
+  "design": "aes_nangate45_t",
+  "timestamp": "2026-07-23T07:23:14.709632",
+  "stages": {
+    "floorplan": null,
+    "placement": null,
+    "cts": null,
+    "legalization": null,
+    "routing": null
+  }
+}

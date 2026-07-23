@@ -3,13 +3,14 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 23 · iCTS 时钟树综合 · 商业对标方案 · rv2.0
+# 23 · iCTS 时钟树综合 · 商业对标方案 · rv2.1
 
-> 文档号：23-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— ccopt 签核精度（G19：skew/latency/power ≤5%）× Innovus in-design 调用（高频 CTS 不成瓶颈）**
+> 文档号：23-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**双对标 —— ccopt 签核精度（G19：skew/latency/power）× Innovus in-design 调用（增量分支更新不成瓶颈）**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`（逐 kernel 算法伪码 + 双对标线 + 双看板）
 > 商业金标：**ccopt（时钟质量签核准确性）**；**Innovus（物理设计流程中的 CTS 调用模式）**；门禁：**G4 / G19 / G17**（辅 G16/G21；useful skew 依赖 G7）
 > 上游：`22-iPL`、`10-iDB`、SDC；下游：`26-iRT`、`27-iSTA`、`30-iPA`、`12-evaluation`
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-CTS-\*
+> 联合架构：`04-ppa-technical-review-and-optimization-rv1.md`；闭环工作台：`51-agent-native-eda-detailed-plan-v1.0.md`
 > 覆盖：`src/operation/iCTS/`（**source 62.5k + test 21.2k = 83.7k LOC**）：`flow/{Flow,Synthesis,Optimization,instantiation,evaluation,report}`、`module/{routing,topology,characterization,timing}`、`database/`、`api/CTSAPI.*`
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
 
@@ -23,6 +24,7 @@ iEDA is licensed under Mulan PSL v2.
 | rv1.0 | 2026-07-20 | 体例对齐；坐实 C1（无 post-buffer LG）/C2（skew 不 fail）；推翻「HiGHS 即默认」「BST 是主 spine」 |
 | rv1.1 | 2026-07-21 | 重读 `Flow.cc`、`Optimization.cc`、`Config.hh`；坐实 C2 机理（void 强转+成败公式排除 optimization）；测试资产盘点（21.2k） |
 | **rv2.0** | **2026-07-21** | **大改（对照 27-iSTA-rv2.0.md 深度重写，目标显式拆成双对标线）**。核心修订五条：**(1)** 明确 **双对标线**：ccopt 线 = 时钟质量签核精度（skew/latency/power 三指标 ≤5%，G19），Innovus 线 = in-design 调用模式（CTS 在优化循环中墙钟占比 ≤20%，post-CTS 能立即进 iTO/iRT 而非卡死，G21 分项）——rv1.0/rv1.1 只隐含"打平 ccopt"单线，未审 CTS 作为工具被调用的性能与接口;**(2)** §1 **逐 kernel 算法审计**：H-tree 离散主路径 = characterization 表驱动 + fanout/cap 约束搜索 + embedding 插 buffer（非通用拓扑优化算法如 DME/ZST），HiGHS analytical 路径 = MILP 求解器后端（真求解器但生产关闭），BST = 教科书 bottom-up joining + top-down embedding 但**主 spine 是 H-tree 不是 BST**（`Solution.cc:38-41` 只在 enable_analytical_solver 分叉，无 BST 主路径）;**(3)** §4 **每模块给算法伪码、复杂度、边界、复用姿势**，新增 §4.12 **模块状态一览表**（成熟度 / 主复杂度 / 关键边界 / 复用姿势，类比 27 号文档 §4.12）;**(4)** §10 拆成 **§10.1 ccopt 精度看板（skew/latency/power）+ §10.2 Innovus 调用模式看板（墙钟占比 / 接口响应）**；§10.3 对照实验每条给「杀死条件」（E-CTS-XX 编号，类比 27 号的 E-PT-XX / E-INCR-XX）;**(5)** §14 按 27 号体例重组：§14.1 未验证、§14.2 负面结论/不要重走、§14.3 兄弟仓库实测发现（预留，现空）、§14.4 相对 rv1.1 的纠偏。**rv1.1 的 C1/C2 结论、FR/NFR 框架、M0–M4 演进全部保留**，本版按双对标线重组并补齐算法细节。 |
+| **rv2.1** | **2026-07-23** | 实现评审：useful skew 改为同时受 setup/hold 差分约束的 LP；buffer 选择补 Pareto DP；增量 CTS 明确 dirty branch RC/STA 优先、拓扑重构后置；G19 加绝对 ps/mW 下限，生产模式严格失败。 |
 
 ---
 
@@ -167,7 +169,7 @@ const bool run_success = _run_summary.outcome == SynthesisOutcome::kFinished
 | FR-CTS-04 | BST/FLUTE/SALT/CBS 路由原语 | ✓ | 保留；★ 补 BST gtest |
 | FR-CTS-05 | Optimization + EmitClockSummary | ✓ | ★ **optimization 状态进 runCTS 成败**（§4.2） |
 | FR-CTS-06 | ★ post-instantiation iPL `runIncrLG` | ✗ | ★ 生产推荐 on；开关可关→零回归 |
-| FR-CTS-07 | ★ skew 硬门禁（逐 clock target_met） | 只报告 | ★ `fail_on_skew_miss` 缺省 false；G4 CI 强制 true |
+| FR-CTS-07 | ★ skew 硬门禁（逐 clock target_met） | 只报告 | ★ production/CI 缺省严格失败；仅显式 compatibility profile 可放宽 |
 | FR-CTS-08 | ★ vs ccopt harness | ✗ | ★ G19 前置 |
 | FR-CTS-09 | ★ 时钟功耗进 iPA / 报告 delta | 半有 | ★ 实锤 G4 |
 | FR-CTS-10 | ★ useful skew | ✗ | ★ 缺省 off；依赖 G7 |
@@ -183,7 +185,7 @@ const bool run_success = _run_summary.outcome == SynthesisOutcome::kFinished
 |---|---|---|---|
 | NFR-CTS-01 | G4 skew | 每 SDC clock：optimized_skew ≤ skew_bound + ε（1–5 ps 协议化） | ccopt |
 | NFR-CTS-02 | G4 legality | CTS 后 overlap=0；site 对齐；runIncrLG rc=0 | ccopt |
-| NFR-CTS-03 | **G19 精度** | vs ccopt **skew/latency/时钟功耗** 相对差 **≤5%**（三指标） | ccopt |
+| NFR-CTS-03 | **G19 精度** | vs ccopt 的 skew/latency/时钟功耗分别用 `max(相对阈值, 绝对阈值)`：例如 skew/latency 至少容许协议化 2–5 ps floor，功耗设测量噪声 floor；三项独立同时验收 | ccopt |
 | NFR-CTS-04 | 零回归 | 两开关 false → 与当前二进制行为一致（浮点 ε 内） | — |
 | NFR-CTS-05 | HiGHS 可选档 | 开启不劣于离散，或响亮回退 | ccopt |
 | **NFR-CTS-06** | ★ **墙钟（Innovus 线）** | 日常设计 CTS ≤1.5× ccopt；**post-CTS 工具（iTO/iRT）墙钟中 CTS 更新占比 ≤20%** | Innovus / G21 |
@@ -236,7 +238,7 @@ Liberty ──► Characterization ──► CharLibrary
 | D2 | **LG 复用 iPL `runIncrLG`** | CTS 内自建 LG | KH-CTS-05；与 iTO 同债 |
 | D3 | **离散 H-tree 保持默认** | 强制 HiGHS | E-CTS-02 未过不翻默认 |
 | D4 | **BST 保持辅助原语** | BST 替 H-tree spine | 主拓扑已是 H-tree |
-| D5 | **`fail_on_skew_miss` 缺省 false，CI 强制 true** | 立刻默认 fail | 防日常脚本全红 |
+| D5 | **production/CI `fail_on_skew_miss=true`；compatibility profile 显式 false** | 生产默认放过 skew miss | 兼容性不能冒充生产成功；旧脚本迁移由 profile 承担 |
 | D6 | **optimization 状态进成败做成开关**（NFR-CTS-07） | 无条件改成败公式 | 现状可能依赖"no_op 也绿"的脚本存在 |
 | D7 | **no_op reason 先类型化再扩展** | 继续加字符串 | `:294` 覆写已是腐化点 |
 | D8 | **useful skew 排 G7 后** | 现用 FastSTA slack | FastSTA≠签核 |
@@ -296,6 +298,8 @@ enum class OptStatus { kOptimized, kTargetMet, kNoOptimizableClock,
 
 `Solution.cc:35-41` 分派；`Config.hh:75,182` 缺省 false。rv1.1 不改默认；★可选增强：HiGHS 求解失败**响亮回退离散**（现状失败语义未验证，§14）。E-CTS-02 结果进看板。
 
+buffer/线型选择不能只取单一 skew 最小值。对每个 subtree 保留非支配状态 `(downstream_cap, insertion_delay, slew, power, area, buffer_count)`；合并子树时查 characterization 表、过滤 cap/slew/fanout 硬违规，再按 delay/power/area 支配关系剪枝。最终由协议按“skew/DRV 硬门 → latency → power/area”字典序选状态，避免一个加权和掩盖不可接受的 slew 或功耗。
+
 ### 4.4 BST（已有，补测）
 
 `BstPipeline::run`（`BstPipeline.cc:65-69`）bottomUp+topDown。★ `BoundSkewTreeTest`（L0）：合并平衡、不可行输入、skew 钳位断言。不可行时日志+钳位 → ★可选 rc 化。
@@ -304,17 +308,36 @@ enum class OptStatus { kOptimized, kTargetMet, kNoOptimizableClock,
 
 ```text
 ALG-CTS-2  UsefulSkewBudget:
-  输入: iSTA(G7 后) 每 capture 对 setup/hold slack
-  skew_target[i] = clip(f(slack_i), [-B,+B])
-  目标: min Σ|skew_i - skew_target[i]|
+  变量: 每个 sequential sink 的 clock latency l_i，以及绝对偏移辅助变量 u_i
+  对每条 launch i → capture j 的 setup check:
+    l_i - l_j ≤ setup_slack_ij - setup_guardband
+  对对应 hold check:
+    l_i - l_j ≥ -hold_slack_ij + hold_guardband
+  每个 sink: -B_i ≤ l_i-l_ref ≤ B_i；跨域/假路径按 SDC 语义过滤
+  第一目标：所有 setup/hold/DRV 约束可行；第二目标：min max_violation；
+  第三目标：min Σu_i + λ_power·ΔP + λ_area·ΔA（只在前两层相同后比较）
+  LP 不可行时输出最小冲突约束集，不得裁剪一个 `f(slack)` 后继续写树
 杀死实验 E-CTS-03: hold 违例升且 setup 无改善 → 杀，回退盲 min-skew
 ```
 
-### 4.6 LocalLegalization（语义收口）
+### 4.6 ★ 增量 clock update（FR-CTS-14）
+
+```text
+ALG-CTS-3 updateClockTree(DirtySet d)
+  定位受影响 clock branch、祖先到最近稳定分叉点及其兄弟边界
+  先只更新 dirty branch 的 RC、arrival/slew/skew，并尝试 resize/rebuffer/local legalize
+  若 fanout/cap/slew/skew 仍超约束，才重建该局部 topology；禁止默认重跑全 CTS
+  用 MoveTxn 记录连接、master、位置、RC/STA version；失败完整 rollback
+  dirty_ratio 超阈值或每 K 次调用运行 full CTS analysis oracle，校验增量/全量差
+```
+
+缓存 characterization lookup、branch-to-sink 索引和稳定分支 RC；用设计版本号拒绝陈旧缓存。性能门禁同时记录 dirty sinks 数、重算 branch 数、增量/全量墙钟比，而不是只报“接口存在”。
+
+### 4.7 LocalLegalization（语义收口）
 
 文档/API 注释明确「端子防重叠 ≠ placement legalize」；placement LG 唯一入口 = ALG-CTS-1 → iPL。
 
-### 4.7 ★ vs ccopt harness（FR-CTS-08）
+### 4.8 ★ vs ccopt harness（FR-CTS-08）
 
 ```text
 run_ccopt_align.sh: 同 netlist/DEF/SDC/lib
@@ -324,7 +347,7 @@ run_ccopt_align.sh: 同 netlist/DEF/SDC/lib
 禁：内部 FastSTA skew 判 G19 绿
 ```
 
-### 4.8 模块状态一览
+### 4.9 模块状态一览
 
 | 模块 | LOC | 成熟度 | 关键边界 | 复用姿势 |
 |---|---|---|---|---|
@@ -351,7 +374,7 @@ run_ccopt_align.sh: 同 netlist/DEF/SDC/lib
 | `max_length` | placeholder | **非活跃约束** | 勿当有效 |
 | ★ `post_cts_legalize` | **false**（零回归）/生产推荐 true | iPL incr LG | 关=现状 |
 | ★ `fail_on_optimization_failure` | **false** | optimization 进成败 | CI 强制 true |
-| ★ `fail_on_skew_miss` | **false** | skew 硬门 | CI 强制 true |
+| ★ `fail_on_skew_miss` | **true（production/CI）** | skew 硬门 | compatibility profile 可显式 false |
 | ★ `enable_useful_skew` | **false** | useful skew | G7 前禁 true |
 
 多轮渐进（缺省单轮=现状）：R0 全关（基线）→ R1 LG+门禁 on（G4 目标态）→ R2 useful skew（G7 后）。
@@ -424,9 +447,9 @@ run_ccopt_align.sh: 同 netlist/DEF/SDC/lib
 
 | 指标 | iCTS | 商业 | 门槛 | 门禁 |
 |---|---|---|---|---|
-| skew | | | ≤bound；vs ≤5% | G4/**G19** |
-| latency | | | ≤5% | **G19**/G17 |
-| 时钟功耗 | | | ≤5% | G4/**G19** |
+| skew | | | ≤bound；误差门槛=max(5%, protocol ps floor) | G4/**G19** |
+| latency | | | 误差门槛=max(5%, protocol ps floor) | **G19**/G17 |
+| 时钟功耗 | | | 误差门槛=max(5%, measurement floor) | G4/**G19** |
 | legality | 无 post-LG | PASS | PASS | G4 |
 | optimization 失败可见 | 隐 no_op | 响亮 | rc≠0 | NFR-CTS-07 |
 | CTS 墙钟 | | | ≤1.5× 起步 | G21 |

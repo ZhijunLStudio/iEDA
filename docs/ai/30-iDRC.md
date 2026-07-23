@@ -3,13 +3,14 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 30 · iDRC 设计规则检查 · 商业对标优化方案 · rv2.0
+# 30 · iDRC 设计规则检查 · 商业对标优化方案 · rv2.1
 
-> 文档号：30-rv2.0　　版本：rv2.0（大改）　　里程碑：**规则引擎实 → 覆盖表透明（G11）→ vs Calibre 子集一致（R²>0.98）→ 违例回灌 iRT**
+> 文档号：30-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**规则引擎实 → 覆盖表透明（G11）→ vs Calibre 子集精确匹配 → 增量违例回灌 iRT**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`24-iPL-3d-rv1.0.md`、`27-iSTA-rv2.0.md`（逐 kernel 走读 + 诚实归因 + 被否方案）
 > 商业金标：**Calibre**（签核精度）；**Innovus verify**（in-design 速度）；门禁：**G7 / G11 / G12 / G14 / G15**（辅 G21）
 > 上游：`26-iRT`　下游：`26-iRT`（ECO 回灌）、`12-evaluation`
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-DRC-\*
+> 联合架构：`04-ppa-technical-review-and-optimization-rv1.md` 的 `DirtySet + full oracle`；闭环工作台：`51-agent-native-eda-detailed-plan-v1.0.md`
 > 覆盖：`src/operation/iDRC/`（RuleValidator.{hpp,cpp}、rv_design_rule/×26、DRCInterface.cpp、design_rule/\*.hpp）
 > 纪律：**签核可信度 > 性能**；断言带 `file:line`；未实测写「未验证」；SKIP≠PASS；每条理论附能杀死它的对照。
 
@@ -23,6 +24,7 @@ iEDA is licensed under Mulan PSL v2.
 | v1.1 | 2026-07-20 | 引擎摘要 |
 | rv1.0 / v2.0 | 2026-07-20 | **大改**：坐实 `verifyRVModel` OpenMP（`RuleValidator.cpp:356`）；`verifyRVCluster`（`:608+`）调度 **26** 类 `ViolationType`；`DRCInterface.cpp:153` 消费 `DRCRV.verify`。核心修订：引擎**非空壳**，缺口是 **覆盖表/假 clean/Calibre 对齐/回灌**，不是「没有 DRC」。 |
 | **rv2.0** | **2026-07-22** | **大改（对照 27-iSTA-rv2.0 的深度与体例重写，强化签核工具特性）**。核心修订五条：**(1)** rv1.0 把 iDRC 当成「引擎全、缺外围」来审——**代码级核实后发现头号结构症结是精度机制链条断裂**：26 规则引擎在、几何谓词成熟，但 **vs Calibre 的精度验证栈零建设**（无 harness / 无分桶归因 / 无 R² / 覆盖表只在附录未进 CI）——in-design DRC 的价值前提是「我知道我覆盖了哪些规则、跳过了哪些、与签核金标的偏差在哪个桶」，当前状态是**边界失明**（§1.5，类比 27 号文档对 PBA/SI/MCMM 缺失的判定）；**(2)** 新增 **精度栈逐项审计**（§1.5，Calibre 对标核心证据）：逐机制列出 iDRC 已有 vs Calibre 签核必需的差距清单——几何检查引擎 ✓、R-tree 索引 ✓、26 规则族 ✓；但 **rule deck 覆盖率不透明**（哪些 Calibre 规则映射到 iDRC 的哪个 `ViolationType`）、**skipped 规则不报告**（假 clean 的根源，G15 核心）、**无 vs Calibre 子集对齐 harness**（G7/G11 不可证）、**违例聚合策略未文档化**（同一 spacing 违例报 N 个点 or 1 个区域影响 diff 对齐）；**(3)** 全文按**双对标线**重组：Calibre 线 = 签核精度栈（覆盖表透明 + R² / MAE 分桶归因 + 子集一致 + 响亮失败 → G7 R²>0.98），Innovus verify 线 = in-design 速度栈（OpenMP 并行已有 + cluster 剖分 + 墙钟 ≪ Calibre → 迭代内可用），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§1.2 kernel 算法表（三规则伪码已有，新增复杂度/边界/复用姿势分析）、§4.13 模块状态一览、§5.2 双档配置表（签核档 vs 迭代档）、§8 调用方契约表（iRT→iDRC + iDRC→iRT ECO 回灌）、§10.3 对照实验（E-DRC-01～04 已有，补 E-CAL-\* 系列 Calibre 对齐实验）；**(5)** 签核工具特殊纪律强化：**SKIP≠PASS 红线前置**（§1.3 边界、§2.3 约束、§7 状态机、§10.1 看板、§14.2 负面）、覆盖表从「附录可选」升为 **M0 前置 + CI 强制**（§4.1）、精度看板必填 R² / MAE / 分桶归因（§10.1，对标 Calibre 子集的机械判据，非目视）。**缺省配置零回归**纪律不变；新增 harness/覆盖表 CI 开关缺省 **强制**（签核工具边界诚实 > 开发便利）。 |
+| **rv2.1** | **2026-07-23** | 实现评审：Calibre 对齐从总数/R²改为规则语义归一化后的 violation precision/recall/F1 与 unmatched 集；移除未由代码证实的具体几何库断言；补 rule-aware dirty window、线程局部结果/确定性归并和 periodic full DRC oracle。 |
 
 ---
 
@@ -73,10 +75,10 @@ Calibre 签核 DRC 的可信度来自一整套互相咬合的机制。逐项核�
 |---|---|---|---|---|---|
 | 1 | **26 规则族几何检查引擎** | ✓ | `verifyRVCluster` `:608-680` 逐 `ViolationType` 调度；`rv_design_rule/*.cpp` **26** 个实现文件 | 基准能力 | — |
 | 2 | **R-tree 空间索引** | ✓ | spacing/enclosure 类规则查询候选（§1.5.1 伪码） | 避免 O(n²) 暴力 | ✓ |
-| 3 | **boost.geometry / CGAL 几何谓词** | ✓ | polygon_distance / contains / medial_axis（§1.5.1） | 精确距离/包含判定 | ✓ |
+| 3 | **整数 DBU 几何谓词与退化处理** | ⚠️ 需逐规则证实 | 当前文档不能仅凭伪码断言使用 boost.geometry/CGAL 或 medial-axis；M0 建实际 primitive 清单 | rounding、touch/overlap、notch/EOL 语义直接决定漏报/误报 | P0 |
 | 4 | **rule deck 覆盖表**（foundry rule ID ↔ tool rule 映射） | ✗（附录有草案，未进 CI） | repo 无强制覆盖表；`coverage.json` 仅附录草案（§4.1） | **边界失明**：不知道 iDRC 覆盖了 PDK deck 的哪个子集 → **假 clean 的根源**（检查了 26 类、跳过了未知数量，报 0 违例不可信） | **P0** |
 | 5 | **runtime checked/skipped 报告**（每次跑完显式列出哪些规则检查了、哪些跳过了） | ✗ | 当前 `verify` 返回 `Violation list`；无 `checked[]` / `skipped[]` 字段（FR-DRC-03） | **SKIP≠PASS 红线**：Innovus verify 明确标注「覆盖 85% PDK deck」；iDRC 0 违例 + skipped 非空 = PARTIAL_CLEAN（**禁止**标 signoff clean） | **P0** |
-| 6 | **vs Calibre 子集对齐 harness**（同 DEF 双方跑 → 键 (layer, rule_type, bbox_hash) 对拍 → R² / MAE / 分桶归因） | ✗ | 无 `benchmark/qor/drc/` harness；无 `classify_diff.py`（FR-DRC-04） | **G7 不可证**：无对齐 = 不知道与金标差距在哪（是几何 bug？测量定义不同？映射表错？Calibre 多报了 iDRC 未实现的规则？） | **P0** |
+| 6 | **vs Calibre 子集对齐 harness**（语义归一化 → rule/layer 内 violation-set matching → precision/recall/F1/unmatched） | ✗ | 无 `benchmark/qor/drc/` harness；无集合匹配与归因工具（FR-DRC-04） | **G7 不可证**：无对齐 = 不知道与金标差距在哪（是几何 bug？测量定义不同？映射表错？Calibre 多报了 iDRC 未实现的规则？） | **P0** |
 | 7 | **违例聚合策略文档化**（多个相邻违例点 merge 成一个区域 or 逐点报告） | ✗ | §1.5.1 三规则伪码提到「实现策略影响违例数」；生产行为**未文档化** | diff 对齐时违例数不一致的归因前提（同一 spacing 错误，Calibre 报 1 个区域、iDRC 报 5 个点 → 需明确聚合策略才能判定是「一致」还是「多报/漏报」） | P1 |
 | 8 | **响亮失败**（未支持规则 → ERROR + 拒绝运行，而非静默 SKIP 当 PASS） | ⚠️ | `needVerifying` 按类型过滤（`verifyRVCluster` `:608+`）；但 skipped 不进报告 → 用户看到 0 违例以为全通过 | G14/G15 核心：静默 SKIP = 假 clean（用户以为流片 ready，实际大量规则未检查） | **P0** |
 | 9 | **rule 参数正确性**（LEF/tech 文件的 spacing/width/enclosure 值正确映射到检查器） | ⚠️ 未验证 | `design_rule/*.hpp` 数据结构；`SameLayerCutSpacing` 等与 LEF 参数绑定（§14.1-4） | 参数错 → 全链失真（如 min_spacing 读成 0.14 实际 PDK 是 0.18 → 漏报真违例） | P1 |
@@ -86,7 +88,7 @@ Calibre 签核 DRC 的可信度来自一整套互相咬合的机制。逐项核�
 | 13 | **vs Calibre 精度归因分桶** | ✗ | 无 harness → 无分桶（`geometry_bug` / `measure_def` / `mapping_error` / `calibre_only`，§4.2） | 对齐差异无法归因 → 不知道是代码 bug 还是边界差异 | P0 |
 | 14 | **iRT ECO 回灌闭环**（DRC 违例 JSON → iRT 消费 → ECO route → 再 DRC） | ⚠️ schema 草案 | `violation_summary` JSON 草案（§4.3）；iRT `RTInterface` 消费侧**未验证** | G5 闭环前置；schema 不一致 = 需转换层 | P1 |
 
-**§1.5 结论**：精度缺口是**结构性的三层**——(a) 机制层：覆盖表/checked/skipped 报告/响亮失败（#4/5/8，**SKIP≠PASS 红线**）；(b) 对齐层：vs Calibre harness / R² / 分桶归因（#6/13，**G7 不可证**）；(c) 实现层：参数绑定/线程安全/天线密度缺（#9/10/11）。rv1.0 只覆盖了 (a)(c) 的一部分，(b) 是 rv2.0 新增战线。**签核工具头号纪律 = 边界诚实**（KH-DRC-02）：无覆盖表的 DRC clean = 假 clean。
+**§1.5 结论**：精度缺口是**结构性的三层**——(a) 机制层：覆盖表/checked/skipped 报告/响亮失败（#4/5/8，**SKIP≠PASS 红线**）；(b) 对齐层：vs Calibre violation-set matching / unmatched 分桶归因（#6/13，**G7 不可证**）；(c) 实现层：参数绑定/线程安全/天线密度缺（#9/10/11）。**签核工具头号纪律 = 边界诚实**（KH-DRC-02）：无覆盖表的 DRC clean = 假 clean。
 
 ### 1.5.1 已实现 ViolationType（代码枚举走读）
 
@@ -94,13 +96,11 @@ Calibre 签核 DRC 的可信度来自一整套互相咬合的机制。逐项核�
 AdjacentCutSpacing、CornerFillSpacing、CornerSpacing、CutEOLSpacing、CutShort、DifferentLayerCutSpacing、Enclosure、EnclosureEdge、EnclosureParallel、EndOfLineSpacing、FloatingPatch、JogToJogSpacing、MaximumWidth、MaxViaStack、MetalShort、MinHole、MinimumArea、MinimumCut、MinimumWidth、MinStep、NonsufficientMetalOverlap、NotchSpacing、OffGridOrWrongWay、OutOfDie、ParallelRunLengthSpacing、SameLayerCutSpacing（及头文件族）。  
 **→ 这是 iEDA 实现集，不是 Calibre 全 deck。**
 
-### 1.5.2 选 3 规则几何检查伪代码（对标 24-iPL-3d §1.2 深度）
+#### 1.5.2 选 3 规则几何检查伪代码（对标 24-iPL-3d §1.2 深度）
 
 从 26 规则族中选 3 个代表性规则展开算法剖析（Spacing、Width、Enclosure），对应商业 DRC 的核心检查类别。
 
-#### 1.5.1 选 3 规则几何检查伪代码（对标 24-iPL-3d §1.2 深度）
-
-从 26 规则族中选 3 个代表性规则展开算法剖析（Spacing、Width、Enclosure），对应商业 DRC 的核心检查类别。
+以下是**目标算法骨架**，不是对当前每个 `.cpp` 所用 primitive 的事实断言；M0 必须把伪码中的 `polygon_distance/widthMeasurementPrimitive/contains` 映射到真实函数、整数 DBU rounding 和聚合行为。
 
 **Spacing 规则伪代码**（`rv_design_rule/rv_spacing.cpp` 类）：
 
@@ -125,7 +125,7 @@ def checkSpacing(layer, min_spacing):
       
       shape_B = getShape(shape_B_id)
       
-      # 3. 精确距离计算（boost.geometry）
+      # 3. 精确距离计算（必须使用仓内已验证的整数 DBU primitive）
       dist = polygon_distance(shape_A.geom, shape_B.geom)
       
       if dist < min_spacing:
@@ -143,8 +143,8 @@ def checkSpacing(layer, min_spacing):
 **复杂度**：O(n log n + k·n)，n=形状数，k=平均邻居数（稠密层 k 大，如 M1 可达 10-20；稀疏层 M5+ k 小）。
 
 **边界 case**：
-1. **Self-spacing**：单 polygon 凹角处距离<min_spacing（需特殊处理：skeleton 骨架法或凸分解）；
-2. **不同 net spacing**：同 net 形状间距可放宽（PDK 常见规则：同 net 0.5×min_spacing）；
+1. **Self-spacing**：单 polygon 凹角处距离<min_spacing（具体 primitive 由实际代码/规则语义冻结）；
+2. **同/异 net 条件**：只能按对应 rule deck 条件表取值，禁止假设固定 0.5 倍关系；
 3. **形状重叠**：polygon_distance=0（特殊违例，需区分"短路"vs"同 net 合并"）。
 
 **Width 规则伪代码**（`rv_design_rule/rv_width.cpp` 类）：
@@ -155,31 +155,29 @@ def checkWidth(layer, min_width):
   violations = []
   
   for shape in shapes:
-    # 1. 计算中轴骨架（Voronoi 骨架，O(m log m)，m=顶点数）
-    skeleton = medialAxis(shape.geom)            # boost.geometry 或 CGAL
+    # 1. 按实际规则实现选择 edge-pair/最大内接窗口/骨架类算法；M0 代码审计后冻结
+    measurements = widthMeasurementPrimitive(shape.geom)
     
-    # 2. 沿骨架采样检查宽度（O(m)）
-    for edge in skeleton.edges:
-      # 骨架边到边界的距离 = 局部宽度的一半
-      half_width = distance_to_boundary(edge.midpoint, shape.geom)
-      local_width = 2 * half_width
+    # 2. 遍历 primitive 返回的局部最小宽度见证
+    for witness in measurements:
+      local_width = witness.width
       
       if local_width < min_width:
         violations.append({
           "type": "WIDTH",
           "layer": layer,
           "value": local_width,
-          "bbox": edge.bbox,
-          "location": edge.midpoint
+          "bbox": witness.bbox,
+          "location": witness.location
         })
   
   return violations
 ```
 
-**复杂度**：O(n·m log m)，n=形状数，m=单形状顶点数（平均 10-50）。
+**复杂度**：O(Σ T_width(shape))；在真实 primitive 审计前不虚报 `m log m`。
 
 **边界 case**：
-1. **非凸 polygon**：骨架可能有分支，需遍历全部骨架边（不能只查主轴）；
+1. **非凸 polygon**：所有局部窄颈必须产生见证，不能只看 bbox 或单一主轴；
 2. **薄长条形状**：整条都<min_width，报多个违例 or 合并成一个区域违例（实现策略影响违例数统计）；
 3. **退化形状**：面积极小的"针刺"形状（可能是布线器bug），宽度→0。
 
@@ -245,7 +243,7 @@ def checkEnclosure(layer_pair, min_enclosure):
 
 **三规则的共同特征**（商业 DRC 核心模式）：
 - **R-tree 空间索引**：避免 O(n²) 暴力配对；
-- **boost.geometry / CGAL 几何库**：多边形距离/包含/骨架计算（不自研几何算法）；
+- **几何 primitive 版本化**：距离/包含/宽度测量必须指向仓内真实实现和 rounding 语义；未经代码证实不得写成 boost.geometry/CGAL；
 - **违例聚合策略**：多个相邻违例 or 合并成一个区域（实现影响违例数，需文档化）。
 
 ---
@@ -261,8 +259,10 @@ def checkEnclosure(layer_pair, min_enclosure):
 | FR-DRC-05 | ★ 违例 JSON ≡ iRT schema | ❓ | P1 |
 | FR-DRC-06 | ★ route→drc→routeECO 闭环 | ✗ | P1 |
 | FR-DRC-07 | 台账驱动补规则 | — | P2 |
+| FR-DRC-08 | ★ rule-aware incremental DRC + periodic full oracle | 无正式契约 | P1 |
 | NFR-DRC-01 | SKIP≠PASS | G11/G15 | |
 | NFR-DRC-02 | in-design 墙钟 ≪ Calibre | 记录 | G21 |
+| NFR-DRC-03 | 可比子集匹配 | per-rule precision/recall/F1、unmatched bbox、测量值误差；关键 short/spacing 类 false-negative=0 | G11 |
 
 红线：不追求 100% deck；追求**边界诚实**（KH-DRC-02）。
 
@@ -314,14 +314,22 @@ iDB/DEF/GDS 形状
 ### 4.2 Calibre 对齐算法 `[新增]`
 
 ```text
-S = implemented ∩ mapped_calibre_rules
-同版图双方跑 → 键 (layer, rule_type, bbox_hash)
-桶: geometry_bug | measure_def | mapping_error | calibre_only
+S = implemented ∩ mapped_calibre_rules，冻结 rule deck/version/DBU/层映射
+双方输出先归一化：foundry rule id、layer pair、整数 DBU、measurement semantic、polygon/bbox
+同一 (rule_id, layer/layer_pair) 内构建候选边：bbox overlap/距离在该规则容差内
+做最大权重二分匹配，权重按 overlap、位置距离、测量值误差；禁止只比较总数或精确 bbox hash
+matched → 统计 measurement error；unmatched_iEDA=FP，unmatched_Calibre=FN
+按 rule/layer 报 precision/recall/F1 和 unmatched 几何；关键规则 FN 必须为 0
+桶: geometry_bug | rounding | aggregation | measure_def | mapping_error | calibre_only
 ```
+
+`R²` 只适合连续测量值的辅助相关性，不适合作为离散违例集合的主门禁；两个工具即使总数相同也可能位置完全不同。
 
 ### 4.3 回灌 `[新增]`
 
 `iDRC JSON == 26-iRT violation_summary`；platform：`route → drc → if vios: routeECO(hot) → drc`。
+
+增量检查接收 `DirtySet{layers,bboxes,shapes,nets}`：每条 rule 根据最大作用距离、EOL/PRL 邻域、layer-pair enclosure 扩不同 halo；只失效相交 cluster 与缓存结果。多个 cluster 由线程局部 violation vector 计算，结束后按 `(rule_id,layer,bbox,shape_ids)` 排序、去重、确定性归并，禁止 OpenMP 线程直接写共享容器。每 K 次增量检查或 dirty area 比例超阈值运行 full DRC oracle；对增量/full violation set 做同一匹配，任何 FN 立即清缓存并降级 full。
 
 ### 4.4 模块状态
 
@@ -343,6 +351,9 @@ S = implemented ∩ mapped_calibre_rules
 | `drc.coverage_table` | path | 必填进 CI |
 | `drc.fail_on_skipped_as_clean` | true | G15 |
 | `drc.omp_threads` | env | |
+| `drc.incremental` | false | 校准通过后开启；缺省 full 保正确性 |
+| `drc.full_oracle_interval` | 1 | K 次增量一次 full；1 为最保守 |
+| `drc.deterministic_merge` | true | 线程局部结果排序归并 |
 
 ---
 
@@ -354,7 +365,8 @@ S = implemented ∩ mapped_calibre_rules
 | vio_by_type/layer | 分桶 |
 | skipped_rules | **独立列** |
 | wall_s | in-design |
-| vs_calibre_delta | 子集差 |
+| vs_calibre_precision/recall/F1 | 可比子集集合匹配；逐 rule/layer |
+| vs_calibre_unmatched | FP/FN 的 bbox、测量值和归因桶 |
 
 ---
 
@@ -405,12 +417,13 @@ init → load_shapes → verify → attach_coverage → emit_json → (optional)
 |---|---|---|---|---|
 | **E-DRC-01** | 注入 spacing 违例（手工缩小间距到 0.9×min） | `sed 's/RECT 100 200 150 300/RECT 100 200 151 300/' gcd.def; run_drc` | 必检出且 **type=SPACING**；违例数 ≥1 | 假 clean（G15） |
 | **E-DRC-02** | 干净设计（golden DEF） | `run_drc -report drc.json` | **0 违例且 skipped[] 非空**（证明有检查有跳过）；报告标注"PARTIAL_CLEAN" | SKIP≠PASS（G11/G15） |
-| **E-DRC-03** | 同 DEF vs Calibre 子集（仅 spacing/width/enclosure） | `run_drc; calibre -lvs -spice ...; diff` | 违例数一致或**差异逐条归因**（如 Calibre 多报 antenna，iDRC 未实现该规则 → 记入 skipped） | Calibre 子集对齐（G11） |
+| **E-DRC-03** | 同 DEF vs Calibre 可比子集（仅已映射规则） | 双方 DRC → normalize → bipartite match | 逐 rule/layer precision/recall/F1；关键 short/spacing FN=0，所有 unmatched 逐条归因；禁止用总数相等替代集合一致 | Calibre 子集对齐（G11） |
 | **E-DRC-04** | 覆盖表 CI 注入（人为删 coverage.json） | `run_drc` | **启动拒绝或 ERROR**："missing coverage.json" | 覆盖表强制（FR-DRC-02） |
+| **E-DRC-05** | 随机局部移动/加线/via，固定 seed | incremental DRC vs 每步 full DRC | 匹配后 FN=0、FP 在归并容差内；任一漏报则缓存/halo 策略失败并降级 full | FR-DRC-08 |
 
 **实验设计原则**：
 1. **注入可控**：手工修改 DEF 坐标 = 制造违例（controlled experiment）；
-2. **判据机械**：违例数≥1、skipped 非空、diff 逐条归因（非目视）；
+2. **判据机械**：违例数≥1、skipped 非空、集合匹配 precision/recall/F1 与 unmatched 逐条归因（非目视）；
 3. **锁住边界**：E-DRC-02 的"skipped 非空"= in-design 定位的验证（不许宣称 100% PDK）。
 
 **E-DRC-01 详细执行步骤**（示例）：
@@ -435,19 +448,15 @@ jq '.violations[0].value' drc_result.json        # 必须 <20（实测间距）
 ```bash
 # iDRC 跑
 ieda> run_drc -pdk sky130 -report idrc.json
-idrc_count=$(jq '.violations | length' idrc.json)
 
 # Calibre 跑（仅子集：spacing/width/enclosure）
 calibre -drc -turbo -hier gcd.calibre_deck    # deck 仅开 3 规则族
-calibre_count=$(grep "TOTAL Results" calibre.rpt | awk '{print $3}')
 
-# 对比
-diff_count=$((idrc_count - calibre_count))
-if [ $diff_count -ne 0 ]; then
-  # 差异逐条归因
-  python3 align_drc.py idrc.json calibre.rpt > diff_account.txt
-  # diff_account.txt 必须解释每条差异（如"Calibre 多报 antenna，iDRC skipped"）
-fi
+# 归一化并做 rule/layer 内集合匹配；总数相同也必须执行
+normalize_calibre_drc calibre.rpt -o calibre.json
+align_drc_sets idrc.json calibre.json --coverage coverage.json -o align.json
+jq '.by_rule[] | {rule,precision,recall,f1,fp,fn}' align.json
+# 关键 short/spacing 的 fn 必须为 0；其余 unmatched 必须带归因桶
 ```
 
 ### 10.3 演进
@@ -584,4 +593,3 @@ AdjacentCutSpacing、CornerFillSpacing、CornerSpacing、CutEOLSpacing、CutShor
 | 0 vio、skipped 非空 | partial_clean |
 | 有 MetalShort | dirty |
 | 覆盖表缺失 | 启动 FAIL（CI） |
-

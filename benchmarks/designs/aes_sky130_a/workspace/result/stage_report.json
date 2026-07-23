@@ -1,0 +1,67 @@
+{
+  "design": "aes_sky130_a",
+  "timestamp": "2026-07-23T07:23:14.610215",
+  "stages": {
+    "floorplan": {
+      "stage": "Floorplan (iFP)",
+      "status": "Completed",
+      "metrics": {
+        "die_area_um2": 640000.0,
+        "die_width_um": 800.0,
+        "die_height_um": 800.0,
+        "total_instances": 29254,
+        "logic_instances": 20413
+      }
+    },
+    "placement": {
+      "stage": "Placement (iPL)",
+      "status": "Completed",
+      "metrics": {
+        "total_instances": 29254,
+        "total_nets": 22342,
+        "die_usage": 0.328633
+      }
+    },
+    "cts": {
+      "stage": "Clock Tree Synthesis (iCTS)",
+      "status": "Completed",
+      "metrics": {
+        "sink_count": 2987,
+        "buffer_count": 184,
+        "buffer_area_um2": 729.45,
+        "total_wirelength_um": 28876.715,
+        "max_wirelength_um": 368.609,
+        "elapsed_time_s": 8.672
+      }
+    },
+    "timing_opt_drv": {
+      "stage": "Timing Optimization - Drive (iTO)",
+      "status": "Completed",
+      "metrics": {
+        "total_instances": 29439
+      }
+    },
+    "timing_opt_hold": {
+      "stage": "Timing Optimization - Hold (iTO)",
+      "status": "Completed",
+      "metrics": {
+        "total_instances": 29439
+      }
+    },
+    "legalization": {
+      "stage": "Legalization (iPL)",
+      "status": "Completed",
+      "metrics": {
+        "total_instances": 29439
+      }
+    },
+    "routing": {
+      "stage": "Routing (iRT)",
+      "status": "In Progress / Completed",
+      "metrics": {
+        "total_vias": 151008,
+        "violations": 24171
+      }
+    }
+  }
+}

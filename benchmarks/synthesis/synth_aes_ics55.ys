@@ -1,0 +1,13 @@
+read_verilog /home/lxq/AiEDA/HS-3D_Problem/baseline/Open3DBench/OpenROAD-3D/flow/designs/src/aes/aes_cipher_top.v
+read_verilog /home/lxq/AiEDA/HS-3D_Problem/baseline/Open3DBench/OpenROAD-3D/flow/designs/src/aes/aes_key_expand_128.v
+read_verilog /home/lxq/AiEDA/HS-3D_Problem/baseline/Open3DBench/OpenROAD-3D/flow/designs/src/aes/aes_rcon.v
+read_verilog /home/lxq/AiEDA/HS-3D_Problem/baseline/Open3DBench/OpenROAD-3D/flow/designs/src/aes/aes_sbox.v
+hierarchy -check -top aes_cipher_top
+synth -top aes_cipher_top -flatten
+dfflibmap -liberty /home/lxq/AiEDA/Foundary/ics55/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CR/liberty/ics55_LLSC_H7CR_typ_tt_1p2_25_nldm.lib
+abc -liberty /home/lxq/AiEDA/Foundary/ics55/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CR/liberty/ics55_LLSC_H7CR_typ_tt_1p2_25_nldm.lib
+setundef -zero
+splitnets
+opt_clean -purge
+write_verilog -noattr /home/lxq/AiEDA/iEDA.ai/benchmarks/synthesis/aes_ics55.v
+stat

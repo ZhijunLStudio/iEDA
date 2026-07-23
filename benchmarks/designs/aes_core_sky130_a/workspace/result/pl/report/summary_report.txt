@@ -1,0 +1,45 @@
+Generate the report at 2026-07-23T00:27:18
++-----------------------+------------+
+| Base Info             | Value      |
++-----------------------+------------+
+| Design                | aes_core   |
+| Utilization           | 0.466993   |
+| Site Num              | 235 * 1392 |
+| Instances Count       | 27419      |
+| - Macro Count         | 0          |
+| - StdCell Count       | 27419      |
+| -- FlipFlop Count     | 2469       |
+| -- Clock Buffer Count | 0          |
+| -- Normal Logic Count | 24950      |
+| Nets Count            | 20671      |
+| - Signal Net Count    | 20670      |
+| - Clock Net Count     | 1          |
+| - Reset Net Count     | 0          |
+| - Other Net Count     | 0          |
++-----------------------+------------+
+
++-----------------------------------+-------+
+| Violation Info                    | Value |
++-----------------------------------+-------+
+| Core Range Violated Count         | 0     |
+| Row/Site Alignment Violated Count | 0     |
+| Power Alignment Violated Count    | 0     |
+| Overlap Violated Count            | 0     |
++-----------------------------------+-------+
+
++-------------------------------------+------------+
+| Wirelength Info                     | Value      |
++-------------------------------------+------------+
+| Total HPWL                          | 900406037  |
+| Max HPWL                            | 1221165    |
+| Total STWL                          | 1072419950 |
+| Max STWL                            | 18719910   |
+| LongNet HPWL (Exceed 1000000) Count | 2          |
++-------------------------------------+------------+
+
++------------------+----------+
+| Bin Density Info | Value    |
++------------------+----------+
+| Peak BinDensity  | 1.000000 |
++------------------+----------+
+

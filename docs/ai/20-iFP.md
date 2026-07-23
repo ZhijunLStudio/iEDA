@@ -3,13 +3,14 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 20 · iFP 布图规划 · 商业对标优化方案 · rv2.0
+# 20 · iFP 布图规划 · 商业对标优化方案 · rv2.1
 
-> 文档号：20-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— Innovus/ICC2 floorplan 精度线（auto-die + IO 质量 + 宏约束）× 性能线（秒级完成 die/core/IO/tap）**
+> 文档号：20-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**双对标 —— Innovus/ICC2 floorplan 精度线（auto-die + IO 质量 + 宏约束）× 性能线（秒级完成 die/core/IO/tap）**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`24-iPL-3d-rv1.0.md`、`27-iSTA-rv2.0.md`（逐 kernel 走读 + 诚实归因 + 双对标线）
 > 商业金标：**Innovus floorplan**（die/core/IO/constraint 精度）；**ICC2 floorplan**（宏规划辅助）；门禁：**G3 / G14 / G17**（辅 G2）
 > 上游：网表/LEF　下游：`22-iPL`、`24-iPDN`、`26-iRT`
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-FP-\*
+> 联合架构：`04-ppa-technical-review-and-optimization-rv1.md`；闭环工作台：`51-agent-native-eda-detailed-plan-v1.0.md`
 > 覆盖：`src/operation/iFP/` 全树（1636 LOC）+ iPL 侧宏残迹（`PLAPI.cc`、`platform/.../ipl_io.cpp`、`tcl_ipl.cpp`）
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
 
@@ -23,6 +24,7 @@ iEDA is licensed under Mulan PSL v2.
 | rv1.0 / v2.0 | 2026-07-20 | parity | 体例对齐；坐实 iFP macro 空壳 + iPL `return true` 假成功 |
 | rv1.1 / v3.0 | 2026-07-21 | parity | 对 iFP 全树 14 个源文件（1636 LOC）+ iPL 宏残迹逐行读完重写；坐实三空壳目录、IO 等间距无 cost、B1/B2 疑似 bug |
 | **rv2.0** | **2026-07-22** | parity | **大改（对照 27-iSTA-rv2.0.md 的深度与双对标线体例重写）**。核心修订五条：**(1)** rv1.1 把 iFP 当成"三空壳+两疑似 bug"来审——**结构层核实后发现头号症结是精度机制完整度缺失**：有 die/core/IO/tap 四项基础能力，但**缺 vs Innovus/ICC2 floorplan 的精度验证栈**（无 auto-die 面积目标验证、无 IO net-driven cost、无宏约束与 iPL 闭环测试、无 die/core 合法性门槛 → G3/G17 主责交接不清）——in-design floorplan 的价值前提是"我知道 die 面积与 util 的关系、IO 摆放质量可量化、宏约束能被 iPL 消费"，当前状态是**边界模糊**（§1.5，类比 27 号文档对 PBA/SI 缺失的判定）；**(2)** 新增 **§1.5 精度栈逐项**（对 Innovus/ICC2 floorplan 的差距清单，辅助工具核心证据）：逐机制列出 iFP 已有 vs 商业 floorplan 必需的差距——die/core/track 初始化 ✓、tap/endcap 插入 ✓；但 **auto-die 面积模型未验证**（util→die 公式与实际拥塞/DRC 的关系未校准）、**IO placement 无 net-driven cost**（等间距排布 vs 商业工具的飞行线优化）、**宏约束模型单向**（iFP→iDB 写入但 iPL 消费侧未闭环测试）、**track 生成按 die vs core 未裁决**（§1.2-kernel 表指出，待 E-FP-07）、**三空壳目录占位误导**（G14 卫生）；**(3)** 全文按**双对标线**重组：Innovus 线 = floorplan 精度栈（auto-die 面积模型 + IO net-cost + 宏约束闭环 → G3/G17 面积/宏可解释），ICC2 线 = floorplan 辅助栈（die/core 合法性 + 快速完成 → 秒级），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§1.2 kernel 算法表（补 auto-die/IO/tap 伪码+复杂度+边界+复用姿势）、§4.6 模块状态一览、§5 配置表、§8 调用方契约表（iFP→iPL/iPDN/iRT 交接）、§10.1/10.2 双看板（vs Innovus/ICC2 + 对照实验 E-FP-01～07）、§14 未验证/不要重走/兄弟仓库三分；**(5)** 辅助工具特殊定位强化：**iFP 是 Tier 2 辅助工具**（主责在 iPL 宏真化，iFP 只做约束交接）——宏算法归 22、iFP 不实现 SA/力导向的红线前置（§2.3 约束、§3.2-D1 决策、§14.2 负面），精度栈聚焦 die/IO/tap 三项特有能力对商业工具的差距（§1.5），篇幅适当精简但保持核心章节完整（§4 LLD 保留伪码但不展开 MacroPlacer）。**缺省新特性关闭 → 零回归**纪律不变。 |
+| **rv2.1** | **2026-07-23** | Codex | 实现评审：auto-die 从单一 `A_cell/util` 改为 std/macro/halo/blockage/IO/PDN/whitespace 分项预算与下游拥塞可行性循环；IO 从“按重心排序”改为约束槽位分配；面积/IO 实验改用独立指标、效应量和置信区间。 |
 
 ---
 
@@ -138,7 +140,7 @@ Innovus/ICC2 floorplan 的实用性来自一整套互相咬合的机制。逐项
 | ID | 指标 | 门槛 |
 |---|---|---|
 | NFR-FP-01 | auto-die 墙钟（≤50k inst） | < 1 s |
-| NFR-FP-02 | util 默认 | 0.55–0.60 可配（KH-FP-02） |
+| NFR-FP-02 | util 策略 | 初始候选 0.55–0.60；按 PDK/设计族由拥塞、pin access、DRC holdout 校准，不作为跨设计常数 |
 | NFR-FP-03 | 假成功 | 0（空壳命令/假 MP 须非成功 rc） |
 | NFR-FP-04 | iFP gtest | 从零 ≥ §12 所列用例 |
 
@@ -208,14 +210,21 @@ Verilog/iDB ──► Netlist ──► cell 面积统计 ──► ★auto-die 
 ```text
 ALG-4.1-1  autoDie(util, aspect, force)
   [已有] initDie/initCore 手工路径（不动）
-  ★ A_cell = Σ area(std) + Σ area(macro)          # O(N_inst)
-  ★ A_die  = A_cell / util                         # util∈[0.40,0.85]，默认 0.55
-  ★ W,H = f(A_die, aspect) → 对齐 manufacture_grid / site
+  ★ A_std = Σ area(movable_std) / util_std          # 仅 std-cell 用 util 折算
+  ★ A_fixed = area(union(macro footprints, halos, hard blockages))  # 几何并集避免重复计数
+  ★ A_reserve = A_io_ring + A_pdn + A_channel + A_whitespace
+  ★ A_core = A_std + A_fixed + A_reserve
+  ★ W,H = f(A_core, aspect)；core 对齐 site/row，die 对齐 manufacturing grid
+  ★ feasibility loop（有界 3–5 轮）:
+      fast_place_or_rudy(W,H) → {overflow,pin_access,macro_channel}
+      若任一超预算：按瓶颈方向扩 W/H；禁止只降低一个全局 util 掩盖原因
   ★ 若 die 已非空且 force=false → ERROR（FR-FP-06/G14）
   ★ 写回 IdbDie + 可选自动 initCore 余量
-  边界：零面积 / 无 site / util≤0 → 响亮失败
+  边界：零面积 / 无 site / util≤0 / 宏+halo 本身不可容纳 → 响亮失败
   复用姿势：Composition 调现有 initDie/initCore，禁止平行写 die
 ```
+
+`A_io_ring/A_pdn/A_channel` 必须来自显式配置或上游约束并写入报告；未知项不得悄悄计为 0。快速可行性只用于选择尺寸，最终门禁仍由 iPL/iRT/iDRC 的独立结果给出。
 
 ### 4.2 ★ MacroConstraintModel（FR-FP-05，P0）
 
@@ -237,7 +246,7 @@ struct MacroConstraint {
 
 - **B1 修复**（先 E-FP-05 裁决）：左/右边 `width_step` → `height_step`。单行修复 + gtest（非方形 core 断言间距）。
 - **B2 修复**（先 E-FP-06 裁决）：相交判定改为标准形式 `row_start_x > rect->get_high_x() || row_end_x < rect->get_low_x()`。单行修复 + gtest（左悬垂 blockage 用例）。
-- **★ net 驱动 IO cost（P1，FR-FP-02）**：在等间距骨架上加 net 重心吸引项——pin 的候选位按 incident net 的内部连接重心排序（cost-term-live 单测：置零该项解必变）。**前提**是 B1 修复落地（D5）。
+- **★ 约束槽位 IO 分配（P1，FR-FP-02）**：先按 side/layer/pitch 枚举合法槽位并剔除 blockage；固定 pin、side 限制、总线顺序、差分对相邻/对称、供电 pin 间距均作硬约束。自由 pin 的代价为 `flyline + w_t·criticality·distance + w_c·local_congestion + w_a·pin_access`，普通组用最小费用匹配，必须保序的 bus 用动态规划，最后以 `(pin_name, slot_id)` 确定性破同分。**前提**是 B1 修复落地（D5）。仅“按重心排序”不是可验收算法。
 - **产物断言**：tap 后存在 PHY_/ENDCAP_ 实例；autoPlacePins 后 pin 全部 `is_placed` 且无重叠（O(pin²) 或排序扫描 O(n log n)）。
 
 ### 4.4 makeTracks 按 core（FR-FP-09，P1）
@@ -271,6 +280,10 @@ struct MacroConstraint {
 | `auto_die.util` | 0.55 | KH-FP-02 |
 | `auto_die.aspect` | 1.0 | |
 | `auto_die.force` | false | 覆盖已有 die |
+| `auto_die.reserve.{io,pdn,channel,whitespace}` | 必填或显式 0 | 分项面积预算，来源写入 Exhibit |
+| `auto_die.max_feasibility_iters` | 5 | 快速拥塞/可达性校准上限 |
+| `io.assignment_mode` | `legacy` | `legacy|constrained`；新模式缺省关 |
+| `io.cost.{timing,congestion,pin_access}` | 0 | 归一化权重；硬约束不进入加权 cost |
 | `macro_constraint.path` | "" | JSON/侧车 |
 
 无多轮渐进（floorplan 单趟）；与 iPL IterParam 无关。
@@ -358,7 +371,7 @@ init → (initDie|auto_die) → initCore → makeTracks
 | **E-FP-05** | 非方形 core（W:H=2:1） | `autoPlacePins`，量左/右边相邻 pin 纵距 | =core_h/(edge_num+1) → B1 被杀；≠ → 实锤 bug，执行修复 | B1 疑似 bug 裁决 |
 | **E-FP-06** | 构造行左端悬垂 blockage | `tapCells`，检查悬垂区 `[row_start, row_start+50]` | 悬垂区无 PHY_/ENDCAP_ → B2 被杀；有 → 实锤 bug，执行修复 | B2 疑似 bug 裁决 |
 | **E-FP-07** | 标准设计 | `makeTracks`，量 core 外 track 是否被 iRT 使用 | iRT 消费 core 外 track 比例；>0 → die 策略合理；=0 → 改按 core | track 生成策略裁决（FR-FP-09） |
-| **E-FP-08** | 同设计 | IO 等间距 vs net-driven，跑完 STA 比 WNS | WNS 差 <20ps → H-FP-2 成立（IO cost P2）；>50ps → H-FP-2 被杀（IO cost 升 P0） | IO net-cost 优先级（H-FP-2） |
+| **E-FP-08** | 同设计、固定 seeds | IO legacy vs constrained，跑完整布局/布线/STA | 逐设计独立报告 flyline、overflow、pin-access DRC、WNS/TNS；以 bootstrap 95% CI 与预注册最小效应判断，CI 跨 0 则“不确定、扩样”，不得用单一 WNS 或留下 20–50 ps 空档 | IO 分配收益与副作用（H-FP-2） |
 
 **实验设计原则**（对标 27-iSTA / 30-iDRC）：
 1. **可控输入**：非方形 core（E-FP-05）、悬垂 blockage（E-FP-06）= 制造触发条件；
@@ -499,8 +512,7 @@ PR 切片：FP-0 台账+空壳删除 → FP-1 B1/B2 修复+gtest → FP-2 MacroC
 
 ## 附录 C · auto-die 数值例（假说，待测）
 
-设 Σarea=1.0e6 µm²，util=0.55 → A_die≈1.82e6；aspect=1 → W=H≈1348 µm；再对齐 site（如 0.46 µm）取整。
-**杀死实验**：同一网表 util=0.55 vs 手工偏小 die → 后者 overflow/拥塞应显著更差，否则 util 模型假。
+仅作 std-cell 子预算示例：设 `A_std_raw=1.0e6 µm²`、`util_std=0.55`，则 `A_std≈1.82e6 µm²`；还必须加宏/halo/blockage 几何并集以及 IO/PDN/channel/whitespace reserve，之后才由 aspect 求 W/H 并分别对齐 site 与 manufacturing grid。**杀死实验**：若分项模型对 holdout 设计的 overflow/pin-access/DRC 无预测力，则调整 reserve/可行性模型，而不是只改一个全局 util。
 
 ## 附录 D · 证据摘录（file:line 最小集）
 

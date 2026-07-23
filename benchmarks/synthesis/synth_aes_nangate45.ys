@@ -1,0 +1,13 @@
+read_verilog /home/lxq/AiEDA/HS-3D_Problem/baseline/Open3DBench/OpenROAD-3D/flow/designs/src/aes/aes_cipher_top.v
+read_verilog /home/lxq/AiEDA/HS-3D_Problem/baseline/Open3DBench/OpenROAD-3D/flow/designs/src/aes/aes_key_expand_128.v
+read_verilog /home/lxq/AiEDA/HS-3D_Problem/baseline/Open3DBench/OpenROAD-3D/flow/designs/src/aes/aes_rcon.v
+read_verilog /home/lxq/AiEDA/HS-3D_Problem/baseline/Open3DBench/OpenROAD-3D/flow/designs/src/aes/aes_sbox.v
+hierarchy -check -top aes_cipher_top
+synth -top aes_cipher_top -flatten
+dfflibmap -liberty /home/lxq/AiEDA/Foundary/nangate45/lib/NangateOpenCellLibrary_typical.lib
+abc -liberty /home/lxq/AiEDA/Foundary/nangate45/lib/NangateOpenCellLibrary_typical.lib
+setundef -zero
+splitnets
+opt_clean -purge
+write_verilog -noattr /home/lxq/AiEDA/iEDA.ai/benchmarks/synthesis/aes_nangate45.v
+stat

@@ -3,15 +3,16 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 28 · iRCX 寄生提取 · 商业对标方案 · rv2.0
+# 28 · iRCX 寄生提取 · 商业对标方案 · rv2.1
 
-> 文档号：28-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— StarRC 签核精度（G8：R²>0.98，CC p90<10%）× 增量提取性能（ECO 后局部重提 ≤10% 全量墙钟）**
+> 文档号：28-rv2.1　　版本：rv2.1（门禁纠偏）　　里程碑：**双对标 —— StarRC 分量/拓扑/时延联合相关性（G8）× 增量提取性能（ECO 后局部重提 vs 全量）**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`24-iPL-3d-rv1.0.md`、`27-iSTA-rv2.0.md`（逐 kernel 走读 + 双对标线 + 诚实归因）
-> 商业金标：**StarRC（签核精度准确性）**；**StarRC xTRA（增量提取）**；门禁：**G8 / G12 / G14 / G15**（辅 G7/G17/G21）
+> 商业金标：**StarRC（签核精度准确性）**；**StarRC xTRA（增量提取）**；门禁：**G8 / G14 / G15**（辅 G7/G17/G21；G12 专属 iLVS，与 iRCX 无关）
 > 上游：`26-iRT`、`10-iDB`、ITF/captab；下游：`27-iSTA`、`25-iTO`、`29-iPW`、`12-evaluation`
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-RCX-\*
 > 覆盖：`src/operation/iRCX/`（flow/extraction/ ~2.1k LOC、module/calculate/ ~4.8k、module/report/ ~1.9k、parser/itf\*/ ~3.2k、tool/compare_spef/ ~1.1k，全树 ~18k LOC 含工具）
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
+> 联合门禁：见 `04-ppa-technical-review-and-optimization-rv1.md` §2.4/§4.3；`R²` 和 total C 不能单独代表 G8。
 
 ---
 
@@ -23,6 +24,7 @@ iEDA is licensed under Mulan PSL v2.
 | v1.1 | 2026-07-20 | 短篇展开，**未对齐 01 规范**；架构图写 `*CC` 易误导 |
 | rv1.0 | 2026-07-20 | **体例对齐 01**：对 `Extraction` / `EdgeCapAccumulator` / `SpefDumperDNet` / `ThicknessModel` / `CompareSpefTool` / ITF parser **逐文件走读后重写**。保留正确结论（**有提取无 StarRC 标定**、**全量无增量**）；推翻/细化：① 「SPEF `*CC`」→ 实现写的是 IEEE **`*CAP` 三节点耦合行**（真实 aggressor 名），全树无字面 `*CC` 关键字；② 「ITF 全」→ 主结构（conductor/dielectric/via/corner）在，**PBTV 厚度应用被注释掉**、部分 PROCESS_* 回调无 setter；③ 「CompareSpef=标定」→ 仅为 **SPEF-vs-SPEF** 工具，**无** `run_starrc_align` harness。**缺省新特性关闭 → 零回归**。 |
 | **rv2.0** | **2026-07-22** | **大改（对照 27-iSTA-rv2.0.md 深度与签核工具要求重写，目标显式拆成双对标线）**。核心修订五条：**(1)** rv1.0 把 iRCX 当成「有提取器缺标定环」来审——**代码级核实后发现头号结构症结是精度栈的缺失与死接线**：pattern 匹配只覆盖基础双侧/单侧场景（`EdgeCapAccumulator.cc:65-135`），**multi-neighbor 族、宽金属 fringe、via C、shield 专用模型全缺**；PBTV 厚度模型被注释掉（`ThicknessModel.hh:111-117`）；field-solver 校准路径不存在——现状是**教科书 2.5D pattern 但无商业级精度栈完整度**；**(2)** 新增 **§1.5 精度栈逐项**（对 StarRC 的差距清单，签核工具核心证据）：pattern 覆盖 vs 商业、Ceff 迭代、fringe/via C、shield 模型、field-solver 校准、density/PBTV、温度/工艺角——逐机制坐实 iRCX 差距（15 项，7 项 P0/P1）；**(3)** 全文按**双对标线**重组：StarRC 线 = 签核精度栈（pattern 完备度 + field-solver 校准 + 工艺变分 → G8 R²>0.98、CC p90<10%），StarRC xTRA 线 = 增量提取（dirty-net 锥 + 局部重建 → ECO 后 ≤10% 全量墙钟），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§4.12 模块状态一览（成熟度/复杂度/边界/复用姿势）、§5 双档配置表（全量档 × 增量档）、§8 调用方契约表（iSTA/iTO/iPW 耦合消费与增量触发）、§10.3 对照实验（E-RCX-NN 系列，可杀假说）、§14 未验证/不要重走/兄弟仓库发现三分；**(5)** 新增 **G12 精度门禁要求**：分桶归因（layer/length/fanout/coupling_ratio 四维）、vs StarRC 的 MAE/P95 误差带、pattern 命中率统计——签核可信度优先于全局性能，**禁止无归因盲调 α**。**缺省新特性关闭 → 零回归**的纪律不变。 |
+| **rv2.1** | **2026-07-23** | 纠正门禁编号（G12 属于 iLVS，iRCX 只绑定 G8）；G8 改为 ground/coupling C、wire/via R、拓扑、Elmore 和同一 STA slack 的联合相关性，增加绝对误差下限与 dirty coupling halo。 |
 
 ---
 
@@ -57,13 +59,13 @@ RCXAPI::report → SpefDumper: *D_NET / *CAP(gnd+coupling 3-node) / *RES
 | Via R 模型 | ✓ | `ViaResistanceModel`（`ViaResistanceModel.cpp:31-59`）：via R × half_node_scale | **可用**；厚度变分 TODO |
 | CompareSpef | ✓ SPEF↔SPEF | `compare_spef/README.md:1-7`；TCL `compare_spef`；`CompareSpefTool.cpp:58-143` | **工具在** |
 | PlotSpef 可视化 | ✓ | `PlotSpefCapResolver.cc:57-74` 识别 iRCX/StarRC 几何；输出 GDS/LYP | 可视化归因 |
-| **vs StarRC 标定 harness** | ✗ | 仓内无 `run_starrc_align.sh`（仅旧文档规划）；无 G8 CI | **P0 缺口（G8/G12）** |
+| **vs StarRC 标定 harness** | ✗ | 仓内无 `run_starrc_align.sh`（仅旧文档规划）；无 G8 CI | **P0 缺口（G8）** |
 | **增量提取** | ✗ | `topo_pool.clear()`（`Extraction.cc:33`）后全量；无 dirty-net API | **P0 缺口（KH-RCX-03、性能线）** |
 | **Multi-neighbor pattern** | ✗ | `accumulate` 仅双侧/单侧/无邻（`EdgeCapAccumulator.cc:75-108`）；三邻及以上 **零命中** | **精度缺口**（宽总线/密集区） |
 | **宽金属 fringe C** | ✗ | `fringeCap` 查表单一（`CapacitanceCalc.cpp:185-187`）；宽金属 fringe 修正 **零** | **精度缺口** |
 | **Via C** | ✗ | `calcEdge` via 边跳过 C 计算（`CapacitanceCalc.cpp:185-187`） | **精度缺口** |
 | **Shield 专用模型** | ✗ | special-net 耦合折进接地（`EdgeCapAccumulator.cc:121-123`：`if specialNet: ground_cap += cc`） | **精度缺口**（屏蔽效应≠简单接地） |
-| **Field-solver 校准** | ✗ | 无 `benchmark/qor/rcx/field_solver_calib/`；无 pattern→EM3D 差分统计 | **G12 精度主杠杆缺** |
+| **Field-solver 校准** | ✗ | 无 `benchmark/qor/rcx/field_solver_calib/`；无 pattern→EM3D 差分统计 | **G8 精度主杠杆缺** |
 | **Density/PBTV 生效** | ⚠️ 半死 | `model_thickness_` 注释掉多项式（`ThicknessModel.hh:111-117`：`// auto rt_deff =...`），厚度=nominal | **死接线** |
 | **温度依赖 R** | ✗ | `WireResistanceModel` 用 CRT 但温度项 **未外露可配**（`WireResistanceModel.cpp:73-88`） | **缺口**（多角需要） |
 | **工艺角 MCMM** | ⚠️ | `Setup::setupCorners`（`Setup.cc:227-238`）多 corner 入口在；**无场景调度** | **半成品**（类比 iSTA MCMM） |
@@ -87,10 +89,10 @@ RCXAPI::report → SpefDumper: *D_NET / *CAP(gnd+coupling 3-node) / *RES
 | ITF `ItfRead::createDb`（`ItfRead.cpp:37-46`，409 LOC） | ANTLR4 grammar → callback；conductor/dielectric/via/corner 主结构 | 解析面宽 | **PROCESS_\* 回调空**（`ItfProcessCbk.cpp` 无 setter 实现，`:83-127` 仅 print） |
 | `WireResistanceModel::getResistance`（`WireResistanceModel.cpp:38-96`，159 LOC） | ρ(W,T) 或 Rpsq 查表 + CRT | 成熟向 | 温度系数硬编码；多角需外露 |
 | `ViaResistanceModel::getResistance`（`ViaResistanceModel.cpp:31-59`，89 LOC） | via R × half_node_scale_factor | 可用 | via stack R（多层 via）TODO |
-| **Field-solver 参考路径** | ✗ **零命中** | **不存在** | **G12 精度主杠杆**：pattern→EM3D 抽检差分 → 可归因补 pattern/调 α |
+| **Field-solver 参考路径** | ✗ **零命中** | **不存在** | **G8 精度主杠杆**：pattern→EM3D 抽检差分 → 可归因补 pattern/调 α |
 
 **假说 H-RCX-1（可杀）**：G8 失败主因是 **全局系统偏差（可 α 标定）**，而非拓扑枚举缺失。  
-**杀死实验 E-RCX-01**：同 DEF+同 ITF，逐网 `(C_i−C_s)/C_s` scatter plot + layer/length/fanout 分桶；若**高相关（R²>0.95）+过原点偏移** → 允许全局/分层 α；若**低相关或按层/长度离群** → **杀 H-RCX-1**，改补边类型/via/shield/multi-neighbor，**禁止盲调 α**（G12/G14）。
+**杀死实验 E-RCX-01**：同 DEF+同 ITF，逐网 `(C_i−C_s)/C_s` scatter plot + layer/length/fanout 分桶；若**高相关（R²>0.95）+过原点偏移** → 允许全局/分层 α；若**低相关或按层/长度离群** → **杀 H-RCX-1**，改补边类型/via/shield/multi-neighbor，**禁止盲调 α**（G8/G14）。
 
 **假说 H-RCX-2（可杀）**：耦合已写入 SPEF ⇒ iSTA SI 可消费。  
 **杀死实验 E-RCX-02**：iSTA 读回 SPEF 统计 discard/未挂上的 CC 行数；扰动单耦合看 slack（对接 27 号文档 T-E1）。若 discard>0 或 slack 不变 → 杀「耦合已闭环」，查命名/单位/`*CAP` vs `*CC` 语义差异。
@@ -115,7 +117,7 @@ RCXAPI::report → SpefDumper: *D_NET / *CAP(gnd+coupling 3-node) / *RES
 | iRCX → iSTA | 文件 SPEF；SI 依赖耦合消费（`*CAP` 三节点） | **半通**；E-RCX-02 未做（§1.2） |
 | iRCX → iTO | SPEF；ECO 后增量触发 | **通**（文件）；**增量断**（无 API） |
 | iRCX → iPW | SPEF + 活动度 → 功耗/IR | **通**（文件）；**增量断** |
-| iRCX ↔ StarRC | PlotSpef 有 `kStarRc` 几何解析（`PlotSpefCapResolver.cc:57-74`）；**无自动对齐流水线** | **G8/G12 前置缺** |
+| iRCX ↔ StarRC | PlotSpef 有 `kStarRc` 几何解析（`PlotSpefCapResolver.cc:57-74`）；**无自动对齐流水线** | **G8 前置缺** |
 | ECO/iTO → 增量 | 无 dirty-net 接口 | **断**（P0，性能线主缺口） |
 | iEval → iRCX | 快估轨（Steiner/布局期 RC） | 协议未文档化（p95 相对差有界） |
 
@@ -132,7 +134,7 @@ StarRC 签核收敛时的准确性来自一整套互相咬合的机制。逐项�
 | 3 | **宽金属 fringe C** | ✗ | `fringeCap` 查表单一（`CapacitanceCalc.cpp:185-187`）；宽金属修正 **零** | 电源网/宽 metal 层 C 偏小 | **P1** |
 | 4 | **Via C**（via-to-layer / via-to-via） | ✗ | `calcEdge` via 边跳过 C（`CapacitanceCalc.cpp:185-187` `if isVia: return`） | 先进工艺（7nm 以下）via C 占比可达 15-25% | **P0** |
 | 5 | **Shield 专用模型**（屏蔽效应） | ✗ | special-net 耦合折进接地（`EdgeCapAccumulator.cc:121-123`） | 屏蔽效应 ≠ 简单接地，shield 存在时 CC **偏大** | **P1** |
-| 6 | **Field-solver 校准**（pattern→EM3D 抽检差分） | ✗ | 无 `benchmark/qor/rcx/field_solver_calib/`；无 vs EM3D 报告 | **G12 精度主杠杆**：系统残差不可归因 | **P0** |
+| 6 | **Field-solver 校准**（pattern→EM3D 抽检差分） | ✗ | 无 `benchmark/qor/rcx/field_solver_calib/`；无 vs EM3D 报告 | **G8 精度主杠杆**：系统残差不可归因 | **P0** |
 | 7 | Density/PBTV 厚度变分 | ⚠️ 死接线 | `ThicknessModel.hh:111-117` 注释掉多项式 | 密集区 C 偏差；nangate45 影响可忽略（**未实测**） | P1 |
 | 8 | 温度依赖 R | ⚠️ 硬编码 | `WireResistanceModel.cpp:73-88` CRT 在，温度项未外露 | 多角 signoff 需要 | P1 |
 | 9 | 工艺角 MCMM | ⚠️ 无场景表 | `Setup::setupCorners`（`Setup.cc:227-238`）多 lib；无 scenario 调度 | 多角 signoff 缺 | P1 |
@@ -141,9 +143,9 @@ StarRC 签核收敛时的准确性来自一整套互相咬合的机制。逐项�
 | 12 | Wire R 模型（ρ/Rpsq + CRT） | ✓ | `WireResistanceModel.cpp:38-96` | — | ✓ |
 | 13 | Via R 模型 | ✓ | `ViaResistanceModel.cpp:31-59` | via stack R TODO | ✓ |
 | 14 | **单位/报告口径** | ⚠️ 硬编码 | `SpefDumperHeader.cc:47-48` FF/OHM；不可配 | 下游兼容性风险（G15） | P1 |
-| 15 | **vs StarRC 对拍 harness** | ✗ | 无 `run_starrc_align.sh` | **G8/G12 不可证** | **P0** |
+| 15 | **vs StarRC 对拍 harness** | ✗ | 无 `run_starrc_align.sh` | **G8 不可证** | **P0** |
 
-**§1.5 结论**：精度缺口是**结构性的三层**——**(a) pattern 完备度**：multi-neighbor/fringe/via C/shield 四大族缺或死（#2/3/4/5），当前只覆盖最基础双侧/单侧；**(b) 校准环**：field-solver 参考路径不存在（#6），系统残差不可归因 → **G12 不可证**；**(c) 工艺变分**：PBTV 死接线、温度/MCMM 半成品（#7/8/9）；**(d) harness**：无 vs StarRC 门禁化对拍（#15）→ **G8 不可证**。rv1.0 只覆盖了 (d) 与 (c) 的一部分，(a)(b) 是 rv2.0 新增战线。
+**§1.5 结论**：精度缺口是**结构性的三层**——**(a) pattern 完备度**：multi-neighbor/fringe/via C/shield 四大族缺或死（#2/3/4/5），当前只覆盖最基础双侧/单侧；**(b) 校准环**：field-solver 参考路径不存在（#6），系统残差不可归因 → **G8 不可证**；**(c) 工艺变分**：PBTV 死接线、温度/MCMM 半成品（#7/8/9）；**(d) harness**：无 vs StarRC 门禁化对拍（#15）→ **G8 不可证**。rv1.0 只覆盖了 (d) 与 (c) 的一部分，(a)(b) 是 rv2.0 新增战线。
 
 
 ### 1.6 死配置 / 死接线 / 假成功点名
@@ -163,7 +165,7 @@ StarRC 签核收敛时的准确性来自一整套互相咬合的机制。逐项�
 
 | ID | 症结 | 证据 | 对标线 | P |
 |---|---|---|---|---|
-| **R1** | **无 vs StarRC 门禁化标定 → G8/G12 不可证** | 无 harness；CompareSpef≠StarRC | StarRC | **P0** |
+| **R1** | **无 vs StarRC 门禁化标定 → G8 不可证** | 无 harness；CompareSpef≠StarRC | StarRC | **P0** |
 | **R6** | **无 field-solver 校准 → 系统残差不可归因** | 无 benchmark/qor/rcx/field_solver_calib/ | StarRC | **P0** |
 | **R2** | **Multi-neighbor pattern 零支持** | `EdgeCapAccumulator.cc:75-108` 三分支；三邻+ **零命中** | StarRC | **P0** |
 | **R7** | **Via C 零支持** | `CapacitanceCalc.cpp:185-187` via 边 return | StarRC | **P0** |
@@ -179,7 +181,7 @@ StarRC 签核收敛时的准确性来自一整套互相咬合的机制。逐项�
 - **StarRC 精度线**：R1（无 harness）、R6（无 field-solver 校准）、R2（multi-neighbor 缺）、R7（via C 缺）  
 - **StarRC xTRA 性能线**：R3（无增量 API）
 
-rv1.0 只覆盖 R1（harness）与 R5（PBTV 死接线），rv2.0 新增 **R6（field-solver 校准，G12 主杠杆）** + **R2/R7（pattern 完备度，精度栈深度）** + **R3（增量，性能线）** 四条结构性症结。
+rv1.0 只覆盖 R1（harness）与 R5（PBTV 死接线），rv2.0 新增 **R6（field-solver 校准，G8 主杠杆）** + **R2/R7（pattern 完备度，精度栈深度）** + **R3（增量，性能线）** 四条结构性症结。
 
 ---
 
@@ -194,7 +196,7 @@ rv1.0 只覆盖 R1（harness）与 R5（PBTV 死接线），rv2.0 新增 **R6（
 | FR-RCX-03 | 跨网耦合进 SPEF（`*CAP` 三节点） | ✓ | 保留；★ 文档/测试明确语义 |
 | FR-RCX-04 | Wire/Via R | ✓ | 保留 |
 | FR-RCX-05 | CompareSpef SPEF↔SPEF | ✓ | ★ 门禁化 JSON 输出 |
-| **FR-RCX-06** | ★ **vs StarRC align harness**（G8/G12 前置） | ✗ | ★ 逐网 JSON + 分桶（layer/length/fanout/cc_ratio） |
+| **FR-RCX-06** | ★ **vs StarRC align harness**（G8 前置） | ✗ | ★ 逐网 JSON + 分桶（layer/length/fanout/cc_ratio） |
 | **FR-RCX-07** | ★ **field-solver 校准**（pattern→EM3D 抽检差分） | ✗ | ★ 可归因残差 → 补 pattern/调 α |
 | FR-RCX-08 | ★ **标定系数表**（全局/分层 α） | ✗ | ★ 仅当 E-RCX-01 支持系统偏差；缺省 α=1 |
 | **FR-RCX-09** | ★ **Multi-neighbor pattern**（3+ aggressor） | ✗ | ★ 补第四分支（三邻+）；缺省 off（零回归） |
@@ -213,10 +215,10 @@ rv1.0 只覆盖 R1（harness）与 R5（PBTV 死接线），rv2.0 新增 **R6（
 
 | ID | 项 | 指标 | 对标线 |
 |---|---|---|---|
-| **NFR-RCX-01** | **G8 相关** | vs StarRC：逐网 total C **p90 相对差 < 5%**；耦合 C **p90 < 10%**（纲领） | StarRC |
-| **NFR-RCX-02** | **G12 相关** | R²(total C) ≥ 0.98；分桶归因（layer/length/fanout/cc_ratio）；MAE/P95 只收紧 | StarRC |
+| **NFR-RCX-01** | **G8 分量门禁** | vs StarRC：ground C/coupling C/wire R/via R 分别报告绝对+相对误差 P50/P90/P95/max；初始阈值由 Phase 0 噪声/量级冻结 | StarRC |
+| **NFR-RCX-02** | **G8 联合相关性** | ground/coupling C、wire/via R、拓扑、Elmore 按 layer/geometry/fanout 分桶；同时报绝对与相对误差、P50/P90/P95/max | StarRC |
 | NFR-RCX-03 | 零回归 | α=1、PBTV off、multi-neighbor off、via C off、fringe off、无增量 → 与当前 SPEF 字节/数值 ε 一致 | — |
-| **NFR-RCX-04** | **增量正确性** | 同 dirty 集：增量 vs 全量同网 \|ΔC\| < ε（协议，建议相对 1% 或绝对 0.1fF） | StarRC xTRA |
+| **NFR-RCX-04** | **增量正确性** | dirty net + coupling-neighbor/via halo：增量 vs 全量 R/C/拓扑在协议 ε 内；dirty 外 canonical hash 不变 | StarRC xTRA |
 | **NFR-RCX-05** | **增量速度** | ECO ≤100 net：增量墙钟 ≤ 全量 10%；≤1000 net：≤ 30% | StarRC xTRA |
 | NFR-RCX-06 | 耦合消费 | iSTA discard CC = 0（或报告响亮非零） | iSTA SI |
 | NFR-RCX-07 | 墙钟 | 日常设计全量 ≤ 1.5× StarRC 起步观测（G21 分项） | StarRC |
@@ -230,8 +232,8 @@ rv1.0 只覆盖 R1（harness）与 R5（PBTV 死接线），rv2.0 新增 **R6（
 - **无 G8 背书，不准宣称 G17 时序/功耗打平**（纲领硬约束）。  
 - **禁止无分桶数据盲调 α**（E-RCX-01）；**禁止无 field-solver 校准盲补 pattern**（E-RCX-07）。  
 - **缺省新特性关闭 → 零回归**（PBTV on、multi-neighbor on、via C on、fringe on、增量、α≠1 均显式）。  
-- 禁止用「CompareSpef 自比对 PASS」代替 G8/G12。  
-- **签核可信度 > 全局性能**：G12 精度门禁优先于 G21 性能（先准后快）。
+- 禁止用「CompareSpef 自比对 PASS」代替 G8。
+- **签核可信度 > 全局性能**：G8 精度门禁优先于 G21 性能（先准后快）。
 
 ---
 
@@ -276,7 +278,7 @@ DEF/iRT ──► Layout ──────┘                              │
  CompareSpef vs StarRC gold ──► align_report.json
        │
        ▼
- G8/G12 看板（§10.1）                        增量看板（§10.2）
+ G8 看板（§10.1）                            增量看板（§10.2）
 ```
 
 **核心架构判断**：StarRC 精度线与 StarRC xTRA 性能线**共用同一个 TopoPool、同一套 pattern 匹配、同一条 R/C 计算管线**——差别只在「调用的粒度（全网 vs dirty 锥）」和「生效的精度配置（§5 双档表：multi-neighbor/via C/fringe/PBTV/α）」。这与 Innovus「common extraction engine, 多 effort」同构；也直接否定「为快而再写一套轻量 RC」的路线（代价是口径分家，参考 27 号文档 §1.3 三套栈教训）。
@@ -285,16 +287,16 @@ DEF/iRT ──► Layout ──────┘                              │
 
 | ID | 决策 | 被否方案 | 理由 |
 |---|---|---|---|
-| **D1** | **先 harness + field-solver 校准，再调 α / 改 pattern** | 先盲调系数或盲补 pattern | 无分桶 + 无 EM3D 差分 → 无法杀 H-RCX-1/归因残差（G12/G14） |
+| **D1** | **先 harness + field-solver 校准，再调 α / 改 pattern** | 先盲调系数或盲补 pattern | 无分桶 + 无 EM3D 差分 → 无法杀 H-RCX-1/归因残差（G8/G14） |
 | **D2** | **保持 2.5D pattern 主路线 + field-solver 抽检校准** | 立刻上全芯片 EM3D 场解 | StarRC 快速模式同类；缺的是完整 pattern 族 + 校准环（KH-RCX-01） |
 | D3 | **耦合保持 `*CAP` 三节点**；若 iSTA 需 `*CC` 再双写 | 无证据改格式 | E-RCX-02 先行 |
 | D4 | **PBTV/multi-neighbor/via C/fringe 修复后缺省 off** | 直接打开改数值 | 零回归；打开需 vs StarRC 验证（NFR-RCX-03） |
 | **D5** | **增量外挂 dirty API，缺省全量** | 默认可增量 | 正确性风险（NFR-RCX-04）；显式触发可审计 |
 | D6 | **标定 α 可审计 changelog** | 静默硬编码 | G15 |
-| D7 | **G8/G12 先于 G17** | 边提边宣称打平 | 纲领 |
+| D7 | **G8 先于 G17** | 边提边宣称打平 | 纲领 |
 | **D8** | **精度栈分层演进**：基础 pattern（M1）→ 补全 pattern 族（M2）→ field-solver 校准（M3）→ 工艺变分（M4） | 一次性全开 | 每层可独立验证 vs StarRC；失败可回退 |
 | **D9** | **增量与精度并行演进** | 等精度完成再做增量 | 下游 iTO/iPW 已依赖增量触发（虽现状空转）；G17 功耗需要 |
-| **D10** | **Pattern 完备度排 P0，温度/MCMM 排 P1** | 先补 MCMM 再补 pattern | Multi-neighbor/via C 对 G8/G12 影响更大（nangate45 量级，假说 E-RCX-06）；MCMM 是为多角预留 |
+| **D10** | **Pattern 完备度排 P0，温度/MCMM 排 P1** | 先补 MCMM 再补 pattern | Multi-neighbor/via C 对 G8 影响更大（nangate45 量级，假说 E-RCX-06）；MCMM 是为多角预留 |
 
 ---
 
@@ -355,8 +357,11 @@ benchmark/qor/rcx/
   spef_i = iRCX(same DEF, ITF, captab)
   spef_s = StarRC(same inputs)
   CompareSpefTool -test spef_i -ref spef_s → stats.json
-  buckets: layer / length / fanout / coupling_ratio
-  assert p90_total_c < 0.05 && p90_cc < 0.10   # G8
+  buckets: layer / width-space / length / via_type / fanout / coupling_ratio
+  report ground_c/coupling_c/wire_r/via_r/topology/elmore:
+         abs+relative P50/P90/P95/max and out_of_domain
+  run same STA on spef_i/spef_s → critical slack false-negative
+  assert protocol.g8_joint_gate(stats)          # 阈值由 Phase 0 冻结
 
 ★ ALG-RCX-2  CoeffTable (default identity)
   if E-RCX-01 显示系统偏移:
@@ -521,9 +526,12 @@ benchmark/qor/rcx/
 
 | 指标 | iRCX | StarRC | 门槛 | 门禁 |
 |---|---|---|---|---|
-| total C p90 相对差 | | 0 | **<5%** | **G8** |
-| 耦合 C p90 | | 0 | **<10%** | **G8** |
-| R²(total C) | | 1 | ≥0.98 | G8 |
+| ground/coupling C P50/P90/P95/max | | 0 | 协议冻结；绝对+相对 | **G8** |
+| wire/via R P50/P90/P95/max | | 0 | 协议冻结；按 layer/via type | **G8** |
+| topology/node/branch coverage | | 100% | 支持清单内完整 | **G8/G14** |
+| driver-to-sink Elmore P50/P95/max | | 0 | 协议冻结 | **G8** |
+| 同一 STA 读双 SPEF 的 critical slack FN | | 0 | 0 | **G8/G7** |
+| R²(total C) | | 1 | ≥0.98，**仅诊断** | — |
 | mismatch net | | 0 | →0 | G8 |
 | iSTA CC discard | | — | =0 或响亮 | KH-RCX-02 |
 | 提取墙钟 | | | ≤1.5× 起步 | G21 |

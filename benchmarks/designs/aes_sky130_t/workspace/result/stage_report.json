@@ -1,0 +1,40 @@
+{
+  "design": "aes_sky130_t",
+  "timestamp": "2026-07-23T07:23:14.644321",
+  "stages": {
+    "floorplan": {
+      "stage": "Floorplan (iFP)",
+      "status": "Completed",
+      "metrics": {
+        "die_area_um2": 640000.0,
+        "die_width_um": 800.0,
+        "die_height_um": 800.0,
+        "total_instances": 31763,
+        "logic_instances": 22922
+      }
+    },
+    "placement": {
+      "stage": "Placement (iPL)",
+      "status": "Completed",
+      "metrics": {
+        "total_instances": 31763,
+        "total_nets": 23298,
+        "die_usage": 0.333061
+      }
+    },
+    "cts": {
+      "stage": "Clock Tree Synthesis (iCTS)",
+      "status": "Completed",
+      "metrics": {
+        "sink_count": 2987,
+        "buffer_count": 0,
+        "buffer_area_um2": 0.0,
+        "total_wirelength_um": 0.0,
+        "max_wirelength_um": 0.0,
+        "elapsed_time_s": 0.807
+      }
+    },
+    "legalization": null,
+    "routing": null
+  }
+}

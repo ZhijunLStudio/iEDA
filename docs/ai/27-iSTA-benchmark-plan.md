@@ -1,9 +1,11 @@
 # iSTA Benchmark & 商业工具对标测试计划
-# Benchmark Testing and Commercial Tool Parity Plan for iSTA
 
-> 文档版本：v1.0  
-> 日期：2026-07-21  
-> 目标：达到 PrimeTime 签核精度 (R²>0.98) 和 Innovus in-design 性能
+*Benchmark Testing and Commercial Tool Parity Plan for iSTA*
+
+> 文档版本：v1.1
+> 日期：2026-07-23
+> 目标：达到 `04 §2.3` 定义的 PrimeTime 联合相关性门禁和 Innovus in-design 性能；`R²` 仅为诊断项
+> 定位：§1/§2/§4/§5 为 benchmark 计划；§3 AI/ML 为研究 backlog，不能替代 `27-iSTA.md` 的确定性内核或放宽 G7
 
 ---
 
@@ -252,11 +254,13 @@ python3 scripts/benchmark/gen_dashboard.py \
 
 ---
 
-## 3. AI/ML 技术创新方案
+## 3. AI/ML 研究 backlog（非 G7 实现路线）
+
+> 保护边界：AI 只用于候选排序、早期近似、偏差归因或参数策略；必须输出 uncertainty/OOD，能 abstain，并由确定性 STA 周期性复算。数据按 design family + PDK 切 train/validation/holdout，禁止同一设计的 path 随机泄漏。以下代码是实验草图，不是已实现能力，所有速度和精度必须实测后才能写入看板。
 
 ### 3.1 神经网络加速时延计算
 
-**场景 1：快速 Cell Delay 预测（替代 LUT 插值）**
+**场景 1：Cell Delay surrogate（不替代生产 Liberty LUT）**
 
 ```python
 # src/ai/delay_predictor.py
@@ -302,10 +306,9 @@ def gen_training_data(lib_file):
                 })
     return data
 
-# 性能优势：
-# - LUT 双线性插值：~200 ns/query
-# - NN 推理（GPU batch）：~5 ns/query (40x 加速)
-# - 精度：MAE < 1ps (相对 SPICE)
+# 未验证假说：仅当真实 batch、数据搬运和 GPU 启动开销下端到端更快，
+# 且 holdout 上满足单调性、MAE/P95/最坏误差和 OOD 拒答，才进入 estimate 档。
+# 对小批量查询，Liberty LUT 通常更简单，NN 不预设有性能优势。
 ```
 
 **场景 2：Net Delay 快速估算（布局期）**
@@ -346,9 +349,9 @@ class SDCAssistant:
     """
     基于 CodeLlama-34B 微调的 SDC 专家模型
     功能：
-    1. 从设计意图生成 SDC 约束
-    2. 检查 SDC 语法和语义错误
-    3. 推荐优化策略（如 set_case_analysis, set_false_path）
+    1. 从设计意图生成待人工/规则引擎确认的 SDC 草案
+    2. 检查 SDC 语法、对象命中率和覆盖缺口
+    3. 解释约束风险；不得自动加入 false_path/multicycle_path
     """
     def __init__(self):
         self.model = AutoModel.from_pretrained("eda/sdc-expert-v1")
@@ -416,18 +419,20 @@ class TimingOptEnv(gym.Env):
     
     def step(self, action):
         net_id, buffer_type = action
-        
-        # 执行 ECO
-        self.design.insert_buffer(net_id, buffer_type)
-        
-        # 增量 STA
-        self.sta_engine.incrUpdateTiming([net_id])
-        wns = self.sta_engine.getWNS()
-        area = self.design.get_area()
-        
-        reward = -abs(wns) - 0.01*area
-        done = (wns > -10)  # WNS > -10ps 认为收敛
-        
+
+        # 任何策略动作都必须走与 iTO 相同的事务和硬约束门禁。
+        with self.design.move_transaction() as txn:
+            self.design.insert_buffer(net_id, buffer_type)
+            incremental_legalize_and_route(net_id)
+            self.sta_engine.incrUpdateTiming([net_id])
+            metrics = evaluate_setup_hold_drv_area_power_drc()
+            if violates_hard_constraints(metrics):
+                txn.rollback()
+                return self.get_state(), HARD_FAIL_REWARD, False, {'rejected': True}
+            txn.commit()
+
+        reward = normalized_pareto_reward(metrics)  # 量纲/尺度由协议冻结
+        done = meets_all_targets(metrics)
         return self.get_state(), reward, done, {}
     
     def get_state(self):
@@ -517,7 +522,9 @@ def knowledge_distillation():
         
         return ista_raw['wns'] + correction
 
-# 效果：将 iSTA 与 PT 的系统性偏差从 50ps 降至 5ps
+# 目标是假说，不是效果：必须在 design-family/PDK holdout 上报告
+# signed bias、MAE/P95、critical false-negative 和 calibration/coverage。
+# 若根因是单位、SDC、拓扑或 RC 支持缺失，禁止用 calibrator 掩盖。
 ```
 
 ---

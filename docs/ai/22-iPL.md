@@ -3,13 +3,14 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 22 · iPL 布局 · 商业对标优化方案 · rv2.0
+# 22 · iPL 布局 · 商业对标优化方案 · rv2.1
 
-> 文档号：22-rv2.0　　版本：rv2.0（大改）　　里程碑：**双对标 —— place_opt QoR 精度线（G2/G3/G17：HPWL/overlap/timing）× 性能线（G21：墙钟/内存/调用模式）**
+> 文档号：22-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**双对标 —— place_opt QoR 精度线（G2/G3/G17：HPWL/overlap/timing）× 性能线（G21：墙钟/内存/调用模式）**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`（逐 kernel 走读 + 双看板 + 诚实归因 + 被否方案）
 > 商业金标：**Innovus place_opt / ICC2 place_opt**（QoR 与调用模式）；门禁：**G2 / G3 / G14 / G17 / G21**
 > 上游：`20-iFP`（die/rows/宏约束）、`21-iNO`（netlist）、`27-iSTA`（timing）　下游：`23-iCTS`、`26-iRT`、`25-iTO`
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-PL-\*
+> 联合架构：`04-ppa-technical-review-and-optimization-rv1.md`；闭环工作台：`51-agent-native-eda-detailed-plan-v1.0.md`
 > 覆盖：`src/operation/iPL/`（31.3k LOC）：`api/PLAPI.{hh,cc}`、`source/module/{global_placer/electrostatic_placer,legalizer,detail_placer,initial_placer,macro_placer,buffer,evaluator,grid_manager,topology_manager,checker,filler,post_global_placer,wrapper}`、`platform/.../ipl_io.cpp`、`tcl_ipl`
 > 纪律：**文档是假说不是事实**；断言带 `file:line`；未实测写「未验证」；每条理论附能杀死它的对照。
 
@@ -23,6 +24,7 @@ iEDA is licensed under Mulan PSL v2.
 | rv1.0 / v2.0 | 2026-07-20 | parity | 体例对齐；坐实宏假成功、Random 默认、发散只打日志 |
 | rv1.1 / v3.0 | 2026-07-21 | parity | 大改：对 `PLAPI.cc`（1087）全文、`NesterovPlace.cc`（2055）关键段、`runFlow` 全链、`ipl_io.cpp`、`tcl_ipl` 重读后重写。核心修订五条，两条推翻 v2.0 判定：(1) `runFlow` 全链为 `runGP → (buffer/spread 可选) → runLG → if(isSTAStarted()) runPostGP() else { /*runDP 注释*/ } → writeBack`，而 `isSTAStarted()` 在 `PLAPI.cc:842-846` 硬编码 `return false`——**runPostGP 永不可达、else 分支 runDP 被注释，详细布局在默认 flow 中整体死亡**；(2) `NesterovPlace.cc:1360-1390` 存在 `_nes_config.isOptCongestion()` 门控的 **LUT-RUDY 拥塞驱动**（内置 RUDY 环，opt-in）；(3) `isSTAStarted` 死在 `PLAPI` 包装层；(4) `runFlow` 内 `runLG()` 的 bool 返回值被丢弃；(5) `runFlow` 还挂了两段隐蔽流程（buffer/spread）。 |
 | **rv2.0 / v4.0** | **2026-07-21** | parity | **大改（对照 27-iSTA-rv2.0.md 的深度与体例重写，目标显式拆成双对标线）**。核心修订六条：**(1)** rv1.1 把 iPL 当成「一组功能缺口」来审——**代码级核实后发现头号结构症结是调用层面的三处死链（宏假成功 D1、DP 在 runFlow 死亡 D2、守卫恒 false D4）+ 发散静默（D-fail）**，这些不是特性缺失而是**工程死结**——Nesterov 内核（2055 LOC）本身成熟，但被错误的流程包装杀死了；**(2)** 新增**主算法对比审计**（§1.2 核心算法判定表）：commercial place_opt 核心能力 = (a) mixed-size macro+std 协同（力导向+SA+通道）+ (b) 解析初值（QP/B2B）+ (c) timing-driven 净权重注入 + (d) congestion-driven density inflation + (e) 多轮 DP refinement **默认跑**——iPL 差距主要在 (a) 空壳 + (b) 资产不存在 + (c)(d) 守卫死 + (e) 默认不跑，**不是 Nesterov 算法本身弱**（§1.2/§1.5）；**(3)** 全文按**双对标线**重组：place_opt QoR 线 = 宏成功/HPWL/timing/congestion（G2/G3/G17），性能线 = 墙钟/内存/调用模式适合优化循环（G21），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§1.5 与 place_opt 差距逐项（算法/实现/调用三层归因）、§4.13 模块状态一览（成熟度/复杂度/边界/复用姿势）、§5 双档配置表（effort 分级）、§10.3 对照实验框架（E-PL-NN 编号，能杀死假说）、§14 未验证/不要重走/平行实现嫌疑；**(5)** 新增**性能剖面审计**（§1.6）：现状无墙钟/内存打点、无 per-stage breakdown、无增量调用接口——对比 Innovus place_opt 可被 iTO 循环内高频调用（ECO 后局部 re-place），iPL 只有全量批处理模式；**(6)** 明确**算法 vs 工程归因**（§1.7 症结优先级表）：P0 是假成功修复（D1/D2/D4，纯工程，零算法工作量）+ DP 回流（D2，~3.2k LOC 成熟算子从死代码变生产），P1 是宏算法（MP force+SA）+ QP 初值（依赖 11-solver），时序/拥塞驱动（守卫修复后验证收益）——**最高性价比修复在 P0**。**缺省新特性关闭 → 零回归**的纪律不变。 |
+| **rv2.1** | **2026-07-23** | Codex | 实现评审：宏摆位改为硬约束可行编码；QP 改为与 B2B/multilevel 并列的待证假说；补 `IncrPlace` LLD、区域冲突图和缓存策略；DP 从“直接默认 on”改为 daily 门禁晋级；G17 改为各独立指标同时满足。 |
 
 ---
 
@@ -202,8 +204,8 @@ Innovus place_opt 的 in-design 行为 = **可被优化器高频调用**：iTO �
 | FR-PL-06 | ★ 修复 `PLAPI::isSTAStarted()`（取消注释）+ TDP 路径回归基线 + timing 权重 A/B | 恒 false | ★ |
 | FR-PL-07 | ★ 拥塞驱动默认化评估：isOptCongestion 现状默认审计 + A/B；统一内置 RUDY 与 12-eval 的归属 | opt-in/两套 | ★ |
 | FR-PL-08 | LG bool 全链上抛（runFlow/TCL）；暴露 unplaced 机器可读 | 两丢 | ★ |
-| FR-PL-09 | ★ **DP 回默认 flow**：`enable_dp` 配置开关（默认 on）替换"守卫+注释"死结构 | 默认不跑 | ★ **最高性价比** |
-| FR-PL-10 | incr LG API 供 iTO/CTS | ✓ API | Phase C |
+| FR-PL-09 | ★ **DP 回默认 flow 候选**：先 observation/opt-in，daily 套件全绿后晋级默认 | 默认不跑 | ★ 高性价比但需门禁 |
+| FR-PL-10 | ★ `IncrPlace`（局部 GP+LG+DP）供 iTO/CTS/ECO | 仅 incr LG | Phase B/C |
 | FR-PL-11 | ★ IterParam 多轮渐进（effort 包） | 单趟 | ★ |
 | FR-PL-12 | ★ Exhibit：per-iter CSV + JSON 终态 + 失败码 | 弱 | ★ |
 | FR-PL-13 | ★ vs place_opt 苹果对苹果 | 无 | ★ G17 |
@@ -218,9 +220,9 @@ Innovus place_opt 的 in-design 行为 = **可被优化器高频调用**：iTO �
 | NFR-PL-03 | 宏：零 overlap；通道满足约束模型 | G3；违规→失败 |
 | NFR-PL-04 | QP 失败 | 显式回退 Random + WARN，禁假成功 |
 | NFR-PL-05 | 关 ★杠杆时 | 与当前二进制行为一致（零回归；假成功修复除外——**默认开**） |
-| NFR-PL-06 | G17 place 段 | HPWL 或 post-route WNS δ≤5% |
+| NFR-PL-06 | G17 place 段 | 每个设计的 HPWL、post-route WNS/TNS、overflow/DRC **分别列出且所有必需项同时过门**；禁止用 `OR` 掩盖退化 |
 | NFR-PL-07 | G21 | place 墙钟 ≤1.5× |
-| NFR-PL-08 | ★ DP 默认 on 后 | gcd 回归 HPWL 不劣化、overlap=0 |
+| NFR-PL-08 | ★ DP 晋级生产默认 | daily 多设计连续窗口：overlap=0，全部必需 QoR 不退化，墙钟在预算内；单一 gcd 不足以晋级 |
 
 ### 2.3 红线
 
@@ -228,7 +230,7 @@ Innovus place_opt 的 in-design 行为 = **可被优化器高频调用**：iTO �
 - **金标** Innovus/ICC2；OpenROAD 不作门禁金标。
 - **3D fork** 算法意图可参考，禁止未审计整替 2D。
 - **QP 资产不存在**（11-solver §1.1）——禁止再在文档里写"接线 qudratic_programming"当既有事实。
-- 新杠杆缺省关（timing/congestion/SA）；假成功修复与 DP 回流**默认开**（NFR-PL-08 门禁看护）。
+- 新杠杆缺省关（timing/congestion/SA）；假成功修复默认开。DP 先 observation/opt-in，只有 daily 多设计 no-regression、合法性和墙钟门禁连续通过后才晋级默认。
 
 ---
 
@@ -250,7 +252,7 @@ Innovus place_opt 的 in-design 行为 = **可被优化器高频调用**：iTO �
   │           ├ WA (+★net_crit)  ├ eDensity/DCT                  │
   │           ├ LUT-RUDY cong (★默认化评估)  └ keep-best [已有]    │
   │  runLG: Abacus → ★bool 全链上抛                              │
-  │  ★ runDP: 五算子（enable_dp 默认 on，替代守卫+注释死结构）      │
+  │  ★ runDP: 五算子（先 observation/opt-in，门禁后晋级默认）       │
   │  reportPLInfo + ★Exhibit CSV/JSON → writeBack                │
   └────────────────────────────────────────────────────────────┘
                             ▼
@@ -261,11 +263,11 @@ Innovus place_opt 的 in-design 行为 = **可被优化器高频调用**：iTO �
 
 | # | 决策 | 被否 |
 |---|---|---|
-| D1 | 假成功修复 + DP 回流默认开；QoR 杠杆默认关 | 全部默认关（DP 不回流 = 放行现状残疾 flow） |
+| D1 | 假成功修复默认开；DP 先接入可观测/opt-in，再经 daily 门禁晋级 | 未跑多设计回归即默认开 DP |
 | D2 | 宏归 iPL，iFP 只给约束（与 20-iFP 裁定一致） | 宏归 iFP |
 | D3 | QP 先在 11-solver 立项建资产，再 Composition 接线 | 文档空喊"接线 qudratic_programming"（目录是 0 字节 TBD） |
 | D4 | timing/congestion 权重注入，不改 Nesterov 骨架 | 改写求解器 |
-| D5 | DP 回流走 `enable_dp` 配置（默认 on），删"守卫+注释"结构 | 恢复注释版 runDP / 继续靠 isSTAStarted 门控 |
+| D5 | DP 回流走 `enable_dp=off|observe|on`，删“守卫+注释”结构 | 未经回归直接默认 on / 继续靠 isSTAStarted 门控 |
 | D6 | `isSTAStarted` 修复 = 取消注释 + 回归基线，不重构 STA 生命周期 | 顺手重设计 STA 启动顺序（超范围） |
 | D7 | 内置 RUDY 与 12-eval congestion_eval 归属：先审计重复度再统一 | 立刻删一个（未审计） |
 
@@ -301,28 +303,31 @@ class MacroPlacer { public: MacroPlaceResult run(); };  // force→resolve→SA
 ```
 ALG-4.1-1  run
   macros ← blocks|is_macro  (M=0 → ok=true no-op)
-  [★] forceInit: 阻尼力导向（net 质心+边界斥力），O(P·M)
-  [★] resolveOverlaps: 最小重叠轴推开，clamp in-die
-  [★] if sa_enable: translate|rotate(LEF orient)|swap；
-      cost = α·HPWL + β·overlap(∞) + γ·channel + δ·cross_proxy；Metropolis
+  [★] force/multilevel seed: 只生成初始顺序与候选区域，不承担合法性
+  [★] legal representation: sequence-pair / B*-tree / slicing+legal decoder（三者先基准选一）
+  [★] decoder 每步保证 boundary/non-overlap/orient；halo/fence/channel 不可满足则候选 infeasible
+  [★] if sa_enable: 在 legal representation 上 translate|rotate|swap；
+      hard={overlap,boundary,halo,fence,orient};
+      soft={HPWL,channel,pin_access,timing,congestion}，只在 hard 全满足后比较 Pareto/cost
   [★] fix macros（fixed=true，macro-first FR-PL-02）
   overlap>0 or channel_viol>0 → ok=false   // 禁假成功
 ```
 
 边界：无合法 orient → fail。复用：SA 框架待 11-solver FR-SOL-08 解冻后共用；此前 iPL 内最小实现并标注收编候选。
 
-### 4.2 `QuadraticPlace` ★（FR-PL-03）
+### 4.2 解析/多层初值假说（FR-PL-03）
 
 ```
 ALG-4.2-1  runGP 初值
-  if cfg.use_qp_init && solver QP 可用:
-    ok = QuadraticPlace(db).run();  if !ok: LOG_WARN → RandomPlace
-  else: RandomPlace
+  deterministic multilevel clustering → coarse net model
+  init_mode ∈ {B2B, QP, RandomFallback}
+  if QP 资产可用则与 bounded-to-bounded (B2B) 同协议 A/B；禁止因“教科书更高级”预设获胜
+  任一解析初值失败: LOG_WARN → deterministic fallback（seed 写入报告）
   NesterovPlace(...).runNesterovPlace()
   if diverged or (strict && overflow>target): return false   // §4.3
 ```
 
-**前置**：11-solver 的 QP 目录现为空 TBD——本 FR 与 11 FR-SOL-08 联动，由本工具的真实需求驱动那边立项。边界：固定宏锚点；孤立网跳过。
+**前置**：11-solver 的 QP 目录现为空 TBD。先用同一 objective/evaluator 比较 B2B、QP、Random 的“达到同 overflow 所需迭代数、终态 HPWL、墙钟、峰值内存”；QP 只有在 holdout 设计上有稳定净收益才升为资产。边界：固定宏锚点；孤立网跳过。
 
 ### 4.3 `NesterovPlace` 深化（FR-PL-04/05/06/07）
 
@@ -358,13 +363,13 @@ struct LgResult { bool ok; int unplaced; double hpwl_delta; std::vector<std::str
 
 ```
 ALG-4.5-1  runFlow 段替换
-  if (cfg.enable_dp) { runDP(); }        // 默认 on
+  if (cfg.enable_dp) { runDP(); }        // 初始默认 off/observation；晋级策略见下
   // 删除 if(isSTAStarted())runPostGP()/else{注释} 结构；
   // runPostGP 归位到时序驱动路径（守卫修复后的 TDP flow），不再霸占默认链
   DP 后 checker.isNoOverlapAmongInsts() 失败 → rc≠0
 ```
 
-门禁 NFR-PL-08：gcd 回归 DP on/off 对比（HPWL 不劣化、overlap=0、wall 增幅记录）。**这是本 rv 单点收益最大的改动**：~3.2k LOC 成熟算子从死代码变默认路径。
+门禁 NFR-PL-08：先在 observation 模式计算/报告建议动作但不写回，再做 DP on/off daily 对比。至少覆盖不同 PDK、密度、宏比例；所有设计 overlap=0，必需 QoR 指标不退化且墙钟在预算内，连续窗口通过后才把默认改为 on。`gcd` 单点和“有 gcd check”都不足以改生产默认。
 
 ### 4.6 `PlacerIO` / TCL（G14）
 
@@ -373,7 +378,20 @@ ALG-4.6-1  runMacroPlacement: 真调 runMP，返 r.ok（禁恒 true）
 ALG-4.6-2  CmdPlacerRunLG/MP/GP/DP: if(!io.run...()) return 0
 ```
 
-### 4.7 模块状态一览
+### 4.7 ★ `IncrPlace`（FR-PL-10）
+
+```text
+ALG-4.7-1  incrPlace(DirtySet d, radius, budget)
+  region = bbox(d.insts ∪ pins(d.nets)).expand(radius)，裁到 fence/core
+  movable = region 内受影响 std cells；边界外实例冻结，跨边界 net 端点作固定锚
+  增量维护 net bbox（极值计数/次极值）、bin density、RUDY demand、timing criticality
+  在局部 bin 上跑有界 GP；随后 local LG + DP；任一 hard legality 失败则 MoveTxn rollback
+  每 K 次或 dirty_ratio 超阈值跑 full-place oracle，对 HPWL/density/legality 差异设 guardband
+```
+
+性能实现：热数组采用 SoA；复用 FFT/DCT plan、bin 映射和邻接表；避免每次 ECO 全量分配。多个局部 region 按共享 row/bin/net 建冲突图，图着色后并行计算 thread-local delta，在确定性 barrier 处按 region id 提交。目标不是“多线程越多越快”，而是减少全图重建和分配。
+
+### 4.8 模块状态一览
 
 | 模块 | 现状 | rv1.1 动作 | 复用姿势 |
 |---|---|---|---|
@@ -388,6 +406,7 @@ ALG-4.6-2  CmdPlacerRunLG/MP/GP/DP: if(!io.run...()) return 0
 | BufferInserter | 隐蔽段（617） | ★职责裁定（FR-PL-14） | 已有 |
 | TimingAnnotation | 守卫殉葬（395） | 随 FR-PL-06 复活 | 已有 |
 | IterParam / Exhibit | 无 / 弱 | ★新增 | 新增 |
+| IncrPlace | 仅 incr LG | ★局部 GP+LG+DP、full oracle 校验 | Composition `MoveTxn/DirtySet` |
 
 ---
 
@@ -582,7 +601,7 @@ PR 切片：PL-0 台账 → PL-1 假成功三修 → PL-2 DP 回流 → PL-3 宏
 
 | ID | 决策 | 被否方案 | 理由 |
 |---|---|---|---|
-| D1 | 假成功修复+DP 回流默认开 | 全默认关 | 现状 flow 残疾，G14 是正确性非实验 |
+| D1 | 假成功修复默认开；DP 经 observe/opt-in 门禁晋级 | 全默认关或未经回归直接默认开 | 假成功属正确性；DP 属 QoR/性能变更，需数据晋级 |
 | D2 | 宏归 iPL | 宏归 iFP | 主纲算法归属 |
 | D3 | QP 先建资产再接线 | 空喊接线 TBD 目录 | 11-solver §1.1 实证 |
 | D4 | 权重注入 | 改写 Nesterov 方程 | 风险低可 A/B |

@@ -3,15 +3,16 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 42 · 性能对标 Perf Parity · 商业对标优化方案 · rv2.0
+# 42 · 性能对标 Perf Parity · 商业对标优化方案 · rv2.1
 
-> 文档号：42-rv2.0　　版本：rv2.0（大改）　　里程碑：**可复现剖面 → 并排比值 → 热点优化（质量优先）→ G21/G20**
+> 文档号：42-rv2.1　　版本：rv2.1（测量纠偏）　　里程碑：**可复现剖面 → 并排比值 → 热点优化（质量优先）→ G21/G20**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`、`28-iRCX-rv2.0.md`（逐 stage 走读 + 双看板 + 诚实归因）
 > 商业金标：**Innovus / Fusion Compiler（日常性能基准）**；**Calibre / PrimeTime（签核性能基准）**；门禁：**G21 / G20**（辅 G17）
 > 依赖：`12-evaluation` protocol/schema；`40-platform` stage 边界计时钩子
 > 纲领：`00-ieda-commercial-parity-master-plan-v1.1.md`；Know-how：`03-commercial-knowhow-catalog.md` KH-EV-01、KH-X-05/08
 > 覆盖：Tier 4 平台层性能对标（StageTimer 钩子、profile.jsonl schema、compare 脚本、G21/G20 门禁）
 > 纪律：**质量优先于速度**（KH-X-05）；无 QoR A/B 的「加速」不合入；共享机数字不进 G21；断言带 `file:line`；未实测写「未验证」。
+> 技术细则：测量协议、复杂度/数据局部性/增量/并行优化顺序见 `04-ppa-technical-review-and-optimization-rv1.md` §2.6/§5。
 
 ---
 
@@ -22,6 +23,7 @@ iEDA is licensed under Mulan PSL v2.
 | v1.1 | 2026-07-20 | 采集算法摘要（~42 行） |
 | rv1.0 / v2.0 | 2026-07-20 | **升体例**：补审计/FR/HLD/LLD/看板 M0–M4/测试/未验证；明确与 12 的 `run_perf_compare.sh` 共管。 |
 | **rv2.0** | **2026-07-22** | **大改（对照 27-iSTA-rv2.0.md / 28-iRCX-rv2.0.md 深度与签核工具要求重写）**。核心修订五条：**(1)** rv1.0 把 perf-parity 当成「缺计时钩子和脚本」来审——**实际上头号结构症结是性能差距的不可见与不可归因**：无逐 stage 的 vs 商业工具墙钟对比数据（哪些 stage 快、哪些慢、慢在哪个子阶段）、无热点定位机制（火焰图/profiler 报告缺失）、无优化前后 A/B 对比门禁（加速 PR 可能牺牲 QoR 而无检测）——现状是**有想法无数据**；**(2)** 新增 **§1.5 性能栈逐项**（对商业工具各 stage 的性能差距清单，G21/G20 核心证据）：逐 stage（iFP/iPL/iCTS/iTO/iRT/iSTA/iRCX/iDRC/iPW）列出 iEDA vs 商业工具的墙钟基线、已有能力、差距、瓶颈——对标目标是「日常设计端到端 ≤1.5× 商业主对标方」（G21）与「大设计 ≤3× + 归因」（G20）；**(3)** 全文按**双看板**重组：G21 日常性能看板（5 套 daily e2e ≤1.5×、≥2/5 ≤1.0×、分项剖面）、G20 大设计看板（scale ≤3× + 瓶颈定位、火焰图/profiler 报告），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§4.12 模块状态一览（StageTimer、profile schema、compare 脚本成熟度/边界/复用姿势）、§10.3 对照实验（E-PERF-01～05 可杀假说）、§14 未验证/不要重走三分；**(5)** 强化**质量优先纪律**（KH-X-05）：所有加速 PR 必须附 QoR A/B 对比数据（G17 指标不回归）、禁止「关检查换速度」、禁止共享机数字进 G21——性能对标的前提是**功能正确性不受损**。**缺省配置零回归**纪律不变。 |
+| **rv2.1** | **2026-07-23** | 修正测量设计：`VmPeak` 不能归因嵌套 stage，改由独立进程/cgroup 采 peak；构建身份改 SHA-256；2/5 明确指设计而非 stage；A/B 使用预构建 artifact 或独立 worktree，禁止脚本切换/清理当前工作区；重复次数改为至少 5 次并用 median/MAD。 |
 
 ---
 
@@ -66,7 +68,7 @@ iEDA is licensed under Mulan PSL v2.
 
 - **质量优先红线**（KH-X-05）：G21 不得在 G17 红时强行转绿——加速 PR 必须附 QoR A/B 对比数据（WNS/TNS/违例数/面积/总线长 不回归）。  
 - **共享机数字不进 G21**：独占机 + 绑核（`parity_protocol.perf` 强制）；CI 观测档（`g21_enable=false`，M3 前）。  
-- **热点驱动优化**：剖面显示该 stage ≥30% e2e 才允许专项加速（禁止「全面并行化」无数据支持）。  
+- **热点驱动优化**：按占比 × 可达加速比 × 工程成本估算 e2e 收益；阈值由 backlog 决策，不固定为 30%（禁止无数据全面并行化）。
 - **禁区**：关 DRC/STA 换速度、降 effort 无 A/B、盲目 `-march=native`（COMPATIBILITY_MODE 影响可移植性）。  
 - **跨工具计时钩挂点**：FlowScheduler stage（`40-platform`）或 TCL wrapper（`tcl_<tool>/tcl_register_<tool>.h` 命令层）。
 
@@ -101,7 +103,7 @@ iEDA is licensed under Mulan PSL v2.
 | 10 | **iRCX** | 寄生提取 | — | **数据盲**；28 号文档 NFR-RCX-07「≤1.5× StarRC 起步观测」 | RCX 若慢 = 拓扑构建 or 邻居查询（R-tree）or cap 查表 | P1（28 已立项） |
 | 11 | **iDRC** | 设计规则检查 | — | **数据盲**；30 号文档 NFR-DRC-02「in-design 墙钟 ≪ Calibre」 | DRC 若慢 = 几何谓词 or cluster 构建 or OpenMP 效率 | P2（30 已立项；in-design 定位） |
 | 12 | **iPW/iPDN** | 功耗/IR 分析 | — | **数据盲** | iPW 若慢 = 电流求解器（迭代法 vs 直接法）or CUDA IR | P2 |
-| 13 | **e2e** | 端到端（上述全部） | — | **G21 目标**：日常 5 套 ≤1.5×，≥2/5 ≤1.0× | **无基线 = G21 不可证** | **P0** |
+| 13 | **e2e** | 端到端（上述全部） | — | **G21 目标**：日常 5 个设计均≤1.5×，且≥2/5 个设计≤1.0× | **无基线 = G21 不可证** | **P0** |
 | 14 | **大设计 scale** | 同上，设计规模 ≥10× | — | **G20 目标**：≤3× + 瓶颈归因（火焰图/profiler） | 算法复杂度非线性 or 数据结构不 scale | **P0**（G20） |
 | 15 | **并行效率** | cpu_time / (wall_time × threads) | — | **数据盲**；理想=1.0，实际<0.7 需归因（Amdahl 定律 or 锁竞争） | 加核不加速 = 并行瓶颈 | P1 |
 
@@ -151,7 +153,7 @@ iEDA is licensed under Mulan PSL v2.
 | FR-PERF-06 | ★ 热点定位（火焰图/profiler 报告） | P1 |
 | FR-PERF-07 | ★ 并行可扩展性测试（加速比曲线） | P1 |
 | FR-PERF-08 | ★ 商业工具同机对比（vs 商业工具基线） | P0 |
-| NFR-PERF-01 | **G21 端到端**：daily 5 套 e2e ≤1.5×，≥2/5 ≤1.0× | G21 |
+| NFR-PERF-01 | **G21 端到端**：daily 5 个设计 e2e 均≤1.5×，且≥2/5 个设计≤1.0× | G21 |
 | NFR-PERF-02 | **G21 分项**：逐 stage 写入 profile.jsonl | G21 |
 | NFR-PERF-03 | **G20 大设计**：scale ≤3× + 瓶颈定位 | G20 |
 | NFR-PERF-04 | 复跑波动 ≤8% | KH-X-08 |
@@ -163,7 +165,7 @@ iEDA is licensed under Mulan PSL v2.
 - **质量优先于速度**（KH-X-05）：G21 不得在 G17 红时强行转绿——加速 PR 必须附 QoR A/B 对比数据（WNS/TNS/违例数/面积/总线长 不回归）。
 - **共享机数字不进 G21**：独占机 + 绑核（`parity_protocol.perf` 强制）；CI 观测档（`g21_enable=false`，M3 前）。
 - **禁止「关检查换速度」**：降 DRC/STA effort、关 eco_route、跳过 legalization 等牺牲 QoR 的加速 **一律拒绝**。
-- **热点驱动优化**：剖面显示该 stage ≥30% e2e 才允许专项加速；禁止盲目优化非瓶颈。
+- **热点驱动优化**：有 stage/substage 占比和 Amdahl 上限，且预计 e2e 收益覆盖工程成本；禁止盲目优化非瓶颈。
 - **无基线不优化**：vs 商业工具的逐 stage 墙钟对比数据（§1.5）是优化靶点的前提；M0 前禁止提加速 PR。
 
 ---
@@ -186,8 +188,8 @@ for design in daily[5]:     for design in scale[1-3]:    │
     start_timer(stage)                                    │
     run_stage()                                           │
     stop_timer() → emit profile.jsonl                     │
-      {design, stage, wall_s, cpu_s, peak_rss_mb,        │
-       threads, host, binary_hash}                        │
+      {design, stage, repeat, wall_s, user/sys_cpu_s,    │
+       threads, host, binary_sha256, manifest_sha256}     │
       │                         │                         │
       ▼                         ▼                         ▼
   run_perf_compare.sh:     run_perf_compare.sh:     analyze_hotspot.sh:
@@ -198,7 +200,7 @@ for design in daily[5]:     for design in scale[1-3]:    │
       │                         │                         │
       ▼                         ▼                         ▼
   G21 看板（§10.1）        G20 看板（§10.2）         优化 backlog（M2）
-  - e2e ≤1.5×              - e2e ≤3×                 - 热点驱动（≥30% e2e）
+  - e2e ≤1.5×              - e2e ≤3×                 - 热点/Amdahl/ROI 驱动
   - ≥2/5 ≤1.0×             - 瓶颈归因                - A/B 对比（QoR 不回归）
   - 分项剖面               - top-5 热点函数
 ```
@@ -209,11 +211,11 @@ for design in daily[5]:     for design in scale[1-3]:    │
 
 | ID | 决策 | 被否方案 | 理由 |
 |---|---|---|---|
-| **D1** | **质量优先于速度**（KH-X-05） | 先刷墙钟，QoR 后验 | **红线**：G21 不得在 G17 红时强行转绿；加速 PR 必须附 QoR A/B 对比数据（WNS/TNS/违例/面积/线长 不回归）；对照：商业工具从不牺牲 QoR 换速度（Innovus `-effort high` 慢但准，`-effort medium` 快但不降质）；**被否原因**：先刷墙钟 = 风险路径（可能关检查、降 effort、跳过 eco，造成 G17 失败）；质量优先 = 可持续路径（速度提升建立在 QoR 稳定基础上）。 |
-| **D2** | **独占机 + 绑核协议强制**（`parity_protocol.perf`） | 共享机数字进 G21 | **门禁可信度前提**：共享机墙钟受其他任务干扰（NUMA/turbo/…）、复跑波动大（>20%）→ G21 门禁不可信；独占机 = 可复现（复跑波动 ≤8%）；对照：商业工具性能测试均在独占机（Synopsys/Cadence benchmark 明确标注机器配置）；**被否原因**：共享机数字 = 假门禁（无法判定是真慢还是机器负载高）。 |
+| **D1** | **质量优先于速度**（KH-X-05） | 先刷墙钟，QoR 后验 | **红线**：G21 不得在 G17 红时强行转绿；加速 PR 必须附 QoR A/B。commercial/iEDA 的 effort 各自冻结并作为不同 Pareto 点，不能把降 effort 得到的速度当作同质量加速。 |
+| **D2** | **受控 runner + 绑核协议强制**（`parity_protocol.perf`） | 共享机单次数字进 G21 | 共享负载、NUMA、turbo、温度和缓存会污染墙钟；用资源隔离、≥5 次 median/MAD 和硬件 manifest 判断是否可用。8% 只是初始噪声上限，需由 runner 实测冻结。 |
 | **D3** | **分项剖面必留**（逐 stage 写入 `profile.jsonl`） | 只看 e2e 总墙钟 | **热点定位前提**：只看 e2e = 盲目优化（不知道哪个 stage 慢）；分项剖面 = 有靶点（优化瓶颈 stage）；对照：商业工具 log 均有逐 stage 墙钟（Innovus `.log` 每步时间戳）；**被否原因**：只看 e2e = 优化无头绪（可能优化非瓶颈、浪费工程量）。 |
 | **D4** | **先 M0 基线 → M1 商业对比 → M2 热点优化**（有序演进） | M0 直接开始优化 | **无基线不优化**：vs 商业工具的逐 stage 墙钟对比数据（§1.5）是优化靶点的前提；M0 量自己（iEDA 各 stage 墙钟基线）→ M1 量差距（vs 商业工具）→ M2 优化瓶颈（热点驱动）；**被否原因**：M0 直接优化 = 盲人摸象（不知道哪快哪慢、优化无依据）。 |
-| **D5** | **热点驱动优化**（剖面显示 ≥30% e2e 才允许专项加速） | 全面并行化（所有 stage 加 OpenMP） | **工程量聚焦**：全面并行化 = 分散精力（可能优化占比 <5% 的 stage，投入产出比低）；热点驱动 = 集中火力（优化瓶颈 stage，效果最大化）；对照：商业工具性能优化也是热点驱动（Innovus route 占比大 → 重点优化 DR 并行）；**被否原因**：全面并行化 = 过早优化（Knuth: premature optimization is the root of all evil）。 |
+| **D5** | **热点 + Amdahl + ROI 驱动优化** | 全面并行化（所有 stage 加 OpenMP） | 用 profile、理论复杂度、可达 speedup 和工程成本选择工作包；即使占比低于 30%，若跨工具复用或收益便宜也可做，反之大热点若不可加速也不盲投。 |
 | **D6** | **优化 A/B 门禁强制**（PR 必须附 QoR 对比数据） | 优化 PR 无门禁 | **质量保障**：无门禁 = 加速 PR 可能牺牲 QoR（降 effort、关检查）；A/B 门禁 = QoR 不回归（G17 指标 Δ≤1%）；对照：商业工具每个版本都有 QoR regression 测试（Innovus release notes 明确列出性能提升 + QoR 不回归）；**被否原因**：无门禁 = 技术债累积（加速换质量，后期难修）。 |
 
 ---
@@ -251,11 +253,12 @@ class StageTimer {
   
   struct Metrics {
     double wall_s = 0.0;
-    double cpu_s = 0.0;      // getrusage RUSAGE_SELF
-    size_t peak_rss_mb = 0;  // /proc/self/status VmPeak
+    double user_cpu_s = 0.0;  // getrusage 差值
+    double sys_cpu_s = 0.0;
     int threads = 0;
     std::string host;
-    std::string binary_hash; // git rev-parse HEAD
+    std::string binary_sha256;
+    std::string build_manifest_sha256;
   };
   
   Metrics getMetrics() const;
@@ -264,8 +267,7 @@ class StageTimer {
  private:
   std::string stage_name_;
   std::chrono::steady_clock::time_point t0_;
-  clock_t cpu_t0_;
-  size_t rss_baseline_mb_;
+  rusage usage_t0_;
 };
 
 // 使用示例（TCL 命令包裹）
@@ -277,8 +279,8 @@ timer.stop();
 timer.emit("benchmark/qor/profile.jsonl");
 ```
 
-**复杂度**：O(1) per stage；RSS 读取 `/proc/self/status` 一次 I/O。  
-**边界**：嵌套 timer（子 stage）支持（可选）；失败时 emit 标记 `"status":"failed"`。  
+**复杂度**：O(1) per stage。进程峰值内存由 runner 读取 cgroup v2 `memory.peak`，或把待测 stage 放入独立子进程采集。`VmPeak/VmHWM` 是整个进程生命周期高水位，不能归因给后续嵌套 stage。
+**边界**：嵌套 timer 可计 wall/cpu，但不能各自声称 peak memory；失败时 emit 标记 `"status":"failed"`。
 **复用姿势**：RAII 自动析构 emit；或显式 start/stop（TCL 层包裹）。
 
 ### 4.2 ALG · profile schema + 校验（FR-PERF-02，P0）
@@ -288,16 +290,20 @@ timer.emit("benchmark/qor/profile.jsonl");
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["design", "stage", "wall_s", "cpu_s", "peak_rss_mb", "threads", "host", "binary_hash"],
+  "required": ["design", "stage", "run_id", "repeat", "wall_s", "user_cpu_s", "sys_cpu_s", "threads", "host", "binary_sha256", "input_manifest_sha256"],
   "properties": {
     "design": {"type": "string"},
+    "run_id": {"type": "string"},
+    "repeat": {"type": "integer", "minimum": 0},
     "stage": {"enum": ["iFP", "iPL-GP", "iPL-DP", "iCTS", "iTO", "iRT-GR", "iRT-TR", "iRT-DR", "iSTA", "iRCX", "iDRC", "iPW", "e2e"]},
     "wall_s": {"type": "number", "minimum": 0},
-    "cpu_s": {"type": "number", "minimum": 0},
-    "peak_rss_mb": {"type": "integer", "minimum": 0},
+    "user_cpu_s": {"type": "number", "minimum": 0},
+    "sys_cpu_s": {"type": "number", "minimum": 0},
+    "process_peak_mb": {"type": "integer", "minimum": 0},
     "threads": {"type": "integer", "minimum": 1},
     "host": {"type": "string"},
-    "binary_hash": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "status": {"enum": ["success", "failed"], "default": "success"}
   }
 }
@@ -338,7 +344,7 @@ done
 
 # 判定 G21
 python3 scripts/integration/check_g21.py perf_align.json
-# → exit 0（e2e ≤1.5× ∧ count(≤1.0×)≥2/5） or exit 1（失败）
+# → exit 0（5 个 daily 设计 e2e 均≤1.5×，且其中至少 2 个≤1.0×）or exit 1
 ```
 
 **复杂度**：O(designs × stages)；商业日志解析 O(log_lines)。  
@@ -350,38 +356,22 @@ python3 scripts/integration/check_g21.py perf_align.json
 #!/bin/bash
 # scripts/integration/run_qor_ab.sh（★ 新增）
 
-# 输入：baseline_branch（优化前）、pr_branch（优化后）
+# 输入：两个已构建且不可变的 artifact 目录；每个目录含 binary SHA-256/build manifest
 # 输出：qor_ab_report.json（QoR 对比 + 判定）
 
 designs=("gcd" "aes" "jpeg" "...")
 metrics=("WNS" "TNS" "DRC_violations" "area" "total_wirelength")
 
 for design in "${designs[@]}"; do
-  # Baseline（优化前）
-  git checkout $baseline_branch
-  ./scripts/design/<pdk>_gcd/run_iEDA.sh $design
-  baseline_metrics=$(extract_qor.py result/$design/)
-  
-  # PR（优化后）
-  git checkout $pr_branch
-  ./scripts/design/<pdk>_gcd/run_iEDA.sh $design
-  pr_metrics=$(extract_qor.py result/$design/)
-  
-  # 对比 Δ
-  for metric in "${metrics[@]}"; do
-    delta=$(python3 -c "print(abs($pr_metrics[$metric] - $baseline_metrics[$metric]) / $baseline_metrics[$metric])")
-    if [ $(echo "$delta > 0.01" | bc) -eq 1 ]; then
-      echo "FAIL: $design $metric 回归 $delta (>1%)" | tee -a qor_ab_report.json
-      exit 1
-    fi
-  done
+  run_one_artifact "$BASELINE_ARTIFACT" "$design" "result/baseline/$design"
+  run_one_artifact "$CANDIDATE_ARTIFACT" "$design" "result/candidate/$design"
+  compare_qor_joint.py \
+    "result/baseline/$design" "result/candidate/$design" \
+    --protocol parity_protocol.json --append qor_ab_report.json
 done
-
-echo "PASS: QoR A/B 不回归（Δ≤1%）" | tee -a qor_ab_report.json
-exit 0
 ```
 
-**门禁契约**：优化 PR 必须跑此脚本并附 `qor_ab_report.json`；CI 强制检查。
+**门禁契约**：优化 PR 必须跑此脚本并附 `qor_ab_report.json`；CI 强制检查。脚本禁止在用户当前工作区执行 `git checkout`、`git clean` 或复用同一输出目录；本地需要源码 A/B 时使用两个独立 worktree/build 目录。WNS/TNS 接近零或为负时按绝对 ps + 符号语义比较，不能直接除 baseline。
 
 ### 4.5 ALG · 热点定位（FR-PERF-06，P1 G20 瓶颈归因）
 
@@ -440,7 +430,7 @@ python3 scripts/integration/calc_speedup.py profile.jsonl > scalability.json
 | `profile.jsonl` schema | ✗ 不存在 | O(lines) 校验 | stage 枚举完整性（新 stage 需加） | ★ 新建 + JSON schema 校验器 |
 | `run_perf_compare.sh` | ✗ 不存在 | O(designs×stages) | 商业日志格式差异（多分支解析） | ★ 新建（Composition `parse_commercial_log.py`） |
 | `parity_protocol.perf` | ✗ 不存在 | O(1) 读配置 | 独占机验证（`ps` / `top` 检查其他任务） | ★ 新建（YAML/JSON 配置文件） |
-| `run_qor_ab.sh` | ✗ 不存在 | O(designs×2) 双跑 | git 分支切换干净（`git clean -fdx`） | ★ 新建（CI 强制调用） |
+| `run_qor_ab.sh` | ✗ 不存在 | O(designs×2) 双跑 | 两个 immutable artifact/独立输出目录 | ★ 新建（CI 强制调用） |
 | `analyze_hotspot.sh` | ✗ 不存在 | O(samples) perf 采样 | `perf` 权限（CAP_PERFMON or sudo） | ★ 新建（G20 手动触发） |
 | 各工具 Monitor/LOG | ⚠️ 散落 | — | 格式不统一（ms/s/无单位） | 保留但不作 G21 真源（改用 StageTimer） |
 | OpenMP 并行（iPL/iSTA/...） | ✓ 部分在 | — | 可扩展性未测 | 保留 + 新增 scalability 测试 |
@@ -457,7 +447,10 @@ python3 scripts/integration/calc_speedup.py profile.jsonl > scalability.json
 performance:
   threads: 8                    # OMP_NUM_THREADS 固定
   pin_cores: [0-7]              # taskset -c 0-7（可选）
-  exclusive_host_required: true # 独占机强制（检查 `ps aux | grep -v ieda` 无高负载任务）
+  exclusive_host_required: true # 由受控 runner/cgroup 判定，不解析易漂移的 ps 文本
+  repeats: 5                    # 至少 5 次有效重复；按 median 判定
+  cache_mode: [cold, warm]      # 分开报告，不混合平均
+  memory_source: cgroup_v2      # memory.peak；不可用时用独立子进程
   g21_enable: false             # M3 前观测（false）；M3 后门禁（true）
   
 designs_daily:                  # G21 日常 5 套
@@ -488,7 +481,7 @@ stages:                         # 必须覆盖的 stage
 
 thresholds:
   g21_e2e_ratio_max: 1.5        # 端到端 ≤1.5×
-  g21_stage_le1_count_min: 2    # ≥2/5 stage ≤1.0×
+  g21_design_le1_count_min: 2   # ≥2/5 个 daily 设计 e2e ≤1.0×
   g20_e2e_ratio_max: 3.0        # 大设计 ≤3×
   rerun_variance_max: 0.08      # 复跑波动 ≤8%
   qor_ab_delta_max: 0.01        # 优化 A/B QoR Δ≤1%
@@ -504,10 +497,10 @@ thresholds:
 | 维 | 指标 | 来源 | 对标线 |
 |---|---|---|---|
 | **e2e 墙钟** | iEDA_e2e_s / commercial_e2e_s | `profile.jsonl` + 商业日志 | **G21**（≤1.5×） |
-| **分项墙钟** | 逐 stage ratio（iEDA_s / commercial_s） | `perf_align.json` | **G21**（≥2/5 ≤1.0×） |
-| **峰值内存** | peak_rss_mb | `profile.jsonl` | 记录（G20 线性度验证） |
-| **并行效率** | cpu_s / (wall_s × threads) | `profile.jsonl` | ≥0.6（<0.6 需归因） |
-| **复跑波动** | std(wall_s) / mean(wall_s)（3 次跑） | `profile.jsonl` | ≤8%（KH-X-08） |
+| **分项墙钟** | 共同大阶段 median ratio（iEDA/commercial） | `perf_align.json` | 归因项；不可比 stage 标 N/A |
+| **峰值内存** | cgroup/独立进程 `process_peak_mb` | runner | 记录（G20 线性度验证） |
+| **并行效率** | `(user+sys)_cpu_s / (wall_s × threads)` | `profile.jsonl` | 诊断项；结合 speedup/锁/带宽解释 |
+| **复跑波动** | median + MAD/置信区间（≥5 次） | `profile.jsonl` | 超协议噪声则本配置不判定 |
 | **热点函数** | top-5 func + pct（perf report） | `hotspot_report.json` | G20（瓶颈归因） |
 | **QoR A/B** | Δ(WNS/TNS/违例/面积/线长) | `qor_ab_report.json` | ≤1%（质量优先） |
 
@@ -535,7 +528,8 @@ thresholds:
       │                        → hotspot_report.json
       ▼                              │
   if g21_enable:                     ▼
-    assert e2e≤1.5× ∧ count(≤1.0×)≥2   assert e2e≤3× ∧ 有热点归因
+    assert daily 全部 e2e≤1.5×          assert e2e≤3× ∧ 有热点归因
+           ∧ 至少 2 个设计≤1.0×
   else:
     emit warning（观测模式）
 ```
@@ -545,7 +539,7 @@ thresholds:
 | `StageTimer::start` | 记录 t0 + cpu_t0 + rss_baseline | — |
 | `StageTimer::stop` | 计算 wall/cpu/rss → emit | — |
 | `run_perf_compare.sh` | 产出 `perf_align.json` | 商业日志缺失 → 非 0 + LOG_ERROR |
-| `check_g21.py` | e2e≤1.5× ∧ count(≤1.0×)≥2 | exit 1（门禁失败；观测模式仅 warning） |
+| `check_g21.py` | daily 全部 e2e≤1.5× 且至少 2 个设计≤1.0× | exit 1（门禁失败；观测模式仅 warning） |
 | `run_qor_ab.sh` | QoR Δ≤1% | exit 1（优化 PR 拒绝合入） |
 
 ---
@@ -554,7 +548,7 @@ thresholds:
 
 | 调用方 | 现状 | 目标契约 | 单位/口径 |
 |---|---|---|---|
-| **40-platform FlowScheduler** | 无统一计时 | ★ 每 stage 自动包裹 `StageTimer`（或 TCL wrapper） | wall_s、cpu_s、peak_rss_mb |
+| **40-platform FlowScheduler** | 无统一计时 | ★ 每 stage 自动包裹 `StageTimer`（或 TCL wrapper） | wall_s、user/sys_cpu_s；peak memory 由 runner/cgroup 采集 |
 | **各工具 TCL 命令** | 散落时间戳 | ★ 保留原有 LOG，但不作 G21 真源；真源=`StageTimer` | — |
 | **12-evaluation** | 只管 QoR | ★ 新增 `qor_perf_joint.json`（QoR + 性能联合报告） | G17 + G21 |
 | **perf → G21 CI** | 无门禁 | ★ `g21_enable=false`（M3 前观测）；M3 后 true（门禁） | exit 0/1 |
@@ -581,7 +575,7 @@ thresholds:
 
 | 档 | 规则 | G |
 |---|---|---|
-| daily e2e | ≤1.5×；≥2/5 ≤1.0× | G21 |
+| daily e2e | 5 个设计均≤1.5×；其中≥2/5 个设计≤1.0× | G21 |
 | 分项 | 写入 profile | G21 |
 | scale | ≤3× + 瓶颈 | G20 |
 
@@ -646,7 +640,7 @@ M4 大设计瓶颈报告
 
 ## 附 · 与 G21 原文对齐
 
-主纲 G21：五套日常基准端到端墙钟 **≤1.5×** 商业主对标方，且至少 **2/5 ≤1.0×**；关键步骤分项剖面进 JSON；大设计（G20）放宽 **≤3×** 且附瓶颈定位。
+主纲 G21：五个日常设计端到端墙钟均 **≤1.5×** 商业主对标方，且至少 **2/5 个设计 ≤1.0×**；关键步骤分项剖面进 JSON；大设计（G20）放宽 **≤3×** 且附瓶颈定位。
 
 ### 采集伪代码（落地版）
 
@@ -665,7 +659,7 @@ if protocol.perf.g21_enable: assert_ratios(ratios)
 
 ### 热点优化准入清单
 
-1. 剖面显示该 stage ≥30% e2e；  
+1. 有稳定的 stage/substage 占比、调用次数和输入规模，并估算 Amdahl 上限；
 2. 有 QoR A/B（同 design，G17 指标不回归）；  
 3. 算法默认不变则优先并行/容器/IO；  
 4. 禁止关 DRC/STA 换速度。

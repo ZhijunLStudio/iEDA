@@ -1,6 +1,6 @@
 {
   "name": "aes_ics55_a",
-  "top": "aes",
+  "top": "aes_cipher_top",
   "scale": "M",
   "role": "timing",
   "description": "AES encryption core",
@@ -8,9 +8,9 @@
   "variant": "stdcell",
   "inputs": {
     "tech_lef": "$PDK/lef/ics55_tech.lef",
-    "cells_lef": "$PDK/lef/ics55_stdcell.lef",
-    "lib": "$PDK/lib/ics55_stdcell_tt_1v8_25c.lib",
-    "netlist": "netlist/aes.v",
+    "cells_lef": "$PDK/lef/ics55_cells.lef",
+    "lib": "$PDK/lib/ics55_typical.lib",
+    "netlist": "netlist/aes_cipher_top.v",
     "sdc": "sdc/aes.sdc"
   },
   "floorplan": {

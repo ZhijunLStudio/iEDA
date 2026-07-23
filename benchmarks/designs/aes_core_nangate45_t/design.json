@@ -8,7 +8,7 @@
   "variant": "stdcell",
   "inputs": {
     "tech_lef": "$PDK/lef/NangateOpenCellLibrary.tech.lef",
-    "cells_lef": "$PDK/lef/NangateOpenCellLibrary.macro.mod.lef",
+    "cells_lef": "$PDK/lef/NangateOpenCellLibrary.macro.lef",
     "lib": "$PDK/lib/NangateOpenCellLibrary_typical.lib",
     "netlist": "netlist/aes_core.v",
     "sdc": "sdc/aes_core.sdc"

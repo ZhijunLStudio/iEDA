@@ -1,0 +1,13 @@
+# Target labels
+ liberty_parser
+# Source files and their labels
+/home/lxq/AiEDA/iEDA.ai/build-aes13/src/database/manager/parser/liberty/CMakeFiles/liberty_parser
+/home/lxq/AiEDA/iEDA.ai/build-aes13/src/database/manager/parser/liberty/CMakeFiles/liberty_parser.rule
+/home/lxq/AiEDA/iEDA.ai/build-aes13/src/database/manager/parser/liberty/CMakeFiles/liberty_parser-complete.rule
+/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/liberty/lib-rust/liberty-parser/src/liberty_parser-stamp/liberty_parser-build.rule
+/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/liberty/lib-rust/liberty-parser/src/liberty_parser-stamp/liberty_parser-configure.rule
+/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/liberty/lib-rust/liberty-parser/src/liberty_parser-stamp/liberty_parser-download.rule
+/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/liberty/lib-rust/liberty-parser/src/liberty_parser-stamp/liberty_parser-install.rule
+/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/liberty/lib-rust/liberty-parser/src/liberty_parser-stamp/liberty_parser-mkdir.rule
+/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/liberty/lib-rust/liberty-parser/src/liberty_parser-stamp/liberty_parser-patch.rule
+/home/lxq/AiEDA/iEDA.ai/src/database/manager/parser/liberty/lib-rust/liberty-parser/src/liberty_parser-stamp/liberty_parser-update.rule

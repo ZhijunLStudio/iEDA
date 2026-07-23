@@ -261,22 +261,6 @@ ALG-4.3-1  每格式一行矩阵
 
 `writeChip()`（`gds_write.cpp:64-85`）按 GDS 语义重排：去掉 `"VERSION"`/`"Design Name"` 两个 DEF 换皮 struct；顶层 struct 用真实 design name；die 边界是否落 layer 0 需按 PDK layer map 决策（**deferred**：layer map 表先行，见 §14）；`write_pin/component/net/special_net/fill` 保留但坐标一律过修复后的 `transDB2Unit`。
 
-### 4.3 ★ 往返矩阵 CI（FR-DB-04，P0，G1 前置）
-
-**现状**：各 parser 散落单测，无"读→写→再读"闭环。
-
-**设计**（测试即规格，D4）：参见上文 ALG-4.3-1 详细设计。
-
-**接入 CI**：`benchmark/db/roundtrip_ci.sh` 每格式 × 每 PDK → JSON 报告 → CI 门禁（清单内 fail=0）
-
-### 4.4 ★ 容量剖面（FR-DB-06，P1，G13 前置）
-
-**设计**：参见上文 ALG-4.4-1，落 `benchmark/db/capacity_profile.sh`，三档实例数（100k/500k/1000k）剖面。
-
-### 4.5 `Def2GdsWrite` 段落重排（随 FR-DB-02 落地）
-
-`writeChip()` 按 GDS 语义重排，去掉 DEF 换皮 struct，详见上文。
-
 ### 4.6 ★ 增量更新 API（FR-DB-11，P1，性能线核心）
 
 **设计**：参见上文 IncrementalDB 类设计 + 增量语义 + 下游切换表。
