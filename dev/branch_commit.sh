@@ -150,7 +150,7 @@ is_generated_path() {
 
 is_agent_owned_path() {
   case "$1" in
-    docs/ai1.0/* | docs/agent/* | src/platform/design_state/* | src/platform/agent_*/* | src/interface/mcp-iEDA/*)
+    docs/ai/* | docs/ai1.0/* | docs/agent/* | src/ai/agent*/* | src/platform/design_state/* | src/platform/agent_*/* | src/platform/flow/tool_flow/* | src/interface/mcp-iEDA/*)
       return 0
       ;;
     *)
@@ -266,9 +266,12 @@ elif [[ $stage_mode == all ]]; then
   if [[ $lane == parity ]]; then
     excludes+=(
       ':(exclude,glob)docs/ai1.0/**'
+      ':(exclude,glob)docs/ai/**'
       ':(exclude,glob)docs/agent/**'
+      ':(exclude,glob)src/ai/agent*/**'
       ':(exclude,glob)src/platform/design_state/**'
       ':(exclude,glob)src/platform/agent_*/**'
+      ':(exclude,glob)src/platform/flow/tool_flow/**'
       ':(exclude,glob)src/interface/mcp-iEDA/**'
     )
   elif [[ $lane == agent ]]; then
