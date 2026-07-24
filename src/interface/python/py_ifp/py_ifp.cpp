@@ -22,6 +22,8 @@
 
 #include <Str.hh>
 
+#include <cmath>
+
 namespace python_interface {
 
 bool fpInit(const std::string& die_area, const std::string& core_area, const std::string& core_site, const std::string& io_site,
@@ -29,17 +31,27 @@ bool fpInit(const std::string& die_area, const std::string& core_area, const std
 {
   std::vector<double> die = ieda::Str::splitDouble(die_area.c_str(), " ");
   std::vector<double> core = ieda::Str::splitDouble(core_area.c_str(), " ");
-  if (die.empty() || core.empty()) {
+  const bool any_explicit_geometry = !die.empty() || !core.empty();
+  if (any_explicit_geometry && (die.size() != 4 || core.size() != 4)) {
+    return false;
+  }
+
+  if (!any_explicit_geometry) {
     // Get cell area - either from user input or get from iDB
     if (cell_area <= 0) {
       cell_area = dmInst->instanceArea(IdbInstanceType::kMax);
     }
 
     // Calculate core area based on cell area and utilization
+    if (!std::isfinite(cell_area) || !std::isfinite(core_util) || !std::isfinite(x_margin) || !std::isfinite(y_margin)
+        || !std::isfinite(xy_ratio) || cell_area <= 0.0 || core_util <= 0.0 || x_margin < 0.0 || y_margin < 0.0
+        || xy_ratio <= 0.0) {
+      return false;
+    }
     double total_core_area = cell_area / core_util;
 
     // Calculate core dimensions based on aspect ratio
-    double core_height = sqrt(total_core_area / xy_ratio);
+    double core_height = std::sqrt(total_core_area / xy_ratio);
     double core_width = total_core_area / core_height;
 
     // Calculate die dimensions by adding margins
@@ -53,9 +65,8 @@ bool fpInit(const std::string& die_area, const std::string& core_area, const std
     core = {x_margin, y_margin, x_margin + core_width, y_margin + core_height};
   }
 
-  fpApiInst->initDie(die[0], die[1], die[2], die[3]);
-  fpApiInst->initCore(core[0], core[1], core[2], core[3], core_site, io_site, corner_site);
-  return true;
+  return fpApiInst->initDie(die[0], die[1], die[2], die[3])
+         && fpApiInst->initCore(core[0], core[1], core[2], core[3], core_site, io_site, corner_site);
 }
 
 bool fpMakeTracks(const std::string& layer, int x_start, int x_step, int y_start, int y_step)

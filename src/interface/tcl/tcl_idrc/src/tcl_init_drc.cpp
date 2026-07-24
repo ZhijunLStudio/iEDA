@@ -28,6 +28,8 @@ TclInitDRC::TclInitDRC(const char* cmd_name) : TclCmd(cmd_name)
   _config_list.push_back(std::make_pair("-temp_directory_path", ValueType::kString));
   // int32_t thread_number;                 // optional
   _config_list.push_back(std::make_pair("-thread_number", ValueType::kInt));
+  // foundry rule deck coverage manifest; optional for in-design runs, required as G11 evidence
+  _config_list.push_back(std::make_pair("-rule_coverage_table", ValueType::kString));
 
   TclUtil::addOption(this, _config_list);
 }

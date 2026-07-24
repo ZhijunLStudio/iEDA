@@ -100,6 +100,10 @@ unsigned TclFpInit::exec()
     // Use explicitly provided areas
     die_area = str.splitDouble(tcl_die_area->getStringVal(), " ");
     core_area = str.splitDouble(tcl_core_area->getStringVal(), " ");
+    if (die_area.size() != 4 || core_area.size() != 4) {
+      LOG_ERROR << "init_floorplan requires exactly four coordinates for both -die_area and -core_area";
+      return 0;
+    }
   } else {
     // Calculate die and core bounding box using core_util
     double util = core_util->getDoubleVal();
@@ -115,12 +119,18 @@ unsigned TclFpInit::exec()
     double x_margin_val = x_margin->getDoubleVal();
     double y_margin_val = y_margin->getDoubleVal();
     double ratio = xy_ratio->getDoubleVal();
+    if (!std::isfinite(util) || !std::isfinite(cell_area_val) || !std::isfinite(x_margin_val) || !std::isfinite(y_margin_val)
+        || !std::isfinite(ratio) || util <= 0.0 || cell_area_val <= 0.0 || x_margin_val < 0.0 || y_margin_val < 0.0
+        || ratio <= 0.0) {
+      LOG_ERROR << "init_floorplan automatic dimensions require finite positive utilization, cell area, and aspect ratio, with non-negative margins";
+      return 0;
+    }
 
     // Calculate core area based on cell area and utilization
     double total_core_area = cell_area_val / util;
 
     // Calculate core dimensions based on aspect ratio
-    double core_height = sqrt(total_core_area / ratio);
+    double core_height = std::sqrt(total_core_area / ratio);
     double core_width = total_core_area / core_height;
 
     // Calculate die dimensions by adding margins
@@ -138,9 +148,13 @@ unsigned TclFpInit::exec()
   string io_site = tcl_io_site->getStringVal() == nullptr ? core_site : tcl_io_site->getStringVal();
   string corner_site = tcl_corner_site->getStringVal() == nullptr ? io_site : tcl_corner_site->getStringVal();
 
-  fpApiInst->initDie(die_area[0], die_area[1], die_area[2], die_area[3]);
-  fpApiInst->initCore(core_area[0], core_area[1], core_area[2], core_area[3], core_site, io_site, corner_site);
-  return 1;
+  if (!fpApiInst->initDie(die_area[0], die_area[1], die_area[2], die_area[3])) {
+    LOG_ERROR << "init_floorplan rejected the die geometry";
+    return 0;
+  }
+  const bool core_ok = fpApiInst->initCore(core_area[0], core_area[1], core_area[2], core_area[3], core_site, io_site, corner_site);
+  LOG_ERROR_IF(!core_ok) << "init_floorplan rejected the core geometry or site configuration";
+  return core_ok ? 1 : 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

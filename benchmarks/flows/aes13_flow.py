@@ -10,6 +10,7 @@ import json
 import os
 import platform
 import re
+import signal
 import shutil
 import socket
 import subprocess
@@ -324,6 +325,91 @@ def controlled_thread_environment(base: dict[str, str], threads: int) -> dict[st
     return env
 
 
+def run_process_with_usage(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: int | float,
+    log_file: Path,
+) -> dict[str, Any]:
+    """Run one isolated stage and return its exact wait4 resource usage.
+
+    The process is its own process-group leader so a timeout cannot leave an
+    iEDA descendant running long enough to publish late, apparently fresh
+    artifacts into the next stage or run.
+    """
+    if timeout <= 0:
+        raise ValueError("timeout must be positive")
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    started = time.monotonic()
+    timed_out = False
+    usage = None
+    with log_file.open("w", encoding="utf-8", errors="replace") as stream:
+        process = subprocess.Popen(
+            command,
+            cwd=cwd,
+            env=env,
+            stdout=stream,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
+        )
+        deadline = started + timeout
+        try:
+            while True:
+                try:
+                    waited_pid, status, usage = os.wait4(process.pid, os.WNOHANG)
+                except InterruptedError:
+                    continue
+                if waited_pid == process.pid:
+                    process.returncode = os.waitstatus_to_exitcode(status)
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    timed_out = True
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    while True:
+                        try:
+                            _, status, usage = os.wait4(process.pid, 0)
+                            break
+                        except InterruptedError:
+                            continue
+                    process.returncode = 124
+                    stream.write(
+                        f"\nTIMEOUT after {timeout}s; "
+                        f"killed process group {process.pid}\n"
+                    )
+                    break
+                time.sleep(min(0.05, remaining))
+        except BaseException:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                os.wait4(process.pid, 0)
+            except ChildProcessError:
+                pass
+            raise
+    if usage is None:
+        raise RuntimeError(
+            f"wait4 returned no resource usage for process {process.pid}"
+        )
+    max_rss_scale = 1024 if sys.platform.startswith("linux") else 1
+    return {
+        "returncode": process.returncode,
+        "timed_out": timed_out,
+        "elapsed_sec": time.monotonic() - started,
+        "user_cpu_sec": float(usage.ru_utime),
+        "system_cpu_sec": float(usage.ru_stime),
+        "process_peak_bytes": int(usage.ru_maxrss) * max_rss_scale,
+    }
+
+
 def check_inputs(names: Iterable[str], synthesize: bool) -> None:
     missing = []
     for path in (IEDA_BIN,):
@@ -571,6 +657,9 @@ def build_performance_record(
     performance: dict[str, Any],
     evidence: dict[str, Any],
     input_manifest_sha256: str,
+    user_cpu_sec: float,
+    system_cpu_sec: float,
+    process_peak_bytes: int | None,
 ) -> dict[str, Any]:
     record = {
         "schema_version": "1.0",
@@ -582,8 +671,8 @@ def build_performance_record(
         "repeat": 1,
         "cache_mode": cache_mode,
         "wall_sec": max(float(wall_sec), 1e-9),
-        "user_cpu_sec": 0.0,
-        "system_cpu_sec": 0.0,
+        "user_cpu_sec": max(float(user_cpu_sec), 0.0),
+        "system_cpu_sec": max(float(system_cpu_sec), 0.0),
         "threads": performance["threads"],
         "hostname": evidence["hostname"],
         "binary_sha256": evidence["binary"]["sha256"],
@@ -595,6 +684,8 @@ def build_performance_record(
         "comparable": evidence["comparable"],
         "non_comparable_reason": evidence["non_comparable_reason"],
     }
+    if process_peak_bytes is not None:
+        record["process_peak_bytes"] = max(int(process_peak_bytes), 0)
     errors = validate_performance_record(record)
     if errors:
         raise ValueError("invalid performance profile record: " + "; ".join(errors))
@@ -624,6 +715,18 @@ def build_design_performance_records(
         elapsed = result.get("elapsed_sec")
         if not isinstance(elapsed, (int, float)) or isinstance(elapsed, bool):
             continue
+        user_cpu = result.get("user_cpu_sec")
+        system_cpu = result.get("system_cpu_sec")
+        if any(
+            not isinstance(value, (int, float)) or isinstance(value, bool)
+            for value in (user_cpu, system_cpu)
+        ):
+            continue
+        process_peak = result.get("process_peak_bytes")
+        if process_peak is not None and (
+            not isinstance(process_peak, int) or isinstance(process_peak, bool)
+        ):
+            continue
         records.append(
             build_performance_record(
                 design=summary["design"],
@@ -635,9 +738,20 @@ def build_design_performance_records(
                 performance=performance,
                 evidence=evidence,
                 input_manifest_sha256=input_manifest_sha256,
+                user_cpu_sec=user_cpu,
+                system_cpu_sec=system_cpu,
+                process_peak_bytes=process_peak,
             )
         )
-    if records and not has_resumed_stage:
+    stopped_early = bool(
+        summary.get("run_control", {}).get("stop_after")
+    )
+    if records and not has_resumed_stage and not stopped_early:
+        peak_values = [
+            record["process_peak_bytes"]
+            for record in records
+            if "process_peak_bytes" in record
+        ]
         records.append(
             build_performance_record(
                 design=summary["design"],
@@ -649,6 +763,9 @@ def build_design_performance_records(
                 performance=performance,
                 evidence=evidence,
                 input_manifest_sha256=input_manifest_sha256,
+                user_cpu_sec=sum(record["user_cpu_sec"] for record in records),
+                system_cpu_sec=sum(record["system_cpu_sec"] for record in records),
+                process_peak_bytes=max(peak_values) if peak_values else None,
             )
         )
     return records
@@ -1436,43 +1553,38 @@ def run_stage(
     log_file = result_dir / "logs" / f"{stage.name}.log"
     print(f"    [{stage.name}] running", flush=True)
     started_epoch_ns = time.time_ns()
-    try:
-        stage_env = env.copy()
-        if stage.name == "legalization":
-            stage_env["INPUT_DEF"] = str(result_dir / "iCTS_result.def")
-        elif stage.name == "filler":
-            stage_env["INPUT_DEF"] = str(result_dir / "iRT_result.def")
-        elif stage.name == "gds":
-            filler_def = result_dir / "iPL_filler_result.def"
-            stage_env["INPUT_DEF"] = str(
-                filler_def if filler_def.is_file() else result_dir / "iRT_result.def"
-            )
-        process = subprocess.run(
-            [str(IEDA_BIN), "-script", str(script)],
-            cwd=workspace,
-            env=stage_env,
-            text=True,
-            capture_output=True,
-            timeout=timeout,
-            check=False,
+    stage_env = env.copy()
+    if stage.name == "legalization":
+        stage_env["INPUT_DEF"] = str(result_dir / "iCTS_result.def")
+    elif stage.name == "filler":
+        stage_env["INPUT_DEF"] = str(result_dir / "iRT_result.def")
+    elif stage.name == "gds":
+        filler_def = result_dir / "iPL_filler_result.def"
+        stage_env["INPUT_DEF"] = str(
+            filler_def if filler_def.is_file() else result_dir / "iRT_result.def"
         )
-        log_text = process.stdout + "\n" + process.stderr
-        returncode = process.returncode
-    except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-        stderr = exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "")
-        log_text = stdout + "\n" + stderr + f"\nTIMEOUT after {timeout}s\n"
-        returncode = 124
-    log_file.write_text(log_text, encoding="utf-8", errors="replace")
+    usage = run_process_with_usage(
+        [str(IEDA_BIN), "-script", str(script)],
+        cwd=workspace,
+        env=stage_env,
+        timeout=timeout,
+        log_file=log_file,
+    )
+    log_text = log_file.read_text(encoding="utf-8", errors="replace")
+    returncode = usage["returncode"]
     elapsed = time.monotonic() - started
     fatal = log_has_fatal_error(log_text)
     if stage.name == "drc" and expected and not expected.is_file() and "violation_type" in log_text:
         expected.write_text(log_text, encoding="utf-8", errors="replace")
     expected_candidates = [path for path in (expected, *expected_alternates) if path is not None]
+    # All declared evidence was removed immediately before launching this
+    # isolated process group. Existence now proves this invocation produced it;
+    # an mtime comparison would falsely reject copied artifacts with preserved
+    # timestamps and is weaker than delete-before-run plus process-group kill.
     fresh_artifacts = [
         path
         for path in expected_candidates
-        if path.is_file() and path.stat().st_size > 0 and path.stat().st_mtime_ns >= started_epoch_ns
+        if path.is_file() and path.stat().st_size > 0
     ]
     if fresh_artifacts:
         expected = fresh_artifacts[0]
@@ -1497,6 +1609,10 @@ def run_stage(
         "artifacts": [str(expected)] if artifact_ok and expected is not None else [],
         "reason": reason,
         "freshness": "executed_fresh" if artifact_ok else "stale_or_missing",
+        "user_cpu_sec": usage["user_cpu_sec"],
+        "system_cpu_sec": usage["system_cpu_sec"],
+        "process_peak_bytes": usage["process_peak_bytes"],
+        "timed_out": usage["timed_out"],
     }
 
 
@@ -1762,6 +1878,11 @@ def run_design(
             "performance": args.performance,
         },
         "performance": args.performance,
+        "run_control": {
+            "prepare_only": args.prepare_only,
+            "resume": args.resume,
+            "stop_after": args.stop_after,
+        },
         "floorplan": floorplan,
         "stages": stage_results,
         "artifacts": collect_artifacts(result_dir),

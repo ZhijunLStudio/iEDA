@@ -29,6 +29,7 @@ class Config
   // **********        DRC         ********** //
   std::string temp_directory_path;  // required
   int32_t thread_number;            // optional
+  std::string rule_coverage_table_path;  // optional; required for foundry-deck coverage evidence
   /////////////////////////////////////////////
   // **********        DRC         ********** //
   std::string log_file_path;  // building

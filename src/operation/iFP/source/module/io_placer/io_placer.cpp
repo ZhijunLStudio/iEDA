@@ -16,6 +16,7 @@
 // ***************************************************************************************
 #include "io_placer.h"
 
+#include "../../utility/FloorplanGeometry.hh"
 #include "idm.h"
 
 using namespace std;
@@ -93,15 +94,28 @@ bool IoPlacer::autoPlacePins(std::string layer_name, int width, int height, std:
   };
 
   auto idb_design = dmInst->get_idb_design();
+  if (idb_design == nullptr) {
+    return false;
+  }
   auto idb_layout = idb_design->get_layout();
+  if (idb_layout == nullptr) {
+    return false;
+  }
 
   auto idb_die = idb_layout->get_die();
   auto idb_core = idb_layout->get_core();
+  if (idb_die == nullptr || idb_core == nullptr || idb_core->get_bounding_box() == nullptr) {
+    return false;
+  }
+
   idb::IdbLayer* horizontal_layer = nullptr;
   idb::IdbLayer* vertical_layer = nullptr;
   {
     auto curr_layer = idb_layout->get_layers()->find_layer(layer_name);
     idb::IdbLayerRouting* curr_routing_layer = dynamic_cast<idb::IdbLayerRouting*>(curr_layer);
+    if (curr_routing_layer == nullptr) {
+      return false;
+    }
 
     if (curr_routing_layer->get_direction() == idb::IdbLayerDirection::kHorizontal) {
       horizontal_layer = curr_layer;
@@ -126,13 +140,26 @@ bool IoPlacer::autoPlacePins(std::string layer_name, int width, int height, std:
 
   /// calculate all the location
   int pin_num = pin_list.size();
+  if (pin_num == 0) {
+    return true;
+  }
   int side_num = sides.size() > 0 ? sides.size() : 4;
   int edge_num = pin_num % side_num == 0 ? pin_num / side_num : pin_num / side_num + 1;
   int manufacture_grid = dmInst->get_idb_lef_service()->get_layout()->get_munufacture_grid();
-  int width_step = idb_core->get_bounding_box()->get_width() / (edge_num + 1);
-  int height_step = idb_core->get_bounding_box()->get_height() / (edge_num + 1);
-  width_step = width_step / manufacture_grid * manufacture_grid;
-  height_step = height_step / manufacture_grid * manufacture_grid;
+  const auto pin_pitch = makePinPitch(idb_core->get_bounding_box()->get_width(), idb_core->get_bounding_box()->get_height(), edge_num,
+                                      manufacture_grid);
+  if (!pin_pitch.has_value()) {
+    return false;
+  }
+  const int width_step = pin_pitch->horizontal;
+  const int height_step = pin_pitch->vertical;
+  if ((has_side("left") || has_side("right")) && horizontal_layer == nullptr) {
+    return false;
+  }
+  if ((has_side("bottom") || has_side("top")) && vertical_layer == nullptr) {
+    return false;
+  }
+
   int pin_index = 0;
   /// left
   if (has_side("left")) {
@@ -142,7 +169,7 @@ bool IoPlacer::autoPlacePins(std::string layer_name, int width, int height, std:
       }
 
       int x = idb_die->get_llx() + height / 2;
-      int y = idb_core->get_bounding_box()->get_low_y() + i * width_step;
+      int y = idb_core->get_bounding_box()->get_low_y() + i * height_step;
 
       auto pin = pin_list[pin_index++];
 
@@ -179,7 +206,7 @@ bool IoPlacer::autoPlacePins(std::string layer_name, int width, int height, std:
       }
 
       int x = idb_die->get_urx() - height / 2;
-      int y = idb_core->get_bounding_box()->get_low_y() + i * width_step;
+      int y = idb_core->get_bounding_box()->get_low_y() + i * height_step;
 
       auto pin = pin_list[pin_index++];
 

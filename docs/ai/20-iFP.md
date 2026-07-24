@@ -3,9 +3,9 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 20 · iFP 布图规划 · 商业对标优化方案 · rv2.1
+# 20 · iFP 布图规划 · 商业对标优化方案 · rv2.2
 
-> 文档号：20-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**双对标 —— Innovus/ICC2 floorplan 精度线（auto-die + IO 质量 + 宏约束）× 性能线（秒级完成 die/core/IO/tap）**
+> 文档号：20-rv2.2　　版本：rv2.2（基础几何正确性落地）　　里程碑：**双对标 —— Innovus/ICC2 floorplan 精度线（auto-die + IO 质量 + 宏约束）× 性能线（秒级完成 die/core/IO/tap）**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`24-iPL-3d-rv1.0.md`、`27-iSTA-rv2.0.md`（逐 kernel 走读 + 诚实归因 + 双对标线）
 > 商业金标：**Innovus floorplan**（die/core/IO/constraint 精度）；**ICC2 floorplan**（宏规划辅助）；门禁：**G3 / G14 / G17**（辅 G2）
 > 上游：网表/LEF　下游：`22-iPL`、`24-iPDN`、`26-iRT`
@@ -25,6 +25,7 @@ iEDA is licensed under Mulan PSL v2.
 | rv1.1 / v3.0 | 2026-07-21 | parity | 对 iFP 全树 14 个源文件（1636 LOC）+ iPL 宏残迹逐行读完重写；坐实三空壳目录、IO 等间距无 cost、B1/B2 疑似 bug |
 | **rv2.0** | **2026-07-22** | parity | **大改（对照 27-iSTA-rv2.0.md 的深度与双对标线体例重写）**。核心修订五条：**(1)** rv1.1 把 iFP 当成"三空壳+两疑似 bug"来审——**结构层核实后发现头号症结是精度机制完整度缺失**：有 die/core/IO/tap 四项基础能力，但**缺 vs Innovus/ICC2 floorplan 的精度验证栈**（无 auto-die 面积目标验证、无 IO net-driven cost、无宏约束与 iPL 闭环测试、无 die/core 合法性门槛 → G3/G17 主责交接不清）——in-design floorplan 的价值前提是"我知道 die 面积与 util 的关系、IO 摆放质量可量化、宏约束能被 iPL 消费"，当前状态是**边界模糊**（§1.5，类比 27 号文档对 PBA/SI 缺失的判定）；**(2)** 新增 **§1.5 精度栈逐项**（对 Innovus/ICC2 floorplan 的差距清单，辅助工具核心证据）：逐机制列出 iFP 已有 vs 商业 floorplan 必需的差距——die/core/track 初始化 ✓、tap/endcap 插入 ✓；但 **auto-die 面积模型未验证**（util→die 公式与实际拥塞/DRC 的关系未校准）、**IO placement 无 net-driven cost**（等间距排布 vs 商业工具的飞行线优化）、**宏约束模型单向**（iFP→iDB 写入但 iPL 消费侧未闭环测试）、**track 生成按 die vs core 未裁决**（§1.2-kernel 表指出，待 E-FP-07）、**三空壳目录占位误导**（G14 卫生）；**(3)** 全文按**双对标线**重组：Innovus 线 = floorplan 精度栈（auto-die 面积模型 + IO net-cost + 宏约束闭环 → G3/G17 面积/宏可解释），ICC2 线 = floorplan 辅助栈（die/core 合法性 + 快速完成 → 秒级），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§1.2 kernel 算法表（补 auto-die/IO/tap 伪码+复杂度+边界+复用姿势）、§4.6 模块状态一览、§5 配置表、§8 调用方契约表（iFP→iPL/iPDN/iRT 交接）、§10.1/10.2 双看板（vs Innovus/ICC2 + 对照实验 E-FP-01～07）、§14 未验证/不要重走/兄弟仓库三分；**(5)** 辅助工具特殊定位强化：**iFP 是 Tier 2 辅助工具**（主责在 iPL 宏真化，iFP 只做约束交接）——宏算法归 22、iFP 不实现 SA/力导向的红线前置（§2.3 约束、§3.2-D1 决策、§14.2 负面），精度栈聚焦 die/IO/tap 三项特有能力对商业工具的差距（§1.5），篇幅适当精简但保持核心章节完整（§4 LLD 保留伪码但不展开 MacroPlacer）。**缺省新特性关闭 → 零回归**纪律不变。 |
 | **rv2.1** | **2026-07-23** | Codex | 实现评审：auto-die 从单一 `A_cell/util` 改为 std/macro/halo/blockage/IO/PDN/whitespace 分项预算与下游拥塞可行性循环；IO 从“按重心排序”改为约束槽位分配；面积/IO 实验改用独立指标、效应量和置信区间。 |
+| **rv2.2** | **2026-07-24** | agent team | 裁决并修复 B1/B2：非方形 core 的垂直 IO pitch 改用高度，tap blockage 使用闭区间标准相交；新增纯几何单测。die/core 坐标、DB/layout/site/layer 和自动尺寸输入开始响亮失败，Tcl/Python 传播返回值。负坐标合法，但负坐标 site snapping 仍使用 C++ 截断，设计级回归前保持未验证。 |
 
 ---
 
@@ -42,38 +43,30 @@ iEDA is licensed under Mulan PSL v2.
 | **io_router** | **仅 0 字节 `CMakeLists.txt`** | **空壳** |
 | **macro_placer** | **仅 0 字节 `CMakeLists.txt`** | **空壳** |
 | data | `ifp_interval.{h,cpp}` 59+21、`ifp_enum.{h,cpp}` 33+21 | interval 容器（tap 用） |
-| **test/** | **仅 `CMakeLists.txt`，零用例** | **全树无测试** |
+| **test/** | `CMakeLists.txt` + `FloorplanGeometryTest.cc` | 基础几何合同 D2；尚非完整 iDB/设计级测试 |
 
 ### 1.2 算法成熟度（逐 kernel）
 
 | kernel | 现状算法（file:line） | 判定 | 缺口 |
 |---|---|---|---|
-| `InitDesign::initDie` | 用户四角 → `IdbDie` 两点（`init_design.cpp:32-43`）；**恒 return true，无任何校验** | 教科书操作 | 无 auto-die；无非法坐标检查 |
+| `InitDesign::initDie` | 用户四角先做有限数/严格有序校验，再检查 DB/layout/die 与 DBU 转换后矩形 | 基础合法性已加固 | 无商业 auto-die 面积模型与设计级回归 |
 | `InitDesign::initCore` | site 对齐取整 + 建行（奇偶行 `kFS_MX`/`kN_R0` 交错，`:88`） | 成熟 | **IO 带检查被注释**（`:73-78` "error report, tbd"）——core 贴着 die 边建 row 无防线 |
 | `InitDesign::makeTracks` | pitch/offset 写 track grid（`:114-144`） | 可用 | **track 条数按 die 宽/高算**（`:131`、`:140`）而非 core——core 外也铺 track，与 LEF TRACKS 并存策略未验证 |
-| `IoPlacer::autoPlacePins` | **pin_list 顺序绕四边等间距**（`:84-290`）：`edge_num=⌈pin/side⌉`，`width_step=core_w/(edge_num+1)` 对齐 manufacture_grid；左→右→下→上依次填 | **教科书以下**——**无飞行线、无连通性、无 cost**，pin 顺序即网表顺序 | 商业 IO 规划的最基本项（net 驱动）整体缺失；左/右边疑似用错步进（§1.3-B1） |
+| `IoPlacer::autoPlacePins` | **pin_list 顺序绕四边等间距**；横/纵 pitch 分别由 core 宽/高计算并对齐 manufacture grid | B1 已修，但仍**无飞行线、无连通性、无 cost** | 商业 IO 规划的 net-driven 质量机制整体缺失 |
 | `IoPlacer::placePort` / `placeIOFiller` / `fillInterval` | 定点 port（`:292`）；pad 区间填 filler（`:353/:431`） | 有实现 | 生产调用路径未验证 |
 | `IoPlacer::autoPlacePad` / `set_pad_coords` / `autoIOFiller` | pad 环摆位（`:491/:577/:642`） | 有实现 | 仅 pad flow 用；未验证 |
-| `TapCellPlacer::tapCells` | 间距 snap site 倍数（`checkDistance :40-54`）→ master 查空（`:62-65`）→ 按行减 blockage 建区间（`buildTapcellRegion :84`）→ 插 ENDCAP_/PHY_（`insertCell :194-270`） | **成熟**（全树最佳） | master 缺 → `return false`（正确响亮）；但 blockage 相交判定疑似错边（§1.3-B2） |
+| `TapCellPlacer::tapCells` | 间距 snap site 倍数 → master 查空 → 按行减 blockage 建区间 → 插 ENDCAP_/PHY_ | **成熟**（全树最佳）；B2 已按闭区间相交修复 | 完整 iDB blockage 场景仍需设计级 E-FP-06 |
 | `InitDesign::transUnitDB` | 单位换算（`:24-30`） | 可用 | layout 空时返回 **-1 哨兵**（静默，调用方不查） |
 
 ### 1.3 边界 / 回退 / 疑似 bug（★=带杀死实验）
 
-- **B1 ★（疑似）`autoPlacePins` 左/右边纵向步进用 `width_step`**：`:146`（left）`y = core_low_y + i * width_step`、`:183`（right）同式；而 `width_step = core_width/(edge_num+1)`（`:137`）。bottom/top 边横向用 `width_step` 是对的（`:211/:247`），左/右边纵向应为 `height_step`。非方形 core 上左/右 pin 纵向分布错误（过密重叠或越出 core 高）。**杀死实验 E-FP-05**：W≠H 的 core（如 2:1）跑 autoPlacePins，量左/右边相邻 pin 纵向间距是否等于 `core_h/(edge_num+1)`；不等即实锤。
-- **B2 ★（疑似）`buildRegionInRow` blockage 相交判定用错矩形边**（`tapcell.cpp:120-123`）：
-  ```cpp
-  if (idb_row_end_y < rect->get_low_y() || idb_row_start_y > rect->get_high_y()
-      || idb_row_start_x > rect->get_low_x()        // ← 应为 rect->get_high_x()
-      || idb_row_end_x < rect->get_high_x()) {      // ← 应为 rect->get_low_x()
-    continue;   // 判"不相交"
-  }
-  ```
-  x 向两条比较用错了 rect 的边：行起点在 blockage 左缘之右（含 blockage 左悬垂进行的情形）会被判"不相交"而跳过 → tapcell 可能插进 blockage 左悬垂区。**杀死实验 E-FP-06**：构造 blockage 覆盖行左端 `[row_start-100, row_start+50]`，跑 tapCells，检查 `[row_start, row_start+50]` 内是否出现 PHY_/ENDCAP_。
+- **B1 已确认并修复**：左/右边纵向位置改用 `height_step`；`makePinPitch` 的非方形与 manufacturing-grid 单测通过。E-FP-05 的完整设计/产物断言仍待跑，故只升 D2。
+- **B2 已确认并修复**：`buildRegionInRow` 复用 `intersectsClosed(row_box, blockage_box)`，覆盖相离、边界接触与左悬垂微例。E-FP-06 的真实 iDB blockage/tap 实例检查仍待跑。
 - **B3** `checkDistance`（`:40-54`）按引用 snap `inst_space` 到 site 倍数，**返回值的语义是"没 snap"**，`tapCells` 在 `:56` 丢弃该返回值——逻辑无错但接口反直觉，重构候选。
 - **B4** `initCore` 的 IO 带检查整段注释（`:73-78`）：core 边界压 die 边界时无报错路径。
-- **B5** `initDie` 恒 true（`:42`）：非法坐标（ll>ur、负值）不拒。
+- **B5 已部分关闭**：非有限数和 `ll>=ur` 现在拒绝；负坐标本身是合法 DEF 坐标，不应拒绝。残余风险是负坐标除以 site pitch 时 C++ 向零截断，而不是数学 floor。
 - **假成功链路（坐实，G14）**：`tcl_ipl.cpp:257-265` `CmdPlacerRunMP::exec` → `ipl_io.cpp:170-181` 函数体全注释 `return true` → `PLAPI.cc:517-522` 全注释 → `macro_placer/readme.md` 一行。**`run_mp` 命令对任何设计都 rc=0 且零效果。**
-- **空壳目录×3**（§1.1）+ **全树零测试**（test/ 仅 CMakeLists）。
+- **空壳目录×3**仍在；测试已从零推进到纯几何合同，生产 iDB 集成测试仍缺。
 
 ### 1.4 跨工具协调
 
@@ -99,14 +92,14 @@ Innovus/ICC2 floorplan 的实用性来自一整套互相咬合的机制。逐项
 | 4 | IO placement（pin 按 net 连通性优化位置） | ⚠️ **等间距无 cost** | `IoPlacer::autoPlacePins`（`io_placer.cpp:84-290`）：按 pin_list 顺序绕四边 `width_step` 等间距；**零 net/wirelength cost** | IO 位置与内部连接无关 → 飞线长、时序差（商业工具：IO 靠近 driver/load 重心） | **P1** |
 | 5 | **IO net-driven cost**（minimize Σ飞线长） | ✗ | `autoPlacePins` 无 cost 函数；无 net 查询/重心计算 | 等间距 IO 可能让关键 net（clock/reset）绕芯片一圈 → WNS 恶化数十 ps（**未实测**，E-FP-08） | P1 |
 | 6 | tap cell / endcap 插入 | ✓ | `TapCellPlacer::tapCells`（`tapcell.cpp:34-77`）；endcap 内联（`:211-224` ENDCAP_） | **成熟**（全树最佳模块） | ✓ |
-| 7 | **tap cell blockage 相交判定**（B2 疑似 bug） | ⚠️ | `buildRegionInRow`（`tapcell.cpp:120-123`）：`row_start_x > rect->get_low_x()` 应为 `rect->get_high_x()` | 左悬垂 blockage 可能被漏判 → tapcell 插进 blockage → DRC 违例（**待 E-FP-06 裁决**） | P1 |
-| 8 | **IO pin 步进正确性**（B1 疑似 bug） | ⚠️ | 左/右边纵向用 `width_step`（`io_placer.cpp:146,183`）而非 `height_step` | 非方形 core（W≠H）左/右 pin 纵向间距错误 → 重叠或越界（**待 E-FP-05 裁决**） | P1 |
+| 7 | **tap cell blockage 相交判定** | ✓ D2 | `tapcell.cpp` 使用 `intersectsClosed`；纯几何微例覆盖悬垂/接触 | 代码 bug 已关闭；设计级 E-FP-06 待补 | P1 |
+| 8 | **IO pin 步进正确性** | ✓ D2 | 左/右边改用 `height_step`；非方形 pitch 微例通过 | 代码 bug 已关闭；设计级 E-FP-05 待补 | P1 |
 | 9 | **宏约束模型**（halo/channel/orient/hint） | ⚠️ 设计有、闭环无 | `MacroConstraintModel` 设计（§4.2）；写 iDB 属性；**iPL 消费侧未验证**（22 宏真化前） | 约束写了但 iPL 不读 → 空转（单向模型） | P1 |
 | 10 | 宏摆位算法（SA/力导向/分区） | ✗（**铁律：归 iPL**） | `macro_placer/` 空壳；`run_mp` 假成功链路坐实（§1.3-假成功） | **G3 主责在 22**；iFP 不实现宏算法（KH-FP-03） | — |
-| 11 | die/core 合法性检查 | ⚠️ | `initDie` 恒 true（`init_design.cpp:42`）；`initCore` IO 带检查注释（`:73-78`） | 非法坐标（ll>ur、负值、core 压 die 边）静默通过 → 下游崩溃 | P1 |
+| 11 | die/core 合法性检查 | ⚠️ D2 | 有序/有限矩形、DB/layout/site、core-in-die 与 Tcl/Python 返回传播已实现 | IO 带语义与负坐标 site snapping 尚未完成 | P1 |
 | 12 | track 生成策略 | ⚠️ **按 die vs core 未裁决** | `makeTracks`（`init_design.cpp:131,140`）按 **die 宽高**计算条数 | core 外铺 track 是否合理？与 LEF TRACKS 并存策略未验证（**待 E-FP-07 裁决**） | P1 |
 | 13 | IO 带预留（die-core 间距） | ⚠️ | `initCore` 的 IO 带检查整段注释（`:73-78`："error report, tbd"） | core 贴 die 边时无防线 → row 压 die 边界 | P2 |
-| 14 | 产物断言（tap/IO 完成性） | ✗ | 无 gtest 断言 tap 后存在 PHY_/ENDCAP_；无 IO 重叠检查 | tap/IO 跑完不知道是否真的插入/摆放成功 → 假成功风险（G14） | P1 |
+| 14 | 产物断言（tap/IO 完成性） | ⚠️ | 有几何合同测试；尚无 gtest 断言 tap 后存在 PHY_/ENDCAP_ 或 IO 全 placed/无重叠 | 完整命令仍存在产物级假成功风险 | P1 |
 | 15 | **vs Innovus/ICC2 面积/拥塞对照** | ✗ | 无 harness；G17 面积行无基线（同网表 iFP 手工 vs Innovus auto 面积差未记录） | 不知道 iFP die 尺寸与商业工具的差距 → 面积优劣无依据 | **P0** |
 
 **§1.5 结论**：精度缺口是**结构性的三层**——(a) 面积模型层：auto-die 缺、util 未校准、无 vs 商业面积对照（#2/3/15，**G17 面积行主缺口**）；(b) IO 质量层：等间距无 cost、B1 步进疑似错（#4/5/8，**时序/布线质量影响**）；(c) 约束闭环层：宏约束单向、tap blockage 判定疑似错、产物断言缺（#7/9/14，**G3/G14 交接风险**）。rv1.1 只覆盖了 (b)(c) 的疑似 bug 发现，(a) 是 rv2.0 新增战线。**辅助工具头号纪律 = 职责清晰**（宏算法归 iPL、iFP 做约束/die/IO/tap）+ **边界诚实**（auto-die 面积模型需校准，不可盲目默认 util=0.55）。
@@ -352,7 +345,7 @@ init → (initDie|auto_die) → initCore → makeTracks
 | tap/endcap 完成 | ✓ | ✓ | — | 产物断言 >0 | **G14** |
 | IO/tap 假成功 | 0（断言后） | — | — | 0 | **G14** |
 | 宏摆位假成功 | `run_mp` rc 恒 0 | — | — | ★记录债务归 22 | G14 |
-| die 坐标合法性 | 恒 true（B5） | 检查 | — | ★响亮失败 | G14 |
+| die/core 坐标合法性 | 有序/有限/core-in-die D2；IO 带和负坐标 snapping 待补 | 检查 | — | ★响亮失败 | G14 |
 | FP 墙钟 | | | | ≤ 5s（≤50k inst） | — |
 
 **看板纪律**：
@@ -368,8 +361,8 @@ init → (initDie|auto_die) → initCore → makeTracks
 | **E-FP-02** | 同网表 | util=0.55 vs 0.75 跑完布局 | util=0.55 拥塞 < 0.75 拥塞（单调性）；若 0.55 仍拥塞 >10% → 改默认 | H-FP-1 util 模型校准（KH-FP-02） |
 | **E-FP-03** | 有宏设计 | 约束置零 vs 全开（halo/channel） | iPL 宏解必变（位置/HPWL 差 >5%） | 约束 cost-term-live（G3） |
 | **E-FP-04** | 已 initDie 的设计 | 再调 `auto_die` force=false | **rc ≠ 0**（必须失败）+ ERROR 日志 | 互斥响亮失败（FR-FP-06/G14） |
-| **E-FP-05** | 非方形 core（W:H=2:1） | `autoPlacePins`，量左/右边相邻 pin 纵距 | =core_h/(edge_num+1) → B1 被杀；≠ → 实锤 bug，执行修复 | B1 疑似 bug 裁决 |
-| **E-FP-06** | 构造行左端悬垂 blockage | `tapCells`，检查悬垂区 `[row_start, row_start+50]` | 悬垂区无 PHY_/ENDCAP_ → B2 被杀；有 → 实锤 bug，执行修复 | B2 疑似 bug 裁决 |
+| **E-FP-05** | 非方形 core（W:H=2:1） | `autoPlacePins`，量左/右边相邻 pin 纵距 | =core_h/(edge_num+1)，且全部 placed/无重叠 | B1 设计级回归 |
+| **E-FP-06** | 构造行左端悬垂 blockage | `tapCells`，检查悬垂区 `[row_start, row_start+50]` | 悬垂区无 PHY_/ENDCAP_ | B2 设计级回归 |
 | **E-FP-07** | 标准设计 | `makeTracks`，量 core 外 track 是否被 iRT 使用 | iRT 消费 core 外 track 比例；>0 → die 策略合理；=0 → 改按 core | track 生成策略裁决（FR-FP-09） |
 | **E-FP-08** | 同设计、固定 seeds | IO legacy vs constrained，跑完整布局/布线/STA | 逐设计独立报告 flyline、overflow、pin-access DRC、WNS/TNS；以 bootstrap 95% CI 与预注册最小效应判断，CI 跨 0 则“不确定、扩样”，不得用单一 WNS 或留下 20–50 ps 空档 | IO 分配收益与副作用（H-FP-2） |
 
@@ -448,8 +441,7 @@ PR 切片：FP-0 台账+空壳删除 → FP-1 B1/B2 修复+gtest → FP-2 MacroC
 
 | # | 项 | 说明 |
 |---|---|---|
-| 1 | B1（左/右边 width_step） | 代码走读高度疑似，E-FP-05 裁决前标「疑似」 |
-| 2 | B2（blockage 相交错边） | 同上，E-FP-06 裁决前标「疑似」 |
+| 1 | B1/B2 设计级闭环 | 纯几何测试通过；尚未用完整 iDB 设计产物执行 E-FP-05/06 |
 | 3 | `placePort`/`autoPlacePad`/`autoIOFiller` 生产调用路径 | 仅 pad flow 相关，未验证 |
 | 4 | makeTracks 按 die 是否为惯例 | 需读 iRT track 消费（E-FP-07）；若 iRT 不用 core 外 track → 应改按 core |
 | 5 | io_router 空壳：商业有 IO 布线，本仓是否立项 | 随 pad flow 需求，未决 |
@@ -472,7 +464,7 @@ PR 切片：FP-0 台账+空壳删除 → FP-1 B1/B2 修复+gtest → FP-2 MacroC
 | **不要静默覆盖已有 die（auto-die 与 initDie 冲突时）** | **禁止**——调试地狱（不知道最终 die 来源）；D3 互斥响亮失败 = 一次失败胜过十次猜测 |
 | **不要保留空壳目录「占位」** | **禁止**——0 字节 CMakeLists × 3 = 误导新人（以为有代码）；git 历史可恢复，删除无损（D6） |
 | **不要用 iFP 宏相关指标宣称 G3 转绿** | **禁止**——G3 主责在 iPL 宏真化（22）；iFP 只做约束交接（§1.4 职责裁定） |
-| **不要跳过 die 坐标合法性检查「为了快」** | **禁止**——秒级完成但产物错误 = 负优化（B5：initDie 恒 true，非法坐标静默通过 → 下游崩溃） |
+| **不要跳过 die 坐标合法性检查「为了快」** | **禁止**——基础有序/有限校验已经接入，后续还必须补 IO 带与负坐标 site snapping 语义，不能以秒级为由省略 |
 
 **负面结论共同模式**：
 - **职责边界清晰** > 功能全覆盖（宏算法归 22、iFP 不实现 SA）；
@@ -498,7 +490,7 @@ PR 切片：FP-0 台账+空壳删除 → FP-1 B1/B2 修复+gtest → FP-2 MacroC
 | auto-die | 由单元面积与 util 推 die 尺寸 |
 | MacroConstraint | 非算法摆位的硬/软约束交接 |
 | 空壳目录 | 仅 0 字节 CMakeLists 的模块目录；本工具 3 个 |
-| B1/B2 | §1.3 两个疑似 bug 编号（待 E-FP-05/06 裁决） |
+| B1/B2 | §1.3 两个已确认并完成代码修复的基础几何 bug；设计级 E-FP-05/06 仍待补 |
 
 ## 附录 B · 决策记录
 
@@ -518,15 +510,15 @@ PR 切片：FP-0 台账+空壳删除 → FP-1 B1/B2 修复+gtest → FP-2 MacroC
 
 | 断言 | 证据 |
 |---|---|
-| initDie API / 实现 | `ifp_api.h:47` / `init_design.cpp:32-43`（恒 true `:42`） |
+| initDie API / 实现 | `ifp_api.h` / `init_design.cpp`（有限数、有序矩形、DB/layout/die/DBU 后矩形校验） |
 | transUnitDB -1 哨兵 | `init_design.cpp:24-30` |
 | initCore / 交错行 / IO 带注释 | `init_design.cpp:45-101` / `:88` / `:73-78` |
 | makeTracks 按 die | `init_design.cpp:131,140` |
 | autoPlacePins 等间距无 cost | `io_placer.cpp:84-290`（edge_num `:133`、width_step `:137`） |
-| B1 疑似 | `io_placer.cpp:146,183`（左/右边 `i * width_step`） |
+| B1 修复 | `FloorplanGeometry.hh::makePinPitch` + `io_placer.cpp`（左/右边 `height_step`） |
 | tapCells 流程 | `tapcell.cpp:34-77`；master 查空 `:62-65`；ENDCAP_/PHY_ `:211-270` |
-| B2 疑似 | `tapcell.cpp:120-123`（相交判定错边） |
+| B2 修复 | `FloorplanGeometry.hh::intersectsClosed` + `tapcell.cpp::buildRegionInRow` |
 | 空壳×3 | `iFP/.../{endcap_cell,io_router,macro_placer}/CMakeLists.txt` 均 0 字节 |
-| 零测试 | `iFP/test/` 仅 `CMakeLists.txt` |
+| 几何合同测试 | `iFP/test/FloorplanGeometryTest.cc`；CMake target `ifp_floorplan_geometry_test` |
 | 假成功链路 | `tcl_ipl.cpp:257-265` → `platform/tool_manager/tool_api/ipl_io/ipl_io.cpp:170-181`（全注释 `return true`）→ `PLAPI.cc:517-522`（全注释）→ `iPL/.../macro_placer/readme.md`（一行） |
 | iFP 全树体量 | `find src/operation/iFP -name '*.cpp' -o ... | xargs wc -l` = 1636 |

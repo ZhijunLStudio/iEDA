@@ -170,7 +170,13 @@ std::vector<ids::Violation> DRCInterface::getViolationList(const std::vector<ids
                                                            const std::set<std::string>& ids_check_type_set,
                                                            const std::vector<ids::Shape>& ids_check_region_list)
 {
-  _last_rule_coverage = RuleCoverageReport::build(getEngineRuleNames(), getLoadedRuleNames(), ids_check_type_set);
+  const auto engine_rule_names = getEngineRuleNames();
+  const auto loaded_rule_names = getLoadedRuleNames();
+  _last_rule_coverage = RuleCoverageReport::build(engine_rule_names, loaded_rule_names, ids_check_type_set);
+  if (!DRCDM.getConfig().rule_coverage_table_path.empty()) {
+    _last_rule_coverage.attachFoundryCoverage(
+        FoundryCoverageManifest::load(DRCDM.getConfig().rule_coverage_table_path, engine_rule_names), loaded_rule_names);
+  }
   if (!_last_rule_coverage.canRun()) {
     outputRuleCoverageJson();
     DRCLOG.error(Loc::current(), "DRC rule selection refused: ", _last_rule_coverage.refusalSummary());
@@ -380,6 +386,7 @@ void DRCInterface::wrapConfig(std::map<std::string, std::any>& config_map)
   /////////////////////////////////////////////
   DRCDM.getConfig().temp_directory_path = DRCUTIL.getConfigValue<std::string>(config_map, "-temp_directory_path", "./drc_temp_directory");
   DRCDM.getConfig().thread_number = DRCUTIL.getConfigValue<int32_t>(config_map, "-thread_number", 128);
+  DRCDM.getConfig().rule_coverage_table_path = DRCUTIL.getConfigValue<std::string>(config_map, "-rule_coverage_table", "");
   omp_set_num_threads(std::max(DRCDM.getConfig().thread_number, 1));
   /////////////////////////////////////////////
 }

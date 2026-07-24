@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,6 +13,59 @@ from benchmarks.flows import aes13_flow
 
 
 class Aes13StageContractTest(unittest.TestCase):
+    def test_stage_process_records_real_rusage(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            result = aes13_flow.run_process_with_usage(
+                [
+                    sys.executable,
+                    "-c",
+                    "sum(index * index for index in range(2000000))",
+                ],
+                cwd=root,
+                env=os.environ.copy(),
+                timeout=10,
+                log_file=root / "stage.log",
+            )
+            self.assertEqual(result["returncode"], 0)
+            self.assertFalse(result["timed_out"])
+            self.assertGreater(
+                result["user_cpu_sec"] + result["system_cpu_sec"], 0.0
+            )
+            self.assertGreater(result["process_peak_bytes"], 0)
+
+    def test_timeout_kills_descendants_before_they_can_publish_late_artifacts(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sentinel = root / "late-artifact"
+            grandchild = (
+                "import pathlib,time;"
+                "time.sleep(0.3);"
+                f"pathlib.Path({str(sentinel)!r}).write_text('late')"
+            )
+            parent = (
+                "import subprocess,sys,time;"
+                f"subprocess.Popen([sys.executable, '-c', {grandchild!r}]);"
+                "time.sleep(10)"
+            )
+            result = aes13_flow.run_process_with_usage(
+                [sys.executable, "-c", parent],
+                cwd=root,
+                env=os.environ.copy(),
+                timeout=0.1,
+                log_file=root / "timeout.log",
+            )
+            self.assertEqual(result["returncode"], 124)
+            self.assertTrue(result["timed_out"])
+            time.sleep(0.4)
+            self.assertFalse(sentinel.exists())
+            self.assertIn(
+                "killed process group",
+                (root / "timeout.log").read_text(encoding="utf-8"),
+            )
+
     def test_pdk_contracts_use_real_driving_pins_and_routing_layers(self) -> None:
         self.assertEqual(aes13_flow.PDKS["sky130"].driving_pin, "X")
         self.assertEqual(aes13_flow.PDKS["nangate45"].driving_pin, "Z")
@@ -287,8 +343,20 @@ class Aes13StageContractTest(unittest.TestCase):
             "design": "aes_asap7_a",
             "status": "success",
             "stages": {
-                "floorplan": {"status": "success", "elapsed_sec": 1.25},
-                "routing": {"status": "success", "elapsed_sec": 2.5},
+                "floorplan": {
+                    "status": "success",
+                    "elapsed_sec": 1.25,
+                    "user_cpu_sec": 0.75,
+                    "system_cpu_sec": 0.10,
+                    "process_peak_bytes": 1000,
+                },
+                "routing": {
+                    "status": "success",
+                    "elapsed_sec": 2.5,
+                    "user_cpu_sec": 1.50,
+                    "system_cpu_sec": 0.20,
+                    "process_peak_bytes": 2000,
+                },
             },
         }
         records = aes13_flow.build_design_performance_records(
@@ -304,7 +372,15 @@ class Aes13StageContractTest(unittest.TestCase):
         self.assertTrue(all(record["repeat"] == 1 for record in records))
         self.assertTrue(all(record["comparable"] is False for record in records))
         self.assertTrue(all(record["exclusive_host"] is False for record in records))
-        self.assertTrue(all(record["user_cpu_sec"] == 0.0 for record in records))
+        self.assertEqual([record["user_cpu_sec"] for record in records], [0.75, 1.5, 2.25])
+        for actual, expected in zip(
+            [record["system_cpu_sec"] for record in records],
+            [0.1, 0.2, 0.3],
+        ):
+            self.assertAlmostEqual(actual, expected)
+        self.assertEqual(
+            [record["process_peak_bytes"] for record in records], [1000, 2000, 2000]
+        )
 
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "performance_profile.jsonl"
@@ -334,7 +410,13 @@ class Aes13StageContractTest(unittest.TestCase):
                 "status": "success",
                 "stages": {
                     "floorplan": {"status": "skipped"},
-                    "routing": {"status": "success", "elapsed_sec": 1.0},
+                    "routing": {
+                        "status": "success",
+                        "elapsed_sec": 1.0,
+                        "user_cpu_sec": 0.5,
+                        "system_cpu_sec": 0.1,
+                        "process_peak_bytes": 1234,
+                    },
                 },
             },
             run_id="resume-run",
@@ -345,6 +427,45 @@ class Aes13StageContractTest(unittest.TestCase):
             e2e_wall_sec=1.5,
         )
         self.assertEqual([record["stage"] for record in records], ["iRT"])
+
+    def test_stop_after_partial_run_does_not_create_fake_e2e(self) -> None:
+        performance = aes13_flow.resolve_performance_contract({"threads": 8}, None)
+        evidence = {
+            "hostname": "test-host",
+            "binary": {"sha256": "a" * 64},
+            "build_manifest": {"sha256": "b" * 64},
+            "hardware_manifest": {"sha256": "c" * 64},
+            "exclusive_host": False,
+            "comparable": False,
+            "non_comparable_reason": performance["reason"],
+        }
+        records = aes13_flow.build_design_performance_records(
+            {
+                "design": "aes",
+                "status": "partial",
+                "run_control": {
+                    "prepare_only": False,
+                    "resume": False,
+                    "stop_after": "floorplan",
+                },
+                "stages": {
+                    "floorplan": {
+                        "status": "success",
+                        "elapsed_sec": 1.0,
+                        "user_cpu_sec": 0.5,
+                        "system_cpu_sec": 0.1,
+                        "process_peak_bytes": 1234,
+                    },
+                },
+            },
+            run_id="partial-run",
+            cache_mode="warm",
+            performance=performance,
+            evidence=evidence,
+            input_manifest_sha256="d" * 64,
+            e2e_wall_sec=1.5,
+        )
+        self.assertEqual([record["stage"] for record in records], ["iFP"])
 
 
 if __name__ == "__main__":

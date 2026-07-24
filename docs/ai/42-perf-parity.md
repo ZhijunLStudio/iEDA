@@ -3,9 +3,9 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 42 · 性能对标 Perf Parity · 商业对标优化方案 · rv2.2
+# 42 · 性能对标 Perf Parity · 商业对标优化方案 · rv2.3
 
-> 文档号：42-rv2.2　　版本：rv2.2（profile 门禁落地）　　里程碑：**可复现剖面 → 并排比值 → 热点优化（质量优先）→ G21/G20**
+> 文档号：42-rv2.3　　版本：rv2.3（AES13 进程统计真实性）　　里程碑：**可复现剖面 → 并排比值 → 热点优化（质量优先）→ G21/G20**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`、`28-iRCX-rv2.0.md`（逐 stage 走读 + 双看板 + 诚实归因）
 > 商业金标：**Innovus / Fusion Compiler（日常性能基准）**；**Calibre / PrimeTime（签核性能基准）**；门禁：**G21 / G20**（辅 G17）
 > 依赖：`12-evaluation` protocol/schema；`40-platform` stage 边界计时钩子
@@ -25,6 +25,7 @@ iEDA is licensed under Mulan PSL v2.
 | **rv2.0** | **2026-07-22** | **大改（对照 27-iSTA-rv2.0.md / 28-iRCX-rv2.0.md 深度与签核工具要求重写）**。核心修订五条：**(1)** rv1.0 把 perf-parity 当成「缺计时钩子和脚本」来审——**实际上头号结构症结是性能差距的不可见与不可归因**：无逐 stage 的 vs 商业工具墙钟对比数据（哪些 stage 快、哪些慢、慢在哪个子阶段）、无热点定位机制（火焰图/profiler 报告缺失）、无优化前后 A/B 对比门禁（加速 PR 可能牺牲 QoR 而无检测）——现状是**有想法无数据**；**(2)** 新增 **§1.5 性能栈逐项**（对商业工具各 stage 的性能差距清单，G21/G20 核心证据）：逐 stage（iFP/iPL/iCTS/iTO/iRT/iSTA/iRCX/iDRC/iPW）列出 iEDA vs 商业工具的墙钟基线、已有能力、差距、瓶颈——对标目标是「日常设计端到端 ≤1.5× 商业主对标方」（G21）与「大设计 ≤3× + 归因」（G20）；**(3)** 全文按**双看板**重组：G21 日常性能看板（5 套 daily e2e ≤1.5×、≥2/5 ≤1.0×、分项剖面）、G20 大设计看板（scale ≤3× + 瓶颈定位、火焰图/profiler 报告），§10 拆成两块看板；**(4)** 补齐 27 号文档体例要素：§4.12 模块状态一览（StageTimer、profile schema、compare 脚本成熟度/边界/复用姿势）、§10.3 对照实验（E-PERF-01～05 可杀假说）、§14 未验证/不要重走三分；**(5)** 强化**质量优先纪律**（KH-X-05）：所有加速 PR 必须附 QoR A/B 对比数据（G17 指标不回归）、禁止「关检查换速度」、禁止共享机数字进 G21——性能对标的前提是**功能正确性不受损**。**缺省配置零回归**纪律不变。 |
 | **rv2.1** | **2026-07-23** | 修正测量设计：`VmPeak` 不能归因嵌套 stage，改由独立进程/cgroup 采 peak；构建身份改 SHA-256；2/5 明确指设计而非 stage；A/B 使用预构建 artifact 或独立 worktree，禁止脚本切换/清理当前工作区；重复次数改为至少 5 次并用 median/MAD。 |
 | **rv2.2** | **2026-07-24** | 落地 `benchmarks/qor/schemas/performance_profile.schema.json` 与 `performance_profile.py`：冻结 profile record、校验 JSONL、按 cache mode 分开计算至少 5 次 median/MAD，机械拒绝跨主机、线程漂移、输入 manifest 不同、失败/不可比/高噪声样本，并按 daily 设计逐项判定 G21。协议以 SHA-256 锁定 schema；`g21_enable=false` 时阈值失败仅观测，但证据不完整仍非零退出。 |
+| **rv2.3** | **2026-07-24** | AES13 runner 不再把 CPU 固定写成 0：每个 iEDA stage 用独立进程组执行，通过 Linux `wait4` 采集该子进程真实 user/system CPU 与 peak RSS；timeout 杀整个进程组，防止孤儿进程在失败后继续产生晚到 artifact。e2e CPU 只汇总本次实际执行 stages，peak RSS 取 stage 最大值；含 resume 或 `--stop-after` 提前停止时禁止发射伪 e2e。合同测试覆盖真实 rusage、进程组超时隔离、profile 汇总口径。 |
 
 ### 0.1 落地状态（2026-07-24）
 
@@ -32,7 +33,7 @@ iEDA is licensed under Mulan PSL v2.
 |---|---|---|---|
 | profile schema + 校验 | D2 | `benchmarks/qor/schemas/performance_profile.schema.json`；`tests/test_performance_profile.py` | 商业工具 profile adapter 尚未落地 |
 | median/MAD + G21 compare | D2 | `benchmarks/qor/performance_profile.py`；缺重复/manifest 漂移/阈值门禁测试 | 尚无商业日志适配器和真实同机 5 次证据 |
-| 受控采集 runner | D2（观测） | `aes13_flow.py` 发射逐 stage/e2e schema record；runner contract tests | 独占机、CPU/cgroup peak、cold-warm 重复编排未落地；记录强制 non-comparable |
+| 受控采集 runner | D3（观测） | `aes13_flow.py` 发射逐 stage/e2e schema record；`wait4` CPU/peak RSS + timeout 进程组隔离；runner contract tests | 独占机、cgroup 整体 peak、cold-warm 重复编排未落地；记录强制 non-comparable |
 
 因此本版只关闭 S2 和 G21 判定器的软件契约，不宣称 G21、G20 或商业性能 parity 已通过。
 

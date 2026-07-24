@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ieda.oscc.cc/schema/drc/rule-coverage-v1.json",
+  "title": "iDRC foundry rule coverage manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pdk",
+    "deck",
+    "rules"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ieda.drc.rule_coverage.v1"
+    },
+    "pdk": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sha256"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{64}$"
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "foundry_id",
+          "state"
+        ],
+        "properties": {
+          "foundry_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "enum": [
+              "implemented",
+              "partial",
+              "missing"
+            ]
+          },
+          "ieda_rule": {
+            "type": "string",
+            "minLength": 1
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "enum": [
+                    "implemented",
+                    "partial"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "ieda_rule"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "missing"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "ieda_rule"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

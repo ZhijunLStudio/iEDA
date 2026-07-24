@@ -3,9 +3,9 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 00 · iEDA 商业能力对标 · 优化主纲领 · v1.7
+# 00 · iEDA 商业能力对标 · 优化主纲领 · v1.8
 
-> 日期：2026-07-20（v1.0）/ 2026-07-24（v1.7 执行证据回写）
+> 日期：2026-07-20（v1.0）/ 2026-07-24（v1.8 执行证据回写）
 > 目标：**在冻结的首个产品切片内，给定相同 netlist（及同 PDK / 同约束包），iEDA 全流程与商业流程（Innovus 或 ICC2 + PrimeTime + Calibre）的 PPA 接近打平；端到端与关键步骤运行时间接近，力争更短。**
 > 能力定义 = **功能覆盖 + QoR 质量 + 规模/性能 + 可签核可信度** 四者齐备，缺一条都不算"达到"。
 > 体例：沿用 `HS-3D_Problem/thirdparty/iEDA-3D/docs/3d/design/`——**每条验收机器可判定；没有实测写"未验证"，不补白；文档是假说不是事实。**
@@ -25,8 +25,20 @@ iEDA is licensed under Mulan PSL v2.
 | **v1.5** | **2026-07-20** | **体例对齐 `24-iPL-3d-rv1.0`**：新增 `01-ai-doc-conventions-rv1.md`；主战场 22/23/25/26/27/28 升 **rv1.0**（逐 kernel 走读 + ALG + IterParam + Exhibit + L0–L5）；其余工具同骨架升 rv1.0（篇幅按 01 指引） |
 | **v1.6** | **2026-07-23** | 技术评审纠偏：冻结首个产品切片；G7/G8/G21 从单指标改为联合门禁；工具/输入/产物改用 SHA-256 manifest；新增 `04` 的 DesignState/DirtySet/MoveTxn 与算法路线。文件名暂保留 `v1.1` 以避免既有链接失效。 |
 | **v1.7** | **2026-07-24** | 回写第一轮工程执行证据：冻结协议与 QoR/performance schema、AES13 可复现 runner、iNO/iPL/iRT/iRCX/iPA/iDRC/iECO/FlowScheduler 的失败语义或状态契约及单测；新增 D0-D4 证据表和 AES13 实测状态；修正 `benchmark/` 为仓内实际 `benchmarks/`。 |
+| **v1.8** | **2026-07-24** | 主 agent 汇合三个子 agent：iFP 几何正确性与接口失败传播、iDRC foundry coverage manifest 与 G11/G14 诚实状态、AES13 真实 stage CPU/RSS/timeout 观测；完整 `iEDA` 构建及新增单测通过。商业金标和 deck 内容校验仍明确未完成。 |
 
 ---
+
+### Agent 团队与写入边界（v1.8）
+
+| 角色 | 负责范围 | 本轮交付 |
+|---|---|---|
+| 主 agent | 主纲领、跨 lane 审核、集成构建、AES13 最终执行 | 本文件、证据分级、测试与结果回写 |
+| implementation-chain 子 agent | iFP | 非方形 IO pitch、tap blockage 相交、die/core 合法性、Tcl/Python 失败传播 |
+| signoff-truth 子 agent | iDRC | foundry coverage manifest、checked/skipped/partial/unsupported、G11/G14 状态 |
+| platform-aes13 子 agent | benchmark/performance | `wait4` CPU/RSS、进程组 timeout、resume/stop-after 可比性防伪 |
+
+所有 agent 直接写入同一远端工作树；主 agent 对共享接口、真实性声明、编译与回归结果负责。agent 完成不自动等于门禁变绿，只有本文件列出的 code/test/artifact 三联证据才可升级成熟度。
 
 ## 0. 一句话
 
@@ -44,7 +56,7 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 
 首阶段只承诺：门级 Verilog + LEF/DEF + Liberty NLDM + SDC + 单/双角 SPEF；单电压域、标准单元为主、有限硬宏；floorplan/place/tree CTS/route/post-route timing opt；GBA+CPPR+top-N PBA、2.5D RC 与 in-design DRC 子集。完整 UPF、advanced-node 全规则、signoff SI/POCV/LVF、mesh CTS、动态 IR 和 full-chip LVS 在支持矩阵转绿前均为 `unsupported`，不得静默降级。
 
-能力成熟度使用 `04 §1.1` 的 D0–D4 证据等级；文档版本号、目录存在或伪代码不等于实现完成。v1.7 只把有代码、测试和 artifact 三联证据的能力升到 D2；没有商业金标并排证据的能力不得标 D4。
+能力成熟度使用 `04 §1.1` 的 D0–D4 证据等级；文档版本号、目录存在或伪代码不等于实现完成。v1.8 只把有代码、测试和 artifact 三联证据的能力升到 D2；没有商业金标并排证据的能力不得标 D4。
 
 ---
 
@@ -127,7 +139,7 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
   - `26-iRT.md` **rv2.1**：冲突分量停滞反馈、终态违例 JSON、时序预算、ECO 冻结契约 + vs NanoRoute。
   - `25-iTO.md` **rv2.1**：联合门禁事务、冲突图批处理、incr LG/RC/STA/full oracle + vs route_opt。
 
-### 2.2 诚实的未决（v1.7 执行后）
+### 2.2 诚实的未决（v1.8 执行后）
 
 | 项 | 状态 | 归属 |
 |---|---|---|
@@ -138,13 +150,14 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 | iTO 贪心否决/incr LG | ⚠️ 代码审计已有（25）；**数值待测** | iTO |
 | iSTA PBA / SI / MCMM / vs PT | ⚠️ 代码审计已有（27）；**数值与 harness 待建** | iSTA |
 | iRCX vs StarRC | ⚠️ JSON 误差报告契约与测试已有；无 StarRC 金标数据 | iRCX |
-| iDRC vs Calibre deck | ⚠️ rule coverage/响亮失败契约与测试已有；未逐条对照 Calibre deck | iDRC |
+| iFP floorplan 基础正确性 | ⚠️ B1/B2 已修且纯几何单测通过；完整设计级 E-FP-05/06、net-driven IO、auto-die 商业面积对照未完成 | iFP |
+| iDRC vs Calibre deck | ⚠️ foundry manifest 与 runtime checked/skipped/partial/unsupported 已接入；SHA-256 仅校验声明格式，尚未读取 deck 文件重算；未逐条对照 Calibre deck | iDRC |
 | iLVS 是否恒等式 / 是否存在 | ❓ 待审计（附录 B 标 greenfield） | iLVS |
 | 规模上限（现有设计多 <50 万实例） | ❓ 未爬坡 | all |
 | 静默失败面 | ⚠️ iNO/iPL/iRT/iPA/iDRC/iECO/flow 已处理首批已知路径；全命令矩阵未清零 | interface/platform |
-| **运行时 vs 商业分项剖面** | ⚠️ profile schema、median/MAD 与不可比样本拒绝已 D2；无独占机商业侧 ≥5 次样本 | all |
+| **运行时 vs 商业分项剖面** | ⚠️ profile schema、median/MAD、真实 stage CPU/RSS/timeout 与不可比样本拒绝已 D2；无独占机商业侧 ≥5 次样本 | all |
 
-### 2.3 v1.7 工程证据快照（2026-07-24）
+### 2.3 v1.8 工程证据快照（2026-07-24）
 
 > 本表按 `04 §1.1` 记录成熟度。共同 `binary_sha256` 以本轮最终重建和 AES13 汇总为准；dirty build 必须在 artifact 中显式标记。D2 表示单元/合同可信，不表示商业对标通过。
 
@@ -152,19 +165,20 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 |---|---:|---|---|---|---|
 | G1b 冻结协议 | D2 | `benchmarks/qor/parity_protocol.json`、`validate_protocol.py` | `test_protocol.py` | AES13 `summary.json.protocol_sha256` | 商业侧实际输入 manifest 冻结 |
 | QoR 指标真实性 | D2 | `quality_metrics.py`、`validate_qor.py` | QoR test suite | 每设计 `quality_summary.json` | ≥5 独立设计 + 商业金标 |
-| G21 profile/统计 | D2 | `performance_profile.py`、AES13 stage timer | performance/runner contract tests | `performance_profile.jsonl`、build/hardware manifest | 独占机 cold/warm 各 ≥5 次 + 商业侧样本 |
+| G21 profile/统计 | D2 | `performance_profile.py`、`aes13_flow.py` 的 `wait4`/进程组 timeout | performance/runner contract tests | `performance_profile.jsonl`、build/hardware manifest | 独占机 cold/warm 各 ≥5 次 + 商业侧样本；当前 `comparable=false` |
+| iFP 几何/失败语义 | D2 | `FloorplanGeometry.hh`、init/IO/tap 与 Tcl/Python 传播 | `ifp_floorplan_geometry_test` | 完整构建产物 `bin/iEDA` | 设计级 E-FP-05/06；负坐标 site snapping 的 floor 语义；net-driven IO 与商业面积/QoR |
 | iNO fanout 失败语义 | D2 | typed `FixResult`、配置/DB/STA/pin 预检 | config/failure semantics tests | AES13 fanout stage manifest/log | 三 PDK/多设计 QoR 回归 |
 | iPL 收敛状态 | D2 | `PlacementStatus`、Nesterov 终态传播 | placement status test | AES13 placement stage manifest/log | 宏、拥塞、时序 A/B 与商业 QoR |
 | iRT 收敛/失败语义 | D2 | `DRConvergence`、终态传播、PinAccessor 共享索引隔离 | convergence/logger tests + AES routing | AES13 routing stage manifest/log | ≥3 设计 route-clean；恢复经证明安全的 PA 并行 |
 | iRCX 误差报告 | D2 | compare SPEF JSON writer | compare JSON test | compare JSON | StarRC 逐网/逐桶金标 |
 | iPA 活动来源 | D2 | `ActivityProvenance`、报告/API 传播 | provenance/report tests | power report | VCD/SAIF 与 PTPX 并排 |
-| iDRC coverage/失败语义 | D2 | `RuleCoverage`、logger exit contract | coverage/logger exit tests | coverage JSON/report | Calibre 可比 rule subset 映射 |
+| iDRC coverage/失败语义 | D2 | `RuleCoverage`、`rule_coverage.schema.json`、Tcl `-rule_coverage_table` | `idrc_rule_coverage_test`、logger exit tests | coverage JSON/report | 实际 PDK manifest；deck 文件内容重算 SHA-256；Calibre 可比 rule subset 映射。当前 deck 字段必须为 `sha256_verification=declared_format_only` |
 | iECO via 结果语义 | D2 | `shape/pattern/unknown` typed result | ECO via request test | TCL error/result | 真实 ECO route + signoff 回归 |
 | FlowScheduler 状态契约 | D2 | scheduler/state propagation | scheduler/design-state tests | stage status/manifest | 单 session 断点一致性与全流程证明 |
 
 ---
 
-## 3. v1.7 验收表（机器可判定门禁）
+## 3. v1.8 验收表（机器可判定门禁）
 
 **本计划完成 = 下表全绿。** 判据落到"脚本读产物、断言数字"，不许人工目测。
 
@@ -566,7 +580,7 @@ WP-<tool>-<nn> · <一句话目标>
 | `10-iDB-database.md` | iDB | OpenAccess | G1/G13/G16 | **rv1.0** |
 | `11-solver.md` | solver | 数值内核 | G2/G3/G5/G15 | **rv1.0** |
 | `12-evaluation.md` | evaluation | QoR/Perf 地基 | G1/G15/G17–G21 | **rv1.2** |
-| `20-iFP.md` | 布图 | floorplan | G3/G17 | **rv2.1** |
+| `20-iFP.md` | 布图 | floorplan | G3/G17 | **rv2.2** |
 | `21-iNO.md` | 网表修复 | DC topo 局部 | G6/G18 边界 | **rv2.1** |
 | `22-iPL.md` | 布局 | place_opt | G2/G3/G5/G17/G21 | **rv2.1（旗舰）** |
 | `23-iCTS.md` | 时钟树 | ccopt | G4/G19 | **rv2.1** |
@@ -576,13 +590,13 @@ WP-<tool>-<nn> · <一句话目标>
 | `27-iSTA.md` | STA | **PrimeTime** | G7/G6 | **rv2.1** |
 | `28-iRCX.md` | 提取 | **StarRC** | G8/G7 | **rv2.1** |
 | `29-iPA-iIR.md` | 功耗/IR | **PTPX**/Voltus | G9/G10 | **rv2.1** |
-| `30-iDRC.md` | DRC | **Calibre** | G11/G5 | **rv2.1** |
+| `30-iDRC.md` | DRC | **Calibre** | G11/G5 | **rv2.2** |
 | `31-iLVS.md` | LVS | nmLVS | G12 | **draft/D0（greenfield 最小切片已设计）** |
 | `32-iECO.md` | ECO | eco/Conformal | G16/G17 | **rv2.1** |
 | `33-iLO-iTM.md` | 逻辑/映射 | DC/Genus | G18 | **draft/D0（先集成成熟后端）** |
 | `40-platform.md` | 平台 | session | G1/G14/G15/G16 | **rv1.0** |
 | `41-interface.md` | 接口 | TCL/Python | G14 | **rv1.0** |
-| `42-perf-parity.md` | 性能 | 墙钟/内存 | G21/G20 | **rv2.1** |
+| `42-perf-parity.md` | 性能 | 墙钟/内存 | G21/G20 | **rv2.3** |
 | `50-agent-era-eda-master-plan-v1.0.md` | AI/Agent 战略研究轨 | 过程工具 | 继承 G7/G17/G21 | **v1.1（不放宽商业门禁）** |
 | `51-agent-native-eda-detailed-plan-v1.0.md` | Agent-native Timing Closure Lab | 事务化 ECO | 复用 G7/G14/G16 | **v1.0（工程化展开）** |
 

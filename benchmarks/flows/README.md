@@ -35,11 +35,14 @@ runner 实际计时边界映射；例如当前 routing TCL 只能记为 `iRT`，
 `iRT-GR/iRT-TR/iRT-DR` 三个分项。
 
 当前入口只运行一次，也不验证独占机或真实 cold/warm 缓存状态，因此所有记录固定为
-`repeat=1`、`comparable=false`、`exclusive_host=false`，CPU 时间保留为 `0`。
-`--profile-cache-mode` 只是观测样本标签，不能让该结果进入 G21。`--resume` 跳过的阶段
-不会产生伪造的耗时记录；只要存在跳过阶段，本次也不会发射 `e2e` 记录。当前 `e2e`
-边界覆盖整个 `run_design`，启用 synthesis 时包含 Yosys 和 runner 准备时间，因此也不能
-直接与商业 PnR 墙钟相比。
+`repeat=1`、`comparable=false`、`exclusive_host=false`。每个实际执行的 iEDA stage
+独占一个进程组，由 `wait4` 采集真实 user/system CPU 与进程 peak RSS；timeout 会终止
+整个进程组，禁止孤儿进程在超时后继续写出“新鲜”产物。`--profile-cache-mode` 只是观测
+样本标签，不能让该结果进入 G21。`--resume` 跳过的阶段不会产生伪造的耗时记录；只要
+存在跳过阶段，或用户用 `--stop-after` 提前停止，本次也不会发射伪 `e2e` 记录。完整
+执行时 `e2e` 的 CPU 是本次实际执行 stage 的 CPU 之和、peak RSS 是各 stage 最大值，
+而 wall 边界覆盖整个 `run_design`；启用 synthesis 时 wall 还包含 Yosys 和 runner
+准备时间，因此仍不能直接与商业 PnR 墙钟相比。
 
 ### 1. 运行单个设计
 
