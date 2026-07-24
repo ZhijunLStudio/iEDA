@@ -3,9 +3,9 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 00 · iEDA 商业能力对标 · 优化主纲领 · v1.8
+# 00 · iEDA 商业能力对标 · 优化主纲领 · v1.9
 
-> 日期：2026-07-20（v1.0）/ 2026-07-24（v1.8 执行证据回写）
+> 日期：2026-07-20（v1.0）/ 2026-07-25（v1.9 AES13 全量证据回写）
 > 目标：**在冻结的首个产品切片内，给定相同 netlist（及同 PDK / 同约束包），iEDA 全流程与商业流程（Innovus 或 ICC2 + PrimeTime + Calibre）的 PPA 接近打平；端到端与关键步骤运行时间接近，力争更短。**
 > 能力定义 = **功能覆盖 + QoR 质量 + 规模/性能 + 可签核可信度** 四者齐备，缺一条都不算"达到"。
 > 体例：沿用 `HS-3D_Problem/thirdparty/iEDA-3D/docs/3d/design/`——**每条验收机器可判定；没有实测写"未验证"，不补白；文档是假说不是事实。**
@@ -26,10 +26,11 @@ iEDA is licensed under Mulan PSL v2.
 | **v1.6** | **2026-07-23** | 技术评审纠偏：冻结首个产品切片；G7/G8/G21 从单指标改为联合门禁；工具/输入/产物改用 SHA-256 manifest；新增 `04` 的 DesignState/DirtySet/MoveTxn 与算法路线。文件名暂保留 `v1.1` 以避免既有链接失效。 |
 | **v1.7** | **2026-07-24** | 回写第一轮工程执行证据：冻结协议与 QoR/performance schema、AES13 可复现 runner、iNO/iPL/iRT/iRCX/iPA/iDRC/iECO/FlowScheduler 的失败语义或状态契约及单测；新增 D0-D4 证据表和 AES13 实测状态；修正 `benchmark/` 为仓内实际 `benchmarks/`。 |
 | **v1.8** | **2026-07-24** | 主 agent 汇合三个子 agent：iFP 几何正确性与接口失败传播、iDRC foundry coverage manifest 与 G11/G14 诚实状态、AES13 真实 stage CPU/RSS/timeout 观测；完整 `iEDA` 构建及新增单测通过。商业金标和 deck 内容校验仍明确未完成。 |
+| **v1.9** | **2026-07-25** | 当前二进制完成 AES 13 配置全量执行：13/13 端到端执行成功、13/13 质量门禁失败；回写逐配置 iRT/GDS/DRC/STA 观测值、共同 manifest、串并行证据边界和 P0 性能热点。该结果证明 flow coverage，不构成 G5/G7/G11/G17/G21 或商业 parity 通过。 |
 
 ---
 
-### Agent 团队与写入边界（v1.8）
+### Agent 团队与写入边界（v1.9）
 
 | 角色 | 负责范围 | 本轮交付 |
 |---|---|---|
@@ -56,7 +57,7 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 
 首阶段只承诺：门级 Verilog + LEF/DEF + Liberty NLDM + SDC + 单/双角 SPEF；单电压域、标准单元为主、有限硬宏；floorplan/place/tree CTS/route/post-route timing opt；GBA+CPPR+top-N PBA、2.5D RC 与 in-design DRC 子集。完整 UPF、advanced-node 全规则、signoff SI/POCV/LVF、mesh CTS、动态 IR 和 full-chip LVS 在支持矩阵转绿前均为 `unsupported`，不得静默降级。
 
-能力成熟度使用 `04 §1.1` 的 D0–D4 证据等级；文档版本号、目录存在或伪代码不等于实现完成。v1.8 只把有代码、测试和 artifact 三联证据的能力升到 D2；没有商业金标并排证据的能力不得标 D4。
+能力成熟度使用 `04 §1.1` 的 D0–D4 证据等级；文档版本号、目录存在或伪代码不等于实现完成。v1.9 只把有代码、测试和 artifact 三联证据的能力升到 D2；没有商业金标并排证据的能力不得标 D4。
 
 ---
 
@@ -146,7 +147,7 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 | **逐工具 QoR 数字**（vs 商业，统一基准） | ⚠️ schema、校验器和 AES 观测 runner 已有；商业侧同输入数据仍不存在 | platform/evaluation |
 | 苹果对苹果协议冻结文件 | ✅ `benchmarks/qor/parity_protocol.json` 已有 schema hash、线程和性能采样约束，并有机械校验 | platform |
 | iPL 宏/收敛/时序驱动 | ⚠️ 状态/失败语义 D2；宏与商业 QoR 数值待测 | iPL |
-| iRT 收敛/时序驱动 | ⚠️ 收敛与失败语义 D2；AES routing 正确性回归进行中，商业 QoR 数值待测 | iRT |
+| iRT 收敛/时序驱动 | ⚠️ 收敛与失败语义 D2；AES13 端到端 13/13 执行成功但 13/13 DRC 非零，商业 QoR 数值待测 | iRT |
 | iTO 贪心否决/incr LG | ⚠️ 代码审计已有（25）；**数值待测** | iTO |
 | iSTA PBA / SI / MCMM / vs PT | ⚠️ 代码审计已有（27）；**数值与 harness 待建** | iSTA |
 | iRCX vs StarRC | ⚠️ JSON 误差报告契约与测试已有；无 StarRC 金标数据 | iRCX |
@@ -178,7 +179,59 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 
 ---
 
-## 3. v1.8 验收表（机器可判定门禁）
+### 2.4 AES13 全量执行证据（2026-07-24—25）
+
+> 结果根 1：`benchmarks/results/aes13-final-20260724-rv2.3/`，只采纳已完整结束的串行样本 `aes`、`aes_sky130_a`；后续重复的未完成 `aes_sky130_b` 不进入证据集。
+> 结果根 2：`benchmarks/results/aes11-functional-parallel-20260725-rv2.3/`，采纳其余 11 个完整样本；该批 `summary.json.execution_status=pass`，11 份设计摘要均被总 manifest 哈希覆盖。
+> 13 份 `quality_summary.json` 均通过 `python3 -m benchmarks.qor.validate_qor` 的 freshness/哈希校验。
+
+| design | PDK/策略 | 执行 | 质量 | iRT wall(s) | iRT CPU user/system(s) | iRT RSS(MiB) | DRC | setup/hold WNS(ns) | GDS(s) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `aes` | sky130/baseline | success | fail | 5404.6 | 13534.8/11.7 | 2306.8 | 158333 | -2.299/-0.084 | 6.4 |
+| `aes_sky130_a` | sky130/a | success | fail | 5515.5 | 14108.0/10.6 | 2317.1 | 166251 | -2.299/-0.084 | 4.6 |
+| `aes_sky130_b` | sky130/b | success | fail | 5142.8 | 13483.5/10.6 | 2357.0 | 158333 | -2.299/-0.084 | 4.8 |
+| `aes_sky130_t` | sky130/t | success | fail | 5205.6 | 13800.8/9.9 | 2373.9 | 161582 | -2.299/-0.084 | 5.4 |
+| `aes_nangate45_a` | nangate45/a | success | fail | 5689.3 | 11882.3/8.5 | 2233.1 | 18033 | 1.380/-0.140 | 14.9 |
+| `aes_nangate45_b` | nangate45/b | success | fail | 5783.2 | 12141.6/7.0 | 2241.9 | 18395 | 1.380/-0.140 | 18.6 |
+| `aes_nangate45_t` | nangate45/t | success | fail | 6277.5 | 12904.1/9.6 | 2301.8 | 21562 | 1.380/-0.140 | 24.2 |
+| `aes_asap7_a` | asap7/a | success | fail | 3820.9 | 16105.3/8.8 | 2079.2 | 13423 | -1491.028/-819.877 | 1095.6 |
+| `aes_asap7_b` | asap7/b | success | fail | 3898.7 | 16542.1/10.3 | 2144.3 | 13929 | -1491.028/-819.877 | 1571.6 |
+| `aes_asap7_t` | asap7/t | success | fail | 3968.9 | 16931.0/9.5 | 2219.5 | 14312 | -1491.028/-819.877 | 2309.3 |
+| `aes_ics55_a` | ics55/a | success | fail | 1432.5 | 6026.6/3.3 | 1416.4 | 1726 | 0.845/-0.105 | 11.5 |
+| `aes_ics55_b` | ics55/b | success | fail | 1533.2 | 6368.7/4.3 | 1462.9 | 1917 | 0.845/-0.105 | 11.5 |
+| `aes_ics55_t` | ics55/t | success | fail | 1618.3 | 6660.5/2.9 | 1545.0 | 2201 | 0.845/-0.105 | 12.7 |
+
+共同 provenance：
+
+- `git_commit=1ca482dfa228bf3d11ac29680c346eecb8fe0cef`，`dirty=true`（构建树及本轮开始前既存改动未清理，必须保留此边界）。
+- `binary_sha256=1e80b4f4f39de8dacd46220fdfdeb923de44455c4a6f0ed0736713c6d034a80d`。
+- `protocol_sha256=d308cd8d6ad5b53c67260811f273bded3c0f91695a1911d293d9fd82425de789`。
+- `build_manifest_sha256=bbdceb6363cc95a3b5a046bc8701db86e94381ba043a8f59186af2430b8b0c71`；`hardware_manifest_sha256=09f1e02f169080c883ea9f032bf808f4a9045b8da422790af46e42c0674d8d79`。
+
+机器门禁统计：
+
+| 门禁 | 13 配置状态 | 结论 |
+|---|---|---|
+| G7 SPEF-backed STA | 13 fail | 未提供 RCX/SPEF，所有被报告路径 net delay 为零；表中 WNS 不是 signoff timing |
+| G7 constraint coverage | 13 pass | 当前支持范围内未发现 unconstrained endpoint |
+| G9 activity-backed power | 13 not_run | 未提供 VCD/SAIF，runner 正确拒绝 vectorless 数字充当签核证据 |
+| G5 congestion summary | 13 pass | 拥塞报告字段完整；不代表 route-clean |
+| G11 DRC clean | 13 fail | DRC 范围 1,726–166,251，零个配置 clean |
+| G10 IR drop | 13 not_run | 缺真实 PDN/current model |
+| GDS signoff | 13 fail | GDS 文件存在，但 DRC 非零，不能标 signoff |
+
+性能真实性边界：
+
+- 两个串行样本与 11 个并行样本只证明功能覆盖；全部 `repeat=1`、`exclusive_host=false`、`comparable=false`，且没有商业侧样本，**禁止**用于 G21 比值或趋势排序。
+- 仅作热点观测时，iRT wall 为 1432.5–6277.5 s，iRT peak RSS 为 1416.4–2373.9 MiB。ASAP7 GDS 文本生成达 1095.6/1571.6/2309.3 s，显著高于其他配置的 4.6–24.2 s。
+- iRT 内部日志显示 DetailedRouter 违例规模随 box 推进扩大；源码审计同时发现全 GCell 重建 violation set 计数及 `updateTaskSchedule` 的 violation×task 扫描候选热点。二者进入 P0 profiling/索引优化，未经受控 A/B 前不宣称根因或加速收益。
+- ASAP7 setup/hold WNS 为 -1491.028/-819.877 ns，且无 SPEF；必须先定位单位、约束和寄生链，不能把该值用于 PPA parity。
+
+**本轮结论**：AES13 flow coverage = 13/13；质量合格 = 0/13；商业 parity = 未验证。下一轮优先顺序为 G5 route-clean → G7 SPEF/单位/约束真值 → ASAP7 GDS 与 iRT hotspot → 独占机商业侧重复样本。
+
+---
+
+## 3. v1.9 验收表（机器可判定门禁）
 
 **本计划完成 = 下表全绿。** 判据落到"脚本读产物、断言数字"，不许人工目测。
 
