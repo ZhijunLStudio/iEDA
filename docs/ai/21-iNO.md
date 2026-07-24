@@ -24,6 +24,8 @@ iEDA is licensed under Mulan PSL v2.
 | rv1.1 / v3.0 | 2026-07-21 | parity | **大改**：对 iNO 全树 13 个源文件（1129 LOC）逐行读完重写（`FixFanout.cpp` 271 行全读）。核心修订五条 |
 | **rv2.0 / v4.0** | **2026-07-22** | **parity** | **大改（对照 27-iSTA.md 深度重写，双对标线显式化）**。核心修订五条：**(1)** 新增 **§1.5 ★功能完整性栈**（辅助工具的精度栈 = 功能覆盖 + 跨工具契约）——逐项清点与 Genus/DC 网表修复的差距：链式拓扑 vs 平衡树、容器序 vs 关键度排序、无 veto vs 路径否决、void API vs 响亮失败、全量 summary STA vs 增量模式、无物理感知 vs 位置聚簇，14 项差距中 **P0 级 5 项全是"能力缺失"（非算法精度）**；**(2)** 新增 **in-place 调用审计**（§1.4，类比 27 号 §1.4）：iTO/iNO **双修同网无冲突检测**（`NoApi::fixFanout` 与 `ViolationOptimizer::fixDrv` 各自插 buffer，**无共享 eco_txn、无修改锁、无变更日志对账**）——现状是"不撞车靠运气"；outputSummary 的全量 STA 重建（`NoApi.cpp:147-149`）在 iTO 循环内调用的墙钟占比**未量化**（E-NO-06 前提）；**(3)** 坐实 **fixFanout 链式拓扑的延迟特征**：深度 = ⌈(fanout−max)/(max−1)⌉ ≈ fanout/max（树是 log），**最远负载经过所有 buffer**（树只经 log 层），在 fanout=100、max=30 时链深度 ≈3 vs 树 ≈2，**但最关键的是容器序分配 → 关键负载不一定近根**——worst slack 路径延迟可比树多 1-2 级 buffer 延迟（未实测，E-NO-04 量化）；**(4)** rv1.1 提的"kClock 副作用"（`:134-136`）实测是**正确行为**——时钟网标记为 kClock 是为了在后续修复轮跳过，**不改则死循环**（时钟网高扇出但不应插 buffer）——归入"未文档化的正确实现"（FR-NO-07 降为 P2 文档化）；**(5)** **引入双对标线框架**（Genus/DC 线 = 修复质量，性能线 = 秒级 + 增量）：质量线差距 = 拓扑/关键度/veto（§1.5 上半），性能线差距 = summary STA/与 iTO 串行调用（§1.5 下半）；§10 拆成两块看板（10.1 质量看板、10.2 性能看板），与 27 号双对标结构对齐。rv1.1 的五条修订全部保留，本版在其上叠加结构性分析。 |
 | **rv2.1** | **2026-07-23** | **Codex** | 实现评审：tree 模式拆为布局前有界扇出树与布局后容量约束几何聚簇；接受条件改为 DRV/合法性/时序/面积功耗的字典序门禁；共享 `MoveTxn/DirtySet` 与冲突图；禁止借改 `kClock` 充当遍历状态。 |
+| **rv2.2** | **2026-07-24** | **Codex** | FR-NO-04 配置层落地：`NoConfig::validate` 拒绝空/纯空白 `insert_buffer`，`JsonParser` 改为异常响亮失败并修复空单例；新增 Release 有效的 L0 配置校验测试。API/TCL typed rc 仍属 FR-NO-03，M1 尚未整体关闭。 |
+| **rv2.3** | **2026-07-24** | **Codex** | FR-NO-03/06 失败语义闭环：内核返回 `FixResult`，NoApi/ToolManager/TCL 逐层透传失败；无 load 网安全跳过，有 load 无 driver、缺 buffer master/pin、连接失败均停止并报错；删除 `connect()` 重复死分支。新增边界测试。FR-NO-02 事务回滚仍未实现，故失败可观测不代表整网原子回滚。 |
 
 ---
 
@@ -81,10 +83,10 @@ iEDA is licensed under Mulan PSL v2.
 |---|---|---|---|
 | FR-NO-01 | FixFanout/FixIO 保持 | ✓ | — |
 | FR-NO-02 | ★ commit 后 incr STA；Δslack≤0 回滚（txn 语义与 25-iTO 同库） | ✗ | P0 |
-| FR-NO-03 | ★ API 返 bool/SolverResult 式状态；TCL rc 透传 | ✗（全 void） | P0 |
-| FR-NO-04 | ★ 空 insert_buffer 响亮失败（配置校验前置） | 弱（cout） | P0 |
+| FR-NO-03 | ★ API 返 bool/SolverResult 式状态；TCL rc 透传 | ✓ `FixResult`→bool→TCL rc 已接通；端到端 Tcl 运行待全量链接验证 | P0 |
+| FR-NO-04 | ★ 空 insert_buffer 响亮失败（配置校验前置） | ✓ 空/空白与非法 max fanout 前置拒绝，异常由 NoApi 转 bool | P0 |
 | FR-NO-05 | ★ 平衡树 fanout 修复（关键负载近根 + slack 排序） | ✗（链式） | P1（§4.2） |
-| FR-NO-06 | ★ `connect()` 死分支清理 + `LOG_ERROR_IF` 后崩险修复 | ✗ | P0（卫生） |
+| FR-NO-06 | ★ `connect()` 死分支清理 + `LOG_ERROR_IF` 后崩险修复 | ✓ 重复分支删除；空端点改 typed failure | P0（卫生） |
 | FR-NO-07 | ★ 时钟识别只读化：使用 STA clock 查询或局部 visited，移除持久 `kClock` 改写 | 隐蔽副作用 | P1 |
 | FR-NO-08 | ★ `outputSummary` 改 incr STA（禁全量重建）或标注成本 | 全量重建 | P1 |
 | FR-NO-09 | 有坐标才启用物理感知放置（经 40 incr LG） | ✗ | P1 |
@@ -125,7 +127,9 @@ iEDA is licensed under Mulan PSL v2.
 
 ### 4.1 ★ 失败语义地基（FR-NO-03/04/06，P0）
 
-**现状签名（真实）**：`void NoApi::fixIO()` / `void NoApi::fixFanout()`（`NoApi.cpp:110-112`）；`bool` 在底层都不存在。
+**实现状态（2026-07-24）**：FR-NO-03/04/06 代码已完成。`ino_config_validation_test` 锁定空配置/非法 fanout，`ino_failure_semantics_test` 锁定无 load 跳过和有 load 无 driver 失败；`JsonParser::get_json_parser()` 同时从未初始化静态指针修为函数内静态对象。五个生产对象已编译，端到端 Tcl 运行仍待全量链接验证。FR-NO-02 的 `MoveTxn` 未落地，已有多个 insertion 后的罕见后续写失败仍可能留下部分修改，调用链会停止并报失败但不会整网回滚。
+
+**现状签名（已实现）**：`FixResult FixFanout::fixIO/fixFanout()` → `bool iNO/NoApi::fixIO/fixFanout()` → ToolManager bool → TCL `0/1`。
 
 ```text
 ALG-4.1-1  失败语义三层修复
@@ -302,6 +306,7 @@ M4 纵深：物理感知放置 + outputSummary incr 化
 | 层 | 用例 | 锁住 |
 |---|---|---|
 | L0 | 空 buffer → ERROR rc≠0 | FR-NO-04 |
+| L0 | 无 load 网跳过；有 load 无 driver → typed failure | FR-NO-06 |
 | L0 | 否决注入必回滚 | FR-NO-02 |
 | L0 | 小网（fanout≤max）不动；时钟网跳过 | 现状语义 |
 | L0 | chain vs tree 拓扑深度 | FR-NO-05 |
@@ -335,6 +340,7 @@ PR 切片：NO-0 台账 → NO-1 失败语义+卫生 → NO-2 veto 环 → NO-3 
 | 5 | `outputSummary` 全量重建的墙钟占比 | 未量化 |
 | 6 | 与 iTO buffer 命名/实例冲突 | 分工协议前未验证 |
 | 7 | initISTA 与 12-init_sta/25-iTO 的重复度 | 三处 STA 引导未审计 |
+| 8 | 失败后的整网原子性 | FR-NO-03/06 已能停止并上抛；FR-NO-02 前，多轮 insertion 后的罕见写失败仍无整网 rollback |
 
 **不要重走**：
 - 不要把 ABC/综合塞进 iNO（范围裁定）。
@@ -346,10 +352,10 @@ PR 切片：NO-0 台账 → NO-1 失败语义+卫生 → NO-2 veto 环 → NO-3 
 ## 附录 A · 迁移 checklist
 
 - [ ] M0 台账（失败语义三层 + 链式结构量化）
-- [ ] JsonParser 前置校验（空 buffer ERROR）
-- [ ] FixFanout 两入口返 FixResult；`:202-203` 崩险修复
-- [ ] `connect()` 死分支清理
-- [ ] NoApi 返 bool；TCL rc 透传
+- [x] JsonParser 前置校验（空/纯空白 buffer ERROR；L0 配置测试已落地）
+- [x] FixFanout 两入口返 FixResult；`:202-203` 崩险修复
+- [x] `connect()` 死分支清理
+- [x] NoApi 返 bool；TCL rc 透传（对象编译通过；端到端运行待全量链接）
 - [ ] veto 环（eco_txn 与 25 同库同键）
 - [ ] 40 IncrLegalizeAfterCommit 接线
 - [ ] clock net 只读跳过；遍历使用局部 visited，禁止修改持久语义类型

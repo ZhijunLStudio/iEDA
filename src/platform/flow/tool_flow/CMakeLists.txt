@@ -16,3 +16,5 @@ add_executable(flow_scheduler_test EXCLUDE_FROM_ALL
 )
 
 target_link_libraries(flow_scheduler_test PRIVATE flow_scheduler)
+
+add_test(NAME flow_scheduler_test COMMAND flow_scheduler_test)

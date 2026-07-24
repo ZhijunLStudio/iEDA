@@ -8,12 +8,68 @@
 #include "FlowScheduler.hh"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
+#include <iomanip>
+#include <optional>
 #include <sstream>
 #include <system_error>
 #include <utility>
 
 namespace ieda::platform {
+
+namespace {
+
+struct ProductSnapshot
+{
+  std::filesystem::path path;
+  uintmax_t size = 0;
+  std::filesystem::file_time_type::rep modified = 0;
+};
+
+struct SuccessStamp
+{
+  std::string stage;
+  std::string run_identity;
+  double wall_ms = 0.0;
+  std::vector<ProductSnapshot> products;
+};
+
+std::optional<SuccessStamp> readSuccessStamp(const std::filesystem::path& path)
+{
+  std::ifstream input(path);
+  if (!input) {
+    return std::nullopt;
+  }
+
+  SuccessStamp stamp;
+  std::string key;
+  unsigned format = 0;
+  size_t product_count = 0;
+  if (!(input >> key >> format) || key != "format" || format != 2U || !(input >> key >> std::quoted(stamp.stage))
+      || key != "stage" || !(input >> key >> std::quoted(stamp.run_identity)) || key != "run_identity"
+      || !(input >> key >> stamp.wall_ms) || key != "wall_ms" || !(input >> key >> product_count) || key != "product_count") {
+    return std::nullopt;
+  }
+
+  stamp.products.reserve(product_count);
+  for (size_t index = 0; index < product_count; ++index) {
+    ProductSnapshot product;
+    std::string path_string;
+    if (!(input >> key >> std::quoted(path_string)) || key != "product" || !(input >> product.size >> product.modified)) {
+      return std::nullopt;
+    }
+    product.path = std::move(path_string);
+    stamp.products.push_back(std::move(product));
+  }
+  input >> std::ws;
+  if (!input.eof()) {
+    return std::nullopt;
+  }
+  return stamp;
+}
+
+}  // namespace
 
 FlowScheduler::FlowScheduler(std::filesystem::path work_dir)
 {
@@ -248,6 +304,71 @@ void FlowScheduler::setWorkDir(std::filesystem::path work_dir)
   _work_dir = std::filesystem::absolute(std::move(work_dir)).lexically_normal();
 }
 
+void FlowScheduler::setRunIdentity(std::string run_identity)
+{
+  if (run_identity.empty()) {
+    throw FlowContractError("flow run identity must not be empty");
+  }
+  if (std::any_of(run_identity.begin(), run_identity.end(),
+                  [](unsigned char character) { return std::iscntrl(character) != 0; })) {
+    throw FlowContractError("flow run identity must not contain control characters");
+  }
+  _run_identity = std::move(run_identity);
+}
+
+std::vector<std::string> FlowScheduler::restoreRunState()
+{
+  if (_run_identity.empty()) {
+    throw FlowContractError("cannot restore flow state without a run identity");
+  }
+
+  resetRunState();
+  const auto order = validateAndTopologicalOrder();
+  const auto stamp_directory = _stamp_dir.is_absolute() ? _stamp_dir : _work_dir / _stamp_dir;
+  std::vector<std::string> restored;
+  for (const auto& stage_name : order) {
+    const auto& stage = _stages.at(stage_name);
+    if (!std::all_of(stage.prerequisites.begin(), stage.prerequisites.end(),
+                     [this](const std::string& dependency) { return hasSucceeded(dependency); })) {
+      continue;
+    }
+
+    const auto stamp = readSuccessStamp(stamp_directory / ("SUCCESS_" + stage_name));
+    if (!stamp || stamp->stage != stage_name || stamp->run_identity != _run_identity
+        || stamp->products.size() != stage.expected_products.size()) {
+      continue;
+    }
+
+    bool products_match = true;
+    for (size_t index = 0; index < stage.expected_products.size(); ++index) {
+      const auto resolved = resolveProduct(stage.expected_products[index]).lexically_normal();
+      std::error_code error;
+      const auto size = std::filesystem::file_size(resolved, error);
+      if (error) {
+        products_match = false;
+        break;
+      }
+      error.clear();
+      const auto modified = std::filesystem::last_write_time(resolved, error);
+      if (error || stamp->products[index].path != resolved || stamp->products[index].size != size
+          || stamp->products[index].modified != modified.time_since_epoch().count()) {
+        products_match = false;
+        break;
+      }
+    }
+    if (!products_match) {
+      continue;
+    }
+
+    auto& profile = _profile.at(stage_name);
+    profile.status = StageStatus::kSucceeded;
+    profile.wall_ms = stamp->wall_ms;
+    _success_stamps.insert(stage_name);
+    restored.push_back(stage_name);
+  }
+  return restored;
+}
+
 std::filesystem::path FlowScheduler::resolveProduct(const std::filesystem::path& product) const
 {
   return product.is_absolute() ? product : _work_dir / product;
@@ -311,8 +432,27 @@ void FlowScheduler::stampSuccess(const std::string& stage, const StageProfile& p
     if (!output) {
       throw FlowContractError("cannot write success stamp '" + temporary_path + "'");
     }
-    output << "stage=" << stage << '\n';
-    output << "wall_ms=" << profile.wall_ms << '\n';
+    const auto& expected_products = _stages.at(stage).expected_products;
+    output << "format " << 2 << '\n';
+    output << "stage " << std::quoted(stage) << '\n';
+    output << "run_identity " << std::quoted(_run_identity) << '\n';
+    output << "wall_ms " << profile.wall_ms << '\n';
+    output << "product_count " << expected_products.size() << '\n';
+    for (const auto& product : expected_products) {
+      const auto resolved = resolveProduct(product).lexically_normal();
+      std::error_code metadata_error;
+      const auto size = std::filesystem::file_size(resolved, metadata_error);
+      if (metadata_error) {
+        throw FlowContractError("cannot snapshot product '" + resolved.string() + "': " + metadata_error.message());
+      }
+      metadata_error.clear();
+      const auto modified = std::filesystem::last_write_time(resolved, metadata_error);
+      if (metadata_error) {
+        throw FlowContractError("cannot snapshot product '" + resolved.string() + "': " + metadata_error.message());
+      }
+      output << "product " << std::quoted(resolved.string()) << ' ' << size << ' ' << modified.time_since_epoch().count()
+             << '\n';
+    }
     output.flush();
     if (!output) {
       throw FlowContractError("failed while writing success stamp '" + temporary_path + "'");

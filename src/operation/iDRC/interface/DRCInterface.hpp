@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "../../../database/interaction/RT_DRC/ids.hpp"
+#include "RuleCoverage.hpp"
 
 #if 1  // 前向声明
 
@@ -99,6 +100,7 @@ class DRCInterface
   std::vector<ids::Shape> buildResultShapeList();
   void printSummary(std::map<std::string, std::vector<ids::Violation>>& type_violation_map);
   void outputViolationJson(std::map<std::string, std::vector<ids::Violation>>& type_violation_map);
+  void outputRuleCoverageJson();
   void outputViolationFile(std::map<std::string, std::vector<ids::Violation>>& type_violation_map);
   void outputTofeature(std::map<std::string, std::vector<ids::Violation>>& type_violation_map);
   DRCShape convertToDRCShape(const ids::Shape& ids_shape);
@@ -115,7 +117,7 @@ class DRCInterface
   ~DRCInterface() = default;
   DRCInterface& operator=(const DRCInterface& other) = delete;
   DRCInterface& operator=(DRCInterface&& other) = delete;
-  // function
+  RuleCoverageReport _last_rule_coverage;
 };
 
 }  // namespace idrc

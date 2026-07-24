@@ -24,7 +24,10 @@
  */
 #include "PLAPI.hh"
 
+#include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <system_error>
 
 #include "BufferInserter.hh"
 #include "CenterPlace.hh"
@@ -45,7 +48,32 @@
 #include "src/MapFiller.h"
 #include "timing_db.hh"
 #include "wirelength_db.h"
+#include "json/json.hpp"
 namespace ipl {
+
+namespace {
+
+auto hasRoutableNet() -> bool
+{
+  return std::any_of(PlacerDBInst.get_design()->get_net_list().begin(), PlacerDBInst.get_design()->get_net_list().end(),
+                     [](const Net* net) { return net != nullptr && net->get_pins().size() > 1U; });
+}
+
+auto stageStatusJson(const PlacementStageStatus& status) -> nlohmann::json
+{
+  return {{"status", placementStatusCodeName(status.code)},
+          {"stage", status.stage},
+          {"message", status.message},
+          {"execution_success", status.execution_success},
+          {"quality_success", status.quality_success},
+          {"metrics_valid", status.metrics_valid},
+          {"legal", status.legal},
+          {"overflow", status.overflow},
+          {"target_overflow", status.target_overflow},
+          {"hpwl", status.hpwl}};
+}
+
+}  // namespace
 
 // NOLINTBEGIN
 ieval::TimingPin* wrapTimingTruePin(Node* node);
@@ -85,6 +113,7 @@ PLAPI::~PLAPI()
 
 void PLAPI::initAPI(std::string pl_json_path, idb::IdbBuilder* idb_builder)
 {
+  _flow_status = PlacementFlowStatus{};
   _external_api = new ExternalAPI();
   _reporter = new PLReporter(_external_api);
 
@@ -173,12 +202,49 @@ void PLAPI::createPLDirectory()
   }
 }
 
+void PLAPI::writePlacementStatus()
+{
+  PlacementStatusCode overall_code = PlacementStatusCode::kNotRun;
+  if (_flow_status.gp_ran) {
+    overall_code = _flow_status.global_placement.code;
+  }
+  if (_flow_status.lg_ran && (!_flow_status.gp_ran || !_flow_status.legalization.quality_success)) {
+    overall_code = _flow_status.legalization.code;
+  }
+
+  nlohmann::json summary{{"schema_version", 1},
+                         {"status", placementStatusCodeName(overall_code)},
+                         {"flow_complete", _flow_status.flow_complete},
+                         {"execution_success", _flow_status.executionSuccess()},
+                         {"quality_success", _flow_status.qualitySuccess()},
+                         {"global_placement", stageStatusJson(_flow_status.global_placement)},
+                         {"legalization", stageStatusJson(_flow_status.legalization)}};
+
+  const std::filesystem::path output_path = std::filesystem::path(obtainTargetDir()) / "pl" / "report" / "place_summary.json";
+  const std::filesystem::path temporary_path = output_path.string() + ".tmp";
+  {
+    std::ofstream stream(temporary_path);
+    LOG_FATAL_IF(!stream.good()) << "Cannot write placement status artifact: " << temporary_path;
+    stream << summary.dump(2) << '\n';
+    stream.close();
+    LOG_FATAL_IF(!stream) << "Failed while writing placement status artifact: " << temporary_path;
+  }
+  std::error_code error;
+  std::filesystem::rename(temporary_path, output_path, error);
+  LOG_FATAL_IF(error) << "Cannot publish placement status artifact " << output_path << ": " << error.message();
+}
+
 void PLAPI::runIncrementalFlow()
 {
-  runLG();
+  if (!runLG()) {
+    LOG_FATAL << "Incremental flow legalization failed; see place_summary.json.";
+    return;
+  }
   notifyPLWLInfo(1);
   reportPLInfo();
   writeBackSourceDataBase();
+  _flow_status.flow_complete = true;
+  writePlacementStatus();
 }
 
 /*****************************Timing-driven Placement: Start*****************************/
@@ -384,10 +450,13 @@ void PLAPI::destroyTimingEval()
 }
 /*****************************Timing-driven Placement: END*****************************/
 
-void PLAPI::runFlow()
+bool PLAPI::runFlow()
 {
   // runMP();
-  runGP();
+  if (!runGP()) {
+    LOG_FATAL << "Global placement failed its execution contract; see place_summary.json.";
+    return false;
+  }
   // printHPWLInfo();
   // printTimingInfo();
   notifyPLWLInfo(0);
@@ -408,7 +477,10 @@ void PLAPI::runFlow()
   }
 
   std::cout << std::endl;
-  runLG();
+  if (!runLG()) {
+    LOG_FATAL << "Legalization failed its execution or legality contract; see place_summary.json.";
+    return false;
+  }
   // printHPWLInfo();
   // printTimingInfo();
   notifyPLWLInfo(1);
@@ -455,11 +527,17 @@ void PLAPI::runFlow()
   }
 
   writeBackSourceDataBase();
+  _flow_status.flow_complete = true;
+  writePlacementStatus();
+  return _flow_status.executionSuccess() && _flow_status.qualitySuccess();
 }
 
-void PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normalization_path)
+bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normalization_path)
 {
-  runGP();
+  if (!runGP()) {
+    LOG_FATAL << "Global placement failed its execution contract; see place_summary.json.";
+    return false;
+  }
   notifyPLWLInfo(0);
 
   if (PlacerDBInst.get_placer_config()->get_buffer_config().isMaxLengthOpt()) {
@@ -474,7 +552,10 @@ void PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normaliza
   }
 
   std::cout << std::endl;
-  runLG();
+  if (!runLG()) {
+    LOG_FATAL << "Legalization failed its execution or legality contract; see place_summary.json.";
+    return false;
+  }
   notifyPLWLInfo(1);
 
   std::cout << std::endl;
@@ -500,6 +581,9 @@ void PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normaliza
   }
 
   writeBackSourceDataBase();
+  _flow_status.flow_complete = true;
+  writePlacementStatus();
+  return _flow_status.executionSuccess() && _flow_status.qualitySuccess();
 }
 
 void PLAPI::insertLayoutFiller()
@@ -520,21 +604,38 @@ void PLAPI::insertLayoutFiller()
 //   delete mpdb;
 // }
 
-void PLAPI::runGP()
+bool PLAPI::runGP()
 {
+  _flow_status = PlacementFlowStatus{};
   // CenterPlace(&PlacerDBInst).runCenterPlace();
   RandomPlace(&PlacerDBInst).runRandomPlace();
   NesterovPlace nesterov_place(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());
   nesterov_place.printNesterovDatabase();
-  nesterov_place.runNesterovPlace();
+  const bool converged = nesterov_place.runNesterovPlace();
+
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  _flow_status.global_placement = PlacementStatusEvaluator::globalPlacement(
+      !converged, PlacerDBInst.gp_overflow, PlacerDBInst.get_placer_config()->get_nes_config().get_target_overflow(),
+      hpwl.obtainTotalWirelength(), hasRoutableNet());
+  _flow_status.gp_ran = true;
+  writePlacementStatus();
+  LOG_FATAL_IF(!_flow_status.global_placement.execution_success)
+      << _flow_status.global_placement.message << "; see place_summary.json.";
+  return _flow_status.global_placement.execution_success;
 }
 
 bool PLAPI::runLG()
 {
   LegalizerInst.initLegalizer(PlacerDBInst.get_placer_config(), &PlacerDBInst);
-  bool flag = LegalizerInst.runLegalize();
-  LOG_ERROR_IF(!flag) << "Legalization is not completed!";
-  return flag;
+  const bool solver_success = LegalizerInst.runLegalize();
+  const bool legal = solver_success && checkLegality();
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  _flow_status.legalization = PlacementStatusEvaluator::legalization(solver_success, legal, hpwl.obtainTotalWirelength());
+  _flow_status.lg_ran = true;
+  writePlacementStatus();
+  LOG_ERROR_IF(!_flow_status.legalization.execution_success) << _flow_status.legalization.message;
+  LOG_FATAL_IF(!_flow_status.legalization.execution_success) << _flow_status.legalization.message << "; see place_summary.json.";
+  return _flow_status.legalization.execution_success;
 }
 
 bool PLAPI::runIncrLG(std::vector<std::string> inst_name_list)

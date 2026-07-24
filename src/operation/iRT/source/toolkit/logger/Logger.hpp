@@ -16,6 +16,8 @@
 // ***************************************************************************************
 #pragma once
 
+#include <cstdlib>
+
 #include "LogLevel.hpp"
 #include "RTHeader.hpp"
 
@@ -70,7 +72,7 @@ class Logger
   {
     printLog(LogLevel::kError, location, value, args...);
     closeLogFileStream();
-    exit(0);
+    std::exit(EXIT_FAILURE);
   }
 
  private:

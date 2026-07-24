@@ -11,6 +11,8 @@ add_library(idrc_interface
 )
 
 target_link_libraries(idrc_interface
+    PUBLIC
+    idrc_rule_coverage
     PRIVATE
     idrc_source
     idm

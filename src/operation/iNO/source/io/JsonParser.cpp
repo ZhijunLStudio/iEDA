@@ -16,30 +16,36 @@
 // ***************************************************************************************
 #include "JsonParser.h"
 
+#include <stdexcept>
+
 #include "idm.h"
 
 namespace ino {
 JsonParser *JsonParser::get_json_parser() {
-  static JsonParser *parser;
-  return parser;
+  static JsonParser parser;
+  return &parser;
 }
 
 void JsonParser::parse(const string &json_file, NoConfig *config) const {
+  if (config == nullptr) {
+    throw std::invalid_argument("iNO configuration target is null");
+  }
+
   std::ifstream ifs(json_file);
   if (!ifs) {
-    std::cout << "[JsonParser Error] Failed to read json file '" << json_file << "'!"
-              << std::endl;
-    assert(0);
+    throw std::runtime_error("failed to read iNO configuration file '" + json_file + "'");
   }
-  Json *json = new Json();
-  ifs >> *json;
+  Json json;
+  ifs >> json;
 
-  jsonToConfig(json, config);
+  jsonToConfig(&json, config);
+
+  string validation_error;
+  if (!config->validate(&validation_error)) {
+    throw std::invalid_argument("invalid iNO configuration: " + validation_error);
+  }
 
   // printConfig(config);
-
-  ifs.close();
-  delete json;
 }
 
 void JsonParser::jsonToConfig(Json *json, NoConfig *config) const {
@@ -67,9 +73,6 @@ void JsonParser::jsonToConfig(Json *json, NoConfig *config) const {
   config->set_report_file(dmInst->get_config().get_output_path() + "./no/report.txt");
 
   config->set_insert_buffer(json->at("insert_buffer").get<string>());
-  if (config->get_insert_buffer().empty()) {
-    cout << "[Config Info] insert_buffer is Null" << endl;
-  }
 
   config->set_max_fanout(json->at("max_fanout").get<int>());
 }

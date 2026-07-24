@@ -19,3 +19,12 @@ target_include_directories(idrc_logger
     PUBLIC
     ${IDRC_TOOLKIT}/logger
 )
+
+add_executable(idrc_logger_exit_test EXCLUDE_FROM_ALL
+    ${IDRC_TOOLKIT}/logger/tests/LoggerExitTest.cpp
+)
+
+target_include_directories(idrc_logger_exit_test
+    PRIVATE
+    ${IDRC_TOOLKIT}/logger
+)

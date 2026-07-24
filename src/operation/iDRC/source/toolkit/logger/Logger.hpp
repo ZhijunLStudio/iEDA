@@ -17,6 +17,7 @@
 #pragma once
 
 #include "DRCHeader.hpp"
+#include "ErrorExit.hpp"
 #include "LogLevel.hpp"
 
 namespace idrc {
@@ -78,7 +79,7 @@ class Logger
   {
     printLog(LogLevel::kError, location, value, args...);
     closeLogFileStream();
-    exit(0);
+    exitWithError();
   }
 
  private:

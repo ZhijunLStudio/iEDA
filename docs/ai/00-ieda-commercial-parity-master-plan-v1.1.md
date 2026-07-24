@@ -3,9 +3,9 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 00 · iEDA 商业能力对标 · 优化主纲领 · v1.6
+# 00 · iEDA 商业能力对标 · 优化主纲领 · v1.7
 
-> 日期：2026-07-20（v1.0）/ 2026-07-23（v1.6 技术评审修订）
+> 日期：2026-07-20（v1.0）/ 2026-07-24（v1.7 执行证据回写）
 > 目标：**在冻结的首个产品切片内，给定相同 netlist（及同 PDK / 同约束包），iEDA 全流程与商业流程（Innovus 或 ICC2 + PrimeTime + Calibre）的 PPA 接近打平；端到端与关键步骤运行时间接近，力争更短。**
 > 能力定义 = **功能覆盖 + QoR 质量 + 规模/性能 + 可签核可信度** 四者齐备，缺一条都不算"达到"。
 > 体例：沿用 `HS-3D_Problem/thirdparty/iEDA-3D/docs/3d/design/`——**每条验收机器可判定；没有实测写"未验证"，不补白；文档是假说不是事实。**
@@ -24,13 +24,14 @@ iEDA is licensed under Mulan PSL v2.
 | v1.4 | 2026-07-20 | 全工具方案升 v1.1+：技术/算法/实现 LLD + 商业对照看板 + M0–M4 演进策略 |
 | **v1.5** | **2026-07-20** | **体例对齐 `24-iPL-3d-rv1.0`**：新增 `01-ai-doc-conventions-rv1.md`；主战场 22/23/25/26/27/28 升 **rv1.0**（逐 kernel 走读 + ALG + IterParam + Exhibit + L0–L5）；其余工具同骨架升 rv1.0（篇幅按 01 指引） |
 | **v1.6** | **2026-07-23** | 技术评审纠偏：冻结首个产品切片；G7/G8/G21 从单指标改为联合门禁；工具/输入/产物改用 SHA-256 manifest；新增 `04` 的 DesignState/DirtySet/MoveTxn 与算法路线。文件名暂保留 `v1.1` 以避免既有链接失效。 |
+| **v1.7** | **2026-07-24** | 回写第一轮工程执行证据：冻结协议与 QoR/performance schema、AES13 可复现 runner、iNO/iPL/iRT/iRCX/iPA/iDRC/iECO/FlowScheduler 的失败语义或状态契约及单测；新增 D0-D4 证据表和 AES13 实测状态；修正 `benchmark/` 为仓内实际 `benchmarks/`。 |
 
 ---
 
 ## 0. 一句话
 
 iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开事实），能跑通 netlist→GDS；
-**v1.6 = 冻结产品切片和同输入商业对标下，实现链 PPA 打平（或更优）+ 签核可信项全绿 + 运行时接近/更短 + 每设计可自动寻优。**
+**本计划完成态 = 冻结产品切片和同输入商业对标下，实现链 PPA 打平（或更优）+ 签核可信项全绿 + 运行时接近/更短 + 每设计可自动寻优。**
 
 四条主线（不可颠倒优先级）：
 
@@ -43,7 +44,7 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 
 首阶段只承诺：门级 Verilog + LEF/DEF + Liberty NLDM + SDC + 单/双角 SPEF；单电压域、标准单元为主、有限硬宏；floorplan/place/tree CTS/route/post-route timing opt；GBA+CPPR+top-N PBA、2.5D RC 与 in-design DRC 子集。完整 UPF、advanced-node 全规则、signoff SI/POCV/LVF、mesh CTS、动态 IR 和 full-chip LVS 在支持矩阵转绿前均为 `unsupported`，不得静默降级。
 
-能力成熟度使用 `04 §1.1` 的 D0–D4 证据等级；文档版本号、目录存在或伪代码不等于实现完成。
+能力成熟度使用 `04 §1.1` 的 D0–D4 证据等级；文档版本号、目录存在或伪代码不等于实现完成。v1.7 只把有代码、测试和 artifact 三联证据的能力升到 D2；没有商业金标并排证据的能力不得标 D4。
 
 ---
 
@@ -79,7 +80,7 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 
 ## 1bis. 苹果对苹果协议（Parity Protocol）——**所有 G17–G21 的前置约束**
 
-> 没有本协议，"差距 ≤5%"没有物理意义。Phase 0 必须产出冻结的 `benchmark/parity_protocol.json`。
+> 没有本协议，"差距 ≤5%"没有物理意义。Phase 0 必须产出冻结的 `benchmarks/qor/parity_protocol.json`。
 
 ### 输入等价（必须逐项锁定）
 
@@ -119,42 +120,60 @@ iEDA 已有 **1 个基础设施 + 若干工具 + 4 次流片**（README 公开�
 
 - 工具目录齐全（`src/operation/i*`），netlist→GDS 可跑通；**4 次流片**（README）。
 - `src/evaluation/` 已存在——PPA 闭环落点在。
-- 本仓已有三套流程痕迹（`ics55` / `sky130` / `nangate45`）——Phase 0 复用。
+- AES13 runner 已覆盖四种 PDK（`sky130` / `nangate45` / `asap7` / `ics55`）和 13 个配置，并校验 stage/输入/产物 SHA-256；当前仅作为正确性与观测证据，不等于四个独立设计族。
 - **子文档已实读审计并升版（功能/算法 + 分阶段交付）**：
   - `22-iPL.md` **rv2.1**：宏硬约束编码、解析初值 A/B、IncrPlace、DP 晋级门禁 + vs place_opt。
   - `27-iSTA.md` **rv2.1**：PBA/harness/MCMM/真实增量 + vs PT 评测路线。
   - `26-iRT.md` **rv2.1**：冲突分量停滞反馈、终态违例 JSON、时序预算、ECO 冻结契约 + vs NanoRoute。
   - `25-iTO.md` **rv2.1**：联合门禁事务、冲突图批处理、incr LG/RC/STA/full oracle + vs route_opt。
 
-### 2.2 诚实的未决（除标注外均为"待 Phase 0 实测"）
+### 2.2 诚实的未决（v1.7 执行后）
 
 | 项 | 状态 | 归属 |
 |---|---|---|
-| **逐工具 QoR 数字**（vs 商业，统一基准） | ❌ 不存在——**第一个要产出的东西**（Phase 0） | platform/evaluation |
-| 苹果对苹果协议冻结文件 | ❌ 不存在 | platform |
-| iPL 宏/收敛/时序驱动 | ⚠️ 代码审计已有（22）；**数值待测** | iPL |
-| iRT 收敛/时序驱动 | ⚠️ 代码审计已有（26）；**数值待测** | iRT |
+| **逐工具 QoR 数字**（vs 商业，统一基准） | ⚠️ schema、校验器和 AES 观测 runner 已有；商业侧同输入数据仍不存在 | platform/evaluation |
+| 苹果对苹果协议冻结文件 | ✅ `benchmarks/qor/parity_protocol.json` 已有 schema hash、线程和性能采样约束，并有机械校验 | platform |
+| iPL 宏/收敛/时序驱动 | ⚠️ 状态/失败语义 D2；宏与商业 QoR 数值待测 | iPL |
+| iRT 收敛/时序驱动 | ⚠️ 收敛与失败语义 D2；AES routing 正确性回归进行中，商业 QoR 数值待测 | iRT |
 | iTO 贪心否决/incr LG | ⚠️ 代码审计已有（25）；**数值待测** | iTO |
 | iSTA PBA / SI / MCMM / vs PT | ⚠️ 代码审计已有（27）；**数值与 harness 待建** | iSTA |
-| iRCX vs StarRC | ❓ 无对比 | iRCX |
-| iDRC vs Calibre deck | ❓ 未逐条对照 | iDRC |
+| iRCX vs StarRC | ⚠️ JSON 误差报告契约与测试已有；无 StarRC 金标数据 | iRCX |
+| iDRC vs Calibre deck | ⚠️ rule coverage/响亮失败契约与测试已有；未逐条对照 Calibre deck | iDRC |
 | iLVS 是否恒等式 / 是否存在 | ❓ 待审计（附录 B 标 greenfield） | iLVS |
 | 规模上限（现有设计多 <50 万实例） | ❓ 未爬坡 | all |
-| 静默失败面 | ❓ 历史病；本仓未普查 | interface/platform |
-| **运行时 vs 商业分项剖面** | ❌ 不存在 | all |
+| 静默失败面 | ⚠️ iNO/iPL/iRT/iPA/iDRC/iECO/flow 已处理首批已知路径；全命令矩阵未清零 | interface/platform |
+| **运行时 vs 商业分项剖面** | ⚠️ profile schema、median/MAD 与不可比样本拒绝已 D2；无独占机商业侧 ≥5 次样本 | all |
+
+### 2.3 v1.7 工程证据快照（2026-07-24）
+
+> 本表按 `04 §1.1` 记录成熟度。共同 `binary_sha256` 以本轮最终重建和 AES13 汇总为准；dirty build 必须在 artifact 中显式标记。D2 表示单元/合同可信，不表示商业对标通过。
+
+| 能力 | 级别 | code_ref | test_ref | artifact_ref | 剩余退出条件 |
+|---|---:|---|---|---|---|
+| G1b 冻结协议 | D2 | `benchmarks/qor/parity_protocol.json`、`validate_protocol.py` | `test_protocol.py` | AES13 `summary.json.protocol_sha256` | 商业侧实际输入 manifest 冻结 |
+| QoR 指标真实性 | D2 | `quality_metrics.py`、`validate_qor.py` | QoR test suite | 每设计 `quality_summary.json` | ≥5 独立设计 + 商业金标 |
+| G21 profile/统计 | D2 | `performance_profile.py`、AES13 stage timer | performance/runner contract tests | `performance_profile.jsonl`、build/hardware manifest | 独占机 cold/warm 各 ≥5 次 + 商业侧样本 |
+| iNO fanout 失败语义 | D2 | typed `FixResult`、配置/DB/STA/pin 预检 | config/failure semantics tests | AES13 fanout stage manifest/log | 三 PDK/多设计 QoR 回归 |
+| iPL 收敛状态 | D2 | `PlacementStatus`、Nesterov 终态传播 | placement status test | AES13 placement stage manifest/log | 宏、拥塞、时序 A/B 与商业 QoR |
+| iRT 收敛/失败语义 | D2 | `DRConvergence`、终态传播、PinAccessor 共享索引隔离 | convergence/logger tests + AES routing | AES13 routing stage manifest/log | ≥3 设计 route-clean；恢复经证明安全的 PA 并行 |
+| iRCX 误差报告 | D2 | compare SPEF JSON writer | compare JSON test | compare JSON | StarRC 逐网/逐桶金标 |
+| iPA 活动来源 | D2 | `ActivityProvenance`、报告/API 传播 | provenance/report tests | power report | VCD/SAIF 与 PTPX 并排 |
+| iDRC coverage/失败语义 | D2 | `RuleCoverage`、logger exit contract | coverage/logger exit tests | coverage JSON/report | Calibre 可比 rule subset 映射 |
+| iECO via 结果语义 | D2 | `shape/pattern/unknown` typed result | ECO via request test | TCL error/result | 真实 ECO route + signoff 回归 |
+| FlowScheduler 状态契约 | D2 | scheduler/state propagation | scheduler/design-state tests | stage status/manifest | 单 session 断点一致性与全流程证明 |
 
 ---
 
-## 3. v1.1 验收表（机器可判定门禁）
+## 3. v1.7 验收表（机器可判定门禁）
 
-**v1.6 完成 = 下表全绿。** 判据落到"脚本读产物、断言数字"，不许人工目测。
+**本计划完成 = 下表全绿。** 判据落到"脚本读产物、断言数字"，不许人工目测。
 
 ### 3.1 地基与可信度
 
 | # | 门禁 | 判据（机器可判定） | 归属 |
 |---|---|---|---|
-| G1 | **`qo-baseline-fresh`** | `benchmark/qor/` 存在当前二进制逐工具 QoR JSON（≥5 设计 × 全指标含墙钟/内存），由 `run_qor_baseline.sh` 生成并进 CI；二进制 hash 变即 FAIL | platform/evaluation |
-| G1b | **`parity-protocol-frozen`** | `benchmark/parity_protocol.json` 存在且版本锁定；含主对标方、努力档、报告点、指标 schema | platform |
+| G1 | **`qo-baseline-fresh`** | `benchmarks/qor/` 存在当前二进制逐工具 QoR JSON（≥5 设计 × 全指标含墙钟/内存），由 runner 生成并进 CI；二进制 hash 变即 FAIL | platform/evaluation |
+| G1b | **`parity-protocol-frozen`** | `benchmarks/qor/parity_protocol.json` 存在且版本锁定；含主对标方、努力档、报告点、指标 schema | platform |
 | G14 | **`no-silent-failure`** | 每 TCL/Python 命令有产物存在断言；已知静默空操作清单清零；缺前置选项响亮失败 | interface |
 | G15 | **`metric-not-fake`** | 禁 `budget==value` 自报达标；QoR budget 外生；超标 FAIL | platform/evaluation |
 | G16 | **`flow-one-session`** | netlist→GDS 单 session；引擎重启不丢状态；断点续跑产物一致 | platform |
@@ -345,7 +364,7 @@ Phase0 ──┬── T0 harness
 |---|---|
 | **重点工具** | **evaluation/platform（G1/G1b）**；**iSTA**（PT 对齐）；**iPL / iRT**（对照实验）；iTO 轻量基线；G12 |
 | **实施路径** | ① 冻结 `parity_protocol.json`（主对标方/努力档/报告点）② `run_qor_baseline.sh` daily 五套 ③ `run_pt_align.sh` 首轮 ④ 执行 22/26/27/25 各自 §P0 测法 ⑤ 目录级 greenfield 确认（iLVS/iLO） |
-| **交付内容** | `benchmark/qor/**` JSON；`parity_protocol.json`；`01-baseline-report.md`；分项墙钟表；各子文档未验证清单前 N 条清零纪要 |
+| **交付内容** | `benchmarks/qor/**` JSON；`parity_protocol.json`；`01-baseline-report.md`；分项墙钟表；各子文档未验证清单前 N 条清零纪要 |
 | **测试验证** | CI：二进制 hash 变 → G1 FAIL；PT 对齐脚本有 R² 产出（不要求已 ≥0.98）；宏布局空操作/timing A/B/plateau 结果落盘 |
 
 ---
@@ -367,7 +386,7 @@ Phase0 ──┬── T0 harness
 |---|---|
 | **重点工具** | **iSTA**（第一优先）；伴生 **iRCX**（G8 起步） |
 | **实施路径** | 见 `27-iSTA.md` §9：单位/增量契约 → **top-N PBA** → R² 爬坡 → MCMM 外挂（可与 B3 重叠）→ delay_mode 文档化；并行 StarRC 逐网对比试点 |
-| **交付内容** | `StaPathBased.*`；GBA/PBA 双值报告；`benchmark/qor/sta/` 多轮对比；增量 gtest |
+| **交付内容** | `StaPathBased.*`；GBA/PBA 双值报告；`benchmarks/qor/sta/` 多轮对比；增量 gtest |
 | **测试验证** | T-A1/A2/B1（27 文档）；**G7** 按 `04 §2.3` 联合门禁逐桶爬坡；无 G7 背书不得关闭 G17 时序行 |
 
 ---

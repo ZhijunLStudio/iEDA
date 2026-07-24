@@ -21,6 +21,8 @@
 #include <string>
 #include <vector>
 
+#include "ieco_via.h"
+
 namespace idb {
 
 }  // namespace idb
@@ -33,7 +35,7 @@ class ECOApi
   ECOApi(std::string config = "");
   ~ECOApi();
 
-  void ecoVia(std::string type = "shape");
+  [[nodiscard]] ECOViaResult ecoVia(std::string_view type = kEcoRepairViaByShape);
 
  private:
 };

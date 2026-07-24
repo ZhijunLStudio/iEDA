@@ -51,7 +51,7 @@ class NesterovPlace
   NesterovPlace& operator=(const NesterovPlace&) = delete;
   NesterovPlace& operator=(NesterovPlace&&) = delete;
 
-  void runNesterovPlace();
+  bool runNesterovPlace();
   void printNesterovDatabase();
 
   bool isJsonOutputEnabled() { return _enable_json_output; }

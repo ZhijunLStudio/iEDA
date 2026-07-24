@@ -3,15 +3,17 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 52 · iEDA.ai Agent 原生工具实施总索引 · ai1.3
+# 52 · iEDA.ai Agent 原生工具实施总索引 · ai1.4
 
-> 日期：2026-07-23
+> 日期：2026-07-24
 > 上位方案：`51-agent-native-eda-detailed-plan-v1.0.md`；新增架构与工具边界见 `53-agent-native-eda-architecture-v2.0.md`。
 > 使用方式：本文件负责跨工具顺序、共同契约和里程碑；各 `*-ai1.0.md` 负责模块 API、LLD、源码落点和测试；同编号原 `.md` 负责现有 kernel 审计与商业对标。
 
-## 0. 详细设计完成基线（2026-07-23）
+## 0. 文档深化执行基线（2026-07-24）
 
-本轮已按 `12-evaluation-ai1.0.md` 的工程深度展开 `10/11`、`20-49`、`54-57` 全部工具/模块文档，并补齐此前缺失的 `34-iFormal-ai1.0.md`、`39-i3D-iPKG-ai1.0.md`。总纲 `50/51/53` 不复制模块 LLD，继续只承担战略、产品与总架构职责。
+仓库当前事实是：`10/11/12/20/21/22` 已达到本轮参考深度；`23-50`、`54-57` 仍需逐模块深化，其中 `34-iFormal-ai1.0.md`、`39-i3D-iPKG-ai1.0.md` 尚未创建。`51-53` 由主 Agent 负责产品、实施索引和架构契约；其他文档执行“一模块一独立子 Agent”，受并发槽位限制按批次滚动。文档状态只记录方案成熟度，绝不表示对应 capability 已经编码、验证或发布。
+
+本轮的目标不是把所有文档扩成相同行数，而是让实现者无需猜测关键语义即可拆出 Contract、Adapter、Shadow Apply、Closure 和 Qualification 五类 PR。`12-evaluation-ai1.0.md` 是深度基线；10/11/20-22 提供已有模块如何做 CURRENT 源码审计和 TARGET adapter 设计的样板。
 
 后续评审不以行数判断“详细”，而机械检查每篇是否给出：
 
@@ -410,21 +412,66 @@ Issue 必填：问题与真实 consumer、输入/输出/context、状态与错�
 
 | 批次 | 独立模块 Agent | 主 Agent 同期职责 | 合并门禁 |
 |---|---|---|---|
-| B0 | 10、11、20 | 51-53 总契约深化 | CURRENT/TARGET 与公共类型对账 |
-| B1 | 21、22、23 | 51-53 schema/架构 | Timing/placement/clock context 一致 |
-| B2 | 24、25、26 | 实施索引更新 | action delta、scope、验证闭包一致 |
-| B3 | 27、28、29 | fidelity/oracle 对账 | timing/RC/power scenario 与 coverage 一致 |
-| B4 | 30、31、32 | failure/certificate 对账 | DRC/LVS/workflow 不扩张 claim |
-| B5 | 33、34、35 | greenfield/external 边界 | logic/formal/SI adapter-first |
-| B6 | 36、37、38 | 多物理语义对账 | activity/temperature/lifetime/rule refs 完整 |
-| B7 | 39、40、41 | 3D 与执行/入口 | 2D 状态稳定、Gateway 无任意 shell |
-| B8 | 42、43、44 | perf/runtime/observer | trace、budget、evidence graph 一致 |
-| B9 | 45、46、47 | model/factory/data | qualification、quarantine、lineage 一致 |
-| B10 | 48、49、50 | intent/verification/strategy | R4 intent 与普通 delta 隔离 |
-| B11 | 54、55、56 | planner/technology/experience | decision、PDK、memory 不充当 oracle |
-| B12 | 57 | 主 Agent 全量验收 | external isolation/protocol 与所有 consumer 对账 |
+| B0 | 10、11、12、20、21、22 | 51-53 纠正事实与冻结验收模板 | 已达参考深度，本轮不重写 |
+| B1 | 23、24、25 | 51-53 可编码工作包 | clock/PDN/timing action 的 context、delta、证书闭包 |
+| B2 | 26、27、28 | 增量分析链审查 | route/RC/timing 的 dirty scope、fidelity、coverage 一致 |
+| B3 | 29、30、31 | 分析与验证语义审查 | power/IR/DRC/LVS 不扩张 claim |
+| B4 | 32、33、34 | workflow/greenfield 边界 | ECO、logic mapping、formal adapter-first |
+| B5 | 35、36、37 | 多物理场景审查 | coupling/activity/temperature/lifetime refs 完整 |
+| B6 | 38、39、40 | 制造/3D/执行平面 | 2D/3D 状态边界和 artifact publish 一致 |
+| B7 | 41、42、43 | Gateway/perf/runtime | auth、trace、budget、journal、cancel 一致 |
+| B8 | 44、45、46 | observer/model/factory | evidence、qualification、quarantine 一致 |
+| B9 | 47、48、49 | data/intent/verification | lineage、R4 intent、certificate owner 一致 |
+| B10 | 50、54、55 | 战略/planner/technology | 路线图、decision、PDK 均不充当 oracle |
+| B11 | 56、57 | 主 Agent 全量验收 | memory applicability 与 external isolation 对账 |
 
 `12-evaluation-ai1.0.md` 是共同深度/契约基线，不由本轮子 Agent 重写；`12-evaluation-ai1.1.md` 保留 3D/梯度扩展研究视图。缺失的 `34`、`39` 文档由对应模块 Agent 新建，不能继续只在索引中宣称存在。
+
+### 19.1 当前执行台账
+
+| 文档 | Owner | 状态 | 当前验收记录 |
+|---|---|---|---|
+| 51-53 | 主 Agent | EDITING | 纠正执行事实；增加代码交付包、契约冻结、组件 wiring 和集成门禁 |
+| 10 iDB | `doc_10_idb` | ACCEPTED | 842 行；CURRENT DesignState 审计、snapshot/delta/CAS/事务/ACL/测试完整 |
+| 11 Solver | `doc_11_solver` | ACCEPTED | 754 行；backend 事实、Problem/Candidate/Proof、anytime/bounds/隔离完整 |
+| 12 Evaluation | 基准文档 | ACCEPTED | Metric/compare/gate/calibration/evidence 和测试深度作为本轮模板 |
+| 20 iFP | `doc_20_ifp` | ACCEPTED | 829 行；FloorplanDelta、F0-F4、worker 隔离、iPL/iPDN handoff 完整 |
+| 21 iNO | `doc_21_ino` | ACCEPTED | 源码入口、NoConfig、Proposal/Delta、fanout tree、失败与测试已深化 |
+| 22 iPL | `doc_22_ipl` | ACCEPTED | placement context、状态机、PlacementDelta、合法化和增量 handoff 已深化 |
+| 23 iCTS | `doc_23_icts` | ACCEPTED | 1427 行；CURRENT CTSAPI/Flow/ClockDAG/H-tree/FastSTA/writeback 审计，Clock schema、useful-skew、事务验证链、LLD/测试/DoD 完整；build-aes13 当前未注册 iCTS CTest，作为显式缺口 |
+| 24 iPDN/iPNP | `doc_24_ipdn_ipnp` | EDITING | 独立 owner；审计 PDN mutation、PNP candidate 和 IR/DRC 边界 |
+| 25 iTO | `doc_25_ito` | ACCEPTED | 1133 行；真实 singleton/pass 审计、六类 action、MCMM、候选算法、事务/CAS/rollback、跨工具 DAG、测试和量化 DoD 完整；公共 TypedDelta/Hub schema 待 owner 冻结后适配 |
+| 26 iRT | `doc_26_irt` | QUEUED | B2 独立 owner |
+| 27 iSTA | `doc_27_ista` | QUEUED | B2 独立 owner |
+| 28 iRCX | `doc_28_ircx` | ACCEPTED | 932 行；真实全量 RC/SPEF/compare 审计，ParasiticGraph/RcDelta、coupling owner、old/new tile halo、RC publish/consumer ACK、LLD/测试/商业门禁完整 |
+| 29 iPA/iIR | `doc_29_ipa_iir` | ACCEPTED | 1457 行/998 非空行；真实 activity/power/PG/matrix/solver/consumer 审计，provenance、network/boundary、residual/KCL、增量/闭环/LLD/F4 false-clean 门禁完整 |
+| 30 iDRC | `doc_30_idrc` | ACCEPTED | 1325 行；CURRENT/CURRENT-WT 审计、rule source conservation/coverage、old-new scope、ViolationId、proposal-only repair、fail-closed/LLD/Calibre/DoD 完整 |
+| 31 iLVS | `doc_31_ilvs` | ACCEPTED | 994 行；诚实确认无完整 CURRENT kernel，adapter-first/greenfield 边界、canonical graph/matcher/witness、no-false-PASS、external protocol/LLD/测试完整 |
+| 32 iECO | `doc_32_ieco` | QUEUED | B4 独立 owner |
+| 33 iLO/iTM | `doc_33_ilo_itm` | QUEUED | B4 独立 owner |
+| 34 iFormal | `doc_34_iformal` | QUEUED/CREATE | B4 独立 owner；新建文档但不得虚构 CURRENT 内核 |
+| 35 iSI | `doc_35_isi` | QUEUED | B5 独立 owner |
+| 36 iEM/Reliability | `doc_36_iem_reliability` | QUEUED | B5 独立 owner |
+| 37 iThermal | `doc_37_ithermal` | QUEUED | B5 独立 owner |
+| 38 iDFM | `doc_38_idfm` | QUEUED | B6 独立 owner |
+| 39 i3D/iPKG | `doc_39_i3d_ipkg` | QUEUED/CREATE | B6 独立 owner；先冻结 assembly/context 与 adapter 边界 |
+| 40 Platform | `doc_40_platform` | QUEUED | B6 独立 owner |
+| 41 Interface | `doc_41_interface` | QUEUED | B7 独立 owner |
+| 42 Perf | `doc_42_perf` | QUEUED | B7 独立 owner |
+| 43 Runtime | `doc_43_runtime` | QUEUED | B7 独立 owner |
+| 44 Observer | `doc_44_observer` | QUEUED | B8 独立 owner |
+| 45 Model Router | `doc_45_model_router` | QUEUED | B8 独立 owner |
+| 46 Honey Factory | `doc_46_honey` | QUEUED | B8 独立 owner |
+| 47 Data/Oracle | `doc_47_data_oracle` | QUEUED | B9 独立 owner |
+| 48 Intent/Scenario | `doc_48_intent` | QUEUED | B9 独立 owner |
+| 49 Verification Hub | `doc_49_verification` | QUEUED | B9 独立 owner |
+| 50 Master Plan | `doc_50_master_plan` | QUEUED | B10 独立 owner；战略与可执行 Wave 对齐，不复制 LLD |
+| 54 Planner | `doc_54_planner` | QUEUED | B10 独立 owner |
+| 55 Technology | `doc_55_technology` | QUEUED | B10 独立 owner |
+| 56 Experience | `doc_56_experience` | QUEUED | B11 独立 owner |
+| 57 External Bridge | `doc_57_external` | QUEUED | B11 独立 owner |
+
+此表记录文档深化工作的事实，不代表对应代码 capability 已实现或晋级。每次 ACCEPTED 必须同时更新标题版本、版本历史、Markdown 检查和源码引用检查；`EDITING/REWORK` 不得在 `0` 节被统计为完成。
 
 ## 20. Module Readiness Record
 
@@ -517,6 +564,7 @@ E6 之前不允许 production 写能力；E8 之前不允许 commit；E10 之前
 
 ## 24. 版本历史
 
+- ai1.4（2026-07-24）：纠正“全部文档已深化”的错误状态；按用户指定保留 10/11/12/20/21/22，建立 23-50、54-57 一模块一独立 Agent 的滚动批次、真实 owner 和执行台账。
 - ai1.3（2026-07-23）：增加一模块一 Agent 的分批所有权、readiness 状态机、90 天 Epic DAG、统一 conformance suite 和主 Agent 集成审查。
 - ai1.2（2026-07-23）：增加机器 readiness ledger、跨模块 producer/consumer 契约矩阵、四类 release train 和可验收 issue 模板。
 - ai1.1（2026-07-23）：接入 53 号新架构，新增 12 份模块方案；冻结 intent/technology context、validation certificate、Planner、experience 与 external bridge 的 ownership，并把 formal/SI/reliability/thermal/DFM/3D 纳入 Wave。

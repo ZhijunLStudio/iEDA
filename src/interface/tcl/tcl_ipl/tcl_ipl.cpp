@@ -19,6 +19,7 @@
 #include <glog/logging.h>
 
 #include "IdbInstance.h"
+#include "PlacementResult.hh"
 #include "idm.h"
 #include "ipl_io.h"
 #include "log/Log.hh"
@@ -58,11 +59,14 @@ unsigned CmdPlacerAutoRun::exec()
     enable_json_output = true;
   }
 
-  if (iplf::tmInst->autoRunPlacer(data_config, enable_json_output)) {
-    std::cout << "iPL run successfully." << std::endl;
+  const bool placement_succeeded = iplf::tmInst->autoRunPlacer(data_config, enable_json_output);
+  if (!placement_succeeded) {
+    std::cerr << "iPL run failed; see place_summary.json." << std::endl;
+    return ipl::placementTclResult(false);
   }
 
-  return 1;
+  std::cout << "iPL run successfully." << std::endl;
+  return ipl::placementTclResult(true);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -119,6 +119,10 @@ void DetailedRouter::routeDRModel(DRModel& dr_model)
   double fixed_rect_unit = 4 * non_prefer_wire_unit * cost_unit;
   double routed_rect_unit = 2 * non_prefer_wire_unit * cost_unit;
   double violation_unit = 4 * non_prefer_wire_unit * cost_unit;
+  const auto& config = RTDM.getConfig();
+  DRConvergenceTracker convergence_tracker(DRConvergenceConfig{.window = config.dr_plateau_window,
+                                                               .min_relative_improvement = config.dr_plateau_min_improvement,
+                                                               .max_hotspot_change = config.dr_plateau_hotspot_change});
   /**
    * prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size, offset, schedule_interval, fixed_rect_unit, routed_rect_unit, violation_unit,
    * max_routed_times, max_candidate_patch_num
@@ -167,6 +171,13 @@ void DetailedRouter::routeDRModel(DRModel& dr_model)
     updateBestResult(dr_model);
     // debugPlotDRModel(dr_model, "after");
     updateSummary(dr_model);
+    const auto& convergence = convergence_tracker.observe(buildConvergenceState(dr_model));
+    if (convergence.plateau) {
+      RTLOG.warn(Loc::current(), "Detailed routing plateau at iteration ", iter, ": residual hotspots are stable (violations=",
+                 getRouteViolationNum(dr_model), ", severity_improvement=", convergence.severity_improvement,
+                 ", hotspot_change=", convergence.hotspot_change, ").");
+    }
+    outputConvergenceJson(convergence_tracker, false);
     printSummary(dr_model);
     outputNetCSV(dr_model);
     outputViolationCSV(dr_model);
@@ -178,6 +189,17 @@ void DetailedRouter::routeDRModel(DRModel& dr_model)
     }
   }
   selectBestResult(dr_model);
+  const auto& final_convergence = convergence_tracker.observe(buildConvergenceState(dr_model));
+  outputConvergenceJson(convergence_tracker, true);
+  if (!final_convergence.clean) {
+    const auto& final_state = convergence_tracker.history().back();
+    RTLOG.warn(Loc::current(), "Detailed routing produced an incomplete result (routed_nets=", final_state.routed_net_num, "/",
+               final_state.total_net_num, ", residual_drc=", final_state.violation_num,
+               "); see iter_dr_series.json for the terminal state.");
+    if (config.fail_on_residual_drc) {
+      RTLOG.error(Loc::current(), "Detailed routing rejected the incomplete result because -fail_on_residual_drc is enabled.");
+    }
+  }
 
   RTLOG.info(Loc::current(), "Completed", monitor.getStatsInfo());
 }
@@ -420,7 +442,8 @@ void DetailedRouter::routeDRBoxMap(DRModel& dr_model)
   size_t routed_box_num = 0;
   for (std::vector<DRBoxId>& dr_box_id_list : dr_model.get_dr_box_id_list_list()) {
     Monitor stage_monitor;
-#pragma omp parallel for
+    // Box setup and result upload mutate shared RTDM GCell indexes. Keep this
+    // loop serial until those indexes support concurrent pointer updates.
     for (DRBoxId& dr_box_id : dr_box_id_list) {
       DRBox& dr_box = dr_box_map[dr_box_id.get_x()][dr_box_id.get_y()];
       buildFixedRect(dr_box);
@@ -2445,6 +2468,78 @@ bool DetailedRouter::stopIteration(DRModel& dr_model, std::vector<DRIterParam>& 
   return false;
 }
 
+DRIterationState DetailedRouter::buildConvergenceState(DRModel& dr_model)
+{
+  Die& die = RTDM.getDatabase().get_die();
+  Summary& summary = RTDM.getDatabase().get_summary();
+  const DRSummary& dr_summary = summary.iter_dr_summary_map[dr_model.get_iter()];
+
+  DRIterationState state;
+  state.iter = dr_model.get_iter();
+  state.violation_num = dr_summary.total_violation_num;
+  state.total_wire_length = dr_summary.total_wire_length;
+  state.total_via_num = dr_summary.total_via_num;
+
+  state.routed_net_num = dr_summary.routed_net_num;
+  state.total_net_num = dr_summary.total_net_num;
+
+  for (Violation* violation : RTDM.getViolationSet(die)) {
+    state.violation_score += getViolationWeight(violation->get_violation_type());
+    const EXTLayerRect& shape = violation->get_violation_shape();
+    state.hotspot_set.insert(RTUTIL.getString(static_cast<int32_t>(violation->get_violation_type()), ":", shape.get_layer_idx(), ":",
+                                               shape.get_real_ll_x(), ":", shape.get_real_ll_y(), ":", shape.get_real_ur_x(), ":",
+                                               shape.get_real_ur_y()));
+  }
+  return state;
+}
+
+void DetailedRouter::outputConvergenceJson(const DRConvergenceTracker& tracker, bool final_state)
+{
+  const auto& history = tracker.history();
+  const auto& decisions = tracker.decisions();
+  if (history.empty() || history.size() != decisions.size()) {
+    return;
+  }
+
+  nlohmann::json result;
+  result["schema_version"] = 1;
+  result["stage"] = "detailed_route";
+  result["final"] = final_state;
+  result["route_complete"] = final_state && decisions.back().clean;
+  result["route_incomplete"] = final_state && !decisions.back().clean;
+  result["residual_drc"] = history.back().violation_num;
+  result["plateau_detected"] = std::any_of(decisions.begin(), decisions.end(), [](const auto& item) { return item.plateau; });
+  result["config"] = {{"window", tracker.config().window},
+                      {"min_relative_improvement", tracker.config().min_relative_improvement},
+                      {"max_hotspot_change", tracker.config().max_hotspot_change},
+                      {"fail_on_residual_drc", RTDM.getConfig().fail_on_residual_drc != 0}};
+  for (std::size_t i = 0; i < history.size(); ++i) {
+    const auto& state = history[i];
+    const auto& decision = decisions[i];
+    result["iterations"].push_back({{"iter", state.iter},
+                                    {"routed_net_num", state.routed_net_num},
+                                    {"total_net_num", state.total_net_num},
+                                    {"completeness", decision.completeness},
+                                    {"violation_num", state.violation_num},
+                                    {"violation_score", state.violation_score},
+                                    {"hotspot_num", state.hotspot_set.size()},
+                                    {"total_wire_length", state.total_wire_length},
+                                    {"total_via_num", state.total_via_num},
+                                    {"plateau", decision.plateau},
+                                    {"reason", decision.reason},
+                                    {"violation_improvement", decision.violation_improvement},
+                                    {"severity_improvement", decision.severity_improvement},
+                                    {"hotspot_change", decision.hotspot_change},
+                                    {"wire_length_change", decision.wire_length_change},
+                                    {"via_change", decision.via_change}});
+  }
+
+  const std::string path = RTUTIL.getString(RTDM.getConfig().dr_temp_directory_path, "iter_dr_series.json");
+  std::ofstream* stream = RTUTIL.getOutputFileStream(path);
+  (*stream) << result.dump(2);
+  RTUTIL.closeFileStream(stream);
+}
+
 void DetailedRouter::selectBestResult(DRModel& dr_model)
 {
   Monitor monitor;
@@ -2474,7 +2569,8 @@ void DetailedRouter::patchFinalMinArea(DRModel& dr_model)
 
   GridMap<DRBox>& dr_box_map = dr_model.get_dr_box_map();
   for (std::vector<DRBoxId>& dr_box_id_list : dr_model.get_dr_box_id_list_list()) {
-#pragma omp parallel for
+    // buildFinalPatchBox() reads shared violations while uploadFinalPatch()
+    // mutates shared GCell indexes, so the box loop must remain serial.
     for (DRBoxId& dr_box_id : dr_box_id_list) {
       DRBox& dr_box = dr_box_map[dr_box_id.get_x()][dr_box_id.get_y()];
       buildFinalPatchBox(dr_model, dr_box);
@@ -3206,6 +3302,8 @@ void DetailedRouter::updateSummary(DRModel& dr_model)
   Summary& summary = RTDM.getDatabase().get_summary();
   int32_t enable_timing = RTDM.getConfig().enable_timing;
 
+  int32_t& routed_net_num = summary.iter_dr_summary_map[dr_model.get_iter()].routed_net_num;
+  int32_t& total_net_num = summary.iter_dr_summary_map[dr_model.get_iter()].total_net_num;
   std::map<int32_t, double>& routing_wire_length_map = summary.iter_dr_summary_map[dr_model.get_iter()].routing_wire_length_map;
   double& total_wire_length = summary.iter_dr_summary_map[dr_model.get_iter()].total_wire_length;
   std::map<int32_t, int32_t>& cut_via_num_map = summary.iter_dr_summary_map[dr_model.get_iter()].cut_via_num_map;
@@ -3218,6 +3316,8 @@ void DetailedRouter::updateSummary(DRModel& dr_model)
 
   std::vector<DRNet>& dr_net_list = dr_model.get_dr_net_list();
 
+  routed_net_num = 0;
+  total_net_num = 0;
   routing_wire_length_map.clear();
   total_wire_length = 0;
   cut_via_num_map.clear();
@@ -3228,7 +3328,18 @@ void DetailedRouter::updateSummary(DRModel& dr_model)
   total_violation_num = 0;
   clock_timing_map.clear();
 
-  for (auto& [net_idx, segment_set] : RTDM.getNetDetailedResultMap(die)) {
+  const auto detailed_result_map = RTDM.getNetDetailedResultMap(die);
+  for (DRNet& dr_net : dr_net_list) {
+    if (dr_net.get_dr_pin_list().size() <= 1U) {
+      continue;
+    }
+    ++total_net_num;
+    auto result_iter = detailed_result_map.find(dr_net.get_net_idx());
+    if (result_iter != detailed_result_map.end() && !result_iter->second.empty()) {
+      ++routed_net_num;
+    }
+  }
+  for (auto& [net_idx, segment_set] : detailed_result_map) {
     for (Segment<LayerCoord>* segment : segment_set) {
       LayerCoord& first_coord = segment->get_first();
       int32_t first_layer_idx = first_coord.get_layer_idx();

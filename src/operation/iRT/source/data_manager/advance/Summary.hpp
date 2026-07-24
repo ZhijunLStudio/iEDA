@@ -103,6 +103,8 @@ class DRSummary
  public:
   DRSummary() = default;
   ~DRSummary() = default;
+  int32_t routed_net_num = 0;
+  int32_t total_net_num = 0;
   std::map<int32_t, double> routing_wire_length_map;
   double total_wire_length = 0;
   std::map<int32_t, int32_t> cut_via_num_map;

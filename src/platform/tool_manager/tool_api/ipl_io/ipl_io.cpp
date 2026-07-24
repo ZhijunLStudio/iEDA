@@ -17,6 +17,7 @@
 #include "ipl_io.h"
 
 #include "PLAPI.hh"
+#include "PlacementResult.hh"
 #include "builder.h"
 #include "flow_config.h"
 #include "idm.h"
@@ -62,14 +63,14 @@ bool PlacerIO::runPlacement(std::string config, bool enableJsonOutput)
   }
 
   ieda::Stats stats;
-  iPLAPIInst.runFlow();
+  const bool placement_succeeded = ipl::propagatePlacementFlowResult([] { return iPLAPIInst.runFlow(); });
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
 
   // destroyPlacer();
 
-  return true;
+  return placement_succeeded;
 }
 
 bool PlacerIO::runAiPlacement(std::string config, std::string onnx_path, std::string normalization_path)

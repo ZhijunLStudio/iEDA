@@ -688,7 +688,7 @@ void NesterovPlace::initNesInstanceDensitySize()
   }
 }
 
-void NesterovPlace::runNesterovPlace()
+bool NesterovPlace::runNesterovPlace()
 {
   std::cout << std::endl;
   LOG_INFO << "-----------------Start Global Placement-----------------";
@@ -699,12 +699,17 @@ void NesterovPlace::runNesterovPlace()
 
   // main
   NesterovSolve(placable_inst_list);
+  if (_nes_database->_is_diverged) {
+    LOG_ERROR << "Global placement terminated after Nesterov divergence.";
+    return false;
+  }
   PlacerDBInst.updateTopoManager();
   PlacerDBInst.updateGridManager();
 
   double time_delta = gp_status.elapsedRunTime();
   LOG_INFO << "Global Placement Total Time Elapsed: " << time_delta << "s";
   LOG_INFO << "-----------------Finish Global Placement-----------------";
+  return true;
 }
 
 void NesterovPlace::initNesterovPlace(std::vector<NesInstance*>& inst_list)
@@ -1576,7 +1581,7 @@ if ((iter_num > 30 && sum_overflow <= _nes_config.get_target_overflow()) || stop
 
 if (_nes_database->_is_diverged) {
   LOG_ERROR << "Detect divergence, The reason may be parameters setting.";
-  exit(1);
+  return;
 }
 
 notifyPLOverflowInfo(sum_overflow);

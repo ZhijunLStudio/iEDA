@@ -1189,14 +1189,15 @@ void PinAccessor::routePABoxMap(PAModel& pa_model)
   size_t routed_box_num = 0;
   for (std::vector<PABoxId>& pa_box_id_list : pa_model.get_pa_box_id_list_list()) {
     Monitor stage_monitor;
-    int32_t thread_num = omp_get_max_threads();
+    // initPATaskList() and uploadBestResult() mutate shared RTDM GCell indexes.
+    // Keep box routing serial until those indexes support concurrent updates.
+    constexpr int32_t thread_num = 1;
     std::vector<std::map<int32_t, std::map<int32_t, std::vector<Segment<LayerCoord>*>>>> del_result_map_list(thread_num);
     std::vector<std::map<int32_t, std::map<int32_t, std::vector<EXTLayerRect*>>>> del_patch_map_list(thread_num);
     std::vector<std::map<int32_t, std::map<int32_t, std::vector<Segment<LayerCoord>*>>>> add_result_map_list(thread_num);
     std::vector<std::map<int32_t, std::map<int32_t, std::vector<EXTLayerRect*>>>> add_patch_map_list(thread_num);
-#pragma omp parallel for schedule(dynamic, 1)
     for (PABoxId& pa_box_id : pa_box_id_list) {
-      int32_t thread_id = omp_get_thread_num();
+      constexpr int32_t thread_id = 0;
       PABox& pa_box = pa_box_map[pa_box_id.get_x()][pa_box_id.get_y()];
       buildFixedRect(pa_box);
       buildAccessPoint(pa_box);

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 STRICT_GATES = (
     "G7_spef_backed_sta",
     "G7_constraint_coverage",
@@ -33,6 +33,11 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def canonical_sha256(value: Any) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def file_record(path: Path) -> dict[str, Any]:
@@ -451,6 +456,8 @@ def build_quality_summary(
         artifact_paths.append(spef_path)
     artifacts = [file_record(path) for path in artifact_paths if path.is_file() and path.stat().st_size > 0]
     git_commit, dirty = git_identity(repo_root)
+    build_manifest = {"binary": binary_record, "git_commit": git_commit, "dirty": dirty}
+    build_manifest["manifest_sha256"] = canonical_sha256(build_manifest)
     all_passed = all(gates[name]["status"] == "pass" for name in STRICT_GATES)
     any_run = any(item["status"] != "not_run" for item in gates.values())
 
@@ -465,8 +472,10 @@ def build_quality_summary(
         "overall_status": "pass" if all_passed else ("fail" if any_run else "incomplete"),
         "manifest": {
             "inputs": input_records,
-            "build": {"binary": binary_record, "git_commit": git_commit, "dirty": dirty},
+            "input_sha256": canonical_sha256(input_records),
+            "build": build_manifest,
             "artifacts": artifacts,
+            "artifact_sha256": canonical_sha256(artifacts),
         },
         "provenance": {
             "route_iterations": route_iterations,

@@ -17,6 +17,7 @@
 #pragma once
 
 #include "DbInterface.h"
+#include "FixResult.h"
 
 namespace ino {
 using idb::IdbBuilder;
@@ -35,28 +36,28 @@ class FixFanout {
   FixFanout(ino::DbInterface *db_interface);
   ~FixFanout() = default;
 
-  void fixIO();
-  void fixFanout();
+  [[nodiscard]] FixResult fixIO();
+  [[nodiscard]] FixResult fixFanout();
 
  private:
   void checkFanout() {}
 
-  void fixFanout(IdbNet *net);
+  [[nodiscard]] FixResult fixFanout(IdbNet *net);
 
   IdbNet *makeNet(const char *name);
 
   IdbInstance *makeInstance(string master_name, string inst_name);
 
-  void disconnectPin(IdbPin *dpin, IdbNet *dnet);
+  bool disconnectPin(IdbPin *dpin, IdbNet *dnet);
 
-  void connect(IdbInstance *dinst, IdbPin *dpin, IdbNet *dnet);
+  bool connect(IdbPin *dpin, IdbNet *dnet);
 
   /* data */
-  ino::DbInterface *_db_interface;
-  TimingEngine     *_timing_engine;
-  IdbBuilder       *_idb;
-  IdbDesign        *_idb_design;
-  IdbLayout        *_idb_layout;
+  ino::DbInterface *_db_interface = nullptr;
+  TimingEngine     *_timing_engine = nullptr;
+  IdbBuilder       *_idb = nullptr;
+  IdbDesign        *_idb_design = nullptr;
+  IdbLayout        *_idb_layout = nullptr;
 
   int _insert_instance_index = 1;
   int _make_net_index = 1;

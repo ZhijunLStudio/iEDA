@@ -40,17 +40,21 @@ bool NoIO::runNOFixIO(std::string config)
   ieda::Stats stats;
 
   /// set data config
-  NoApiInst.initNO(config);
+  if (!NoApiInst.initNO(config)) {
+    return false;
+  }
   /// reset lib & sdc
   resetConfig(NoApiInst.get_no_config());
 
-  NoApiInst.iNODataInit(dmInst->get_idb_builder(), nullptr);
-  NoApiInst.fixIO();
+  if (!NoApiInst.iNODataInit(dmInst->get_idb_builder(), nullptr)) {
+    return false;
+  }
+  const bool success = NoApiInst.fixIO();
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
 
-  return true;
+  return success;
 }
 
 bool NoIO::runNOFixFanout(std::string config)
@@ -65,17 +69,21 @@ bool NoIO::runNOFixFanout(std::string config)
   ieda::Stats stats;
 
   /// set data config
-  NoApiInst.initNO(config);
+  if (!NoApiInst.initNO(config)) {
+    return false;
+  }
   /// reset lib & sdc
   resetConfig(NoApiInst.get_no_config());
 
-  NoApiInst.iNODataInit(dmInst->get_idb_builder(), nullptr);
-  NoApiInst.fixFanout();
+  if (!NoApiInst.iNODataInit(dmInst->get_idb_builder(), nullptr)) {
+    return false;
+  }
+  const bool success = NoApiInst.fixFanout();
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
 
-  return true;
+  return success;
 }
 
 void NoIO::resetConfig(ino::NoConfig* no_config)

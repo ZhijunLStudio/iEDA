@@ -30,10 +30,10 @@ ECOApi::~ECOApi()
 {
 }
 
-void ECOApi::ecoVia(std::string type)
+ECOViaResult ECOApi::ecoVia(std::string_view type)
 {
   ECOManager eco_manager;
-  eco_manager.ecoVia(type);
+  return eco_manager.ecoVia(type);
 }
 
 }  // namespace ieco

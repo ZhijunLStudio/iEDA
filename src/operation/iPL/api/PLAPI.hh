@@ -26,6 +26,7 @@
 #ifndef IPL_API_H
 #define IPL_API_H
 
+#include "PlacementStatus.hh"
 #include "external_api/ExternalAPI.hh"
 #include "report/PLReporter.hh"
 
@@ -44,12 +45,12 @@ class PLAPI
   static void destoryInst();
 
   void initAPI(std::string pl_json_path, idb::IdbBuilder* idb_builder);
-  void runFlow();
-  void runAiFlow(const std::string& onnx_path, const std::string& normalization_path);
+  bool runFlow();
+  bool runAiFlow(const std::string& onnx_path, const std::string& normalization_path);
   void runIncrementalFlow();
   void insertLayoutFiller();
 
-  void runGP();
+  bool runGP();
   void runMP();
   void runNetworkFlowSpread();
 
@@ -126,6 +127,7 @@ class PLAPI
 
   void enableJsonOutput() { _enable_json_output = true; }
   bool isJsonOutputEnabled() { return _enable_json_output; }
+  const PlacementFlowStatus& lastRunStatus() const { return _flow_status; }
 
   /*****************************Timing-driven Placement: START*****************************/
   double obtainPinEarlySlack(std::string pin_name);
@@ -164,6 +166,7 @@ class PLAPI
   PLReporter* _reporter;
 
   bool _enable_json_output = false;
+  PlacementFlowStatus _flow_status;
 
   PLAPI() = default;
   PLAPI(const PLAPI&) = delete;
@@ -171,6 +174,7 @@ class PLAPI
   ~PLAPI();
   PLAPI& operator=(const PLAPI&) = delete;
   PLAPI& operator=(PLAPI&&) = delete;
+  void writePlacementStatus();
 };
 
 }  // namespace ipl

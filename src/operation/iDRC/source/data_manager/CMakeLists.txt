@@ -21,4 +21,5 @@ target_include_directories(idrc_data_manager
     ${IDRC_DATA_MANAGER}/basic
     ${IDRC_DATA_MANAGER}/design_rule
     ${IDRC_DATA_MANAGER}
+    ${IDRC_MODULE}/rule_validator/coverage
 )

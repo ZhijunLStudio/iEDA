@@ -3,9 +3,9 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 53 · iEDA.ai 面向 Agent 的 EDA 工具架构与新增工具总方案 · v2.2
+# 53 · iEDA.ai 面向 Agent 的 EDA 工具架构与新增工具总方案 · v2.3
 
-> 日期：2026-07-23  
+> 日期：2026-07-24
 > 上位方案：`50-agent-era-eda-master-plan-v1.0.md`、`51-agent-native-eda-detailed-plan-v1.0.md`。  
 > 实施索引：`52-agent-native-implementation-index-ai1.0.md`。  
 > 定位：本文件给出“当前仓库事实”和“目标产品架构”两张图，补齐现有 `*-ai1.0.md` 未明确承接的工具；它是规划，不表示新增模块已经实现。  
@@ -813,10 +813,123 @@ LLM 的系统提示、角色名和自然语言承诺都不是安全边界。所�
 
 ADR 在决策前保持接口抽象，但禁止同时实现多套生产后端。每项记录 hypothesis、benchmark、chosen/rejected、migration 和 rollback；结果同步回 51/52 owner 条目。
 
-## 27. 文档与版本历史
+## 27. 组件端口与实现边界
 
-本文件是架构主图；模块 API/LLD 以 `34`-`39`、`48`-`49`、`54`-`57` 的 `ai1.0` 为准；已有模块以 `10`-`47` 对应文档为准。字段冲突时先修改 owner 文档并记录 schema migration，禁止在 consumer 文档复制后私自演化。
+架构图中的每条边必须落成一个 transport-neutral port。端口只传 immutable ref、typed value 和 `StageResult<T>`；本地对象指针、singleton、工作目录、环境变量和日志文本不能成为跨组件依赖。
 
+| 组件端口 | 最小操作 | 输入 | 输出 | 不允许承担 |
+|---|---|---|---|---|
+| `CapabilityRegistryPort` | `discover/resolve/check_freshness` | actor、query、capability ref | frozen manifest/qualification | 执行工具或放宽权限 |
+| `ContextResolverPort` | `resolve_intent/resolve_scenarios/resolve_tech/resolve_policy` | tenant + immutable refs | validated context bundle | 使用工具私有默认值 |
+| `DesignStatePort` | `resolve/fork/apply/rollback/commit` | snapshot/branch/delta/lease | snapshot ref、touched/dirty/invalidation、commit record | 判断候选 QoR 优劣 |
+| `ExecutionPort` | `prepare/execute/cancel/resume` | resolved invocation + mounts + budget | stage result、artifact refs、resource record | 改 policy 或选择其他 binary |
+| `DomainCapabilityPort` | `inspect/diagnose/propose/materialize/validate` | invocation context + domain payload | observation/proposal/delta/validator result | 隐式 commit 主状态 |
+| `EvaluationPort` | `measure/compare/gate` | frozen subject/context/metric policy | metric bundle、comparison、gate evidence | 签发领域 correctness claim |
+| `VerificationPort` | `plan/run/issue_bundle/check_current` | subject、delta/invalidation、policy | claim results、certificates、bundle | 自建平行 STA/DRC 内核 |
+| `ExperimentPort` | `begin/fork/run/select/commit/cancel` | goal/plan/context/budget | experiment/decision/terminal record | 解释自然语言或修改领域算法 |
+| `ArtifactPort` | `put/get/pin/tombstone` | bytes/manifest/ACL/retention | content ref + integrity metadata | 决定业务 success |
+| `EventJournalPort` | `append/read/subscribe` | aggregate sequence + typed event | durable offset/ordered events | 以投影代替权威 head |
+
+接口实现可以首版同进程，但依赖方向必须与端口一致。`Runtime` 可依赖 `DesignStatePort`，不能链接 iDB writer；`Planner` 可依赖 Registry/Observer 的只读接口，不能依赖 `ExecutionPort` 的任意命令入口；domain adapter 可链接自己的 legacy kernel，不能反向依赖 Planner、Gateway 或 Evaluation。
+
+### 27.1 `PreparedInvocation` 交接点
+
+Gateway 和 Runtime 完成鉴权、manifest/context 解析与预算预留后，才允许产生执行平面唯一接受的对象：
+
+```yaml
+invocation_id: uuid
+idempotency_key: sha256:...
+actor_ref: tenant:subject
+capability_ref: timing.top_paths@sha256:qualification
+context_bundle_ref: cas:context-bundle
+subject_snapshot_ref: sha256:...
+branch_ref: null
+scope_ref: cas:scope
+request_ref: cas:typed-request
+input_mounts:
+  - {artifact_ref: cas:..., mount_name: design, mode: read_only}
+budget_reservation_ref: cas:budget
+worker_profile_ref: cas:worker-profile
+expected_outputs: [timing-path-set@1, execution-log@1]
+deadline: 2026-07-24T18:00:00+08:00
+seed: 17
+```
+
+worker 返回结果前先发布所有声明 artifact，随后原子记录 terminal `StageResult`。如果 worker 丢失，Runtime 以 idempotency key、journal 和 artifact manifest 区分“未开始、执行中、产物已写但未确认、已终态”，不能盲目重跑写操作。
+
+### 27.2 依赖防火墙
+
+| 源 target | 允许依赖 | CI 必须拒绝 |
+|---|---|---|
+| `ieda_agent_contracts` | STL、选定 schema runtime | iDB/tool/platform/shell |
+| `ieda_design_state` | contracts、iDB stable-ID/file adapter | Planner/model/domain optimizer |
+| `ieda_agent_runtime` | contracts、port interfaces、journal/CAS client | tool singleton、Tcl command |
+| `ieda_agent_gateway` | contracts、registry/runtime client、auth | domain kernel、DB writer |
+| `<domain>_agent_adapter` | contracts、domain kernel、worker SDK | Planner、Gateway、commit catalog |
+| `ieda_verification` | contracts、validator ports、policy | 复制 domain kernel |
+| `ieda_planner` | contracts、registry/observer client | state writer、shell、issuer key |
+
+该表用 include/link allowlist 和最小链接测试落实。为绕开循环依赖而把公共类型移回某个 domain target 视为架构回归。
+
+## 28. 首个可执行参考装配
+
+首个开发环境只需要单进程控制面加隔离 worker，不需要先拆微服务。必须提供一个不依赖 LLM、不依赖商业 license 的确定性 reference assembly，用小设计贯通真实端口：
+
+```text
+AgentGateway
+  -> LocalCapabilityRegistry
+  -> AgentRuntime + EmbeddedJournal + LocalCAS
+  -> DesignStateService + iDB adapter
+  -> ProcessWorkerPool
+       -> iSTA read adapter
+       -> iTO proposal/materialization adapter
+       -> iPL local-legalize adapter
+       -> iRCX dirty-RC adapter
+  -> EvaluationService
+  -> VerificationHub
+```
+
+### 28.1 启动与健康顺序
+
+1. 校验 schema bundle、Registry snapshot、policy 和 issuer trust roots；
+2. 打开 CAS/journal，恢复未完成 aggregate，验证 design head 与 outbox；
+3. 注册 worker profile，只加载 digest 与 qualification 均匹配的 adapter；
+4. 解析只读 Intent/Scenario/Tech context 并跑 input-integrity validator；
+5. 发布 R0/R1 capabilities；R2 仅在 branch/crash/rollback suite 通过后发布；
+6. R3 默认关闭，直到 current certificate bundle 和 atomic commit suite 通过；
+7. 对外 health 同时报告 `AVAILABLE/DEGRADED/READ_ONLY/UNAVAILABLE` 及被禁用 facet。
+
+启动失败不得通过空 Registry、默认 PDK、跳过 recovery 或禁用 validator 来获得绿色 health。
+
+### 28.2 两条 release trace
+
+只读 trace 必须先通过：
+
+```text
+discover -> resolve contexts -> resolve snapshot -> execute top_paths
+  -> normalize MetricRecord -> persist evidence -> replay same result
+```
+
+写 trace 随后在相同 assembly 中通过：
+
+```text
+begin experiment -> propose Resize/SwapVt -> fork -> apply journaled delta
+  -> local legalize -> dirty RC -> dirty STA -> evaluation compare
+  -> issue required bundle -> deterministic select -> head CAS commit
+  -> publish invalidation/trajectory -> replay decision and commit
+```
+
+每个箭头至少有一个 contract fixture、一个成功集成例和一个失败注入例。写 trace 任一步失败时，主 head、scope 外对象和冻结 intent/tech refs 必须不变；已完成的 stage/artifact 仍需可审计。
+
+### 28.3 架构验收记录
+
+reference assembly 的 release artifact 至少包含：build digest、schema bundle、Registry snapshot、context bundle、golden input snapshot、完整 event trace、所有 StageResult、certificate bundle、DecisionRecord、CommitRecord、资源 trace 和 replay report。缺少任一项时只能称为 demo，不能作为 Agent-native MVP 发布。
+
+## 29. 文档与版本历史
+
+本文件是架构主图；模块 API/LLD 以 `34`-`39`、`48`-`49`、`54`-`57` 的对应实施文档为准；已有模块以 `10`-`47` 对应文档为准。字段冲突时先修改 owner 文档并记录 schema migration，禁止在 consumer 文档复制后私自演化。尚未创建或仍在深化的文档不得被索引为“已完成”。
+
+- v2.3（2026-07-24）：增加 transport-neutral 组件端口、`PreparedInvocation` 交接、构建依赖防火墙，以及可直接落地的单进程控制面/隔离 worker reference assembly 和 release trace。
 - v2.2（2026-07-23）：按模块深化计划补充公共类型所有权、聚合/事件/Saga 一致性、控制与执行平面、威胁模型、architecture fitness functions 和 ADR 实验表。
 - v2.1（2026-07-23）：增加十条机器架构不变量、read/propose/commit 控制序列、显式降级模式、部署拓扑与首批 ADR。
 - v2.0（2026-07-23）：基于 `51`、全部现有 `*-ai1.0.md` 与当前源码入口审计，新增 Intent/Scenario、Verification Hub、Planner、Technology Knowledge、Experience Memory、External Bridge，以及 formal/SI/reliability/thermal/DFM/3D-package 工具规划；明确 CURRENT/ADAPTER-FIRST/GREENFIELD 双视图与分阶段门禁。

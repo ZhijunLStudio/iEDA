@@ -15,3 +15,5 @@ add_executable(design_state_test EXCLUDE_FROM_ALL
 )
 
 target_link_libraries(design_state_test PRIVATE design_state)
+
+add_test(NAME design_state_test COMMAND design_state_test)

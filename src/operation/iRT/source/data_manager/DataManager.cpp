@@ -1594,6 +1594,14 @@ void DataManager::printConfig()
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_notification);
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_timing");
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_timing);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "dr_plateau_window");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.dr_plateau_window);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "dr_plateau_min_improvement");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.dr_plateau_min_improvement);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "dr_plateau_hotspot_change");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.dr_plateau_hotspot_change);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "fail_on_residual_drc");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.fail_on_residual_drc);
   // **********        RT         ********** //
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(0), "RT_CONFIG_BUILD");
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "log_file_path");

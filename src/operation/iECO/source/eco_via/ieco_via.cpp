@@ -16,6 +16,8 @@
 // ***************************************************************************************
 #include "ieco_via.h"
 
+#include <iostream>
+
 #include "ieco_dm.h"
 #include "ieco_via_init.h"
 #include "ieco_via_repair.h"
@@ -37,37 +39,33 @@ void ECOVia::init()
   via_init.initData();
 }
 
-int ECOVia::repair(std::string type)
+ECOViaResult ECOVia::repair(std::string_view type)
 {
-  ECOViaType enum_type;
-  if (type == eco_repair_via_by_shape) {
-    enum_type = ECOViaType::kECOViaByShape;
-  } else if (type == eco_repair_via_by_pattern) {
-    enum_type = ECOViaType::kECOViaByPattern;
-  } else {
-    enum_type = ECOViaType::kECOViaByShape;
+  const ECOViaRequest request = parseECOViaRequest(type);
+  if (request.status == ECOViaStatus::kUnsupported) {
+    std::cerr << "iECO ERROR: via repair type '" << type << "' is not implemented" << std::endl;
+    return {request.status, 0};
+  }
+  if (request.status == ECOViaStatus::kInvalidType) {
+    std::cerr << "iECO ERROR: unknown via repair type '" << type << "' (expected 'shape')" << std::endl;
+    return {request.status, 0};
   }
 
-  return repair(enum_type);
+  init();
+  return repair(request.type);
 }
 
-int ECOVia::repair(ECOViaType type)
+ECOViaResult ECOVia::repair(ECOViaType type)
 {
-  int repair_num = 0;
-
   ECOViaRepair via_repair(_data_manager);
   switch (type) {
     case ECOViaType::kECOViaByShape:
-      repair_num = via_repair.repairByShape();
-      break;
+      return {ECOViaStatus::kSuccess, via_repair.repairByShape()};
     case ECOViaType::kECOViaByPattern:
-      repair_num = via_repair.repairByPattern();
-      break;
+      return {ECOViaStatus::kUnsupported, 0};
     default:
-      break;
+      return {ECOViaStatus::kInvalidType, 0};
   }
-
-  return repair_num;
 }
 
 }  // namespace ieco

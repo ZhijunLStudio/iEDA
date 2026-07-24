@@ -6,6 +6,24 @@ else()
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
+add_library(idrc_rule_coverage
+    ${IDRC_MODULE}/rule_validator/coverage/RuleCoverage.cpp
+)
+
+target_include_directories(idrc_rule_coverage
+    PUBLIC
+    ${IDRC_MODULE}/rule_validator/coverage
+)
+
+add_executable(idrc_rule_coverage_test EXCLUDE_FROM_ALL
+    ${IDRC_MODULE}/rule_validator/tests/RuleCoverageTest.cpp
+)
+
+target_link_libraries(idrc_rule_coverage_test
+    PRIVATE
+    idrc_rule_coverage
+)
+
 add_library(idrc_rule_validator
     ## module rule_validator
     ${IDRC_MODULE}/rule_validator/RuleValidator.cpp
@@ -39,6 +57,7 @@ add_library(idrc_rule_validator
 
 target_link_libraries(idrc_rule_validator
     PUBLIC
+    idrc_rule_coverage
     idrc_data_manager
     idrc_module
     idrc_toolkit

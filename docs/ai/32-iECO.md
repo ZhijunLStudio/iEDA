@@ -3,9 +3,9 @@ Copyright (c) 2026-2030 Southeast University
 Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
-# 32 · iECO 工程变更 · 商业对标方案 · rv2.1
+# 32 · iECO 工程变更 · 商业对标方案 · rv2.2
 
-> 文档号：32-rv2.1　　版本：rv2.1（实现评审优化）　　里程碑：**双对标 —— ICC2/Innovus timing ECO 原子闭环 × Conformal ECO 等价修复精度**
+> 文档号：32-rv2.2　　版本：rv2.2（M0 失败语义闭环）　　里程碑：**双对标 —— ICC2/Innovus timing ECO 原子闭环 × Conformal ECO 等价修复精度**
 > 体例：`01-ai-doc-conventions-rv1.md`；深度对标：`27-iSTA-rv2.0.md`（逐 kernel 走读 + 诚实归因 + 被否方案）
 > 商业金标：**ICC2 / Innovus（timing ECO 闭环与调用可靠性）**；**Conformal ECO（功能等价修复精度）**；门禁：**G16 / G17**
 > 上游：`22-iPL`、`25-iTO`、`26-iRT`、`27-iSTA`　下游：`12-evaluation`、`40-platform`
@@ -24,6 +24,7 @@ iEDA is licensed under Mulan PSL v2.
 | rv1.0 / v2.0 | 2026-07-20 | **审计**：生产 API 仅 `ECOApi::ecoVia`（`ieco_api.cpp:33-36`）→ `ECOVia` shape/pattern（`ieco_via.cpp:43-45`）。**无** diagnose→iTO→routeECO 编排——旧稿「技术架构」多为目标态。 |
 | **rv2.0** | **2026-07-21** | **大改（对照 27-iSTA-rv2.0.md 深度重写，双对标线拆解）**。核心修订五条：**(1)** rv1.0 把 iECO 当成「缺时序/功能 ECO」来审——**代码级核实后发现头号结构症结是零编排能力**：仅 `ECOApi::ecoVia`（`ieco_api.cpp:33-36`）一个生产接口，直连 via shape/pattern 修复（`ieco_via_repair.cpp:37-75`），**无** timing ECO 所需的「诊断→提案→合法→布线→验证」循环编排器（§1.3）；**(2)** 新增 **平台原语缺口审计**（§1.4）：timing ECO 需要的五大原语——iSTA 增量（`incrUpdateTiming` 存在但下游 10:1 不用，见 27-iSTA-rv2.0.md §1.4）、iTO veto 提案（接口无）、iPL 增量合法（API 无）、iRT 增量布线（`RTInterface::updateTiming` 死骨架，`RTInterface.cpp:1522+` 函数体注释）、事务回滚（无）——**五缺四半**；**(3)** via repair 算法走读（§1.2/§4.2）：`repairByShape` 为每个 via 遍历候选 via master（`ieco_via_repair.cpp:37-68`，OMP 并行），按方向/连通性匹配最佳形状；`repairByPattern`（`:71-76`）**空实现**（仅 `return 0`）；**(4)** 全文按**双对标线**重组：ICC2/Innovus 线 = timing ECO 闭环（诊断→优化→增量legalize+route+STA → accept/rollback，G16/G17 主战场），Conformal 线 = 功能 ECO 等价修复（netlist patch → LEC 验证，Phase C 后置）；**(5)** 补齐 27 号文档体例要素：§4.8 模块状态一览（成熟度/边界/复用）、§5 双档配置表、§8 调用方契约、§10 双看板（timing ECO 可靠性 × functional ECO 精度）、§14 未验证/不要重走。**缺省新特性关闭 → 零回归**。 |
 | **rv2.1** | **2026-07-23** | 实现评审：纠正 via repair 伪码与 timing ECO 接受条件方向；事务扩为五层状态原子提交；明确 dirty RC/STA、local DRC、冻结哈希和 full oracle；functional ECO 以正式等价检查而非 LVS 作为功能门禁。 |
+| **rv2.2** | **2026-07-24** | 完成 ECO-0 的请求失败语义：`shape` 返回成功状态与独立修复计数；未实现的 `pattern` 返回 `kUnsupported`；未知 type 返回 `kInvalidType`，不再静默回落到 shape；API/manager/TCL 逐层传播失败。新增 `ieco_via_request_test` 锁住分发、零修复成功和 unsupported 非成功语义。shape 修复后的 DRC 改善量仍未验证。 |
 
 ---
 
@@ -41,7 +42,7 @@ iEDA is licensed under Mulan PSL v2.
 | kernel | 现状 | 判定 |
 |---|---|---|
 | eco via by shape | 有实现 | **窄域可用，仍需 DRC 改善验证** |
-| eco via by pattern | 空实现（return 0） | **unsupported，禁止假成功** |
+| eco via by pattern | 内核仍为空；入口已返回 `kUnsupported`，TCL 返回失败（rv2.2） | **失败语义已闭环；算法仍未实现** |
 | timing ECO 编排 | 无 | ★ 目标 |
 | functional patch | 无 | ★ Phase C |
 
@@ -171,6 +172,8 @@ setup/hold WNS/TNS、DRV、area/power、local DRC、改动实例/网/shape 数�
 
 `begin_txn → apply → local place/legal → route_eco → local DRC → dirty RC → setup+hold STA → joint gate → commit|rollback → periodic full oracle`。
 
+已落地的 via 请求子状态机：`parse type → shape: init+repair+SUCCESS(count>=0) | pattern: UNSUPPORTED | unknown: INVALID_TYPE`。只有 `SUCCESS` 映射为 TCL 成功；“成功且修复 0 个”与“不支持”不再共用整数 `0`。
+
 ---
 
 ## 8. Cascade
@@ -189,7 +192,7 @@ KH-ECO-01 金属可修；KH-ECO-02 时序 ECO= iTO+iRT incr。
 
 | 指标 | 门槛 | G |
 |---|---|---|
-| via ECO 可跑 | 有断言 | — |
+| via ECO 请求语义 | `ieco_via_request_test` 通过；pattern/unknown 非成功，shape 的 0 修复仍成功 | G14 |
 | timing ECO E2E | 用例绿 | G16/G17 |
 | 扰动最小 | 记录 | |
 
@@ -206,7 +209,7 @@ KH-ECO-01 金属可修；KH-ECO-02 时序 ECO= iTO+iRT incr。
 ### 10.3 演进
 
 ```text
-M0 via 路径审计+产物断言
+M0 via 请求分发/失败语义完成；shape 产物与 DRC 改善断言待补
 M1 timing ECO E2E（平台原语）
 M2 事务/冻结层
 M3 functional 最小
@@ -235,7 +238,7 @@ Phase C 主战场；M0 可提前。
 
 ## 14. 未验证
 
-via repair 对 DRC 的改善量；tcl_eco 是否暴露；与 iRT ECO API 签名对齐。
+via repair 对 DRC 的改善量；shape 路径端到端产物；与 iRT ECO API 签名对齐。`eco_repair_via` 已由 `tcl_register_eco.h` 注册并由 `tcl_eco.cpp` 调用，不再列为未验证。
 
 **不要重走**：在 iECO 内复制 Nesterov/DR。
 
@@ -271,7 +274,7 @@ freeze_layers 外禁止改几何
 
 | PR | 内容 |
 |---|---|
-| ECO-0 | via 产物断言 |
+| ECO-0 | via 请求状态与 pattern/unknown 失败语义已完成；shape 产物/DRC 改善断言待补 |
 | ECO-1 | ecoTiming 门面 |
 | ECO-2 | 冻结层 |
 | ECO-3 | functional 最小 |
@@ -279,10 +282,10 @@ freeze_layers 外禁止改几何
 
 ### via ECO 类型
 
-| type | 宏 | 含义 |
+| type | 请求 token | 含义 |
 |---|---|---|
-| shape | `eco_repair_via_by_shape` | 按形状修 |
-| pattern | `eco_repair_via_by_pattern` | **空实现/unsupported**；实现前调用须失败而非返回“修复 0 个但成功” |
+| shape | `shape` | 按形状修 |
+| pattern | `pattern` | **空实现/unsupported**；rv2.2 已返回失败且不初始化/修改设计 |
 
 ### 金属可修层示例配置
 
@@ -315,4 +318,4 @@ checklist：via shape 断言与 pattern unsupported；ecoTiming 门面；冻结�
 
 ---
 
-**文档状态**：rv2.1 实现评审完成；现状断言仍须有 file:line，目标设计须由机器门禁验证。
+**文档状态**：rv2.2 已完成 via 请求失败语义闭环；shape 修复产物/DRC 改善与 timing ECO 目标态仍须由机器门禁验证。

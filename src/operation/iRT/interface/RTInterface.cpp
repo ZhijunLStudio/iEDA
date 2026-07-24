@@ -365,6 +365,19 @@ void RTInterface::wrapConfig(std::map<std::string, std::any>& config_map)
   RTDM.getConfig().output_inter_result = RTUTIL.getConfigValue<int32_t>(config_map, "-output_inter_result", 0);
   RTDM.getConfig().enable_notification = RTUTIL.getConfigValue<int32_t>(config_map, "-enable_notification", 0);
   RTDM.getConfig().enable_timing = RTUTIL.getConfigValue<int32_t>(config_map, "-enable_timing", 0);
+  RTDM.getConfig().dr_plateau_window = RTUTIL.getConfigValue<int32_t>(config_map, "-dr_plateau_window", 3);
+  RTDM.getConfig().dr_plateau_min_improvement = RTUTIL.getConfigValue<double>(config_map, "-dr_plateau_min_improvement", 0.02);
+  RTDM.getConfig().dr_plateau_hotspot_change = RTUTIL.getConfigValue<double>(config_map, "-dr_plateau_hotspot_change", 0.25);
+  RTDM.getConfig().fail_on_residual_drc = RTUTIL.getConfigValue<int32_t>(config_map, "-fail_on_residual_drc", 0);
+  if (RTDM.getConfig().dr_plateau_window < 2) {
+    RTLOG.error(Loc::current(), "-dr_plateau_window must be at least 2!");
+  }
+  if (RTDM.getConfig().dr_plateau_min_improvement < 0.0 || RTDM.getConfig().dr_plateau_min_improvement > 1.0) {
+    RTLOG.error(Loc::current(), "-dr_plateau_min_improvement must be in [0, 1]!");
+  }
+  if (RTDM.getConfig().dr_plateau_hotspot_change < 0.0 || RTDM.getConfig().dr_plateau_hotspot_change > 1.0) {
+    RTLOG.error(Loc::current(), "-dr_plateau_hotspot_change must be in [0, 1]!");
+  }
   /////////////////////////////////////////////
 }
 

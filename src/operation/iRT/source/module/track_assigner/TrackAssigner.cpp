@@ -212,7 +212,8 @@ void TrackAssigner::assignTAPanelMap(TAModel& ta_model)
   size_t assigned_panel_num = 0;
   for (std::vector<TAPanelId>& ta_panel_id_list : ta_model.get_ta_panel_id_list_list()) {
     Monitor stage_monitor;
-#pragma omp parallel for
+    // Panel routing removes and uploads shared RTDM results and violations.
+    // Serialize this loop until the GCell pointer indexes are thread-safe.
     for (TAPanelId& ta_panel_id : ta_panel_id_list) {
       TAPanel& ta_panel = layer_panel_list[ta_panel_id.get_layer_idx()][ta_panel_id.get_panel_idx()];
       buildFixedRect(ta_panel);

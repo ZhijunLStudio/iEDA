@@ -1,7 +1,81 @@
 {
-  "version": "1.0",
-  "effort": "standard",
-  "report_points": ["floorplan", "placement", "cts", "post_route"],
+  "version": "1.1",
+  "protocol_id": "aes13-commercial-parity-v1.1",
+  "status": "frozen",
+  "primary_pnr_by_design": {
+    "aes": "innovus",
+    "aes_sky130_a": "innovus",
+    "aes_sky130_b": "innovus",
+    "aes_sky130_t": "innovus",
+    "aes_nangate45_a": "innovus",
+    "aes_nangate45_b": "innovus",
+    "aes_nangate45_t": "innovus",
+    "aes_asap7_a": "innovus",
+    "aes_asap7_b": "innovus",
+    "aes_asap7_t": "innovus",
+    "aes_ics55_a": "innovus",
+    "aes_ics55_b": "innovus",
+    "aes_ics55_t": "innovus"
+  },
+  "implementation": {
+    "ieda_effort": "standard",
+    "commercial_effort": "standard",
+    "fixed_seed": 42
+  },
+  "report_points": ["post_place", "post_cts", "post_route", "signoff_sta"],
+  "metric_schema": {
+    "path": "schemas/qor_metrics.schema.json",
+    "sha256": "d940eea64bb1fd938ff6b4595835fcdb10667f3e49798b0027ec5f43fc342373"
+  },
+  "deltas": {
+    "timing": {"direction": "higher", "relative_tolerance": 0.05, "absolute_tolerance_ps": 10.0},
+    "area": {"direction": "lower", "relative_tolerance": 0.05},
+    "wirelength": {"direction": "lower", "relative_tolerance": 0.08},
+    "power": {"direction": "lower", "relative_tolerance": 0.05},
+    "drc": {"direction": "exact", "relative_tolerance": 0.0, "required_value": 0},
+    "cts": {"direction": "lower", "relative_tolerance": 0.05}
+  },
+  "performance": {
+    "profile_schema": {
+      "path": "schemas/performance_profile.schema.json",
+      "sha256": "0943df4fd7e3613285486841eb9d5fd5a609896c5863ff803a043861723e9eb9"
+    },
+    "threads": 8,
+    "exclusive_host_required": true,
+    "repeats": 5,
+    "cache_modes": ["cold", "warm"],
+    "required_stages": [
+      "iFP",
+      "iPL-GP",
+      "iPL-DP",
+      "iCTS",
+      "iTO",
+      "iRT-GR",
+      "iRT-TR",
+      "iRT-DR",
+      "iSTA",
+      "iRCX",
+      "iDRC",
+      "iPW",
+      "e2e"
+    ],
+    "memory_source": "cgroup_v2",
+    "g21_enable": false,
+    "rerun_mad_ratio_max": 0.08,
+    "daily_e2e_ratio_max": 1.5,
+    "daily_le_one_count_min": 2,
+    "scale_e2e_ratio_max": 3.0
+  },
+  "manifest": {
+    "hash_algorithm": "sha256",
+    "dirty_build_policy": "record",
+    "required_fields": [
+      "input_sha256",
+      "binary_sha256",
+      "build_manifest_sha256",
+      "artifact_sha256"
+    ]
+  },
   "strict_gates": [
     "G7_spef_backed_sta",
     "G7_constraint_coverage",
@@ -14,15 +88,35 @@
   "route_iteration_sweep": [1, 3, 5],
   "benchmark_sets": {
     "smoke": ["aes_asap7_a"],
-    "daily": ["aes_sky130_a", "aes_nangate45_a", "aes_asap7_a", "aes_ics55_a"],
-    "weekly": ["aes13"],
+    "daily": [
+      "aes_sky130_a",
+      "aes_sky130_b",
+      "aes_nangate45_a",
+      "aes_asap7_a",
+      "aes_ics55_a"
+    ],
+    "weekly": [
+      "aes",
+      "aes_sky130_a",
+      "aes_sky130_b",
+      "aes_sky130_t",
+      "aes_nangate45_a",
+      "aes_nangate45_b",
+      "aes_nangate45_t",
+      "aes_asap7_a",
+      "aes_asap7_b",
+      "aes_asap7_t",
+      "aes_ics55_a",
+      "aes_ics55_b",
+      "aes_ics55_t"
+    ],
     "scale": [],
     "holdout": []
   },
   "signoff": {
-    "sta": "external_or_correlated_iSTA",
-    "rcx": "external_or_correlated_iRCX",
-    "drc": "external_or_correlated_iDRC",
-    "power": "activity_backed_iPA"
+    "sta": "pt",
+    "rcx": "starrc",
+    "drc": "calibre",
+    "power": "ptpx"
   }
 }

@@ -15,8 +15,8 @@
 // See the Mulan PSL v2 for more details.
 // ***************************************************************************************
 #pragma once
-#include <map>
 #include <string>
+#include <string_view>
 
 namespace ieco {
 enum ECOViaType
@@ -27,8 +27,40 @@ enum ECOViaType
   kECOViaMax
 };
 
-#define eco_repair_via_by_shape "shape"
-#define eco_repair_via_by_pattern "pattern"
+inline constexpr std::string_view kEcoRepairViaByShape = "shape";
+inline constexpr std::string_view kEcoRepairViaByPattern = "pattern";
+
+enum class ECOViaStatus
+{
+  kSuccess,
+  kUnsupported,
+  kInvalidType
+};
+
+struct ECOViaRequest
+{
+  ECOViaStatus status = ECOViaStatus::kInvalidType;
+  ECOViaType type = ECOViaType::kECONone;
+};
+
+struct ECOViaResult
+{
+  ECOViaStatus status = ECOViaStatus::kInvalidType;
+  int repaired_count = 0;
+
+  [[nodiscard]] bool ok() const { return status == ECOViaStatus::kSuccess; }
+};
+
+[[nodiscard]] inline ECOViaRequest parseECOViaRequest(std::string_view type)
+{
+  if (type == kEcoRepairViaByShape) {
+    return {ECOViaStatus::kSuccess, ECOViaType::kECOViaByShape};
+  }
+  if (type == kEcoRepairViaByPattern) {
+    return {ECOViaStatus::kUnsupported, ECOViaType::kECOViaByPattern};
+  }
+  return {ECOViaStatus::kInvalidType, ECOViaType::kECONone};
+}
 
 class EcoDataManager;
 
@@ -39,11 +71,11 @@ class ECOVia
   ~ECOVia();
 
   void init();
-  int repair(std::string type);
+  [[nodiscard]] ECOViaResult repair(std::string_view type);
 
  private:
   EcoDataManager* _data_manager;
-  int repair(ECOViaType type = ECOViaType::kECOViaByShape);
+  ECOViaResult repair(ECOViaType type);
 };
 
 }  // namespace ieco

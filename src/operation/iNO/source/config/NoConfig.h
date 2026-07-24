@@ -56,6 +56,25 @@ class NoConfig {
   int                   get_max_fanout() const { return _max_fanout; }
   const string         &get_report_file() const { return _report_file; }
 
+  [[nodiscard]] bool validate(string *error = nullptr) const {
+    if (error != nullptr) {
+      error->clear();
+    }
+    if (_insert_buffer.find_first_not_of(" \t\r\n") == string::npos) {
+      if (error != nullptr) {
+        *error = "insert_buffer must name a buffer cell master";
+      }
+      return false;
+    }
+    if (_max_fanout < 2) {
+      if (error != nullptr) {
+        *error = "max_fanout must be at least 2";
+      }
+      return false;
+    }
+    return true;
+  }
+
  private:
   // input
   vector<string> _lef_files_path;
@@ -66,7 +85,7 @@ class NoConfig {
   string         _report_file;
 
   string _insert_buffer;
-  int    _max_fanout;
+  int    _max_fanout = 30;
 
   // output
   string _out_def_path;

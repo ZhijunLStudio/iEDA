@@ -19,6 +19,7 @@
 #include "ChangeType.hpp"
 #include "Config.hpp"
 #include "DRBoxId.hpp"
+#include "DRConvergence.hpp"
 #include "DRIterParam.hpp"
 #include "DRModel.hpp"
 #include "DRNet.hpp"
@@ -140,6 +141,8 @@ class DetailedRouter
   std::vector<Violation> getRouteViolationList(DRModel& dr_model);
   void updateBestResult(DRModel& dr_model);
   bool stopIteration(DRModel& dr_model, std::vector<DRIterParam>& dr_iter_param_list);
+  DRIterationState buildConvergenceState(DRModel& dr_model);
+  void outputConvergenceJson(const DRConvergenceTracker& tracker, bool final_state);
   void selectBestResult(DRModel& dr_model);
   void patchFinalMinArea(DRModel& dr_model);
   void buildFinalPatchBox(DRModel& dr_model, DRBox& dr_box);

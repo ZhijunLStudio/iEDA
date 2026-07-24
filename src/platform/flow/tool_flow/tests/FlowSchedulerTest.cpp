@@ -101,6 +101,45 @@ void testProductsAndSuccessStamp()
   expect(success.profile().at("route").wall_ms >= 0.0, "successful stage must record wall time");
 }
 
+void testRestartRestoreRequiresMatchingIdentityAndProducts()
+{
+  const auto work_dir = testDirectory("restore");
+  int run_count = 0;
+  FlowScheduler initial(work_dir);
+  initial.setRunIdentity("binary-and-input-manifest-a");
+  initial.registerStage({"route", {}, {"route.def"}, [&] {
+                           ++run_count;
+                           std::ofstream output(work_dir / "route.def");
+                           output << "VERSION 5.8 ;\n";
+                           return static_cast<bool>(output);
+                         }, {}, {}});
+  expect(initial.run().ok() && run_count == 1, "initial run must execute and publish its product");
+
+  FlowScheduler resumed(work_dir);
+  resumed.setRunIdentity("binary-and-input-manifest-a");
+  resumed.registerStage({"route", {}, {"route.def"}, [&] {
+                           ++run_count;
+                           return true;
+                         }, {}, {}});
+  const auto restored = resumed.restoreRunState();
+  expect(restored == std::vector<std::string>{"route"}, "matching restart must restore the completed stage");
+  expect(resumed.run().ok() && run_count == 1, "restored stage must not execute again");
+
+  FlowScheduler changed_identity(work_dir);
+  changed_identity.setRunIdentity("binary-and-input-manifest-b");
+  changed_identity.registerStage({"route", {}, {"route.def"}, [] { return true; }, {}, {}});
+  expect(changed_identity.restoreRunState().empty(), "different run identity must invalidate the checkpoint");
+
+  {
+    std::ofstream changed(work_dir / "route.def", std::ios::app);
+    changed << "# changed\n";
+  }
+  FlowScheduler changed_product(work_dir);
+  changed_product.setRunIdentity("binary-and-input-manifest-a");
+  changed_product.registerStage({"route", {}, {"route.def"}, [] { return true; }, {}, {}});
+  expect(changed_product.restoreRunState().empty(), "changed product must invalidate the checkpoint");
+}
+
 }  // namespace
 
 int main()
@@ -110,6 +149,7 @@ int main()
     testOutOfOrderPlanDoesNotRun();
     testFailureAbortsChain();
     testProductsAndSuccessStamp();
+    testRestartRestoreRequiresMatchingIdentityAndProducts();
     std::cout << "FlowScheduler tests passed\n";
     return 0;
   } catch (const std::exception& error) {

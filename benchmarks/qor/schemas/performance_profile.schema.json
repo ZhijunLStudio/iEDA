@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ieda.ai/schemas/performance_profile.schema.json",
+  "title": "iEDA commercial-parity performance profile record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "tool_role",
+    "tool",
+    "design",
+    "stage",
+    "run_id",
+    "repeat",
+    "cache_mode",
+    "wall_sec",
+    "user_cpu_sec",
+    "system_cpu_sec",
+    "threads",
+    "hostname",
+    "binary_sha256",
+    "build_manifest_sha256",
+    "hardware_manifest_sha256",
+    "input_manifest_sha256",
+    "exclusive_host",
+    "status",
+    "comparable"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "tool_role": {"enum": ["ieda", "commercial"]},
+    "tool": {"type": "string", "minLength": 1},
+    "design": {"type": "string", "minLength": 1},
+    "stage": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "repeat": {"type": "integer", "minimum": 1},
+    "cache_mode": {"enum": ["cold", "warm"]},
+    "wall_sec": {"type": "number", "exclusiveMinimum": 0},
+    "user_cpu_sec": {"type": "number", "minimum": 0},
+    "system_cpu_sec": {"type": "number", "minimum": 0},
+    "process_peak_bytes": {"type": "integer", "minimum": 0},
+    "threads": {"type": "integer", "minimum": 1},
+    "hostname": {"type": "string", "minLength": 1},
+    "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "build_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "hardware_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "exclusive_host": {"type": "boolean"},
+    "timestamp": {"type": "string", "minLength": 1},
+    "status": {"enum": ["success", "failed"]},
+    "comparable": {"type": "boolean"},
+    "non_comparable_reason": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"comparable": {"const": false}}},
+      "then": {"required": ["non_comparable_reason"]}
+    }
+  ]
+}

@@ -17,6 +17,8 @@
 
 #include "DRCInterface.hpp"
 
+#include <array>
+
 #include "AdjacentCutSpacingRule.hpp"
 #include "DataManager.hpp"
 #include "GDSPlotter.hpp"
@@ -29,6 +31,43 @@
 #include "idm.h"
 
 namespace idrc {
+
+namespace {
+
+auto getEngineRuleNames() -> std::set<std::string>
+{
+  constexpr std::array<ViolationType, 26> rule_types = {
+      ViolationType::kAdjacentCutSpacing,       ViolationType::kCornerFillSpacing,
+      ViolationType::kCornerSpacing,            ViolationType::kCutEOLSpacing,
+      ViolationType::kCutShort,                 ViolationType::kDifferentLayerCutSpacing,
+      ViolationType::kEndOfLineSpacing,         ViolationType::kEnclosure,
+      ViolationType::kEnclosureEdge,            ViolationType::kEnclosureParallel,
+      ViolationType::kFloatingPatch,            ViolationType::kJogToJogSpacing,
+      ViolationType::kMaximumWidth,             ViolationType::kMaxViaStack,
+      ViolationType::kMetalShort,               ViolationType::kMinHole,
+      ViolationType::kMinimumArea,              ViolationType::kMinimumCut,
+      ViolationType::kMinimumWidth,             ViolationType::kMinStep,
+      ViolationType::kNonsufficientMetalOverlap, ViolationType::kNotchSpacing,
+      ViolationType::kOffGridOrWrongWay,        ViolationType::kOutOfDie,
+      ViolationType::kParallelRunLengthSpacing, ViolationType::kSameLayerCutSpacing};
+
+  std::set<std::string> names;
+  for (const auto rule_type : rule_types) {
+    names.insert(GetViolationTypeName()(rule_type));
+  }
+  return names;
+}
+
+auto getLoadedRuleNames() -> std::set<std::string>
+{
+  std::set<std::string> names;
+  for (const auto rule_type : DRCDM.getDatabase().get_exist_rule_set()) {
+    names.insert(GetViolationTypeName()(rule_type));
+  }
+  return names;
+}
+
+}  // namespace
 
 // public
 
@@ -131,6 +170,12 @@ std::vector<ids::Violation> DRCInterface::getViolationList(const std::vector<ids
                                                            const std::set<std::string>& ids_check_type_set,
                                                            const std::vector<ids::Shape>& ids_check_region_list)
 {
+  _last_rule_coverage = RuleCoverageReport::build(getEngineRuleNames(), getLoadedRuleNames(), ids_check_type_set);
+  if (!_last_rule_coverage.canRun()) {
+    outputRuleCoverageJson();
+    DRCLOG.error(Loc::current(), "DRC rule selection refused: ", _last_rule_coverage.refusalSummary());
+  }
+
   std::vector<DRCShape> drc_env_shape_list;
   drc_env_shape_list.reserve(ids_env_shape_list.size());
   for (const ids::Shape& ids_env_shape : ids_env_shape_list) {
@@ -142,7 +187,7 @@ std::vector<ids::Violation> DRCInterface::getViolationList(const std::vector<ids
     drc_result_shape_list.push_back(convertToDRCShape(ids_result_shape));
   }
   std::set<ViolationType> drc_check_type_set;
-  for (std::string ids_check_type : ids_check_type_set) {
+  for (const std::string& ids_check_type : _last_rule_coverage.getChecked()) {
     drc_check_type_set.insert(GetViolationTypeByName()(ids_check_type));
   }
   std::vector<DRCShape> drc_check_region_list;
@@ -163,6 +208,7 @@ std::vector<ids::Violation> DRCInterface::getViolationList(const std::vector<ids
     ids_violation.required_size = violation.get_required_size();
     ids_violation_list.push_back(ids_violation);
   }
+  _last_rule_coverage.setViolationCount(ids_violation_list.size());
   return ids_violation_list;
 }
 
@@ -1334,6 +1380,33 @@ void DRCInterface::outputViolationJson(std::map<std::string, std::vector<ids::Vi
   std::ofstream* violation_json_file = DRCUTIL.getOutputFileStream(violation_json_file_path);
   (*violation_json_file) << violation_json_list;
   DRCUTIL.closeFileStream(violation_json_file);
+  outputRuleCoverageJson();
+}
+
+void DRCInterface::outputRuleCoverageJson()
+{
+  const std::filesystem::path report_path = std::filesystem::path(DRCDM.getConfig().temp_directory_path) / "drc_summary.json";
+  const std::filesystem::path temporary_path = report_path.string() + ".tmp";
+  {
+    std::ofstream output(temporary_path, std::ios::trunc);
+    if (!output.is_open()) {
+      DRCLOG.error(Loc::current(), "Cannot open DRC coverage report: ", temporary_path.string());
+    }
+    output << _last_rule_coverage.toJson().dump(2) << '\n';
+    output.flush();
+    if (!output) {
+      DRCLOG.error(Loc::current(), "Cannot write DRC coverage report: ", temporary_path.string());
+    }
+  }
+
+  std::error_code error;
+  std::filesystem::remove(report_path, error);
+  error.clear();
+  std::filesystem::rename(temporary_path, report_path, error);
+  if (error) {
+    std::filesystem::remove(temporary_path);
+    DRCLOG.error(Loc::current(), "Cannot publish DRC coverage report: ", report_path.string(), ": ", error.message());
+  }
 }
 
 void DRCInterface::outputViolationFile(std::map<std::string, std::vector<ids::Violation>>& type_violation_map)

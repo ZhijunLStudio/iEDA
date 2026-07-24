@@ -84,6 +84,9 @@ class FlowScheduler
   void setWorkDir(std::filesystem::path work_dir);
   const std::filesystem::path& workDir() const { return _work_dir; }
   void setStampDir(std::filesystem::path stamp_dir) { _stamp_dir = std::move(stamp_dir); }
+  void setRunIdentity(std::string run_identity);
+  const std::string& runIdentity() const { return _run_identity; }
+  std::vector<std::string> restoreRunState();
 
  private:
   std::filesystem::path resolveProduct(const std::filesystem::path& product) const;
@@ -94,6 +97,7 @@ class FlowScheduler
 
   std::filesystem::path _work_dir;
   std::filesystem::path _stamp_dir = ".ieda/stamps";
+  std::string _run_identity;
   std::map<std::string, Stage> _stages;
   std::map<std::string, StageProfile> _profile;
   std::set<std::string> _success_stamps;

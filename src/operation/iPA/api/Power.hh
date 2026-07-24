@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include "ActivityProvenance.hh"
 #include "core/PwrAnalysisData.hh"
 #include "core/PwrGraph.hh"
 #include "core/PwrGroupData.hh"
@@ -56,10 +57,18 @@ class Power {
   }
   const char* get_design_work_space() { return _design_work_space.c_str(); }
 
-  void set_default_toggle(double default_toggle) {
-    _default_toggle = default_toggle;
+  bool set_default_toggle(double default_toggle);
+  double get_default_toggle() const { return _default_toggle.value_or(0.0); }
+  std::optional<double> getVectorlessToggle() const { return _default_toggle; }
+  bool isVectorlessActivityEnabled() const {
+    return _activity_provenance.isVectorlessSelected();
   }
-  double get_default_toggle() { return _default_toggle; }
+  bool hasActivitySelection() const {
+    return _activity_provenance.hasActivitySelection();
+  }
+  ActivityReport getActivityReport() const {
+    return _activity_provenance.report();
+  }
 
   void enableJsonReport() { _is_json_report_enabled = true; }
   bool isJsonReportEnabled() const { return _is_json_report_enabled; }
@@ -136,6 +145,7 @@ class Power {
 
   unsigned setupClock(PwrClock&& fastest_clock, Vector<StaClock*>&& sta_clocks);
   unsigned annotateToggleSP();
+  void updateActivityCoverage();
 
   unsigned initPowerGraphData();
 
@@ -205,7 +215,8 @@ class Power {
  private:
   std::string _design_work_space;  //!< The power report work space.
   std::optional<std::pair<std::string, std::string>> _backup_work_dir;
-  double _default_toggle = 0.02;  //!< The default toggle value.
+  std::optional<double> _default_toggle;  //!< Explicit vectorless toggle.
+  ActivityProvenance _activity_provenance;
 
   PwrGraph _power_graph;         //< The power graph, mapped to sta graph.
   PwrSeqGraph _power_seq_graph;  //!< The power sequential graph, vertex is

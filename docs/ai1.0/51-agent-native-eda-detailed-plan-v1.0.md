@@ -4,9 +4,9 @@ Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
 iEDA is licensed under Mulan PSL v2.
 -->
 
-# 51 · 面向 Agent 的 iEDA.ai 具体研发方案 · v1.2
+# 51 · 面向 Agent 的 iEDA.ai 具体研发方案 · v1.3
 
-> 日期：2026-07-23
+> 日期：2026-07-24
 > 定位：本方案是 `50-agent-era-eda-master-plan-v1.0.md` 的工程化展开，不替代 `00-ieda-commercial-parity-master-plan-v1.1.md`。
 > 目标：把 iEDA 从“由工程师编写 Tcl 驱动的一组 EDA 程序”改造成“Agent 可观察、可试探、可修改、可验证、可回滚、可组合和可生成的 EDA 能力底座”。
 > 事实纪律：本文将“已有代码资产”“需改造成 Agent 工具的能力”“未来新工具”分开标识；代码存在不等于精度、稳定性或商业对标已经达标。
@@ -1398,6 +1398,88 @@ Release 从 `contract -> shadow -> qualified -> active` 逐级推进。每一级
 
 首个系统 release 仅承诺 post-place Timing ECO 的 read/propose/branch/verify/controlled commit；route、power、3D 等只能复用已经通过的共同契约，不能用自己的 demo 反向放宽 P0 底座。
 
+## 28. 从文档到代码的交付协议
+
+模块文档不是愿景说明书，而是实现输入。进入编码前，模块 owner 必须把自己的方案收敛为一个 `ModuleDeliveryPacket`；主 Agent 只接受可由代码、fixture 和测试共同验证的字段：
+
+```yaml
+module: iTO
+document_revision: ai1.1
+current_evidence:
+  source_refs: [src/operation/iTO/...]
+  build_targets: [ito_api]
+  baseline_tests: [legacy_numeric_lock]
+target:
+  first_consumer: timing_closure_lab
+  capabilities: [timing.diagnose, timing.propose_eco, timing.apply_eco]
+contracts:
+  owned: [TimingDiagnosis, EcoProposal]
+  consumed: [InvocationContext, TypedDelta, StageResult, MetricRecord]
+delivery:
+  pr_slices: [contract, adapter, shadow_apply, closure, qualification]
+  conformance: [CONF-SCHEMA-01, CONF-CTX-01, CONF-STATUS-01]
+  domain_tests: [ITO-ACTION-01, ITO-MCMM-01, ITO-ROLLBACK-01]
+open_decisions: []
+```
+
+### 28.1 Definition of Ready
+
+一个代码工作包只有同时满足下列条件才能进入实现：
+
+1. `CURRENT` 源码入口、真实返回值、副作用、singleton/线程模型和已知失败路径已经审计；
+2. `TARGET` capability 有唯一 owner、首个 consumer、权限级别和明确非目标；
+3. request/result 中所有 ID、单位、context、scope、coverage、status 和 provenance 均有 schema owner；
+4. 写能力给出 precondition、declared/actual scope、inverse、DirtySet、InvalidationSet 和 required claims；
+5. 低精度结果明确允许的决策、禁止的 claim、升级条件和无预算行为；
+6. LLD 指向真实目录；新目录、target 和依赖以 `TARGET` 标记，不能伪装为已有代码；
+7. 至少有一个会在错误实现时失败的 golden/property/failure-injection 测试；
+8. 公共契约冲突已经由 10/12/40/41/43/48/49/55 对应 owner 裁决。
+
+缺任一项时允许做 spike 或源码审计，但不得合并 production adapter，也不得在 Registry 发布 capability。
+
+### 28.2 首个垂直切片的可编码工作包
+
+| 包 | 代码产物 | 前置 | 独立关闭证据 | 阻断关系 |
+|---|---|---|---|---|
+| `WP0-contracts` | context/status/scope/coverage/capability/validation value types 与 canonical codec | 无 | valid/invalid fixtures、unknown semantic field fail-closed | 阻断全部 |
+| `WP1-state` | stable ObjectId、snapshot catalog、branch、transaction journal、head CAS | WP0 | hash/replay/crash/rollback/scope property | 阻断所有写能力 |
+| `WP2-execution` | Stage DAG、worker/session、artifact publish、Gateway auth/schema | WP0-WP1 | rc/timeout/cancel/orphan/tenant fixtures | 阻断 Agent 入口 |
+| `WP3-context` | Intent/Scenario、TechContext、ValidationPolicy 的只读版本对象 | WP0 | canonicalization、context drift、qualification fixtures | 阻断 metric 比较和 commit |
+| `WP4-observe` | summarize、top-path、path-explain、baseline metric adapter | WP1-WP3 | legacy numeric lock、coverage/provenance、无 ambient state | Planner 可开始 shadow |
+| `WP5-actions` | Resize/SwapVt/InsertBuffer/LocalMove proposal 与 branch-only apply | WP1-WP4 | inverse/touched/frozen/dirty、非法 action 反例 | 阻断闭环写入 |
+| `WP6-incremental` | local legalize -> dirty RC -> dirty STA validator chain | WP5 | incremental/full 对拍、scope escalation、partial 传播 | 阻断证书签发 |
+| `WP7-commit` | certificate bundle、hard gate/Pareto、DecisionRecord、原子 commit | WP3/WP6 | stale/missing claim 零 commit；500 branch invalid commit 为 0 | 首个 R3 gate |
+| `WP8-learning` | Planner baseline、trajectory/data capture、model shadow route | WP4/WP7 | fixed-budget A/B、family split、OOD/fallback | 不阻断确定性 MVP |
+
+`WP0-WP4` 必须先形成完全只读的端到端 trace；`WP5` 首发只能到 R2 shadow apply；只有 `WP6/WP7` 的完整证据闭包通过后，单个 action 才能晋级 R3。`WP8` 永远不能成为 schema、transaction 或 validator correctness 的必需依赖。
+
+### 28.3 每类 PR 的边界
+
+| PR 类型 | 允许内容 | 必须测试 | 禁止夹带 |
+|---|---|---|---|
+| Contract | schema/value type、codec、fixture、migration | old/new/invalid fixture | kernel 行为变化 |
+| Adapter | legacy API 到 typed contract 的薄层 | 数值锁、错误映射、lifetime | 新建第二套领域算法 |
+| Shadow apply | branch mutation、inverse、journal | crash/rollback/frozen/scope | main-head commit |
+| Closure | 确定性 DAG、validator/gate consumer | e2e/failure/replay | 私改公共 schema |
+| Qualification | benchmark、oracle、security/perf evidence | held-out、对抗、资源上限 | 只凭 demo 晋级 |
+
+每个 PR 只声明自己关闭的 readiness 项。代码合并、文档完成和 capability 晋级是三件不同的事；只有 Registry qualification record 引用完整 evidence pack 时才改变运行时成熟度。
+
+### 28.4 首批契约冻结判定
+
+公共 schema 不是等所有模块写完后一次性冻结。采用 producer/consumer 三方判定：owner 发布 canonical fixture，一个真实 producer 生成，一个真实 consumer 对缺字段、旧版本、错误单位和 context mismatch fail closed。以下链路是首批冻结顺序：
+
+```text
+10 SnapshotRef/ObjectId
+  -> 48 IntentRef/ScenarioSetRef + 55 TechContextRef
+  -> 40/41 InvocationContext/StageResult/CapabilityManifest
+  -> 10 TypedDelta/DirtySet/InvalidationSet
+  -> 12 MetricRecord + 49 Certificate/Bundle
+  -> 43 Experiment/Decision/CommitRecord
+```
+
+模块文档中的示例 schema 只用于约束 payload；若与 owner fixture 冲突，以 owner schema 为准并回写 consumer 文档。任何跨模块字段尚无 owner 时，先登记 contract issue，禁止在多个 adapter 中各自定义同名结构。
+
 ---
 
 ## 附录 A：首批 API 命名建议
@@ -1526,6 +1608,7 @@ ExperimentRecord
 
 ## 附录 G：版本历史
 
+- v1.3（2026-07-24）：新增从文档到代码的 `ModuleDeliveryPacket`、Definition of Ready、Timing Closure Lab 可编码工作包、PR 边界和 producer/consumer 契约冻结判定。
 - v1.2（2026-07-23）：按 Evaluation Agent 深度基线补充系统级 FR/NFR、调用类型闭包、一致性/commit/失效协议、参考源码依赖和统一 conformance/release 资格。
 - v1.1（2026-07-23）：补充 Timing ECO 参考执行序列、持久化记录、恢复矩阵、schema 演化规则与发布资格。
 - v1.0（2026-07-23）：基于 `50` 号总纲、2026-07-22 研讨会纪要、现有工具方案和仓库代码资产形成首版具体方案。

@@ -446,7 +446,8 @@ void SpaceRouter::routeSRBoxMap(SRModel& sr_model)
   size_t routed_box_num = 0;
   for (std::vector<SRBoxId>& sr_box_id_list : sr_model.get_sr_box_id_list_list()) {
     Monitor stage_monitor;
-#pragma omp parallel for
+    // Box setup and result upload mutate shared RTDM GCell indexes. Keep this
+    // loop serial until those indexes support concurrent pointer updates.
     for (SRBoxId& sr_box_id : sr_box_id_list) {
       SRBox& sr_box = sr_box_map[sr_box_id.get_x()][sr_box_id.get_y()];
       buildNetResult(sr_box);

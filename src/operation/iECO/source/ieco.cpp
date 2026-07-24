@@ -33,11 +33,10 @@ ECOManager::~ECOManager()
   }
 }
 
-void ECOManager::ecoVia(std::string type)
+ECOViaResult ECOManager::ecoVia(std::string_view type)
 {
   ECOVia eco_via(_data_manager);
-  eco_via.init();
-  eco_via.repair(type);
+  return eco_via.repair(type);
 }
 
 }  // namespace ieco

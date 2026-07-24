@@ -53,3 +53,11 @@
 #     tool_manager
 #     file_manager_placement
 # )
+
+add_executable(ipl_placement_status_test PlacementStatusTest.cc)
+target_include_directories(ipl_placement_status_test PRIVATE ${iPL_API})
+add_test(NAME ipl_placement_status_test COMMAND ipl_placement_status_test)
+
+add_executable(ipl_placement_result_propagation_test PlacementResultPropagationTest.cc)
+target_include_directories(ipl_placement_result_propagation_test PRIVATE ${iPL_API})
+add_test(NAME ipl_placement_result_propagation_test COMMAND ipl_placement_result_propagation_test)

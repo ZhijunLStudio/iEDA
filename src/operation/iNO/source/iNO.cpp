@@ -44,14 +44,17 @@ void iNO::initialization(idb::IdbBuilder *idb_build, ista::TimingEngine *timing)
   _db_interface = ino::DbInterface::get_db_interface(_no_config, idb_build, timing);
 }
 
-void iNO::fixIO() {
+bool iNO::fixIO() {
   cout << "fixIO" << endl;
-  ino::FixFanout *fix_fanout = new FixFanout(_db_interface);
-  fix_fanout->fixIO();
-  delete fix_fanout;
+  ino::FixFanout fix_fanout(_db_interface);
+  auto result = fix_fanout.fixIO();
+  if (!result.ok) {
+    LOG_ERROR << "iNO fixIO failed: " << result.message;
+  }
+  return result.ok;
 }
 
-void iNO::fixFanout() {
+bool iNO::fixFanout() {
   cout << "\033[1;35m" << endl;
   cout << R"(  ______ _        ______                      _    )" << endl;
   cout << R"( |  ____(_)      |  ____|                    | |   )" << endl;
@@ -61,10 +64,13 @@ void iNO::fixFanout() {
   cout << R"( |_|    |_/_/\_\ |_|  \__,_|_| |_|\___/ \__,_|\__| )" << endl;
   cout << R"(                                                   )" << endl;
   cout << "\033[0m" << endl;
-  ino::FixFanout *fix_fanout = new FixFanout(_db_interface);
+  ino::FixFanout fix_fanout(_db_interface);
   // fix_fanout->fixIO();
-  fix_fanout->fixFanout();
-  delete fix_fanout;
+  auto result = fix_fanout.fixFanout();
+  if (!result.ok) {
+    LOG_ERROR << "iNO fixFanout failed: " << result.message;
+  }
+  return result.ok;
 }
 
 } // namespace ino
