@@ -7,11 +7,44 @@ from copy import deepcopy
 from pathlib import Path
 
 from benchmarks.qor.compare_qor import compare
-from benchmarks.qor.quality_metrics import build_quality_summary, parse_overflow_csv, sha256_file
+from benchmarks.qor.quality_metrics import (
+    build_quality_summary,
+    parse_overflow_csv,
+    parse_timing,
+    sha256_file,
+)
 from benchmarks.qor.validate_qor import validate_summary
 
 
 class QualityMetricsTest(unittest.TestCase):
+    def test_timing_parser_collects_aggregate_tns(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "timing.rpt"
+            path.write_text(
+                ""
+                "+---+\n"
+                "| ep | clk | max | 4.0f | 2.5 | 0.0 | -1.5 | 100 |\n"
+                "+---+\n"
+                "| Clock | Delay Type | TNS |\n"
+                "| core_clock | max | -12.500 |\n"
+                "| core_clock | min | -0.750 |\n",
+                encoding="ascii",
+            )
+            result = parse_timing(path)
+        self.assertEqual(result["setup_tns_ns"], -12.5)
+        self.assertEqual(result["hold_tns_ns"], -0.75)
+
+    def test_timing_parser_does_not_infer_tns(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "timing.rpt"
+            path.write_text(
+                "| ep | clk | max | 4.0f | 2.5 | 0.0 | -1.5 | 100 |\n",
+                encoding="ascii",
+            )
+            result = parse_timing(path)
+        self.assertIsNone(result["setup_tns_ns"])
+        self.assertIsNone(result["hold_tns_ns"])
+
     def test_overflow_statistics(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "map.csv"

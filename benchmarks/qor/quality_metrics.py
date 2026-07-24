@@ -113,6 +113,18 @@ def parse_timing(report_path: Path) -> dict[str, Any]:
             continue
     setup = [row for row in rows if row["type"] == "max"]
     hold = [row for row in rows if row["type"] == "min"]
+    # iSTA emits aggregate TNS in a separate ASCII table after the path rows.
+    # Do not infer TNS from a truncated path report when that table is absent.
+    tns: dict[str, float] = {}
+    tns_row_re = re.compile(
+        r"^\|\s*[^|]+?\s*\|\s*(max|min)\s*\|\s*([+-]?[0-9.]+)\s*\|\s*$",
+        re.MULTILINE,
+    )
+    for match in tns_row_re.finditer(text):
+        try:
+            tns[match.group(1)] = float(match.group(2))
+        except ValueError:
+            continue
     net_delays = [
         float(value)
         for value in re.findall(r"path net delay\s*\|[^\n]*\|\s*([+-]?[0-9.]+)\(", text)
@@ -120,6 +132,8 @@ def parse_timing(report_path: Path) -> dict[str, Any]:
     return {
         "setup_wns_ns": min((row["slack"] for row in setup), default=None),
         "hold_wns_ns": min((row["slack"] for row in hold), default=None),
+        "setup_tns_ns": tns.get("max"),
+        "hold_tns_ns": tns.get("min"),
         "worst_path_delay_ns": max((row["delay"] for row in setup), default=None),
         "reported_paths": len(rows),
         "reported_net_delay_paths": len(net_delays),
@@ -294,6 +308,8 @@ def build_quality_summary(
     for name, unit in (
         ("setup_wns_ns", "ns"),
         ("hold_wns_ns", "ns"),
+        ("setup_tns_ns", "ns"),
+        ("hold_tns_ns", "ns"),
         ("worst_path_delay_ns", "ns"),
         ("reported_paths", "count"),
         ("reported_net_delay_paths", "count"),
