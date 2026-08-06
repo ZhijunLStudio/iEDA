@@ -1,0 +1,14 @@
+# iRCX layer mapping: <design_layer> <process_layer>
+# Identity mapping for sky130_hd routing stack (li1/met1-met5 + cuts).
+# Generated ITF/captab from this mapping is untrusted and not foundry signoff RC.
+li1 li1
+mcon mcon
+met1 met1
+via via
+met2 met2
+via2 via2
+met3 met3
+via3 via3
+met4 met4
+via4 via4
+met5 met5

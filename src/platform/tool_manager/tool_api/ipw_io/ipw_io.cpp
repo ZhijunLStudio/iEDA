@@ -16,6 +16,7 @@
 // ***************************************************************************************
 #include "ipw_io.h"
 
+#include <cstdlib>
 #include <filesystem>
 
 #include "IdbEnum.h"
@@ -93,6 +94,19 @@ bool PowerIO::reportSummaryPower()
 
   ista::Sta* ista = ista::Sta::getOrCreateSta();
   ipower::Power* ipower = ipower::Power::getOrCreatePower(&(ista->get_graph()));
+
+  // Optional vectorless activity for flows without VCD/SAIF.
+  // Set by `run_power -toggle ...` / `-allow_default_toggle` via env.
+  if (const char* toggle_env = std::getenv("IEDA_POWER_DEFAULT_TOGGLE")) {
+    char* end = nullptr;
+    const double toggle = std::strtod(toggle_env, &end);
+    if (end != toggle_env && ipower->set_default_toggle(toggle)) {
+      LOG_INFO << "iPA vectorless default toggle enabled: " << toggle;
+    } else {
+      LOG_ERROR << "invalid IEDA_POWER_DEFAULT_TOGGLE=" << toggle_env;
+      return false;
+    }
+  }
 
   return ipower->runCompleteFlow() != 0;
 }

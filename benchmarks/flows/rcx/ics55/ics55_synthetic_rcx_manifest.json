@@ -1,0 +1,70 @@
+{
+  "schema": "synthetic-rcx/v1",
+  "trusted": false,
+  "pdk": "ics55",
+  "tech_lef": "/home/lxq/AiEDA/Foundary/ics55/prtech/techLEF/N551P6M.lef",
+  "mapping": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/ics55/layer_mapping.txt",
+  "itf": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/ics55/ics55.itf",
+  "captab": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/ics55/ics55.captab",
+  "routing_layers": [
+    {
+      "name": "MET1",
+      "width": 0.09,
+      "spacing": 0.09,
+      "rpsq": 0.1122,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "MET2",
+      "width": 0.1,
+      "spacing": 0.1,
+      "rpsq": 0.0914,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "MET3",
+      "width": 0.1,
+      "spacing": 0.1,
+      "rpsq": 0.0914,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "MET4",
+      "width": 0.1,
+      "spacing": 0.1,
+      "rpsq": 0.0914,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "MET5",
+      "width": 0.1,
+      "spacing": 0.1,
+      "rpsq": 0.0914,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    }
+  ],
+  "via_layers": [
+    {
+      "name": "VIA1",
+      "resistance": 5.0
+    },
+    {
+      "name": "VIA2",
+      "resistance": 5.0
+    },
+    {
+      "name": "VIA3",
+      "resistance": 5.0
+    },
+    {
+      "name": "VIA4",
+      "resistance": 5.0
+    }
+  ],
+  "note": "Synthetic ITF/captab for iEDA extraction smoke only; not foundry signoff data."
+}

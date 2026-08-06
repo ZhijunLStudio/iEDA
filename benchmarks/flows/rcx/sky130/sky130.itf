@@ -1,0 +1,159 @@
+$ Synthetic RCX model generated for iEDA smoke validation; not foundry signoff data.
+TECHNOLOGY = synthetic_iEDA
+GLOBAL_TEMPERATURE = 25
+BACKGROUND_ER = 3.9
+HALF_NODE_SCALE_FACTOR = 1.0
+USE_SI_DENSITY = NO
+
+DIELECTRIC substrate {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = TOP_OF_CHIP
+}
+
+DIELECTRIC diel_li1 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = li1
+  ASSOCIATED_CONDUCTOR = li1
+}
+
+CONDUCTOR li1 {
+  WMIN = 0.17
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 0.2
+  RPSQ = 12.2
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_met1 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = met1
+  ASSOCIATED_CONDUCTOR = met1
+}
+
+CONDUCTOR met1 {
+  WMIN = 0.14
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 0.4
+  RPSQ = 0.125
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_met2 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = met2
+  ASSOCIATED_CONDUCTOR = met2
+}
+
+CONDUCTOR met2 {
+  WMIN = 0.14
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 0.6
+  RPSQ = 0.125
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_met3 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = met3
+  ASSOCIATED_CONDUCTOR = met3
+}
+
+CONDUCTOR met3 {
+  WMIN = 0.3
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 0.8
+  RPSQ = 0.047
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_met4 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = met4
+  ASSOCIATED_CONDUCTOR = met4
+}
+
+CONDUCTOR met4 {
+  WMIN = 0.3
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 1
+  RPSQ = 0.047
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_met5 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = met5
+  ASSOCIATED_CONDUCTOR = met5
+}
+
+CONDUCTOR met5 {
+  WMIN = 1.6
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 1.2
+  RPSQ = 0.0285
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA mcon {
+  FROM = li1
+  TO = met1
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA via {
+  FROM = li1
+  TO = met1
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA via2 {
+  FROM = met1
+  TO = met2
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA via3 {
+  FROM = met2
+  TO = met3
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA via4 {
+  FROM = met3
+  TO = met4
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}

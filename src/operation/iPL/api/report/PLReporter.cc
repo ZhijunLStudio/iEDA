@@ -910,11 +910,17 @@ namespace ipl {
     (*report_tbl) << TABLE_HEAD;
     (*report_tbl)[0][0] = "Congestion Info";
     (*report_tbl)[1][0] = "Average Congestion of Edges";
-    (*report_tbl)[1][1] = std::to_string(overflow_summary.weighted_average_overflow_union);
     (*report_tbl)[2][0] = "Total Overflow";
-    (*report_tbl)[2][1] = std::to_string(overflow_summary.total_overflow_union);
     (*report_tbl)[3][0] = "Maximal Overflow";
-    (*report_tbl)[3][1] = std::to_string(overflow_summary.max_overflow_union);
+    if (overflow_summary.isValid()) {
+      (*report_tbl)[1][1] = std::to_string(overflow_summary.weighted_average_overflow_union);
+      (*report_tbl)[2][1] = std::to_string(overflow_summary.total_overflow_union);
+      (*report_tbl)[3][1] = std::to_string(overflow_summary.max_overflow_union);
+    } else {
+      (*report_tbl)[1][1] = "N/A";
+      (*report_tbl)[2][1] = "N/A";
+      (*report_tbl)[3][1] = "N/A";
+    }
     (*report_tbl) << TABLE_ENDLINE;
     feed << (*report_tbl).to_string() << std::endl;
   }

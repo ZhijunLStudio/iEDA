@@ -16,6 +16,7 @@
 // ***************************************************************************************
 #pragma once
 
+#include <algorithm>
 #include <limits>
 
 #include "RTHeader.hpp"
@@ -114,11 +115,19 @@ class DRNode : public LayerCoord
   }
   double getViolationCost(Orientation orientation, double violation_unit)
   {
-    double cost = 0;
-    if (getViolationNumber(orientation) > 0) {
-      cost = violation_unit;
+    return getViolationCost(orientation, violation_unit, /*scale_by_count=*/false, /*max_history_scale=*/8);
+  }
+  double getViolationCost(Orientation orientation, double violation_unit, bool scale_by_count, int32_t max_history_scale)
+  {
+    const int32_t violation_number = getViolationNumber(orientation);
+    if (violation_number <= 0) {
+      return 0.0;
     }
-    return cost;
+    if (!scale_by_count) {
+      return violation_unit;
+    }
+    const int32_t scale = std::min(violation_number, std::max(1, max_history_scale));
+    return violation_unit * static_cast<double>(scale);
   }
   void addFixedRectNet(Orientation orientation, int32_t net_idx) { addOrientNet(_orient_fixed_rect_list, _orient_fixed_rect_net_idx_list, orientation, net_idx); }
   void addRoutedRectNet(Orientation orientation, int32_t net_idx) { addOrientNet(_orient_routed_rect_list, _orient_routed_rect_net_idx_list, orientation, net_idx); }
@@ -142,11 +151,12 @@ class DRNode : public LayerCoord
     }
     return false;
   }
-  void addViolationNumber(Orientation orientation)
+  void addViolationNumber(Orientation orientation, int32_t count = 1)
   {
-    if (isNeighborOrientation(orientation)) {
-      _orient_violation_number_list[getNeighborOrientationIdx(orientation)]++;
+    if (!isNeighborOrientation(orientation) || count <= 0) {
+      return;
     }
+    _orient_violation_number_list[getNeighborOrientationIdx(orientation)] += count;
   }
   int32_t getViolationNumber(Orientation orientation) const
   {

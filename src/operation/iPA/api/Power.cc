@@ -24,9 +24,11 @@
 
 #include "Power.hh"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 
 #include "json/json.hpp"
 #include "ops/annotate_toggle_sp/AnnotateToggleSP.hh"
@@ -49,6 +51,8 @@ namespace ipower {
 
 namespace {
 
+unsigned writeJsonFile(const char* report_path, const nlohmann::json& report);
+
 nlohmann::json makeActivityJson(const ActivityReport& activity) {
   return {
       {"source", activitySourceName(activity.source)},
@@ -63,6 +67,82 @@ nlohmann::json makeActivityJson(const ActivityReport& activity) {
       {"refused", activity.refused},
       {"reason", activity.reason},
   };
+}
+
+nlohmann::json makeActivitySourceJson(const ActivityReport& activity,
+                                      std::optional<double> default_toggle) {
+  const bool trusted = activity.source == ActivitySource::kVcd && !activity.refused;
+  return {
+      {"schema", "c-act/v0"},
+      {"activity_source", activitySourceName(activity.source)},
+      {"trusted", trusted},
+      {"coverage", activity.coverage},
+      {"measured_coverage", activity.measured_coverage},
+      {"defaulted_coverage", activity.defaulted_coverage},
+      {"effective_coverage", activity.effective_coverage},
+      {"toggle_default", default_toggle.has_value() ? nlohmann::json(*default_toggle) : nlohmann::json(nullptr)},
+      {"allow_default_toggle", activity.vectorless_enabled},
+      {"refused", activity.refused},
+      {"reason", activity.reason.empty() ? nlohmann::json(nullptr) : nlohmann::json(activity.reason)},
+      {"note", trusted ? "VCD activity is used as power evidence" : "vectorless/default activity is proxy-only; do not treat power as trusted"},
+  };
+}
+
+unsigned writeActivitySourceJson(const std::string& output_dir,
+                                 const ActivityReport& activity,
+                                 std::optional<double> default_toggle) {
+  const std::filesystem::path report_path =
+      std::filesystem::path(output_dir) / "activity_source.json";
+  std::filesystem::create_directories(report_path.parent_path());
+  return writeJsonFile(report_path.string().c_str(),
+                       makeActivitySourceJson(activity, default_toggle));
+}
+
+auto makeIRDropStatusJson(const std::map<std::string, std::map<std::string, double>>& net_to_instance_ir_drop) -> nlohmann::json {
+  nlohmann::json payload;
+  payload["schema"] = "c-ir/v0";
+  payload["ir_drop_run"] = !net_to_instance_ir_drop.empty();
+  payload["ir_status"] = net_to_instance_ir_drop.empty() ? "missing" : "checked";
+  payload["net_count"] = net_to_instance_ir_drop.size();
+  payload["nets"] = nlohmann::json::array();
+
+  std::size_t sample_count = 0;
+  for (const auto& [net_name, instance_ir_drop] : net_to_instance_ir_drop) {
+    nlohmann::json net_payload;
+    net_payload["net"] = net_name;
+    net_payload["sample_count"] = instance_ir_drop.size();
+    sample_count += instance_ir_drop.size();
+    if (!instance_ir_drop.empty()) {
+      double min_drop = std::numeric_limits<double>::max();
+      double max_drop = -std::numeric_limits<double>::max();
+      double sum_drop = 0.0;
+      for (const auto& [_, ir_drop] : instance_ir_drop) {
+        min_drop = std::min(min_drop, ir_drop);
+        max_drop = std::max(max_drop, ir_drop);
+        sum_drop += ir_drop;
+      }
+      net_payload["min_ir_drop"] = min_drop;
+      net_payload["max_ir_drop"] = max_drop;
+      net_payload["avg_ir_drop"] = sum_drop / static_cast<double>(instance_ir_drop.size());
+    }
+    payload["nets"].push_back(net_payload);
+  }
+
+  payload["sample_count"] = sample_count;
+  payload["trusted"] = sample_count > 0;
+  if (sample_count == 0) {
+    payload["reason"] = "IR report has no instance-level voltage samples";
+  }
+  return payload;
+}
+
+unsigned writeIRDropStatusJson(const std::string& output_dir,
+                               const std::map<std::string, std::map<std::string, double>>& net_to_instance_ir_drop) {
+  const std::filesystem::path report_path =
+      std::filesystem::path(output_dir) / "ir_drop_status.json";
+  std::filesystem::create_directories(report_path.parent_path());
+  return writeJsonFile(report_path.string().c_str(),
+                       makeIRDropStatusJson(net_to_instance_ir_drop));
 }
 
 void addActivityMetadata(nlohmann::json& report,
@@ -1221,6 +1301,7 @@ unsigned Power::reportPower(bool is_copy) {
   std::filesystem::create_directories(output_dir);
   const char* design_name = ista->get_design_name().c_str();
   const ActivityReport activity = getActivityReport();
+  writeActivitySourceJson(output_dir, activity, getVectorlessToggle());
 
   {
     std::string file_name =
@@ -1602,6 +1683,8 @@ unsigned Power::reportIRAnalysis(bool is_copy) {
 
     LOG_INFO << "output ir drop csv report: " << output_path;
   }
+
+  writeIRDropStatusJson(output_dir, getNetInstanceIRDrop());
 
   LOG_INFO << "report IR analysis end";
   return 1;

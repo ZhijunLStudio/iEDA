@@ -42,4 +42,15 @@ unsigned CmdReportCong::check()
 CMD_CLASS_DEFAULT_EXEC(CmdReportCong,
                        rptInst->reportCongestion(getOptionOrArg(TCL_PATH)->getStringVal() ? getOptionOrArg(TCL_PATH)->getStringVal() : ""));
 
+CmdReportQualityGate::CmdReportQualityGate(const char* cmd) : TclCmd(cmd)
+{
+  addOption(new TclStringOption(TCL_PATH, 1));
+}
+unsigned CmdReportQualityGate::check()
+{
+  return 1;
+}
+CMD_CLASS_DEFAULT_EXEC(CmdReportQualityGate,
+                       rptInst->reportQualityGate(getOptionOrArg(TCL_PATH)->getStringVal() ? getOptionOrArg(TCL_PATH)->getStringVal() : ""));
+
 }  // namespace tcl

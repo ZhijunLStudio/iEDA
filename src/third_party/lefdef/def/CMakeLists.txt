@@ -157,6 +157,7 @@ target_include_directories( defzlib
   PUBLIC
   def
   defzlib 
+  ${ZLIB_INCLUDE_DIRS}
   )
 
 if (BUILD_STATIC_LIB)

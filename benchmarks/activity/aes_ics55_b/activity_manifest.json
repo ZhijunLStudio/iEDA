@@ -1,0 +1,15 @@
+{
+  "schema": "synthetic-activity/v1",
+  "trusted": false,
+  "design": "aes_ics55_b",
+  "pdk": "ics55",
+  "top": "aes_cipher_top",
+  "netlist": "/home/lxq/AiEDA/iEDA.ai/benchmarks/designs/aes_ics55_b/netlist/aes_cipher_top.v",
+  "vcd": "/home/lxq/AiEDA/iEDA.ai/benchmarks/activity/aes_ics55_b/aes_cipher_top.vcd",
+  "saif": "/home/lxq/AiEDA/iEDA.ai/benchmarks/activity/aes_ics55_b/aes_cipher_top.saif",
+  "signal_count": 1988,
+  "cycles": 96,
+  "toggle_count_total": 94191,
+  "signals_with_toggle": 1988,
+  "note": "Synthetic deterministic toggle activity for iPA smoke only; not RTL/gate simulation signoff stimulus."
+}

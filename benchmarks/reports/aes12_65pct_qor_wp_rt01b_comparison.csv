@@ -1,0 +1,13 @@
+design,pdk,strategy,status,cell_count,cell_area_um2,die_side_um,setup_wns_ns,hold_wns_ns,max_frequency_mhz,total_power_w,switch_power_w,egr_wirelength_um,def_routed_um,drc_total,high_density_bins_pct,congestion_valid,route_runtime_sec,ir_drop_status
+aes_sky130_a,sky130,a,success,9434,68354.307,404.285,-2.299,0.431,208.39,0.06273,0.0,350639.0,316604.085,55462,,True,4130.693,not_run
+aes_sky130_b,sky130,b,success,9434,68354.307,404.285,-2.299,0.431,208.39,0.06273,0.0,350639.0,316604.085,55462,,True,4073.294,not_run
+aes_sky130_t,sky130,t,success,9434,68354.307,404.285,-2.299,0.431,208.39,0.06273,0.0,350639.0,316497.215,55477,,True,4070.549,not_run
+aes_nangate45_a,nangate45,a,success,9961,13642.608,184.875,1.38,0.086,892.89,0.02269,0.0,153034.0,138803.935,15329,,True,1560.717,not_run
+aes_nangate45_b,nangate45,b,success,9961,13642.608,184.875,1.38,0.086,892.89,0.02269,0.0,153034.0,138803.935,15329,,True,1475.045,not_run
+aes_nangate45_t,nangate45,t,success,9961,13642.608,184.875,1.38,0.086,892.89,0.02269,0.0,153034.0,138709.615,15351,,True,1693.362,not_run
+aes_asap7_a,asap7,a,success,19917,1412.758,66.621,-1491.028,-819.752,0.67,0.03929,0.0,50440.0,40426.254,48094,,True,2454.829,not_run
+aes_asap7_b,asap7,b,success,19917,1412.758,66.621,-1491.028,-819.752,0.67,0.03929,0.0,50440.0,40435.476,48089,,True,2387.021,not_run
+aes_asap7_t,asap7,t,success,19917,1412.758,66.621,-1491.028,-819.752,0.67,0.03929,0.0,50440.0,40426.254,48094,,True,2442.399,not_run
+aes_ics55_a,ics55,a,success,9453,19568.64,213.51,0.845,0.13,604.322,0.1908,0.0,191812.0,166248.515,26899,,True,1492.732,not_run
+aes_ics55_b,ics55,b,success,9453,19568.64,213.51,0.845,0.13,604.322,0.1908,0.0,191812.0,166248.515,26899,,True,1695.697,not_run
+aes_ics55_t,ics55,t,success,9453,19568.64,213.51,0.845,0.13,604.322,0.1908,0.0,191812.0,166248.515,26899,,True,1794.252,not_run

@@ -1,0 +1,237 @@
+$ Synthetic RCX model generated for iEDA smoke validation; not foundry signoff data.
+TECHNOLOGY = synthetic_iEDA
+GLOBAL_TEMPERATURE = 25
+BACKGROUND_ER = 3.9
+HALF_NODE_SCALE_FACTOR = 1.0
+USE_SI_DENSITY = NO
+
+DIELECTRIC substrate {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = TOP_OF_CHIP
+}
+
+DIELECTRIC diel_M1 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = M1
+  ASSOCIATED_CONDUCTOR = M1
+}
+
+CONDUCTOR M1 {
+  WMIN = 0.018
+  SMIN = 0.018
+  THICKNESS = 0.14
+  T0 = 0.2
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_M2 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = M2
+  ASSOCIATED_CONDUCTOR = M2
+}
+
+CONDUCTOR M2 {
+  WMIN = 0.018
+  SMIN = 0.018
+  THICKNESS = 0.14
+  T0 = 0.4
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_M3 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = M3
+  ASSOCIATED_CONDUCTOR = M3
+}
+
+CONDUCTOR M3 {
+  WMIN = 0.018
+  SMIN = 0.018
+  THICKNESS = 0.14
+  T0 = 0.6
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_M4 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = M4
+  ASSOCIATED_CONDUCTOR = M4
+}
+
+CONDUCTOR M4 {
+  WMIN = 0.024
+  SMIN = 0.024
+  THICKNESS = 0.14
+  T0 = 0.8
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_M5 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = M5
+  ASSOCIATED_CONDUCTOR = M5
+}
+
+CONDUCTOR M5 {
+  WMIN = 0.024
+  SMIN = 0.024
+  THICKNESS = 0.14
+  T0 = 1
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_M6 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = M6
+  ASSOCIATED_CONDUCTOR = M6
+}
+
+CONDUCTOR M6 {
+  WMIN = 0.032
+  SMIN = 0.032
+  THICKNESS = 0.14
+  T0 = 1.2
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_M7 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = M7
+  ASSOCIATED_CONDUCTOR = M7
+}
+
+CONDUCTOR M7 {
+  WMIN = 0.032
+  SMIN = 0.032
+  THICKNESS = 0.14
+  T0 = 1.4
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_M8 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = M8
+  ASSOCIATED_CONDUCTOR = M8
+}
+
+CONDUCTOR M8 {
+  WMIN = 0.04
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 1.6
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_M9 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = M9
+  ASSOCIATED_CONDUCTOR = M9
+}
+
+CONDUCTOR M9 {
+  WMIN = 0.04
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 1.8
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA V1 {
+  FROM = M1
+  TO = M2
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA V2 {
+  FROM = M2
+  TO = M3
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA V3 {
+  FROM = M3
+  TO = M4
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA V4 {
+  FROM = M4
+  TO = M5
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA V5 {
+  FROM = M5
+  TO = M6
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA V6 {
+  FROM = M6
+  TO = M7
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA V7 {
+  FROM = M7
+  TO = M8
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA V8 {
+  FROM = M8
+  TO = M9
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}

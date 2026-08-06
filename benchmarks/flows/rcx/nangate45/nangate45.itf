@@ -1,0 +1,159 @@
+$ Synthetic RCX model generated for iEDA smoke validation; not foundry signoff data.
+TECHNOLOGY = synthetic_iEDA
+GLOBAL_TEMPERATURE = 25
+BACKGROUND_ER = 3.9
+HALF_NODE_SCALE_FACTOR = 1.0
+USE_SI_DENSITY = NO
+
+DIELECTRIC substrate {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = TOP_OF_CHIP
+}
+
+DIELECTRIC diel_metal1 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = metal1
+  ASSOCIATED_CONDUCTOR = metal1
+}
+
+CONDUCTOR metal1 {
+  WMIN = 0.07
+  SMIN = 0.065
+  THICKNESS = 0.14
+  T0 = 0.2
+  RPSQ = 0.38
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_metal2 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = metal2
+  ASSOCIATED_CONDUCTOR = metal2
+}
+
+CONDUCTOR metal2 {
+  WMIN = 0.07
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 0.4
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_metal3 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = metal3
+  ASSOCIATED_CONDUCTOR = metal3
+}
+
+CONDUCTOR metal3 {
+  WMIN = 0.07
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 0.6
+  RPSQ = 0.25
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_metal4 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = metal4
+  ASSOCIATED_CONDUCTOR = metal4
+}
+
+CONDUCTOR metal4 {
+  WMIN = 0.14
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 0.8
+  RPSQ = 0.21
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_metal5 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = metal5
+  ASSOCIATED_CONDUCTOR = metal5
+}
+
+CONDUCTOR metal5 {
+  WMIN = 0.14
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 1
+  RPSQ = 0.21
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+DIELECTRIC diel_metal6 {
+  ER = 3.9
+  THICKNESS = 0.2
+  MEASURED_FROM = metal6
+  ASSOCIATED_CONDUCTOR = metal6
+}
+
+CONDUCTOR metal6 {
+  WMIN = 0.14
+  SMIN = 0.1
+  THICKNESS = 0.14
+  T0 = 1.2
+  RPSQ = 0.21
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA via1 {
+  FROM = metal1
+  TO = metal2
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA via2 {
+  FROM = metal2
+  TO = metal3
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA via3 {
+  FROM = metal3
+  TO = metal4
+  RPV = 5
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA via4 {
+  FROM = metal4
+  TO = metal5
+  RPV = 3
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}
+
+VIA via5 {
+  FROM = metal5
+  TO = metal6
+  RPV = 3
+  AREA = 0.01
+  CRT1 = 0.0039
+  CRT2 = 0.0
+}

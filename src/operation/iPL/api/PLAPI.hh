@@ -51,7 +51,7 @@ class PLAPI
   void insertLayoutFiller();
 
   bool runGP();
-  void runMP();
+  bool runMP();
   void runNetworkFlowSpread();
 
   bool runLG();

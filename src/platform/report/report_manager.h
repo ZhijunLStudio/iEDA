@@ -69,6 +69,7 @@ class ReportManager
   bool reportDBSummary(const std::string& file_name);
   bool reportWL(const std::string& file_name);
   bool reportCongestion(const std::string& file_name);
+  bool reportQualityGate(const std::string& file_name);
 
   bool reportInstance(const std::string& file_name, const std::string& inst_name);
   bool reportNet(const std::string& file_name, const std::string& net_name);

@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
-"""
-生成13个AES设计的对比分析报告
-提取各阶段的DEF、GDS和报告文件，进行PPA对比分析
-"""
+"""Generate a full AES 13 run comparison report."""
 
-import os
-import sys
+from __future__ import annotations
+
+import argparse
 import json
-import glob
+import math
+import os
 import re
-from pathlib import Path
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from pathlib import Path
+from typing import Any
 
-# 13个选定的设计
-DESIGNS = [
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_RUN_ROOT = REPO_ROOT / "benchmarks" / "results" / "aes13"
+DEFAULT_REPORT_ROOT = REPO_ROOT / "benchmarks" / "reports"
+REPORT_OUTPUT = DEFAULT_REPORT_ROOT / "aes13_postchange_comparison-1.md"
+
+DESIGNS = (
     "aes_sky130_a",
     "aes_sky130_b",
     "aes_sky130_t",
@@ -27,388 +32,543 @@ DESIGNS = [
     "aes_ics55_a",
     "aes_ics55_b",
     "aes_ics55_t",
-    "aes_core_sky130_a"
-]
+    "aes",
+)
 
-# 工艺库分类
-PDK_MAP = {
-    "sky130": ["aes_sky130_a", "aes_sky130_b", "aes_sky130_t", "aes_core_sky130_a"],
-    "nangate45": ["aes_nangate45_a", "aes_nangate45_b", "aes_nangate45_t"],
-    "asap7": ["aes_asap7_a", "aes_asap7_b", "aes_asap7_t"],
-    "ics55": ["aes_ics55_a", "aes_ics55_b", "aes_ics55_t"]
-}
+STAGES = (
+    ("floorplan", "iFP", "iFP_result.def"),
+    ("fanout", "iNO", "iTO_fix_fanout_result.def"),
+    ("placement", "iPL", "iPL_result.def"),
+    ("cts", "iCTS", "iCTS_result.def"),
+    ("to_drv", "iTO_drv", "iTO_drv_result.def"),
+    ("to_hold", "iTO_hold", "iTO_hold_result.def"),
+    ("legalization", "iPL_lg", "iPL_lg_result.def"),
+    ("routing", "iRT", "iRT_result.def"),
+    ("timing", "timing", None),
+    ("power", "power", None),
+    ("metrics", "metrics", "report/wirelength.rpt"),
+    ("drc", "iRT_DRC", "report/drc/iRT_drc.rpt"),
+    ("filler", "iPL_filler", "iPL_filler_result.def"),
+    ("gds", "gds", "final.gds"),
+)
 
-# 流程阶段
-STAGES = [
-    "iFP",
-    "iTO_fix_fanout",
-    "iPL",
-    "iCTS",
-    "iTO_drv",
-    "iTO_hold",
-    "iPL_legalization",
-    "iRT",
-    "iRT_DRC"
-]
+BASELINE_GOAL_DELTA = 0.20
+TARGET_UTILIZATION = 0.70
 
-class AESAnalyzer:
-    def __init__(self, benchmark_dir: str):
-        self.benchmark_dir = Path(benchmark_dir)
-        self.designs_dir = self.benchmark_dir / "designs"
-        self.report_dir = self.benchmark_dir / "reports"
-        self.report_dir.mkdir(exist_ok=True)
 
-        self.results = {}
+WNS_RE = re.compile(r"\bWNS[:\\s]+([+-]?(?:\\d+\\.\\d+|\\d*\\.\\d+|\\d+)(?:[eE][+-]?\\d+)?)")
+TNS_RE = re.compile(r"\bTNS[:\\s]+([+-]?(?:\\d+\\.\\d+|\\d*\\.\\d+|\\d+)(?:[eE][+-]?\\d+)?)")
 
-    def analyze_design(self, design_name: str) -> Dict[str, Any]:
-        """分析单个设计的运行结果"""
-        design_dir = self.designs_dir / design_name
-        workspace_dir = design_dir / "workspace"
-        result_dir = workspace_dir / "result"
 
-        if not result_dir.exists():
-            return {
-                "design": design_name,
-                "status": "not_run",
-                "error": "Result directory not found"
-            }
+def number(value: Any, digits: int = 3, missing: str = "N/A") -> str:
+    if value is None:
+        return missing
+    if isinstance(value, int):
+        return f"{value}"
+    try:
+        if math.isfinite(float(value)):
+            return f"{float(value):.{digits}f}"
+    except Exception:
+        return missing
+    return missing
 
-        result = {
-            "design": design_name,
-            "status": "unknown",
-            "stages": {},
-            "files": {
-                "def": [],
-                "gds": [],
-                "rpt": []
-            },
-            "metrics": {}
-        }
 
-        # 检查各阶段的DEF文件
-        for stage in STAGES:
-            def_file = result_dir / f"{stage}_result.def"
-            if def_file.exists():
-                result["stages"][stage] = "completed"
-                result["files"]["def"].append(str(def_file))
-                # 提取DEF文件信息
-                metrics = self.extract_def_metrics(def_file)
-                if metrics:
-                    result["metrics"][stage] = metrics
-            else:
-                result["stages"][stage] = "missing"
+def pct(value: float | None, digits: int = 1) -> str:
+    if value is None:
+        return "N/A"
+    return f"{100.0 * value:.{digits}f}%"
 
-        # 查找GDS文件
-        gds_files = list(result_dir.glob("*.gds"))
-        result["files"]["gds"] = [str(f) for f in gds_files]
 
-        # 查找报告文件
-        report_dir = result_dir / "report"
-        if report_dir.exists():
-            rpt_files = list(report_dir.rglob("*.rpt"))
-            result["files"]["rpt"] = [str(f) for f in rpt_files]
+def safe_relpath(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
 
-            # 提取时序报告
-            timing_metrics = self.extract_timing_metrics(report_dir)
-            if timing_metrics:
-                result["metrics"]["timing"] = timing_metrics
 
-        # 查找日志文件分析错误
-        log_files = list(result_dir.glob("*.log"))
-        errors = self.analyze_logs(log_files)
-        if errors:
-            result["errors"] = errors
-            result["status"] = "failed"
-        else:
-            # 判断是否成功完成
-            if result["stages"].get("iRT_DRC") == "completed":
-                result["status"] = "success"
-            elif result["stages"].get("iPL") == "completed":
-                result["status"] = "partial"
-            else:
-                result["status"] = "failed"
+def read_json(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
 
-        return result
 
-    def extract_def_metrics(self, def_file: Path) -> Optional[Dict[str, Any]]:
-        """从DEF文件提取指标"""
+def parse_timing_from_text(text: str) -> dict[str, float | None]:
+    def _parse(match: re.Pattern[str]) -> float | None:
+        m = match.search(text)
+        if not m:
+            return None
         try:
-            with open(def_file, 'r') as f:
-                content = f.read()
-
-            metrics = {}
-
-            # 提取芯片面积
-            die_area_match = re.search(r'DIEAREA\s+\(\s*(\d+)\s+(\d+)\s*\)\s+\(\s*(\d+)\s+(\d+)\s*\)', content)
-            if die_area_match:
-                x1, y1, x2, y2 = map(int, die_area_match.groups())
-                width = x2 - x1
-                height = y2 - y1
-                area = width * height
-                metrics["die_area"] = area
-                metrics["die_width"] = width
-                metrics["die_height"] = height
-
-            # 提取单元数量
-            components_match = re.search(r'COMPONENTS\s+(\d+)', content)
-            if components_match:
-                metrics["num_components"] = int(components_match.group(1))
-
-            # 提取网络数量
-            nets_match = re.search(r'NETS\s+(\d+)', content)
-            if nets_match:
-                metrics["num_nets"] = int(nets_match.group(1))
-
-            return metrics if metrics else None
-        except Exception as e:
-            print(f"Error parsing DEF file {def_file}: {e}")
+            return float(m.group(1))
+        except Exception:
             return None
 
-    def extract_timing_metrics(self, report_dir: Path) -> Optional[Dict[str, Any]]:
-        """从时序报告提取指标"""
-        metrics = {}
+    return {
+        "setup_wns_ns": _parse(WNS_RE),
+        "setup_tns_ns": _parse(TNS_RE),
+    }
 
-        # 查找STA报告
-        sta_reports = list(report_dir.rglob("*sta*.rpt"))
-        for rpt_file in sta_reports:
-            try:
-                with open(rpt_file, 'r') as f:
-                    content = f.read()
 
-                # 提取WNS (Worst Negative Slack)
-                wns_match = re.search(r'WNS[:\s]+([+-]?\d+\.?\d*)', content)
-                if wns_match:
-                    metrics["wns"] = float(wns_match.group(1))
+def parse_timing_from_summary(summary: dict[str, Any]) -> dict[str, float | None]:
+    timing = summary.get("timing") if isinstance(summary.get("timing"), dict) else {}
+    if timing:
+        return {
+            "setup_wns_ns": timing.get("setup_wns_ns", timing.get("wns")),
+            "setup_tns_ns": timing.get("setup_tns_ns", timing.get("tns")),
+        }
+    return {"setup_wns_ns": None, "setup_tns_ns": None}
 
-                # 提取TNS (Total Negative Slack)
-                tns_match = re.search(r'TNS[:\s]+([+-]?\d+\.?\d*)', content)
-                if tns_match:
-                    metrics["tns"] = float(tns_match.group(1))
 
-            except Exception as e:
-                print(f"Error parsing timing report {rpt_file}: {e}")
-
-        return metrics if metrics else None
-
-    def analyze_logs(self, log_files: List[Path]) -> List[str]:
-        """分析日志文件中的错误"""
-        errors = []
-
-        for log_file in log_files:
-            try:
-                with open(log_file, 'r') as f:
-                    content = f.read()
-
-                # 查找错误信息
-                error_patterns = [
-                    r'Error\s*:(.+?)(?:\n|$)',
-                    r'SIGFPE',
-                    r'Segmentation fault',
-                    r'core dumped'
-                ]
-
-                for pattern in error_patterns:
-                    matches = re.finditer(pattern, content, re.IGNORECASE)
-                    for match in matches:
-                        errors.append(match.group(0).strip())
-
-            except Exception as e:
-                print(f"Error reading log file {log_file}: {e}")
-
-        return errors
-
-    def analyze_all_designs(self):
-        """分析所有13个设计"""
-        print("开始分析13个AES设计...")
-
-        for design in DESIGNS:
-            print(f"  分析 {design}...")
-            result = self.analyze_design(design)
-            self.results[design] = result
-
-        print(f"分析完成! 共处理 {len(self.results)} 个设计")
-
-    def generate_json_report(self) -> str:
-        """生成JSON格式报告"""
-        report_file = self.report_dir / f"comparison_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-
-        with open(report_file, 'w', encoding='utf-8') as f:
-            json.dump(self.results, f, indent=2, ensure_ascii=False)
-
-        print(f"JSON报告已生成: {report_file}")
-        return str(report_file)
-
-    def generate_markdown_report(self) -> str:
-        """生成Markdown格式的对比分析报告"""
-        report_file = self.report_dir / f"comparison_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-
-        with open(report_file, 'w', encoding='utf-8') as f:
-            f.write("# 13个AES设计对比分析报告\n\n")
-            f.write(f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-
-            # 1. 总体统计
-            f.write("## 1. 总体统计\n\n")
-
-            status_count = {"success": 0, "partial": 0, "failed": 0, "not_run": 0}
-            for design, result in self.results.items():
-                status = result.get("status", "unknown")
-                status_count[status] = status_count.get(status, 0) + 1
-
-            f.write(f"- 总设计数: {len(self.results)}\n")
-            f.write(f"- 完全成功: {status_count['success']}\n")
-            f.write(f"- 部分完成: {status_count['partial']}\n")
-            f.write(f"- 失败: {status_count['failed']}\n")
-            f.write(f"- 未运行: {status_count['not_run']}\n\n")
-
-            # 2. 按工艺库分类统计
-            f.write("## 2. 按工艺库分类\n\n")
-
-            for pdk, designs in PDK_MAP.items():
-                f.write(f"### {pdk.upper()}\n\n")
-                f.write("| 设计名称 | 状态 | 完成阶段 | 芯片面积 | 单元数 | 网络数 |\n")
-                f.write("|---------|------|---------|---------|--------|--------|\n")
-
-                for design in designs:
-                    if design not in self.results:
-                        continue
-
-                    result = self.results[design]
-                    status = result.get("status", "unknown")
-
-                    # 计算完成的阶段数
-                    completed_stages = sum(1 for s, st in result.get("stages", {}).items() if st == "completed")
-                    total_stages = len(STAGES)
-
-                    # 获取最新的指标（通常是最后一个阶段）
-                    metrics = {}
-                    for stage in reversed(STAGES):
-                        if stage in result.get("metrics", {}):
-                            metrics = result["metrics"][stage]
-                            break
-
-                    area = metrics.get("die_area", "N/A")
-                    if isinstance(area, int):
-                        area = f"{area:,}"
-
-                    components = metrics.get("num_components", "N/A")
-                    if isinstance(components, int):
-                        components = f"{components:,}"
-
-                    nets = metrics.get("num_nets", "N/A")
-                    if isinstance(nets, int):
-                        nets = f"{nets:,}"
-
-                    f.write(f"| {design} | {status} | {completed_stages}/{total_stages} | {area} | {components} | {nets} |\n")
-
-                f.write("\n")
-
-            # 3. 各阶段完成情况
-            f.write("## 3. 流程各阶段完成情况\n\n")
-            f.write("| 设计名称 | " + " | ".join(STAGES) + " |\n")
-            f.write("|---------|" + "|".join(["---"] * len(STAGES)) + "|\n")
-
-            for design in DESIGNS:
-                if design not in self.results:
+def parse_performance_jsonl(path: Path) -> tuple[dict[str, float], float]:
+    total = 0.0
+    stage_runtime: dict[str, float] = {}
+    if not path.is_file():
+        return stage_runtime, total
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
                     continue
-
-                result = self.results[design]
-                stages = result.get("stages", {})
-
-                row = [design]
-                for stage in STAGES:
-                    status = stages.get(stage, "missing")
-                    symbol = "✓" if status == "completed" else "✗"
-                    row.append(symbol)
-
-                f.write("| " + " | ".join(row) + " |\n")
-
-            f.write("\n")
-
-            # 4. 失败设计详细信息
-            failed_designs = [(d, r) for d, r in self.results.items() if r.get("status") in ["failed", "partial"]]
-            if failed_designs:
-                f.write("## 4. 失败/部分完成设计详情\n\n")
-
-                for design, result in failed_designs:
-                    f.write(f"### {design}\n\n")
-                    f.write(f"- **状态**: {result.get('status')}\n")
-
-                    if "errors" in result and result["errors"]:
-                        f.write(f"- **错误信息**:\n")
-                        for error in result["errors"][:5]:  # 最多显示5个错误
-                            f.write(f"  - `{error}`\n")
-
-                    f.write("\n")
-
-            # 5. 文件清单
-            f.write("## 5. 生成的文件\n\n")
-
-            for design in DESIGNS:
-                if design not in self.results:
+                try:
+                    payload = json.loads(line)
+                except Exception:
                     continue
+                stage = payload.get("stage") or payload.get("name")
+                if not stage:
+                    continue
+                sec = (
+                    payload.get("runtime_sec")
+                    or payload.get("time")
+                    or payload.get("duration_sec")
+                )
+                if sec is None:
+                    continue
+                try:
+                    sec_val = float(sec)
+                except Exception:
+                    continue
+                stage_runtime[str(stage)] = stage_runtime.get(str(stage), 0.0) + sec_val
+                total += sec_val
+    except Exception:
+        pass
+    return stage_runtime, total
 
-                result = self.results[design]
-                files = result.get("files", {})
 
-                if any(files.values()):
-                    f.write(f"### {design}\n\n")
+def best_timing_value(*values: float | None) -> float | None:
+    for value in values:
+        if value is None:
+            continue
+        if not math.isfinite(value):
+            continue
+        return value
+    return None
 
-                    if files.get("def"):
-                        f.write(f"- **DEF文件**: {len(files['def'])} 个\n")
 
-                    if files.get("gds"):
-                        f.write(f"- **GDS文件**: {len(files['gds'])} 个\n")
+def parse_timing_from_reports(result_dir: Path) -> dict[str, float | None]:
+    reports = list(result_dir.rglob("*sta*.rpt")) + list(result_dir.rglob("*sta*.rpt.txt")) + list(result_dir.rglob("*.rpt"))
+    timing = {"setup_wns_ns": None, "setup_tns_ns": None}
+    for report in reports:
+        try:
+            text = report.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        parsed = parse_timing_from_text(text)
+        for key in ("setup_wns_ns", "setup_tns_ns"):
+            if parsed[key] is not None:
+                timing[key] = parsed[key]
+        if timing["setup_wns_ns"] is not None and timing["setup_tns_ns"] is not None:
+            break
+    return timing
 
-                    if files.get("rpt"):
-                        f.write(f"- **报告文件**: {len(files['rpt'])} 个\n")
 
-                    f.write("\n")
+@dataclass
+class DesignReport:
+    design: str
+    pdk: str
+    strategy: str
+    status: str
+    output_dir: Path
+    result_dir: Path
+    floorplan_target: float | None
+    stage_status: dict[str, str]
+    timing: dict[str, float | None]
+    runtime_by_stage: dict[str, float]
+    runtime_total: float
+    artifacts: dict[str, list[str]]
+    baseline_timing: dict[str, float | None] | None = None
 
-            # 6. 总结和建议
-            f.write("## 6. 总结和建议\n\n")
+    @property
+    def util_target_ok(self) -> bool:
+        return self.floorplan_target is not None and self.floorplan_target >= TARGET_UTILIZATION - 1e-9
 
-            if status_count["success"] == len(self.results):
-                f.write("✓ 所有设计均成功完成全部流程！\n\n")
-            elif status_count["failed"] > 0 or status_count["partial"] > 0:
-                f.write("需要关注的问题:\n\n")
+    @property
+    def util_gap_to_target(self) -> float | None:
+        if self.floorplan_target is None:
+            return None
+        return self.floorplan_target - TARGET_UTILIZATION
 
-                if status_count["not_run"] > 0:
-                    f.write(f"- {status_count['not_run']} 个设计未运行\n")
+    def timing_improvement(self, key: str) -> float | None:
+        if self.baseline_timing is None:
+            return None
+        current = self.timing.get(key)
+        base = self.baseline_timing.get(key)
+        if current is None or base is None:
+            return None
+        if not math.isfinite(current) or not math.isfinite(base):
+            return None
+        if base == 0.0:
+            return 1.0 if current >= 0.0 else None
+        if current < 0.0 and base < 0.0:
+            return max(0.0, (abs(base) - abs(current)) / abs(base))
+        if current >= 0 and base < 0:
+            return 1.0
+        if current < 0 and base >= 0:
+            return 0.0
+        return max(0.0, (base - current) / abs(base)) if base != 0 else None
 
-                if status_count["failed"] > 0:
-                    f.write(f"- {status_count['failed']} 个设计运行失败，需要检查错误日志\n")
+    def timing_improvement_meets_goal(self, key: str) -> bool:
+        imp = self.timing_improvement(key)
+        return imp is not None and imp >= BASELINE_GOAL_DELTA
 
-                if status_count["partial"] > 0:
-                    f.write(f"- {status_count['partial']} 个设计部分完成，可能在某个阶段卡住\n")
 
-            f.write("\n---\n\n")
-            f.write(f"报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+def infer_design_metadata(design: str) -> tuple[str, str]:
+    parts = design.split("_")
+    if len(parts) >= 2:
+        pdk = parts[1]
+        strategy = parts[-1] if len(parts[-1]) == 1 else "a"
+        return pdk, strategy
+    return "unknown", "a"
 
-        print(f"Markdown报告已生成: {report_file}")
-        return str(report_file)
 
-def main():
-    # 获取benchmark目录
-    script_dir = Path(__file__).parent
-    benchmark_dir = script_dir.parent
+def load_baseline_mapping(path: Path | None) -> dict[str, dict[str, float | None]]:
+    if not path or not path.is_file():
+        return {}
+    data = read_json(path)
+    if not isinstance(data, dict):
+        return {}
 
-    print(f"Benchmark目录: {benchmark_dir}")
+    entries = data.get("designs")
+    if not isinstance(entries, list):
+        return {}
 
-    # 创建分析器
-    analyzer = AESAnalyzer(str(benchmark_dir))
+    result: dict[str, dict[str, float | None]] = {}
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("design")
+        timing = item.get("timing") if isinstance(item.get("timing"), dict) else {}
+        if not name:
+            continue
+        result[str(name)] = {
+            "setup_wns_ns": timing.get("setup_wns_ns"),
+            "setup_tns_ns": timing.get("setup_tns_ns"),
+        }
+    return result
 
-    # 分析所有设计
-    analyzer.analyze_all_designs()
 
-    # 生成报告
-    json_file = analyzer.generate_json_report()
-    md_file = analyzer.generate_markdown_report()
+def load_design_report(design: str, run_root: Path, baseline: dict[str, dict[str, float | None]]) -> DesignReport:
+    pdk, strategy = infer_design_metadata(design)
+    output_dir = run_root / design
+    summary = read_json(output_dir / "summary.json")
+    result_dir = output_dir / "workspace" / "result"
 
-    print("\n" + "="*60)
-    print("报告生成完成!")
-    print(f"  JSON报告: {json_file}")
-    print(f"  Markdown报告: {md_file}")
-    print("="*60)
+    stage_status: dict[str, str] = {}
+    floorplan_target = None
+    runtime_total = 0.0
+    runtime_by_stage: dict[str, float] = {}
+    artifacts: dict[str, list[str]] = {"def": [], "gds": [], "rpt": [], "pwr": [], "png": []}
+    status = "not_run"
+    timing = {"setup_wns_ns": None, "setup_tns_ns": None}
+
+    if summary:
+        status = summary.get("status", "unknown")
+        fp = summary.get("floorplan")
+        if isinstance(fp, dict):
+            floorplan_target = fp.get("target_utilization")
+        stages = summary.get("stages", {})
+        if isinstance(stages, dict):
+            for stage_key, _name, _artifact in STAGES:
+                info = stages.get(stage_key)
+                if isinstance(info, dict):
+                    stage_status[stage_key] = info.get("status", "unknown")
+                else:
+                    stage_status[stage_key] = "missing"
+
+        timing = parse_timing_from_summary(summary)
+
+        runtime_by_stage, runtime_total = parse_performance_jsonl(output_dir / "performance_profile.jsonl")
+
+        for path in result_dir.rglob("*.def"):
+            artifacts["def"].append(str(path))
+        for path in result_dir.rglob("*.gds*"):
+            artifacts["gds"].append(str(path))
+        for path in result_dir.rglob("*.rpt"):
+            artifacts["rpt"].append(str(path))
+        for path in result_dir.rglob("*.pwr"):
+            artifacts["pwr"].append(str(path))
+        for path in result_dir.rglob("*.png"):
+            artifacts["png"].append(str(path))
+    else:
+        # Fallback from raw result directory when no per-design summary exists.
+        if result_dir.is_dir():
+            for stage_key, _stage_label, marker in STAGES:
+                if marker is None:
+                    stage_status[stage_key] = "missing"
+                    continue
+                path = result_dir / marker
+                stage_status[stage_key] = "done" if path.exists() else "missing"
+            timing = parse_timing_from_reports(result_dir)
+            for path in result_dir.rglob("*.def"):
+                artifacts["def"].append(str(path))
+            for path in result_dir.rglob("*.gds*"):
+                artifacts["gds"].append(str(path))
+            for path in result_dir.rglob("*.rpt"):
+                artifacts["rpt"].append(str(path))
+            for path in result_dir.rglob("*.pwr"):
+                artifacts["pwr"].append(str(path))
+            for path in result_dir.rglob("*.png"):
+                artifacts["png"].append(str(path))
+            runtime_by_stage, runtime_total = parse_performance_jsonl(output_dir / "performance_profile.jsonl")
+        status = "unknown" if any(v for v in stage_status.values()) else "not_run"
+
+    return DesignReport(
+        design=design,
+        pdk=pdk,
+        strategy=strategy,
+        status=status,
+        output_dir=output_dir,
+        result_dir=result_dir,
+        floorplan_target=floorplan_target,
+        stage_status=stage_status,
+        timing=timing,
+        runtime_by_stage=runtime_by_stage,
+        runtime_total=runtime_total,
+        artifacts=artifacts,
+        baseline_timing=baseline.get(design),
+    )
+
+
+def discover_designs(run_root: Path) -> list[str]:
+    batch = read_json(run_root / "summary.json")
+    if isinstance(batch, dict):
+        summary_entries = batch.get("summaries")
+        if isinstance(summary_entries, list):
+            seen = []
+            for item in summary_entries:
+                if not isinstance(item, dict):
+                    continue
+                design = item.get("design")
+                if isinstance(design, str) and design not in seen:
+                    seen.append(design)
+            if seen:
+                return seen
+    return [name for name in DESIGNS if (run_root / name).is_dir()]
+
+
+def run_root_summary(design_results: list[DesignReport], run_root: Path, output: Path) -> None:
+    status_count: dict[str, int] = {}
+    util_ok = 0
+    util_total = 0
+    tns_ok = 0
+    wns_ok = 0
+    with_targets = 0
+    total_runtime = 0.0
+    for result in design_results:
+        status_count[result.status] = status_count.get(result.status, 0) + 1
+        if result.floorplan_target is not None:
+            util_total += 1
+            if result.util_target_ok:
+                util_ok += 1
+        with_targets += 1
+        if result.timing_improvement_meets_goal("setup_tns_ns"):
+            tns_ok += 1
+        if result.timing_improvement_meets_goal("setup_wns_ns"):
+            wns_ok += 1
+        total_runtime += result.runtime_total
+
+    pdk_groups: dict[str, dict[str, int]] = {}
+    for result in design_results:
+        bucket = pdk_groups.setdefault(result.pdk, {"total": 0, "success": 0, "util_ok": 0, "tns_ok": 0, "wns_ok": 0})
+        bucket["total"] += 1
+        if result.status == "success":
+            bucket["success"] += 1
+        if result.util_target_ok:
+            bucket["util_ok"] += 1
+        if result.timing_improvement_meets_goal("setup_tns_ns"):
+            bucket["tns_ok"] += 1
+        if result.timing_improvement_meets_goal("setup_wns_ns"):
+            bucket["wns_ok"] += 1
+
+    lines = [
+        "# AES13 交易化后对比报告（v1）",
+        "",
+        f"- 生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- 结果目录：{safe_relpath(run_root, REPO_ROOT)}",
+        "",
+        "## 1. 总体统计",
+        "",
+        f"- 设计总数：{len(design_results)}",
+    ]
+    for key in ("success", "partial", "failed", "prepared", "not_run", "error"):
+        lines.append(f"- {key}: {status_count.get(key, 0)}")
+    lines.extend(
+        [
+            f"- 利用率目标达标(≥{TARGET_UTILIZATION:.2f})：{util_ok}/{util_total}",
+            f"- TNS ≥ {int(BASELINE_GOAL_DELTA * 100)}% 提升：{tns_ok}/{with_targets}",
+            f"- WNS ≥ {int(BASELINE_GOAL_DELTA * 100)}% 提升：{wns_ok}/{with_targets}",
+            f"- 总运行时长累计：{number(total_runtime, 1)} s",
+            "",
+            "## 2. PDK 汇总",
+            "",
+            "| PDK | 总数 | 成功 | 利用率达标 | TNS 20%+ | WNS 20%+ |",
+            "|---|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for pdk in sorted(pdk_groups.keys()):
+        item = pdk_groups[pdk]
+        lines.append(
+            f"| {pdk} | {item['total']} | {item['success']} | {item['util_ok']}/{item['total']} | "
+            f"{item['tns_ok']}/{item['total']} | {item['wns_ok']}/{item['total']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## 3. 按设计明细",
+            "",
+            "| 设计 | PDK/策略 | 状态 | 利用率目标 | 达标 | 运行时(s) | WNS(ns) | TNS(ns) | WNS提升 | TNS提升 | 阶段完成率 |",
+            "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for result in sorted(design_results, key=lambda item: item.design):
+        done = sum(1 for v in result.stage_status.values() if v in {"success", "done"})
+        total_stage = len(STAGES)
+        if not result.stage_status:
+            done = 0
+            total_stage = len(STAGES)
+        wns_gap = result.timing.get("setup_wns_ns")
+        tns_gap = result.timing.get("setup_tns_ns")
+        lines.append(
+            f"| {result.design} | {result.pdk}/{result.strategy} | {result.status} | "
+            f"{number(result.floorplan_target, 2)} | {'✓' if result.util_target_ok else '✗'} | "
+            f"{number(result.runtime_total, 1)} | {number(wns_gap, 3)} | {number(tns_gap, 3)} | "
+            f"{pct(result.timing_improvement('setup_wns_ns'))} | {pct(result.timing_improvement('setup_tns_ns'))} | "
+            f"{done}/{total_stage} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## 4. 目标评审（新门禁）",
+            "",
+            f"- 目标：每个设计 floorplan target utilization 调整到 {TARGET_UTILIZATION:.2f}",
+            f"- 目标：TNS/WNS 相对基线（`--baseline`）至少提升 {int(BASELINE_GOAL_DELTA * 100)}%",
+            "",
+            "每个指标说明：",
+            "- `提升` 按负值改进率定义，值越大越好，1.0 代表全部修复；与基线同号无法评估时标记 `N/A`。",
+            "",
+            f"- 结果文件：{safe_relpath(output.with_suffix('.json'), output.parent)}（若有基线则包含 baseline 字段）",
+        ]
+    )
+    output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def build_json_report(design_results: list[DesignReport]) -> dict[str, Any]:
+    return {
+        "schema_version": "aes13-postchange-v1",
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "target_utilization": TARGET_UTILIZATION,
+        "target_timing_improvement": BASELINE_GOAL_DELTA,
+        "designs": [
+            {
+                "design": result.design,
+                "pdk": result.pdk,
+                "strategy": result.strategy,
+                "status": result.status,
+                "floorplan_target_utilization": result.floorplan_target,
+                "output_dir": str(result.output_dir),
+                "result_dir": str(result.result_dir),
+                "runtime_total_sec": result.runtime_total,
+                "runtime_by_stage": result.runtime_by_stage,
+                "stage_status": result.stage_status,
+                "timing": {
+                    "setup_wns_ns": result.timing.get("setup_wns_ns"),
+                    "setup_tns_ns": result.timing.get("setup_tns_ns"),
+                },
+                "timing_improvement": {
+                    "setup_wns_ns": result.timing_improvement("setup_wns_ns"),
+                    "setup_tns_ns": result.timing_improvement("setup_tns_ns"),
+                },
+                "targets": {
+                    "util_ok": result.util_target_ok,
+                    "util_gap": result.util_gap_to_target,
+                    "wns_improvement_goal_met": result.timing_improvement_meets_goal("setup_wns_ns"),
+                    "tns_improvement_goal_met": result.timing_improvement_meets_goal("setup_tns_ns"),
+                },
+                "artifacts": result.artifacts,
+            }
+            for result in design_results
+        ],
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate AES13 comparison report from run summaries")
+    parser.add_argument(
+        "--run-root",
+        type=Path,
+        default=DEFAULT_RUN_ROOT,
+        help="Run root path generated by aes13_flow.py",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=REPORT_OUTPUT,
+        help="Markdown report output path",
+    )
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        default=None,
+        help="Optional baseline JSON for TNS/WNS uplift comparison",
+    )
+    parser.add_argument(
+        "--baseline-improvement",
+        type=float,
+        default=0.20,
+        help="Required TNS/WNS improvement ratio against baseline (default 0.20)",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    global BASELINE_GOAL_DELTA
+    BASELINE_GOAL_DELTA = args.baseline_improvement
+    run_root = args.run_root
+    if not run_root.is_dir():
+        raise SystemExit(f"Run root not found: {run_root}")
+
+    baseline = load_baseline_mapping(args.baseline)
+    designs = discover_designs(run_root)
+    if not designs:
+        raise SystemExit(f"No AES design summaries found under {run_root}")
+
+    design_results = [
+        load_design_report(design, run_root, baseline) for design in designs
+    ]
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    json_path = args.output.with_suffix(".json")
+    report_json = build_json_report(design_results)
+    with json_path.open("w", encoding="utf-8") as f:
+        json.dump(report_json, f, indent=2, ensure_ascii=False)
+    json_path.write_text(json.dumps(report_json, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    run_root_summary(design_results, run_root, args.output)
+    print(f"对比报告已生成: {args.output}")
+    print(f"JSON 报告已生成: {json_path}")
+
 
 if __name__ == "__main__":
     main()

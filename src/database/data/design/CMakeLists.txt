@@ -1,4 +1,6 @@
 file(GLOB_RECURSE DB_SRC "*.cpp")
+find_package(Boost REQUIRED)
+
 if(BUILD_STATIC_LIB)
   add_library(idb ${DB_SRC})
 else()
@@ -13,6 +15,7 @@ target_include_directories(idb
         ${CMAKE_CURRENT_SOURCE_DIR}/db_property
         ${HOME_DATABASE}/basic/geometry
         ${HOME_UTILITY}/string
+        ${Boost_INCLUDE_DIRS}
 )
 
 target_link_libraries(idb PRIVATE str geometry_db)

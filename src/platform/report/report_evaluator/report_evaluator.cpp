@@ -19,7 +19,10 @@
 #include <algorithm>
 #include <fstream>
 #include <future>
+#include <iostream>
 #include <memory>
+#include <optional>
+#include <sstream>
 #include <tuple>
 
 #include "IdbPins.h"
@@ -31,6 +34,36 @@
 #include "wirelength_api.h"
 
 namespace iplf {
+
+namespace {
+
+std::optional<std::vector<float>> readFloatCsvValues(const std::string& file_path)
+{
+  std::ifstream file(file_path);
+  if (!file.is_open()) {
+    std::cerr << "Error opening file: " << file_path << std::endl;
+    return std::nullopt;
+  }
+
+  std::vector<float> values;
+  std::string line;
+  while (std::getline(file, line)) {
+    std::stringstream stream(line);
+    std::string cell;
+    while (std::getline(stream, cell, ',')) {
+      if (!cell.empty()) {
+        values.push_back(std::stof(cell));
+      }
+    }
+  }
+  if (values.empty()) {
+    std::cerr << "Empty CSV file: " << file_path << std::endl;
+    return std::nullopt;
+  }
+  return values;
+}
+
+}  // namespace
 
 // template <typename T>
 // static void freeWrapped(std::vector<T*>& obj_vec)
@@ -53,8 +86,21 @@ namespace iplf {
  */
 auto ReportEvaluator::CongStats(float threshold, float step, vector<float>& data)
 {
-  float ceiling = *std::max_element(data.begin(), data.end());
   vector<float> range;
+  if (data.empty()) {
+    return std::tuple(range, vector<int>{});
+  }
+  float ceiling = *std::max_element(data.begin(), data.end());
+  if (ceiling <= threshold || step <= 0.0F) {
+    range.push_back(threshold);
+    vector<int> count(1, 0);
+    for (auto value : data) {
+      if (value >= threshold && value <= ceiling) {
+        count[0]++;
+      }
+    }
+    return std::tuple(range, count);
+  }
   for (auto r = threshold; r < ceiling; r += step) {
     range.push_back(r);
   }
@@ -64,7 +110,7 @@ auto ReportEvaluator::CongStats(float threshold, float step, vector<float>& data
       continue;
     }
     size_t index = 0;
-    for (; index < range.size() - 1 && range[index] < value; ++index)
+    for (; index + 1 < range.size() && range[index] < value; ++index)
       ;
     count[index]++;
   }
@@ -111,47 +157,10 @@ std::shared_ptr<ieda::ReportTable> ReportEvaluator::createCongestionReport()
   ieval::DensityMapSummary density_map_summay = DENSITY_API_INST->densityMap(stage);
 
   std::string pin_density_file_path = density_map_summay.pin_map_summary.allcell_pin_density;
-  std::ifstream pin_density_file(pin_density_file_path);
-  if (!pin_density_file.is_open()) {
-    std::cerr << "Error opening file: " << pin_density_file_path << std::endl;
-  }
-  std::string pin_density_line;
-  std::vector<float> pin_density;
-  while (std::getline(pin_density_file, pin_density_line)) {
-    std::stringstream ss(pin_density_line);
-    std::string pin_density_cell;
-    while (std::getline(ss, pin_density_cell, ',')) {
-      float pin_value = std::stof(pin_density_cell);
-      pin_density.push_back(pin_value);
-    }
-  }
-  pin_density_file.close();
-
   std::string inst_density_file_path = density_map_summay.cell_map_summary.allcell_density;
-  std::ifstream inst_density_file(inst_density_file_path);
-  if (!inst_density_file.is_open()) {
-    std::cerr << "Error opening file: " << inst_density_file_path << std::endl;
-  }
-  std::string inst_density_line;
-  std::vector<float> inst_density;
-  while (std::getline(inst_density_file, inst_density_line)) {
-    std::stringstream ss1(inst_density_line);
-    std::string inst_density_cell;
-    while (std::getline(ss1, inst_density_cell, ',')) {
-      float inst_value = std::stof(inst_density_cell);
-      inst_density.push_back(inst_value);
-    }
-  }
-  inst_density_file.close();
-
-  float inst_den_max = *std::max_element(inst_density.begin(), inst_density.end());
-  float pin_den_max = *std::max_element(pin_density.begin(), pin_density.end());
+  const auto pin_density_values = readFloatCsvValues(pin_density_file_path);
+  const auto inst_density_values = readFloatCsvValues(inst_density_file_path);
   // prepare report table
-
-  auto [inst_den_range, inst_den_cnt] = CongStats(inst_den_max * 0.75, 0.05 * inst_den_max, inst_density);
-  auto [pin_den_range, pin_den_cnt] = CongStats(pin_den_max * 0.5, pin_den_max * 0.1, pin_density);
-  inst_den_range.push_back(inst_den_max);
-  pin_den_range.push_back(pin_den_max);
 
   std::vector<std::string> header = {"Grid Bin Size", "Bin Partition", "Total Count"};
   auto tbl = std::make_shared<ieda::ReportTable>("Congestion Report", header, static_cast<int>(ReportEvaluatorType::kCongestion));
@@ -164,34 +173,94 @@ std::shared_ptr<ieda::ReportTable> ReportEvaluator::createCongestionReport()
   *tbl << TABLE_HEAD << "Instance Density Range"
        << "Bins Count"
        << "Percentage " << TABLE_ENDLINE;
-  for (int i = inst_den_cnt.size() - 1; i >= 0; --i) {
-    *tbl << ieda::Str::printf("%.2f ~ %.2f", inst_den_range[i], inst_den_range[i + 1]) << inst_den_cnt[i]
-         << ieda::Str::printf("%.2f", 100 * inst_den_cnt[i] / static_cast<double>(inst_density.size())) << TABLE_ENDLINE;
+  if (inst_density_values) {
+    std::vector<float> inst_density = *inst_density_values;
+    float inst_den_max = *std::max_element(inst_density.begin(), inst_density.end());
+    auto [inst_den_range, inst_den_cnt] = CongStats(inst_den_max * 0.75, 0.05 * inst_den_max, inst_density);
+    inst_den_range.push_back(inst_den_max);
+    for (int i = inst_den_cnt.size() - 1; i >= 0; --i) {
+      *tbl << ieda::Str::printf("%.2f ~ %.2f", inst_den_range[i], inst_den_range[i + 1]) << inst_den_cnt[i]
+           << ieda::Str::printf("%.2f", 100 * inst_den_cnt[i] / static_cast<double>(inst_density.size())) << TABLE_ENDLINE;
+    }
+  } else {
+    *tbl << "N/A"
+         << "N/A"
+         << "N/A" << TABLE_ENDLINE;
   }
 
   // Pin Density Information
   *tbl << TABLE_HEAD << "Pin Count Range"
        << "Bins Count"
        << "Percentage" << TABLE_ENDLINE;
-  for (int i = pin_den_cnt.size() - 1; i >= 0; --i) {
-    *tbl << ieda::Str::printf("%.0f ~ %.0f", pin_den_range[i], pin_den_range[i + 1]) << pin_den_cnt[i]
-         << ieda::Str::printf("%.2f", 100 * pin_den_cnt[i] / static_cast<double>(pin_density.size())) << TABLE_ENDLINE;
+  if (pin_density_values) {
+    std::vector<float> pin_density = *pin_density_values;
+    float pin_den_max = *std::max_element(pin_density.begin(), pin_density.end());
+    auto [pin_den_range, pin_den_cnt] = CongStats(pin_den_max * 0.5, pin_den_max * 0.1, pin_density);
+    pin_den_range.push_back(pin_den_max);
+    for (int i = pin_den_cnt.size() - 1; i >= 0; --i) {
+      *tbl << ieda::Str::printf("%.0f ~ %.0f", pin_den_range[i], pin_den_range[i + 1]) << pin_den_cnt[i]
+           << ieda::Str::printf("%.2f", 100 * pin_den_cnt[i] / static_cast<double>(pin_density.size())) << TABLE_ENDLINE;
+    }
+  } else {
+    *tbl << "N/A"
+         << "N/A"
+         << "N/A" << TABLE_ENDLINE;
   }
 
   // evaluate EGR Congestion
 
   *tbl << TABLE_HEAD << "Average Congestion of Edges"
        << "Total Overflow"
-       << "Maximal Overflow" << TABLE_ENDLINE;
+       << "Maximal Overflow"
+       << "Top 1% Mean"
+       << "Top 5% Mean"
+       << "Non-zero Bins (%)"
+       << "Average Source" << TABLE_ENDLINE;
 
-  CONGESTION_API_INST->egrMap("place");                                                 // hard code , only for place stage
-  ieval::OverflowSummary overflow_summary = CONGESTION_API_INST->egrOverflow("place");  // hard code , only for place stage
+  const std::string summary_path = dmInst->get_config().get_output_path() + "/congestion_summary.json";
+
+  CONGESTION_API_INST->egrMap(stage);
+  CONGESTION_API_INST->writeCongestionSummary(stage, summary_path);
+
+  ieval::OverflowSummary overflow_summary;
+  std::optional<ieval::CongestionSummaryDocument> congestion_summary_doc = CONGESTION_API_INST->readCongestionSummary(summary_path);
+  if (congestion_summary_doc && congestion_summary_doc->valid) {
+    const auto& summary_doc = *congestion_summary_doc;
+    overflow_summary.total_overflow_union = static_cast<int32_t>(summary_doc.union_map.total);
+    overflow_summary.max_overflow_union = summary_doc.union_map.max;
+    overflow_summary.weighted_average_overflow_union = static_cast<float>(summary_doc.union_map.weighted_average);
+    overflow_summary.total_overflow_horizontal = static_cast<int32_t>(summary_doc.horizontal.total);
+    overflow_summary.total_overflow_vertical = static_cast<int32_t>(summary_doc.vertical.total);
+    overflow_summary.max_overflow_horizontal = summary_doc.horizontal.max;
+    overflow_summary.max_overflow_vertical = summary_doc.vertical.max;
+    overflow_summary.weighted_average_overflow_horizontal = static_cast<float>(summary_doc.horizontal.weighted_average);
+    overflow_summary.weighted_average_overflow_vertical = static_cast<float>(summary_doc.vertical.weighted_average);
+  } else {
+    overflow_summary = CONGESTION_API_INST->egrOverflow(stage);
+  }
+
   if (overflow_summary.isValid()) {
     *tbl << ieda::Str::printf("%.2f", overflow_summary.weighted_average_overflow_union)
          << ieda::Str::printf("%d", overflow_summary.total_overflow_union)
-         << ieda::Str::printf("%d", overflow_summary.max_overflow_union) << TABLE_ENDLINE;
+         << ieda::Str::printf("%d", overflow_summary.max_overflow_union);
+    if (congestion_summary_doc && congestion_summary_doc->valid) {
+      *tbl << ieda::Str::printf("%.2f", congestion_summary_doc->union_map.top_1_pct_mean)
+           << ieda::Str::printf("%.2f", congestion_summary_doc->union_map.top_5_pct_mean)
+           << ieda::Str::printf("%.2f", congestion_summary_doc->union_map.nonzero_bin_pct)
+           << congestion_summary_doc->union_map.weighted_average_source;
+    } else {
+      *tbl << "N/A"
+           << "N/A"
+           << "N/A"
+           << "legacy";
+    }
+    *tbl << TABLE_ENDLINE;
   } else {
     *tbl << "N/A"
+         << "N/A"
+         << "N/A"
+         << "N/A"
+         << "N/A"
          << "N/A"
          << "N/A" << TABLE_ENDLINE;
   }

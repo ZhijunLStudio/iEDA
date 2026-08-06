@@ -94,11 +94,14 @@ unsigned CmdPlacerFiller::exec()
   TclOption* option = getOptionOrArg(TCL_CONFIG);
   auto data_config = option->getStringVal();
 
-  if (iplf::tmInst->runPlacerFiller(data_config)) {
-    std::cout << "iPL filler run successfully." << std::endl;
+  const bool filler_succeeded = iplf::tmInst->runPlacerFiller(data_config);
+  if (!filler_succeeded) {
+    std::cerr << "iPL filler run failed." << std::endl;
+    return ipl::placementTclResult(false);
   }
 
-  return 1;
+  std::cout << "iPL filler run successfully." << std::endl;
+  return ipl::placementTclResult(true);
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -125,11 +128,14 @@ unsigned CmdPlacerIncrementalFlow::exec()
   TclOption* option = getOptionOrArg(TCL_CONFIG);
   auto data_config = option->getStringVal();
 
-  if (iplf::tmInst->runPlacerIncrementalFlow(data_config)) {
-    std::cout << "iPL incremental flow run successfully." << std::endl;
+  const bool incremental_succeeded = iplf::tmInst->runPlacerIncrementalFlow(data_config);
+  if (!incremental_succeeded) {
+    std::cerr << "iPL incremental flow run failed." << std::endl;
+    return ipl::placementTclResult(false);
   }
 
-  return 1;
+  std::cout << "iPL incremental flow run successfully." << std::endl;
+  return ipl::placementTclResult(true);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

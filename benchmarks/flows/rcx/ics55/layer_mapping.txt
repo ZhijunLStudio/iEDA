@@ -1,0 +1,12 @@
+# iRCX layer mapping: <design_layer> <process_layer>
+# Synthetic smoke mapping for ICS55 standard signal routing stack.
+# Generated ITF/captab from this mapping is untrusted and not foundry signoff RC.
+MET1 MET1
+VIA1 VIA1
+MET2 MET2
+VIA2 VIA2
+MET3 MET3
+VIA3 VIA3
+MET4 MET4
+VIA4 VIA4
+MET5 MET5

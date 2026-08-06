@@ -16,6 +16,8 @@
 // ***************************************************************************************
 #include "tcl_ito.h"
 
+#include <iostream>
+
 #include "ToApi.hpp"
 #include "tool_manager.h"
 
@@ -43,10 +45,13 @@ unsigned CmdTOAutoRun::exec()
   TclOption* option = getOptionOrArg(TCL_CONFIG);
   auto data_config = option->getStringVal();
 
-  if (iplf::tmInst->autoRunTO(data_config)) {
-    std::cout << "iTO auto run successfully." << std::endl;
+  const bool to_succeeded = iplf::tmInst->autoRunTO(data_config);
+  if (!to_succeeded) {
+    std::cerr << "iTO auto run failed." << std::endl;
+    return 0;
   }
 
+  std::cout << "iTO auto run successfully." << std::endl;
   return 1;
 }
 
@@ -76,10 +81,13 @@ unsigned CmdTORunDrv::exec()
   TclOption* option = getOptionOrArg(TCL_CONFIG);
   auto data_config = option->getStringVal();
 
-  if (iplf::tmInst->RunTODrv(data_config)) {
-    std::cout << "iTO Drv run successfully." << std::endl;
+  const bool drv_succeeded = iplf::tmInst->RunTODrv(data_config);
+  if (!drv_succeeded) {
+    std::cerr << "iTO Drv run failed." << std::endl;
+    return 0;
   }
 
+  std::cout << "iTO Drv run successfully." << std::endl;
   return 1;
 }
 

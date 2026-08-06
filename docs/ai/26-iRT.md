@@ -433,6 +433,92 @@ ALG-4.A-2  detectStagnation（★新增）
 
 Know-how：KH-RT-01/02/03（PathFinder 历史代价、plateau→策略、自适应 box）。
 
+#### 4.A.3 WP-iRT-03: Adaptive Box Sizing（★已实现 rv2.1）
+
+**动机**：当前 box size 固定为 12 GCell，在高密度设计（≥60% utilization）下过小，导致局部冲突无法全局解决。诊断报告（`docs/ai/diagnostics/aes_sky130_a_65pct.md`）建议：<40% 用 12，40-60% 用 24，≥60% 用 48。
+
+**实现位置**：`src/operation/iRT/source/module/detailed_router/DetailedRouter.cpp:420-543`
+
+**策略**：
+
+1. **自动检测**（基于利用率）：
+   ```cpp
+   if (utilization < 0.40) initial_box_size = 12;      // 快速收敛
+   else if (utilization < 0.60) initial_box_size = 24; // 平衡
+   else initial_box_size = 48;                         // 高密度，需要全局视野
+   ```
+
+2. **手动覆盖**（环境变量优先级最高）：
+   ```bash
+   export IEDA_RT_INITIAL_BOX_SIZE=24   # 手动指定
+   ```
+
+3. **Escalation 策略**（默认启用）：
+   ```
+   初始 size → 2× → 4×
+   例如：12 → 24 → 48  或  24 → 48 → 96
+   每个 size 运行 3 轮迭代（不同 offset）
+   ```
+
+4. **固定 size 模式**（禁用 escalation）：
+   ```bash
+   export IEDA_RT_ENABLE_ESCALATION=0   # 所有 9 轮使用相同 size
+   ```
+
+**环境变量控制**：
+
+| 变量 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `IEDA_RT_INITIAL_BOX_SIZE` | int | auto | 手动指定初始 box size (12/24/48) |
+| `IEDA_RT_ENABLE_ESCALATION` | bool | 1 | 启用 escalation 策略 |
+| `IEDA_RT_DESIGN_UTILIZATION` | float | 0.35 | 设计利用率（用于自动选择）|
+
+**验证实验**：
+
+| 实验 | 配置 | 预期效果 |
+|---|---|---|
+| E-03 | size=24 固定 | box 200+/324 完成 |
+| E-04 | size=48 固定 | 可能完成全部 324 |
+| E-05 | utilization=0.65 自动 | 自动选择 size=48 |
+| E-06 | escalation 12→24→48 | 平衡速度和收敛 |
+
+**复杂度影响**：
+
+- Box size ↑ → 单 box 内网络数 O(size²)，A* 搜索空间 O(size² × layers)
+- 但 box 总数 ↓ → 全局迭代次数可能 ↓
+- 净效应：<60% 利用率下 size=12 更快；≥60% 下 size=48 更可能收敛
+
+**边界条件**：
+
+- size < 12：可能过小，网络无法在单 box 内找到路径
+- size > 96：内存消耗指数增长，可能触发 OOM
+- escalation 倍率建议：2× 或 4×，避免过激跳跃
+
+**复用姿势**：
+
+- 利用率可从 database 实时计算（TODO：`getCoreArea()` / `getTotalCellArea()`）
+- 当前临时方案：从环境变量读取
+- 禁止在运行中动态改变 box size（会破坏 history cost 一致性）
+
+**日志输出示例**：
+
+```
+[INFO] High utilization (65%), using box_size=48 (global view for congestion)
+[INFO] Using escalation strategy: 48 -> 96 -> 192
+```
+
+**Known issues**：
+
+- 利用率目前从环境变量读取，未集成到 database API
+- Offset 计算 `size/3` 和 `size*2/3` 对非 3 的倍数可能不够平衡
+
+**对标差距**：
+
+- ✅ 已支持可配 box size（vs 硬编码 12）
+- ✅ 已支持 escalation 策略
+- ⚠️ 尚未支持 plateau 检测后动态调整 box size（需配合 WP-iRT-01）
+- ⚠️ 尚未支持基于冲突密度的自适应 box 切分
+
 ### 4.B 时序驱动（FR-RT-06/07，NanoRoute 性能线）
 
 **真实现状**：调用槽在（`DetailedRouter.cpp:3248-3263`）；`updateTiming` 空（`RTInterface.cpp:1522+`）；代价无 slack（`:1425-1574`）。

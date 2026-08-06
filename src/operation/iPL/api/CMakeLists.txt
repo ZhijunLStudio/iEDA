@@ -11,6 +11,7 @@ add_library(ipl-api
 target_link_libraries(ipl-api
     PRIVATE
         ipl-source
+        ipl-module-macro_placer
     PUBLIC
         ipl-reporter
         ipl-external_api
@@ -19,4 +20,5 @@ target_link_libraries(ipl-api
 target_include_directories(ipl-api
     PUBLIC
         ${iPL_API}
+        ${iPL_SOURCE}/module/macro_placer
 )

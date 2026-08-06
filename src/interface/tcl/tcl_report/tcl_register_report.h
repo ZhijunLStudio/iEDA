@@ -43,6 +43,7 @@ int registerCmdReportEval()
 {
   registerTclCmd(CmdReportWL, "report_wirelength");
   registerTclCmd(CmdReportCong, "report_congestion");
+  registerTclCmd(CmdReportQualityGate, "report_quality_gate");
   // registerTclCmd(CmdReportDanglingNet, "report_dangling_net");
 
   return EXIT_SUCCESS;

@@ -1602,6 +1602,20 @@ void DataManager::printConfig()
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.dr_plateau_hotspot_change);
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "fail_on_residual_drc");
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.fail_on_residual_drc);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_plateau_escalate");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_plateau_escalate);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_rule_aware_cost");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_rule_aware_cost);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_enhanced_minarea_repair");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_enhanced_minarea_repair);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "rule_aware_max_history_scale");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.rule_aware_max_history_scale);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_component_escalate");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_component_escalate);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_prl_short_repair");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_prl_short_repair);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "component_escalate_halo_pitch");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.component_escalate_halo_pitch);
   // **********        RT         ********** //
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(0), "RT_CONFIG_BUILD");
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "log_file_path");

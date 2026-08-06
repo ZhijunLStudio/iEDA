@@ -1,19 +1,19 @@
-Generate the report at 2026-07-23T07:25:26
+Generate the report at 2026-07-25T15:06:06
 +-----------------------+------------+
 | Base Info             | Value      |
 +-----------------------+------------+
 | Design                | aes        |
-| Utilization           | 0.530070   |
+| Utilization           | 0.530635   |
 | Site Num              | 235 * 1392 |
-| Instances Count       | 29439      |
+| Instances Count       | 29435      |
 | - Macro Count         | 0          |
-| - StdCell Count       | 29439      |
+| - StdCell Count       | 29435      |
 | -- FlipFlop Count     | 2987       |
 | -- Clock Buffer Count | 0          |
-| -- Normal Logic Count | 26452      |
-| Nets Count            | 22527      |
+| -- Normal Logic Count | 26448      |
+| Nets Count            | 22500      |
 | - Signal Net Count    | 22342      |
-| - Clock Net Count     | 185        |
+| - Clock Net Count     | 158        |
 | - Reset Net Count     | 0          |
 | - Other Net Count     | 0          |
 +-----------------------+------------+
@@ -24,22 +24,22 @@ Generate the report at 2026-07-23T07:25:26
 | Core Range Violated Count         | 0     |
 | Row/Site Alignment Violated Count | 0     |
 | Power Alignment Violated Count    | 0     |
-| Overlap Violated Count            | 14    |
+| Overlap Violated Count            | 0     |
 +-----------------------------------+-------+
 
 +-------------------------------------+-----------+
 | Wirelength Info                     | Value     |
 +-------------------------------------+-----------+
-| Total HPWL                          | 781827907 |
-| Max HPWL                            | 860806    |
-| Total STWL                          | 965770398 |
-| Max STWL                            | 2035052   |
+| Total HPWL                          | 786280170 |
+| Max HPWL                            | 955227    |
+| Total STWL                          | 966478857 |
+| Max STWL                            | 1540394   |
 | LongNet HPWL (Exceed 1000000) Count | 0         |
 +-------------------------------------+-----------+
 
 +------------------+----------+
 | Bin Density Info | Value    |
 +------------------+----------+
-| Peak BinDensity  | 1.353164 |
+| Peak BinDensity  | 1.000000 |
 +------------------+----------+
 

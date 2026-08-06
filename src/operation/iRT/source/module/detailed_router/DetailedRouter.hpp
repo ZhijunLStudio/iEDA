@@ -25,6 +25,8 @@
 #include "DRNet.hpp"
 #include "DRNode.hpp"
 #include "DRPatch.hpp"
+#include "DRConflictEscalate.hpp"
+#include "DRRuleAwareCost.hpp"
 #include "DataManager.hpp"
 #include "Database.hpp"
 #include "Net.hpp"
@@ -46,6 +48,15 @@ class DetailedRouter
  private:
   // self
   static DetailedRouter* _dr_instance;
+  // Cached once per routeDRModel for A* hot path (no getenv/config map lookups in getNodeCost).
+  DRRuleAwareCostConfig _rule_aware_cost_config;
+  // WP-RT-01b: nets in the selected conflict component get weight boost on plateau.
+  bool _enable_component_escalate = false;
+  bool _enable_prl_short_repair = false;
+  int32_t _component_escalate_level = 0;
+  int32_t _component_halo_pitch_mult = 2;
+  bool _component_extra_iters_appended = false;
+  std::set<int32_t> _escalated_net_idx_set;
 
   DetailedRouter() = default;
   DetailedRouter(const DetailedRouter& other) = delete;
@@ -131,6 +142,7 @@ class DetailedRouter
   int32_t getViolationScore(const std::vector<Violation>& violation_list);
   void updateBestResult(DRBox& dr_box);
   void updateTaskSchedule(DRBox& dr_box, std::vector<DRTask*>& routing_task_list);
+  void applyComponentEscalateOnPlateau(DRModel& dr_model, std::vector<DRIterParam>& dr_iter_param_list, int32_t from_index);
   void selectBestResult(DRBox& dr_box);
   void uploadBestResult(DRBox& dr_box);
   void freeDRBox(DRBox& dr_box);
@@ -143,10 +155,14 @@ class DetailedRouter
   bool stopIteration(DRModel& dr_model, std::vector<DRIterParam>& dr_iter_param_list);
   DRIterationState buildConvergenceState(DRModel& dr_model);
   void outputConvergenceJson(const DRConvergenceTracker& tracker, bool final_state);
+  void recordIterationDelta(DRModel& dr_model, const DRIterationState& state, double runtime_seconds, int32_t task_count);
+  void outputIterationDeltaJson(DRModel& dr_model);
+  void recordRepairAction(DRModel& dr_model, nlohmann::json action);
+  void outputRepairActionsJson(DRModel& dr_model);
   void selectBestResult(DRModel& dr_model);
   void patchFinalMinArea(DRModel& dr_model);
   void buildFinalPatchBox(DRModel& dr_model, DRBox& dr_box);
-  void uploadFinalPatch(DRBox& dr_box);
+  int32_t uploadFinalPatch(DRBox& dr_box);
   void uploadBestResult(DRModel& dr_model);
 
 #if 1  // update env
@@ -157,7 +173,8 @@ class DetailedRouter
   void updateRoutedRectToGraph(DRBox& dr_box, ChangeType change_type, int32_t net_idx, Segment<LayerCoord>& segment);
   void updateRoutedRectToGraph(DRBox& dr_box, ChangeType change_type, int32_t net_idx, EXTLayerRect& routed_rect, bool is_routing);
   void addRouteViolationToGraph(DRBox& dr_box, Violation& violation);
-  void addRouteViolationToGraph(DRBox& dr_box, LayerRect& searched_rect, std::vector<Segment<LayerCoord>>& overlap_segment_list);
+  void addRouteViolationToGraph(DRBox& dr_box, LayerRect& searched_rect, std::vector<Segment<LayerCoord>>& overlap_segment_list,
+                                int32_t violation_weight = 1);
   void updateNetShapeToGraph(DRBox& dr_box, ChangeType change_type, NetShape& net_shape, bool is_fixed);
   void updateRoutingNetShapeToGraph(DRBox& dr_box, ChangeType change_type, NetShape& net_shape, bool is_fixed);
   void updateCutNetShapeToGraph(DRBox& dr_box, ChangeType change_type, NetShape& net_shape, bool is_fixed);

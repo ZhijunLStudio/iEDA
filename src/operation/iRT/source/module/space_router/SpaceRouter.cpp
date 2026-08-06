@@ -16,11 +16,58 @@
 // ***************************************************************************************
 #include "SpaceRouter.hpp"
 
+#include <chrono>
+#include <cstdlib>
+#include <string>
+
 #include "GDSPlotter.hpp"
 #include "RTInterface.hpp"
 #include "Utility.hpp"
 
 namespace irt {
+
+namespace {
+
+int32_t getIntEnv(const char* env_name, const int32_t default_value)
+{
+  const char* env_value = std::getenv(env_name);
+  if (env_value == nullptr || env_value[0] == '\0') {
+    return default_value;
+  }
+  char* parse_end = nullptr;
+  long parsed = std::strtol(env_value, &parse_end, 10);
+  if (parse_end == env_value || *parse_end != '\0') {
+    return default_value;
+  }
+  return static_cast<int32_t>(parsed);
+}
+
+bool getBoolEnv(const char* env_name, const bool default_value)
+{
+  const char* env_value = std::getenv(env_name);
+  if (env_value == nullptr || env_value[0] == '\0') {
+    return default_value;
+  }
+  std::string value(env_value);
+  if (value == "1" || value == "true" || value == "TRUE" || value == "yes" || value == "YES") {
+    return true;
+  }
+  if (value == "0" || value == "false" || value == "FALSE" || value == "no" || value == "NO") {
+    return false;
+  }
+  return default_value;
+}
+
+void capTaskList(std::vector<SRTask*>& routing_task_list, const int32_t max_tasks, const char* context)
+{
+  if (max_tasks <= 0 || static_cast<int32_t>(routing_task_list.size()) <= max_tasks) {
+    return;
+  }
+  RTLOG.warn(Loc::current(), "IEDA_RT_BEST_EFFORT: capping ", context, " SR tasks from ", routing_task_list.size(), " to ", max_tasks);
+  routing_task_list.resize(max_tasks);
+}
+
+}  // namespace
 
 // public
 
@@ -184,8 +231,14 @@ void SpaceRouter::routeSRModel(SRModel& sr_model)
   sr_iter_param_list.emplace_back(prefer_wire_unit, via_unit, 30, 10, 3, overflow_unit, 3);
   sr_iter_param_list.emplace_back(prefer_wire_unit, via_unit, 30, 20, 3, overflow_unit, 3);
   // clang-format on
+  const bool best_effort = getBoolEnv("IEDA_RT_BEST_EFFORT", false);
+  const int32_t max_iterations = getIntEnv("IEDA_RT_MAX_SR_ITERATIONS", best_effort ? 1 : 0);
   initRoutingState(sr_model);
   for (int32_t i = 0, iter = 1; i < static_cast<int32_t>(sr_iter_param_list.size()); i++, iter++) {
+    if (max_iterations > 0 && iter > max_iterations) {
+      RTLOG.warn(Loc::current(), "Reached IEDA_RT_MAX_SR_ITERATIONS=", max_iterations, "; stopping space-router iterations early");
+      break;
+    }
     Monitor iter_monitor;
     RTLOG.info(Loc::current(), "***** Begin iteration ", iter, "/", sr_iter_param_list.size(), "(", RTUTIL.getPercentage(iter, sr_iter_param_list.size()),
                ") *****");
@@ -436,6 +489,15 @@ void SpaceRouter::routeSRBoxMap(SRModel& sr_model)
   Monitor monitor;
   RTLOG.info(Loc::current(), "Starting...");
 
+  const bool best_effort = getBoolEnv("IEDA_RT_BEST_EFFORT", false);
+  const int32_t max_boxes = getIntEnv("IEDA_RT_MAX_SR_BOXES", best_effort ? getIntEnv("IEDA_RT_MAX_BOXES", 0) : 0);
+  const int32_t max_seconds = getIntEnv("IEDA_RT_MAX_SR_SECONDS", best_effort ? 120 : 0);
+  const auto sr_deadline = (max_seconds > 0) ? (std::chrono::steady_clock::now() + std::chrono::seconds(max_seconds))
+                                             : std::chrono::steady_clock::time_point::max();
+
+  RTLOG.info(Loc::current(), "65pct space-router guards: best_effort=", best_effort ? 1 : 0,
+             ", max_boxes=", max_boxes, ", max_seconds=", max_seconds);
+
   GridMap<SRBox>& sr_box_map = sr_model.get_sr_box_map();
 
   size_t total_box_num = 0;
@@ -445,10 +507,26 @@ void SpaceRouter::routeSRBoxMap(SRModel& sr_model)
 
   size_t routed_box_num = 0;
   for (std::vector<SRBoxId>& sr_box_id_list : sr_model.get_sr_box_id_list_list()) {
+    if (std::chrono::steady_clock::now() >= sr_deadline) {
+      RTLOG.warn(Loc::current(), "Reached IEDA_RT_MAX_SR_SECONDS; stopping space routing early");
+      break;
+    }
+    if (max_boxes > 0 && static_cast<int32_t>(routed_box_num) >= max_boxes) {
+      RTLOG.warn(Loc::current(), "Reached IEDA_RT_MAX_SR_BOXES=", max_boxes, "; stopping space routing early");
+      break;
+    }
     Monitor stage_monitor;
     // Box setup and result upload mutate shared RTDM GCell indexes. Keep this
     // loop serial until those indexes support concurrent pointer updates.
     for (SRBoxId& sr_box_id : sr_box_id_list) {
+      if (std::chrono::steady_clock::now() >= sr_deadline) {
+        RTLOG.warn(Loc::current(), "Reached IEDA_RT_MAX_SR_SECONDS; stopping space routing early");
+        break;
+      }
+      if (max_boxes > 0 && static_cast<int32_t>(routed_box_num) >= max_boxes) {
+        RTLOG.warn(Loc::current(), "Reached IEDA_RT_MAX_SR_BOXES=", max_boxes, "; stopping space routing early");
+        break;
+      }
       SRBox& sr_box = sr_box_map[sr_box_id.get_x()][sr_box_id.get_y()];
       buildNetResult(sr_box);
       initSRTaskList(sr_model, sr_box);
@@ -466,10 +544,16 @@ void SpaceRouter::routeSRBoxMap(SRModel& sr_model)
       }
       selectBestResult(sr_box);
       freeSRBox(sr_box);
+      ++routed_box_num;
     }
-    routed_box_num += sr_box_id_list.size();
     RTLOG.info(Loc::current(), "Routed ", routed_box_num, "/", total_box_num, "(", RTUTIL.getPercentage(routed_box_num, total_box_num), ") boxes",
                stage_monitor.getStatsInfo());
+    if (std::chrono::steady_clock::now() >= sr_deadline) {
+      break;
+    }
+    if (max_boxes > 0 && static_cast<int32_t>(routed_box_num) >= max_boxes) {
+      break;
+    }
   }
 
   RTLOG.info(Loc::current(), "Completed", monitor.getStatsInfo());
@@ -767,7 +851,10 @@ void SpaceRouter::buildOrientDemand(SRModel& sr_model, SRBox& sr_box)
 
 void SpaceRouter::routeSRBox(SRBox& sr_box)
 {
+  const bool best_effort = getBoolEnv("IEDA_RT_BEST_EFFORT", false);
+  const int32_t max_tasks = getIntEnv("IEDA_RT_MAX_TASKS_PER_SR_BOX", best_effort ? 128 : 0);
   std::vector<SRTask*> routing_task_list = initTaskSchedule(sr_box);
+  capTaskList(routing_task_list, max_tasks, "initial");
   while (!routing_task_list.empty()) {
     for (SRTask* routing_task : routing_task_list) {
       routeSRTask(sr_box, routing_task);
@@ -776,6 +863,7 @@ void SpaceRouter::routeSRBox(SRBox& sr_box)
     updateOverflow(sr_box);
     updateBestResult(sr_box);
     updateTaskSchedule(sr_box, routing_task_list);
+    capTaskList(routing_task_list, max_tasks, "overflow");
   }
 }
 

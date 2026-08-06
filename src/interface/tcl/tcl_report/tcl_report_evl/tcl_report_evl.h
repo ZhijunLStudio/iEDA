@@ -30,5 +30,6 @@ namespace tcl {
 
 DEFINE_CMD_CLASS(ReportWL);
 DEFINE_CMD_CLASS(ReportCong);
+DEFINE_CMD_CLASS(ReportQualityGate);
 
 }  // namespace tcl

@@ -1,5 +1,6 @@
 add_library(eval_congestion_eval
     congestion_eval.cpp
+    congestion_summary.cpp
 )
 
 target_link_libraries(eval_congestion_eval 
@@ -15,4 +16,5 @@ target_include_directories(eval_congestion_eval
     PUBLIC
         ${EVAL_MODULE}/congestion
         ${EVAL_DATA}
+        ${HOME_THIRDPARTY}/json
 )

@@ -1,0 +1,879 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-08-05T17:48:10+08:00",
+  "result_root": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805",
+  "scope": {
+    "included": [
+      "aes_ics55_a"
+    ],
+    "excluded": []
+  },
+  "baseline": {
+    "path": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_65pct_detailed_comparison.json",
+    "matched": 1
+  },
+  "experiment_manifest": {
+    "schema": "ieda-qor-experiment-manifest/v0",
+    "created_at": "2026-08-05T17:31:57+08:00",
+    "repo_root": "/home/lxq/AiEDA/iEDA.ai",
+    "result_root": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805",
+    "scope": {
+      "designs": [
+        "aes_ics55_a"
+      ],
+      "jobs": 1,
+      "synthesize": false,
+      "prepare_only": false,
+      "resume": false,
+      "stop_after": null
+    },
+    "tool": {
+      "git": {
+        "commit": "8cf7f68efd46c65603e2376d8fb9befa244c0e2b",
+        "branch": "commercial-parity",
+        "dirty": true,
+        "status_line_count": 1385,
+        "flow_diff_sha256": "c77e8a61fd170b74b52e4e855857bb23c85e4a29eb7da4e001c167f8cfaff120",
+        "flow_diff_name_status": [
+          "M\tbenchmarks/flows/aes13_flow.py",
+          "M\tbenchmarks/flows/generate_aes11_detailed_report.py"
+        ]
+      },
+      "binary": {
+        "path": "/home/lxq/AiEDA/iEDA.ai/bin/iEDA",
+        "exists": true,
+        "sha256": "a0d79c1975011964e21d32c48e788e0a878db1e10dc6c8364baad3fa14d1ca24"
+      }
+    },
+    "runtime_env": {
+      "IEDA_CTS_BEST_EFFORT": "1",
+      "IEDA_QOR_BUDGET_PROFILE": "E1_final_minarea",
+      "IEDA_RT_BEST_EFFORT": "1",
+      "IEDA_RT_BEST_EFFORT_SKIP_FINAL_MINAREA": "0",
+      "IEDA_RT_BUSINESS_BASELINE_MIN_ITER": "2",
+      "IEDA_RT_BUSINESS_BASELINE_TIMING_IMPROVE_RATIO": "0.2000",
+      "IEDA_RT_BUSINESS_DECISION_SCORE_MIN_ITER": "1",
+      "IEDA_RT_BUSINESS_DECISION_SCORE_THRESHOLD": "0.7500",
+      "IEDA_RT_BUSINESS_TIMING_IMPROVE_GATE": "0.2000",
+      "IEDA_RT_COMPONENT_ESCALATE": "0",
+      "IEDA_RT_DESIGN_UTILIZATION": "0.6500",
+      "IEDA_RT_ENABLE_BUSINESS_BASELINE_TIMING_GATE": "1",
+      "IEDA_RT_ENABLE_BUSINESS_GATE": "1",
+      "IEDA_RT_ENABLE_ESCALATION": "0",
+      "IEDA_RT_ENABLE_PLATEAU": "0",
+      "IEDA_RT_ENHANCED_MINAREA_REPAIR": "0",
+      "IEDA_RT_FAIL_ON_RESIDUAL_DRC": "0",
+      "IEDA_RT_MAX_FINAL_MINAREA_TASKS": "32",
+      "IEDA_RT_MAX_ITERATIONS": "1",
+      "IEDA_RT_MAX_MEMORY_MB": "32768",
+      "IEDA_RT_MAX_SR_ITERATIONS": "1",
+      "IEDA_RT_MAX_SR_SECONDS": "60",
+      "IEDA_RT_MAX_TASKS_PER_SR_BOX": "64",
+      "IEDA_RT_OVERFLOW_CELL_IMPROVE_RATIO": "0.0500",
+      "IEDA_RT_PLATEAU_CHECK_INTERVAL": "36",
+      "IEDA_RT_PLATEAU_EXPLOSION_THRESHOLD": "2.0000",
+      "IEDA_RT_PLATEAU_HISTORY_SCALE": "1.2000",
+      "IEDA_RT_PLATEAU_MAX_CAND_PATCH": "0",
+      "IEDA_RT_PLATEAU_MAX_REROUTE": "0",
+      "IEDA_RT_PLATEAU_NO_IMPROVE_LIMIT": "2",
+      "IEDA_RT_PLATEAU_VIOLATION_SCALE": "1.2500",
+      "IEDA_RT_PRL_SHORT_REPAIR": "0",
+      "IEDA_RT_ROUTING_OVERFLOW_CELL_TARGET": "0.1000",
+      "IEDA_RT_ROUTING_UTILIZATION_GAP": "0.000000",
+      "IEDA_RT_ROUTING_UTILIZATION_TARGET": "0.7000",
+      "IEDA_RT_RULE_AWARE_COST": "0",
+      "IEDA_RT_STOP_EARLY_MIN_ITER": "2",
+      "IEDA_RT_TIMING_IMPROVE_RATIO": "0.2000",
+      "IEDA_RT_UTILIZATION_IMPROVE_RATIO": "0.0200",
+      "IEDA_RT_UTILIZATION_RETRY_MAX_ITER": "5",
+      "IEDA_RT_UTILIZATION_RETRY_TASK_RATIO": "0.4000",
+      "ROUTING_THREADS": "pdk_default",
+      "JOBS": "1",
+      "TIMEOUT_SEC": "7200",
+      "TARGET_UTILIZATION": "0.6500"
+    },
+    "budget_profile": {
+      "name": "E1_final_minarea",
+      "description": "Run final min-area patch under the E0 best-effort budget.",
+      "dr_iterations": 1,
+      "sr_iterations": 1,
+      "sr_seconds": 60,
+      "tasks_per_sr_box": 64,
+      "final_minarea_tasks": 32,
+      "skip_final_minarea": false,
+      "best_effort": true,
+      "max_boxes": 0,
+      "max_memory_mb": 32768,
+      "overrides": {}
+    },
+    "input_signature": {
+      "artifact_version": 2,
+      "designs": {
+        "aes_ics55_a": {
+          "artifact_version": 2,
+          "design": "aes_ics55_a",
+          "pdk": "ics55",
+          "inputs": [
+            {
+              "path": "/home/lxq/AiEDA/iEDA.ai/benchmarks/designs/aes_ics55_a/netlist/aes_cipher_top.v",
+              "exists": true,
+              "sha256": "b8e52dbcd8e41b612f85f53207f6e1069a1eef4948a1e9f9cc8428183895c5fb"
+            },
+            {
+              "path": "/home/lxq/AiEDA/iEDA.ai/benchmarks/designs/aes_ics55_a/design.json",
+              "exists": true,
+              "sha256": "c3b653cb12a5d1b183a5f9ecb2b2a9d0580fbc6116e91f1a34cacbad848022e3"
+            },
+            {
+              "path": "/home/lxq/AiEDA/iEDA.ai/benchmarks/designs/aes_ics55_a/sdc/aes.sdc",
+              "exists": true,
+              "sha256": "0674450b79bbc61cbaef039a68e0f1a3a1412c65c2a29a8d81b5e455ea1d4496"
+            },
+            {
+              "path": "/home/lxq/AiEDA/iEDA.ai/bin/iEDA",
+              "exists": true,
+              "sha256": "a0d79c1975011964e21d32c48e788e0a878db1e10dc6c8364baad3fa14d1ca24"
+            },
+            {
+              "path": "/home/lxq/AiEDA/Foundary/ics55/prtech/techLEF/N551P6M_ieda.lef",
+              "exists": true,
+              "sha256": "5a30e0626b465841101b96edba94e3b7c145fb0c5d3bc5bd7efc55ce1cac6a1a"
+            },
+            {
+              "path": "/home/lxq/AiEDA/Foundary/ics55/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CR/lef/ics55_LLSC_H7CR_ieda.lef",
+              "exists": true,
+              "sha256": "e55d17f3255dfb600bdf2f6b03453830869d3a22d42b65e48bcae3283c15012c"
+            },
+            {
+              "path": "/home/lxq/AiEDA/Foundary/ics55/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CR/liberty/ics55_LLSC_H7CR_typ_tt_1p2_25_nldm.lib",
+              "exists": true,
+              "sha256": "38a9f9056a7e4417451e0aaa137efaf0461ee1fc574a8b2ad53622def34bb2b7"
+            }
+          ]
+        }
+      }
+    },
+    "baseline_ref": {
+      "report_json": null,
+      "label": null
+    },
+    "acceptance_policy": {
+      "schema": "qor-ab-acceptance/v0",
+      "primary": "Compare DRC total/by_type and routing runtime against baseline_ref using fixed input/tool/budget metadata.",
+      "pareto_rule": "Reject expansion when DRC improvement is <5% and routing runtime growth is >20%.",
+      "hard_gates": {
+        "summary_json": "required per design",
+        "drc_by_type": "required for routed designs",
+        "congestion_summary": "must be valid when map inputs exist",
+        "spef_backed_sta": "informational only in M0; not used for promotion",
+        "activity_backed_power": "informational only in M0; not used for promotion"
+      }
+    },
+    "path": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/experiment_manifest.json",
+    "present": true
+  },
+  "measurement_notes": {
+    "sta": "post-route report exists but interconnect path delays are zero; no SPEF back-annotation",
+    "power": "switching power is zero without VCD/SAIF; vectorless toggle may be used for numeric totals",
+    "congestion": "congestion_summary.json is aggregated from EGR/early-router overflow maps; old -1 sentinel reports are not used when summary is valid",
+    "spatial_maps": "same map types use a shared design-set scale; DRC center density uses a shared logarithmic scale",
+    "ir_drop": "not run for all designs",
+    "def_hpwl": "derived from placed instance origins; use for within-PDK/stage trends",
+    "core_utilization": "CORE Usage from iDB report_db; floorplan target is sized so stdcell_area/core_area ≈ 0.65"
+  },
+  "designs": [
+    {
+      "design": "aes_ics55_a",
+      "pdk": "ics55",
+      "strategy": "a",
+      "status": "success",
+      "timestamp": "2026-08-05T17:41:43.459359+08:00",
+      "floorplan": {
+        "cell_area_um2": 19568.64,
+        "cell_count": 9453,
+        "target_utilization": 0.65,
+        "effective_utilization": 0.65,
+        "die_area": "0.0 0.0 213.510 213.510",
+        "core_area": "20.000 20.000 193.510 193.510",
+        "die_side_um": 213.51,
+        "core_side_um": 173.51
+      },
+      "budget_profile": {
+        "name": "E1_final_minarea",
+        "description": "Run final min-area patch under the E0 best-effort budget.",
+        "dr_iterations": 1,
+        "sr_iterations": 1,
+        "sr_seconds": 60,
+        "tasks_per_sr_box": 64,
+        "final_minarea_tasks": 32,
+        "skip_final_minarea": false,
+        "best_effort": true,
+        "max_boxes": 0,
+        "max_memory_mb": 32768,
+        "overrides": {}
+      },
+      "experiment_manifest": "benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/experiment_manifest.json",
+      "stages": {
+        "floorplan": {
+          "status": "measured",
+          "def": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/iFP_result.def",
+          "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/floorplan.png",
+          "runtime_sec": 0.706,
+          "memory_mb": 0.0,
+          "instances": 11419,
+          "placed_instances": 1966,
+          "nets": 9712,
+          "core_usage": 0.650051,
+          "die_usage": 0.42925,
+          "timing_instances": 0,
+          "timing_area_um2": 0.0,
+          "dbu": 1000,
+          "die_dbu": [
+            0,
+            0,
+            213510,
+            213510
+          ],
+          "def_hpwl_um": 0.0,
+          "def_routed_um": 0.0
+        },
+        "fanout": {
+          "status": "measured",
+          "def": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/iNO_fix_fanout_result.def",
+          "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/fanout.png",
+          "runtime_sec": 21.782,
+          "memory_mb": 4473.476,
+          "instances": 11834,
+          "placed_instances": 1966,
+          "nets": 10127,
+          "core_usage": 0.688653,
+          "die_usage": 0.45474,
+          "timing_instances": 415,
+          "timing_area_um2": 0.0532256,
+          "dbu": 1000,
+          "die_dbu": [
+            0,
+            0,
+            213510,
+            213510
+          ],
+          "def_hpwl_um": 0.0,
+          "def_routed_um": 0.0
+        },
+        "placement": {
+          "status": "measured",
+          "def": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/iPL_result.def",
+          "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/placement.png",
+          "runtime_sec": 12.827,
+          "memory_mb": null,
+          "instances": 11834,
+          "placed_instances": 11834,
+          "nets": 10127,
+          "core_usage": null,
+          "die_usage": null,
+          "timing_instances": null,
+          "timing_area_um2": null,
+          "dbu": 1000,
+          "die_dbu": [
+            0,
+            0,
+            213510,
+            213510
+          ],
+          "def_hpwl_um": 162780.517,
+          "def_routed_um": 0.0
+        },
+        "cts": {
+          "status": "measured",
+          "def": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/iCTS_result.def",
+          "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/cts.png",
+          "runtime_sec": 23.011,
+          "memory_mb": 873.512,
+          "instances": 11855,
+          "placed_instances": 11855,
+          "nets": 10148,
+          "core_usage": 0.689517,
+          "die_usage": 0.45531,
+          "timing_instances": 436,
+          "timing_area_um2": 0.0543535,
+          "dbu": 1000,
+          "die_dbu": [
+            0,
+            0,
+            213510,
+            213510
+          ],
+          "def_hpwl_um": 164423.858,
+          "def_routed_um": 0.0
+        },
+        "legalization": {
+          "status": "measured",
+          "def": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/iPL_lg_result.def",
+          "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/legalization.png",
+          "runtime_sec": 5.47,
+          "memory_mb": null,
+          "instances": 11855,
+          "placed_instances": 11855,
+          "nets": 10148,
+          "core_usage": null,
+          "die_usage": null,
+          "timing_instances": null,
+          "timing_area_um2": null,
+          "dbu": 1000,
+          "die_dbu": [
+            0,
+            0,
+            213510,
+            213510
+          ],
+          "def_hpwl_um": 164447.117,
+          "def_routed_um": 0.0
+        },
+        "routing": {
+          "status": "measured",
+          "def": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/iRT_result.def",
+          "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/routing.png",
+          "runtime_sec": 470.59,
+          "memory_mb": 0.0,
+          "instances": 11855,
+          "placed_instances": 11855,
+          "nets": 10148,
+          "core_usage": 0.689517,
+          "die_usage": 0.45531,
+          "timing_instances": 436,
+          "timing_area_um2": 0.0543535,
+          "dbu": 1000,
+          "die_dbu": [
+            0,
+            0,
+            213510,
+            213510
+          ],
+          "def_hpwl_um": 164447.117,
+          "def_routed_um": 161683.85
+        },
+        "filler": {
+          "status": "measured",
+          "def": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/iPL_filler_result.def",
+          "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/filler.png",
+          "runtime_sec": 3.725,
+          "memory_mb": 83.244,
+          "instances": 18112,
+          "placed_instances": 18112,
+          "nets": 10148,
+          "core_usage": 0.977668,
+          "die_usage": 0.645586,
+          "timing_instances": 436,
+          "timing_area_um2": 0.038912,
+          "dbu": 1000,
+          "die_dbu": [
+            0,
+            0,
+            213510,
+            213510
+          ],
+          "def_hpwl_um": 164447.117,
+          "def_routed_um": 161683.85
+        }
+      },
+      "timing": {
+        "setup_wns_ns": 0.845,
+        "hold_wns_ns": 0.13,
+        "setup_tns_ns": 0.0,
+        "hold_tns_ns": 0.0,
+        "max_frequency_mhz": 604.322,
+        "worst_path_delay_ns": 1.612,
+        "reported_paths": 6,
+        "all_reported_net_delays_zero": true
+      },
+      "power": {
+        "total_w": 0.1908,
+        "switch_w": 0.0,
+        "internal_w": 0.1908,
+        "leakage_w": 1.862e-06
+      },
+      "wirelength": {
+        "hpwl_um": 162888.121,
+        "hpwl_avg_um": 16.051,
+        "flute_um": 192703.063,
+        "flute_avg_um": 18.989,
+        "egr_um": 191812.0,
+        "egr_avg_um": 18.901
+      },
+      "congestion": {
+        "high_density_bins_pct": null,
+        "high_pin_bins_pct": null,
+        "average_edge_congestion": 2.8578,
+        "total_overflow": 66026.0,
+        "max_overflow": 61.0,
+        "top_1_pct_mean": 37.9524,
+        "top_5_pct_mean": 26.4866,
+        "nonzero_bin_pct": 25.6882,
+        "valid": true,
+        "source": "congestion_summary.json"
+      },
+      "drc": {
+        "total": 25952,
+        "by_type": {
+          "metal_short": 3050,
+          "minimum_area": 21120,
+          "nonsufficient_metal_overlap": 21,
+          "parallel_run_length_spacing": 1761
+        }
+      },
+      "cts": {
+        "sink_count": 562,
+        "buffer_count": 21,
+        "clock_wirelength_um": 3374.738,
+        "max_clock_wirelength_um": 313.288
+      },
+      "warnings": {
+        "unconstrained_ports": 5,
+        "missing_input_slew_pins": 426
+      },
+      "ir_drop": {
+        "status": "not_run",
+        "worst_drop_v": null,
+        "coverage": 0.0
+      },
+      "artifacts": {
+        "gds": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/final.gds",
+        "gds_size_mb": 77.937,
+        "final_png": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/visualizations/final.png",
+        "cts_design_svg": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/cts/visualization/svg/cts_design.svg",
+        "cts_flyline_svg": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/cts/visualization/svg/cts_flyline.svg"
+      },
+      "normalized": {
+        "drc_per_1k_instances": 1432.8621908127209,
+        "power_mw_per_1k_instances": 10.534452296819788,
+        "route_um_per_instance": 8.926891011484098
+      },
+      "baseline": {
+        "drc_total": 28133,
+        "route_runtime_sec": 581.0,
+        "placement_hpwl_um": 162780.517,
+        "routing_hpwl_um": 164447.117,
+        "def_routed_um": 162552.55,
+        "egr_wirelength_um": 191812.0
+      },
+      "delta_vs_baseline": {
+        "drc_total": -7.752461522055949,
+        "route_runtime_sec": -19.003442340791743,
+        "placement_hpwl_um": 0.0,
+        "routing_hpwl_um": 0.0,
+        "def_routed_um": -0.534411794831876,
+        "egr_wirelength_um": 0.0
+      },
+      "maps": {
+        "representative": [
+          {
+            "key": "stdcell_density",
+            "category": "Placement density",
+            "label": "Std-cell density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_stdcell_density.csv",
+            "scale_group": "cell_density",
+            "log_scale": false,
+            "stats": {
+              "rows": 153,
+              "columns": 153,
+              "cells": 23409,
+              "nonzero_cells": 12219,
+              "nonzero_pct": 52.198,
+              "min": 0.0,
+              "max": 1.0,
+              "mean": 0.4523962209406636,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/stdcell_density.png",
+            "scale_max": 1.142857
+          },
+          {
+            "key": "macro_density",
+            "category": "Placement density",
+            "label": "Macro density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_macro_density.csv",
+            "scale_group": "cell_density",
+            "log_scale": false,
+            "stats": {
+              "rows": 153,
+              "columns": 153,
+              "cells": 23409,
+              "nonzero_cells": 0,
+              "nonzero_pct": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "mean": 0.0,
+              "all_zero": true
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/macro_density.png",
+            "scale_max": 1.142857
+          },
+          {
+            "key": "allcell_density",
+            "category": "Placement density",
+            "label": "All-cell density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_allcell_density.csv",
+            "scale_group": "cell_density",
+            "log_scale": false,
+            "stats": {
+              "rows": 153,
+              "columns": 153,
+              "cells": 23409,
+              "nonzero_cells": 12971,
+              "nonzero_pct": 55.41,
+              "min": 0.0,
+              "max": 1.142857,
+              "mean": 0.4763918705626042,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/allcell_density.png",
+            "scale_max": 1.142857
+          },
+          {
+            "key": "stdcell_pin_density",
+            "category": "Placement density",
+            "label": "Std-cell pin density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_stdcell_pin_density.csv",
+            "scale_group": "pin_density",
+            "log_scale": false,
+            "stats": {
+              "rows": 153,
+              "columns": 153,
+              "cells": 23409,
+              "nonzero_cells": 11621,
+              "nonzero_pct": 49.643,
+              "min": 0.0,
+              "max": 11.0,
+              "mean": 2.5306933230808664,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/stdcell_pin_density.png",
+            "scale_max": 11.0
+          },
+          {
+            "key": "macro_pin_density",
+            "category": "Placement density",
+            "label": "Macro pin density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_macro_pin_density.csv",
+            "scale_group": "pin_density",
+            "log_scale": false,
+            "stats": {
+              "rows": 153,
+              "columns": 153,
+              "cells": 23409,
+              "nonzero_cells": 0,
+              "nonzero_pct": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "mean": 0.0,
+              "all_zero": true
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/macro_pin_density.png",
+            "scale_max": 11.0
+          },
+          {
+            "key": "allcell_pin_density",
+            "category": "Placement density",
+            "label": "All-cell pin density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_allcell_pin_density.csv",
+            "scale_group": "pin_density",
+            "log_scale": false,
+            "stats": {
+              "rows": 153,
+              "columns": 153,
+              "cells": 23409,
+              "nonzero_cells": 12329,
+              "nonzero_pct": 52.668,
+              "min": 0.0,
+              "max": 11.0,
+              "mean": 2.698662907428767,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/allcell_pin_density.png",
+            "scale_max": 11.0
+          },
+          {
+            "key": "local_net_density",
+            "category": "Placement density",
+            "label": "Local-net density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_local_net_density.csv",
+            "scale_group": "net_density",
+            "log_scale": false,
+            "stats": {
+              "rows": 153,
+              "columns": 153,
+              "cells": 23409,
+              "nonzero_cells": 439,
+              "nonzero_pct": 1.875,
+              "min": 0.0,
+              "max": 1.0,
+              "mean": 0.01875347088726558,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/local_net_density.png",
+            "scale_max": 161.0
+          },
+          {
+            "key": "global_net_density",
+            "category": "Placement density",
+            "label": "Global-net density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_global_net_density.csv",
+            "scale_group": "net_density",
+            "log_scale": false,
+            "stats": {
+              "rows": 153,
+              "columns": 153,
+              "cells": 23409,
+              "nonzero_cells": 22433,
+              "nonzero_pct": 95.831,
+              "min": 0.0,
+              "max": 161.0,
+              "mean": 40.05476526122432,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/global_net_density.png",
+            "scale_max": 161.0
+          },
+          {
+            "key": "allnet_density",
+            "category": "Placement density",
+            "label": "All-net density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_allnet_density.csv",
+            "scale_group": "net_density",
+            "log_scale": false,
+            "stats": {
+              "rows": 153,
+              "columns": 153,
+              "cells": 23409,
+              "nonzero_cells": 22433,
+              "nonzero_pct": 95.831,
+              "min": 0.0,
+              "max": 161.0,
+              "mean": 40.07351873211158,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/allnet_density.png",
+            "scale_max": 161.0
+          },
+          {
+            "key": "egr_horizontal_overflow",
+            "category": "EGR congestion",
+            "label": "EGR horizontal overflow",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/egr_congestion_map/place_egr_horizontal_overflow.csv",
+            "scale_group": "egr_overflow",
+            "log_scale": false,
+            "stats": {
+              "rows": 152,
+              "columns": 152,
+              "cells": 23104,
+              "nonzero_cells": 5093,
+              "nonzero_pct": 22.044,
+              "min": 0.0,
+              "max": 41.0,
+              "mean": 1.929016620498615,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/egr_horizontal_overflow.png",
+            "scale_max": 61.0
+          },
+          {
+            "key": "egr_vertical_overflow",
+            "category": "EGR congestion",
+            "label": "EGR vertical overflow",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/egr_congestion_map/place_egr_vertical_overflow.csv",
+            "scale_group": "egr_overflow",
+            "log_scale": false,
+            "stats": {
+              "rows": 152,
+              "columns": 152,
+              "cells": 23104,
+              "nonzero_cells": 3140,
+              "nonzero_pct": 13.591,
+              "min": 0.0,
+              "max": 46.0,
+              "mean": 0.9287569252077562,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/egr_vertical_overflow.png",
+            "scale_max": 61.0
+          },
+          {
+            "key": "egr_union_overflow",
+            "category": "EGR congestion",
+            "label": "EGR union overflow",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/egr_congestion_map/place_egr_union_overflow.csv",
+            "scale_group": "egr_overflow",
+            "log_scale": false,
+            "stats": {
+              "rows": 152,
+              "columns": 152,
+              "cells": 23104,
+              "nonzero_cells": 5935,
+              "nonzero_pct": 25.688,
+              "min": 0.0,
+              "max": 61.0,
+              "mean": 2.857773545706371,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/egr_union_overflow.png",
+            "scale_max": 61.0
+          },
+          {
+            "key": "early_net_planar",
+            "category": "Early Router",
+            "label": "Planar routing demand",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/net_map_planar.csv",
+            "scale_group": "route_demand",
+            "log_scale": false,
+            "stats": {
+              "rows": 152,
+              "columns": 152,
+              "cells": 23104,
+              "nonzero_cells": 19739,
+              "nonzero_pct": 85.435,
+              "min": 0.0,
+              "max": 100.0,
+              "mean": 18.793109418282548,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/early_net_planar.png",
+            "scale_max": 100.0
+          },
+          {
+            "key": "early_supply_planar",
+            "category": "Early Router",
+            "label": "Planar routing supply",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/supply_map_planar.csv",
+            "scale_group": "route_supply",
+            "log_scale": false,
+            "stats": {
+              "rows": 152,
+              "columns": 152,
+              "cells": 23104,
+              "nonzero_cells": 23104,
+              "nonzero_pct": 100.0,
+              "min": 8.0,
+              "max": 86.0,
+              "mean": 64.91499307479225,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/early_supply_planar.png",
+            "scale_max": 86.0
+          },
+          {
+            "key": "early_overflow_planar",
+            "category": "Early Router",
+            "label": "Planar routing overflow",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/overflow_map_planar.csv",
+            "scale_group": "route_overflow",
+            "log_scale": false,
+            "stats": {
+              "rows": 152,
+              "columns": 152,
+              "cells": 23104,
+              "nonzero_cells": 5522,
+              "nonzero_pct": 23.901,
+              "min": 0.0,
+              "max": 58.0,
+              "mean": 1.9660664819944598,
+              "all_zero": false
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/early_overflow_planar.png",
+            "scale_max": 58.0
+          },
+          {
+            "key": "drc_violation_density",
+            "category": "DRC",
+            "label": "DRC violation-center density",
+            "source": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/drc_temp_directory/violation_map.json",
+            "scale_group": "drc_density",
+            "log_scale": true,
+            "stats": {
+              "rows": 180,
+              "columns": 180,
+              "cells": 32400,
+              "nonzero_cells": 11469,
+              "nonzero_pct": 35.398,
+              "min": 0.0,
+              "max": 13.0,
+              "mean": 0.8009876543209876,
+              "all_zero": false,
+              "violations": 25952
+            },
+            "image": "/home/lxq/AiEDA/iEDA.ai/benchmarks/reports/aes12_m0_smoke_e1_cap32_20260805_detailed_comparison_assets/aes_ics55_a/maps/drc_violation_density.png",
+            "scale_max": 13.0
+          }
+        ],
+        "raw_groups": [
+          {
+            "key": "placement_density",
+            "label": "Placement density CSV",
+            "count": 9,
+            "files": [
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_allcell_density.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_allcell_pin_density.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_allnet_density.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_global_net_density.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_local_net_density.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_macro_density.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_macro_pin_density.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_stdcell_density.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/density_map/place_stdcell_pin_density.csv"
+            ]
+          },
+          {
+            "key": "egr_overflow",
+            "label": "EGR congestion CSV",
+            "count": 3,
+            "files": [
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/egr_congestion_map/place_egr_horizontal_overflow.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/egr_congestion_map/place_egr_union_overflow.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/egr_congestion_map/place_egr_vertical_overflow.csv"
+            ]
+          },
+          {
+            "key": "early_router",
+            "label": "Early-router layer CSV",
+            "count": 24,
+            "files": [
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/net_map_MET1.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/net_map_MET2.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/net_map_MET3.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/net_map_MET4.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/net_map_MET5.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/net_map_RDL.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/net_map_T4M2.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/net_map_planar.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/overflow_map_MET1.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/overflow_map_MET2.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/overflow_map_MET3.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/overflow_map_MET4.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/overflow_map_MET5.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/overflow_map_RDL.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/overflow_map_T4M2.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/overflow_map_planar.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/supply_map_MET1.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/supply_map_MET2.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/supply_map_MET3.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/supply_map_MET4.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/supply_map_MET5.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/supply_map_RDL.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/supply_map_T4M2.csv",
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/result/rt/rt_temp_directory/early_router/supply_map_planar.csv"
+            ]
+          },
+          {
+            "key": "drc_violation",
+            "label": "DRC violation JSON",
+            "count": 1,
+            "files": [
+              "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes12_m0_smoke_e1_cap32_20260805/aes_ics55_a/workspace/drc_temp_directory/violation_map.json"
+            ]
+          }
+        ],
+        "raw_file_count": 37,
+        "rendered_count": 16
+      }
+    }
+  ]
+}

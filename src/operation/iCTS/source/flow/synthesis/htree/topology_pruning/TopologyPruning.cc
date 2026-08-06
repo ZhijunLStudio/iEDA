@@ -640,6 +640,16 @@ auto EvaluateCandidateBuild(const std::vector<HTree::LevelPlan>& levels, const S
       result.boundary_relaxation_reason = "no_strict_boundary_feasible_solution";
       result.boundary_relaxation_score = CalcBoundaryRelaxationScore(*result.best_char, boundary_constraints, char_slew_steps);
     }
+  } else if (fanout_config.allow_boundary_relaxation && !topology_assembly.frontier.empty()) {
+    // BEST_EFFORT get-through: sink-load region filter emptied the frontier (common on ASAP7
+    // with illegal singleton clusters). Keep a delay/power pareto of the raw frontier.
+    LOG_WARNING << "HTree: BEST_EFFORT accepting raw frontier after empty sink-load region filter"
+                << " (depth=" << depth << ", raw_entries=" << topology_assembly.frontier.size() << ")";
+    result.feasible_frontier_entries = BuildLocalDelayPowerPareto(topology_assembly.frontier);
+    result.best_char = SelectBestHTreeChar(result.feasible_frontier_entries);
+    result.used_boundary_relaxation = true;
+    result.boundary_relaxation_reason = "no_sink_load_region_legal_frontier_entries";
+    result.failure_reason.clear();
   }
 
   result.success = result.best_char.has_value();
@@ -656,11 +666,24 @@ auto ReduceCandidateBuildEvaluationForGlobalSelection(CandidateBuildEvaluation& 
                                                       SinkLoadRegionLegalityContext& legality_context, bool retain_relaxed_candidates)
     -> void
 {
-  evaluation.feasible_frontier_entries = BuildLocalDelayPowerPareto(FilterSinkLoadRegionCoveredEntries(
-      evaluation.feasible_frontier_entries, topology, evaluation.topology_pattern_library, segment_pattern_library, legality_context));
+  auto covered_feasible = FilterSinkLoadRegionCoveredEntries(evaluation.feasible_frontier_entries, topology,
+                                                             evaluation.topology_pattern_library, segment_pattern_library, legality_context);
+  if (covered_feasible.empty() && retain_relaxed_candidates && !evaluation.feasible_frontier_entries.empty()) {
+    LOG_WARNING << "HTree: BEST_EFFORT retaining uncovered feasible frontier for global selection"
+                << " (entries=" << evaluation.feasible_frontier_entries.size() << ")";
+    evaluation.feasible_frontier_entries = BuildLocalDelayPowerPareto(evaluation.feasible_frontier_entries);
+  } else {
+    evaluation.feasible_frontier_entries = BuildLocalDelayPowerPareto(covered_feasible);
+  }
   if (retain_relaxed_candidates) {
-    evaluation.candidate_frontier_entries = BuildLocalDelayPowerPareto(FilterSinkLoadRegionCoveredEntries(
-        evaluation.candidate_frontier_entries, topology, evaluation.topology_pattern_library, segment_pattern_library, legality_context));
+    auto covered_candidates
+        = FilterSinkLoadRegionCoveredEntries(evaluation.candidate_frontier_entries, topology, evaluation.topology_pattern_library,
+                                             segment_pattern_library, legality_context);
+    if (covered_candidates.empty() && !evaluation.candidate_frontier_entries.empty()) {
+      evaluation.candidate_frontier_entries = BuildLocalDelayPowerPareto(evaluation.candidate_frontier_entries);
+    } else {
+      evaluation.candidate_frontier_entries = BuildLocalDelayPowerPareto(covered_candidates);
+    }
   } else {
     std::vector<HTreeTopologyChar>().swap(evaluation.candidate_frontier_entries);
   }

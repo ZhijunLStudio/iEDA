@@ -10,7 +10,7 @@ import math
 import os
 import random
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -54,6 +54,17 @@ STAGES = (
     ("filler", "Filler", "iPL_filler_result.def", "filler_db.rpt"),
 )
 
+# ICS55 (and some templates) emit alternate report filenames.
+DB_REPORT_ALIASES = {
+    "fp_db.rpt": ("floorplan_stat.rpt",),
+    "fixfanout_db.rpt": ("fix_fanout_db.rpt",),
+    "pl_db.rpt": ("placement_stat.rpt", "pl_stat.rpt"),
+    "cts_db.rpt": ("cts_stat.rpt",),
+    "lg_db.rpt": ("legalization_stat.rpt", "lg_stat.rpt"),
+    "rt_db.rpt": ("routing_stat.rpt", "rt_stat.rpt"),
+    "filler_db.rpt": ("filler_stat.rpt",),
+}
+
 PDK_COLORS = {
     "sky130": "#1687a7",
     "nangate45": "#3b8f5a",
@@ -80,12 +91,12 @@ MAP_SPECS = (
 )
 
 MAP_COMPARISONS = (
-    ("stdcell_density", "Std-cell density: 13-design comparison"),
-    ("allcell_pin_density", "All-cell pin density: 13-design comparison"),
-    ("egr_union_overflow", "EGR union overflow: 13-design comparison"),
-    ("early_net_planar", "Planar routing demand: 13-design comparison"),
-    ("early_overflow_planar", "Planar routing overflow: 13-design comparison"),
-    ("drc_violation_density", "DRC violation density: 13-design comparison"),
+    ("stdcell_density", "Std-cell density: design-set comparison"),
+    ("allcell_pin_density", "All-cell pin density: design-set comparison"),
+    ("egr_union_overflow", "EGR union overflow: design-set comparison"),
+    ("early_net_planar", "Planar routing demand: design-set comparison"),
+    ("early_overflow_planar", "Planar routing overflow: design-set comparison"),
+    ("drc_violation_density", "DRC violation density: design-set comparison"),
 )
 
 MAP_PALETTES = {
@@ -112,6 +123,23 @@ def number(value, digits: int = 3, missing: str = "N/A") -> str:
     if not math.isfinite(float(value)):
         return missing
     return f"{float(value):,.{digits}f}"
+
+
+def signed_pct(value, digits: int = 1) -> str:
+    return "N/A" if value is None else f"{value:+.{digits}f}%"
+
+
+def pct_delta(old, new) -> float | None:
+    if old is None or new is None:
+        return None
+    try:
+        old_f = float(old)
+        new_f = float(new)
+    except (TypeError, ValueError):
+        return None
+    if old_f == 0 or not math.isfinite(old_f) or not math.isfinite(new_f):
+        return None
+    return 100.0 * (new_f - old_f) / old_f
 
 
 def pct(value, digits: int = 1) -> str:
@@ -284,6 +312,17 @@ def parse_def(path: Path, keep_visuals: bool = True) -> DefData:
     return data
 
 
+def resolve_db_report(report_dir: Path, db_name: str) -> Path:
+    primary = report_dir / db_name
+    if primary.is_file() and primary.stat().st_size > 0:
+        return primary
+    for alias in DB_REPORT_ALIASES.get(db_name, ()):
+        candidate = report_dir / alias
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            return candidate
+    return primary
+
+
 def parse_db_report(path: Path) -> dict:
     text = read_text(path)
     if not text:
@@ -367,7 +406,39 @@ def parse_wirelength(path: Path) -> dict:
     return values
 
 
+def parse_congestion_summary_json(path: Path) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if payload.get("schema") != "C-CONG":
+        return None
+    summary = payload.get("summary") or {}
+    average = summary.get("average_edge_congestion")
+    if average is None:
+        return None
+    average = float(average)
+    return {
+        "high_density_bins_pct": None,
+        "high_pin_bins_pct": None,
+        "average_edge_congestion": average,
+        "total_overflow": summary.get("total_overflow"),
+        "max_overflow": summary.get("max_overflow"),
+        "top_1_pct_mean": summary.get("top_1_pct_mean"),
+        "top_5_pct_mean": summary.get("top_5_pct_mean"),
+        "nonzero_bin_pct": summary.get("nonzero_bin_pct"),
+        "valid": bool(payload.get("valid")) and average >= 0,
+        "source": "congestion_summary.json",
+    }
+
+
 def parse_congestion(path: Path) -> dict:
+    summary_json = path.parent.parent / "congestion_summary.json"
+    from_json = parse_congestion_summary_json(summary_json)
+    if from_json is not None:
+        return from_json
     text = read_text(path)
     edge = re.search(
         r"\| Average Congestion of Edges\s*\| Total Overflow\s*\| Maximal Overflow\s*\|.*?"
@@ -399,6 +470,7 @@ def parse_congestion(path: Path) -> dict:
         "total_overflow": float(edge.group(2)) if edge else None,
         "max_overflow": float(edge.group(3)) if edge else None,
         "valid": average is not None and average >= 0,
+        "source": "congestion.rpt",
     }
 
 
@@ -410,6 +482,234 @@ def parse_drc(path: Path) -> dict:
     total_matches = re.findall(r"\|\s*Total\s*\|\s*(\d+)\s*\|\s*100\.00%\s*\|", text)
     total = int(total_matches[-1]) if total_matches else sum(by_type.values()) or None
     return {"total": total, "by_type": by_type}
+
+
+def read_json_payload(path: Path) -> tuple[dict | list | None, str | None]:
+    if not path.is_file():
+        return None, "missing"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")), None
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, str(exc)
+
+
+def numeric_value(value) -> float | int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        number_value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number_value):
+        return None
+    return int(number_value) if number_value.is_integer() else number_value
+
+
+def sum_action_field(actions: list[dict], key: str) -> float | int | None:
+    values = [numeric_value(action.get(key)) for action in actions]
+    values = [value for value in values if value is not None]
+    if not values:
+        return None
+    total = sum(values)
+    return int(total) if isinstance(total, float) and total.is_integer() else total
+
+
+def normalize_violation_type(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def violation_category(name: str) -> str | None:
+    normalized = normalize_violation_type(name)
+    if "minimum_area" in normalized or "min_area" in normalized or (
+        "minimum" in normalized and "area" in normalized
+    ):
+        return "minimum_area"
+    if "prl" in normalized or "parallel_run_length" in normalized:
+        return "prl"
+    if "short" in normalized:
+        return "short"
+    return None
+
+
+def action_drc_by_type_delta(action: dict) -> dict[str, float | int]:
+    delta = action.get("drc_delta") or {}
+    by_type = delta.get("by_type")
+    if isinstance(by_type, dict):
+        return {
+            str(name): value
+            for name, raw_value in by_type.items()
+            if (value := numeric_value(raw_value)) is not None
+        }
+
+    before = ((action.get("drc_before") or {}).get("by_type") or {})
+    after = ((action.get("drc_after") or {}).get("by_type") or {})
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return {}
+    names = set(before) | set(after)
+    result = {}
+    for name in names:
+        before_value = numeric_value(before.get(name)) or 0
+        after_value = numeric_value(after.get(name)) or 0
+        value = after_value - before_value
+        if value:
+            result[str(name)] = value
+    return result
+
+
+def action_drc_total_delta(action: dict) -> float | int | None:
+    value = numeric_value((action.get("drc_delta") or {}).get("total"))
+    if value is not None:
+        return value
+    before = numeric_value((action.get("drc_before") or {}).get("total"))
+    after = numeric_value((action.get("drc_after") or {}).get("total"))
+    if before is None or after is None:
+        return None
+    return after - before
+
+
+def summarize_final_minarea_actions(actions: list[dict]) -> dict:
+    final_actions = [
+        action
+        for action in actions
+        if isinstance(action, dict) and action.get("action_type") == "final_minarea_patch"
+    ]
+    if not final_actions:
+        return {
+            "action_type": "final_minarea_patch",
+            "action_count": 0,
+            "action_status": "not_observed",
+            "status_summary": "not_observed",
+            "candidate_count": None,
+            "processed_candidate_count": None,
+            "accepted_count": None,
+            "runtime_seconds": None,
+            "drc_delta": {"total": None, "by_type": {}},
+            "minimum_area_delta": None,
+            "prl_delta": None,
+            "short_delta": None,
+            "actions": [],
+        }
+
+    status_counts = Counter(str(action.get("status") or "unknown") for action in final_actions)
+    by_type_delta: dict[str, float | int] = defaultdict(int)
+    total_delta = 0
+    has_total_delta = False
+    category_delta = {"minimum_area": 0, "prl": 0, "short": 0}
+    category_seen = {"minimum_area": False, "prl": False, "short": False}
+    action_summaries = []
+    for action in final_actions:
+        action_by_type = action_drc_by_type_delta(action)
+        action_total_delta = action_drc_total_delta(action)
+        if action_total_delta is not None:
+            total_delta += action_total_delta
+            has_total_delta = True
+        for name, value in action_by_type.items():
+            by_type_delta[name] += value
+            category = violation_category(name)
+            if category:
+                category_delta[category] += value
+                category_seen[category] = True
+        action_summaries.append({
+            "status": action.get("status"),
+            "reason": action.get("reason"),
+            "candidate_count": numeric_value(action.get("candidate_count")),
+            "processed_candidate_count": numeric_value(action.get("processed_candidate_count")),
+            "accepted_count": numeric_value(action.get("accepted_count")),
+            "runtime_seconds": numeric_value(action.get("runtime_seconds")),
+            "drc_delta": {
+                "total": action_total_delta,
+                "by_type": dict(sorted(action_by_type.items())),
+            },
+        })
+
+    return {
+        "action_type": "final_minarea_patch",
+        "action_count": len(final_actions),
+        "action_status": str(final_actions[-1].get("status") or "unknown"),
+        "status_summary": ", ".join(
+            f"{status} x{count}" if count > 1 else status
+            for status, count in sorted(status_counts.items())
+        ),
+        "candidate_count": sum_action_field(final_actions, "candidate_count"),
+        "processed_candidate_count": sum_action_field(final_actions, "processed_candidate_count"),
+        "accepted_count": sum_action_field(final_actions, "accepted_count"),
+        "runtime_seconds": sum_action_field(final_actions, "runtime_seconds"),
+        "drc_delta": {
+            "total": total_delta if has_total_delta else None,
+            "by_type": dict(sorted(by_type_delta.items())),
+        },
+        "minimum_area_delta": category_delta["minimum_area"] if category_seen["minimum_area"] else 0,
+        "prl_delta": category_delta["prl"] if category_seen["prl"] else 0,
+        "short_delta": category_delta["short"] if category_seen["short"] else 0,
+        "actions": action_summaries,
+    }
+
+
+def parse_iter_delta(path: Path) -> dict:
+    payload, error = read_json_payload(path)
+    if error:
+        return {"path": str(path), "present": False, "status": error}
+    if not isinstance(payload, dict):
+        return {"path": str(path), "present": True, "status": "invalid", "error": "root is not an object"}
+    iterations = payload.get("iterations") or []
+    if not isinstance(iterations, list):
+        iterations = []
+    final_iteration = iterations[-1] if iterations and isinstance(iterations[-1], dict) else {}
+    return {
+        "path": str(path),
+        "present": True,
+        "status": "measured",
+        "schema_version": payload.get("schema_version"),
+        "iteration_count": len(iterations),
+        "final_iteration": {
+            "iter": final_iteration.get("iter"),
+            "drc_total": final_iteration.get("drc_total"),
+            "delta": final_iteration.get("delta"),
+        },
+    }
+
+
+def parse_repair_actions(path: Path) -> dict:
+    payload, error = read_json_payload(path)
+    if error:
+        return {
+            "path": str(path),
+            "present": False,
+            "status": error,
+            "action_count": 0,
+            "final_minarea_patch": summarize_final_minarea_actions([]),
+        }
+    if not isinstance(payload, dict):
+        return {
+            "path": str(path),
+            "present": True,
+            "status": "invalid",
+            "error": "root is not an object",
+            "action_count": 0,
+            "final_minarea_patch": summarize_final_minarea_actions([]),
+        }
+    actions = payload.get("actions") or []
+    if not isinstance(actions, list):
+        actions = []
+    return {
+        "path": str(path),
+        "present": True,
+        "status": "measured",
+        "schema_version": payload.get("schema_version"),
+        "action_count": len(actions),
+        "final_minarea_patch": summarize_final_minarea_actions(actions),
+    }
+
+
+def parse_detailed_router_observations(result_dir: Path) -> dict:
+    detailed_router_dir = result_dir / "rt/detailed_router"
+    return {
+        "path": str(detailed_router_dir),
+        "repair_actions": parse_repair_actions(detailed_router_dir / "repair_actions.json"),
+        "iter_delta": parse_iter_delta(detailed_router_dir / "iter_delta.json"),
+    }
 
 
 def parse_cts(result_dir: Path) -> dict:
@@ -708,7 +1008,7 @@ def draw_map_image(
         f"grid {stats.get('columns', 0)}x{stats.get('rows', 0)}  |  non-zero "
         f"{number(nonzero_pct, 2)}%  |  local max {number(stats.get('max'), 3)}"
     )
-    scale_note = f"shared 13-design scale: 0..{number(scale_max, 3)}; lower grid origin shown at bottom"
+    scale_note = f"shared design-set scale: 0..{number(scale_max, 3)}; lower grid origin shown at bottom"
     draw.text((56, 878), footer, font=body_font, fill="#34474f")
     draw.text((56, 907), scale_note, font=body_font, fill="#637178")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -829,7 +1129,7 @@ def analyze_design(name: str) -> dict:
         def_path = result_dir / def_name
         if not def_path.is_file() and key == "fanout":
             def_path = result_dir / "iNO_fix_fanout_result.def"
-        db = parse_db_report(result_dir / "report" / db_name)
+        db = parse_db_report(resolve_db_report(result_dir / "report", db_name))
         if def_path.is_file():
             parsed = parse_def(def_path)
             image_path = ASSET_ROOT / name / f"{key}.png"
@@ -866,6 +1166,7 @@ def analyze_design(name: str) -> dict:
     wirelength = parse_wirelength(result_dir / "report/wirelength.rpt")
     congestion = parse_congestion(result_dir / "report/congestion.rpt")
     drc = parse_drc(result_dir / "report/drc/iRT_drc.rpt")
+    detailed_router = parse_detailed_router_observations(result_dir)
     cts = parse_cts(result_dir)
     warnings = analyze_warnings(result_dir)
     final_png = result_dir / "visualizations/final.png"
@@ -874,19 +1175,27 @@ def analyze_design(name: str) -> dict:
     gds = result_dir / "final.gds"
     final_instances = stages.get("filler", {}).get("instances") or stages.get("routing", {}).get("instances")
     total_power = power.get("total_w")
+    # Artifact-based flow completion: DEF+GDS means the physical flow ran through,
+    # even if optional power/viz stages left summary.status=partial.
+    routed = (result_dir / "iRT_result.def").is_file()
+    flow_complete = routed and gds.is_file() and gds.stat().st_size > 0
+    status = "success" if flow_complete else summary.get("status", "partial")
     return {
         "design": name,
         "pdk": summary["pdk"],
         "strategy": summary["strategy"],
-        "status": summary["status"],
+        "status": status,
         "timestamp": summary.get("timestamp"),
         "floorplan": summary.get("floorplan", {}),
+        "budget_profile": summary.get("budget_profile", {}),
+        "experiment_manifest": summary.get("experiment_manifest"),
         "stages": stages,
         "timing": timing,
         "power": power,
         "wirelength": wirelength,
         "congestion": congestion,
         "drc": drc,
+        "detailed_router": detailed_router,
         "cts": cts,
         "warnings": warnings,
         "ir_drop": {"status": "not_run", "worst_drop_v": None, "coverage": 0.0},
@@ -906,6 +1215,124 @@ def analyze_design(name: str) -> dict:
     }
 
 
+def read_experiment_manifest(result_root: Path) -> dict:
+    path = result_root / "experiment_manifest.json"
+    if not path.is_file():
+        return {
+            "path": str(path),
+            "present": False,
+            "warning": "experiment_manifest.json not found; run aes13_flow.py with M0 metadata support.",
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "path": str(path),
+            "present": False,
+            "warning": f"failed to read experiment_manifest.json: {exc}",
+        }
+    payload["path"] = str(path)
+    payload["present"] = True
+    return payload
+
+
+def manifest_summary_table(manifest: dict) -> str:
+    if not manifest.get("present"):
+        return f"> Manifest 缺失：{manifest.get('warning', 'unknown error')}"
+    budget = manifest.get("budget_profile") or {}
+    tool = manifest.get("tool") or {}
+    git = tool.get("git") or {}
+    binary = tool.get("binary") or {}
+    baseline = manifest.get("baseline_ref") or {}
+    runtime_env = manifest.get("runtime_env") or {}
+    acceptance = manifest.get("acceptance_policy") or {}
+    sha = binary.get("sha256")
+    rows = [
+        "| 字段 | 值 |",
+        "|---|---|",
+        f"| Manifest | `{manifest.get('path')}` |",
+        f"| Budget profile | `{budget.get('name', 'N/A')}` - {budget.get('description', 'N/A')} |",
+        f"| DR/SR budget | DR iter={budget.get('dr_iterations', 'N/A')}, SR iter={budget.get('sr_iterations', 'N/A')}, SR seconds={budget.get('sr_seconds', 'N/A')}, tasks/box={budget.get('tasks_per_sr_box', 'N/A')}, final min-area tasks={budget.get('final_minarea_tasks', 'N/A')}, skip final min-area={budget.get('skip_final_minarea', 'N/A')} |",
+        f"| Git | branch `{git.get('branch') or 'N/A'}`, commit `{git.get('commit') or 'N/A'}`, dirty={git.get('dirty')} ({git.get('status_line_count', 'N/A')} paths) |",
+        f"| Flow diff hash | `{git.get('flow_diff_sha256') or 'N/A'}` |",
+        f"| iEDA binary | `{binary.get('path') or 'N/A'}`, sha256 `{sha[:16] + '...' if sha else 'N/A'}` |",
+        f"| Runtime env | `IEDA_QOR_BUDGET_PROFILE={runtime_env.get('IEDA_QOR_BUDGET_PROFILE', 'N/A')}`, `ROUTING_THREADS={runtime_env.get('ROUTING_THREADS', 'N/A')}`, `JOBS={runtime_env.get('JOBS', 'N/A')}` |",
+        f"| Baseline ref | `{baseline.get('report_json') or 'N/A'}` ({baseline.get('label') or 'unlabeled'}) |",
+        f"| Acceptance | {acceptance.get('pareto_rule', 'N/A')} |",
+    ]
+    overrides = budget.get("overrides") or {}
+    if overrides:
+        rows.append(f"| Profile overrides | `{json.dumps(overrides, ensure_ascii=False, sort_keys=True)}` |")
+    return "\n".join(rows)
+
+
+def manifest_html(manifest: dict) -> str:
+    if not manifest.get("present"):
+        return f'<div class="callout"><b>Manifest 缺失。</b> {html.escape(manifest.get("warning", "unknown error"))}</div>'
+    budget = manifest.get("budget_profile") or {}
+    tool = manifest.get("tool") or {}
+    git = tool.get("git") or {}
+    binary = tool.get("binary") or {}
+    baseline = manifest.get("baseline_ref") or {}
+    runtime_env = manifest.get("runtime_env") or {}
+    acceptance = manifest.get("acceptance_policy") or {}
+    rows = [
+        ("Budget profile", f"{budget.get('name', 'N/A')} - {budget.get('description', 'N/A')}"),
+        (
+            "DR/SR budget",
+            f"DR iter={budget.get('dr_iterations', 'N/A')}, SR iter={budget.get('sr_iterations', 'N/A')}, "
+            f"SR seconds={budget.get('sr_seconds', 'N/A')}, tasks/box={budget.get('tasks_per_sr_box', 'N/A')}, "
+            f"final min-area tasks={budget.get('final_minarea_tasks', 'N/A')}, "
+            f"skip final min-area={budget.get('skip_final_minarea', 'N/A')}",
+        ),
+        ("Git", f"branch {git.get('branch') or 'N/A'}, commit {git.get('commit') or 'N/A'}, dirty={git.get('dirty')}"),
+        ("iEDA binary", f"{binary.get('path') or 'N/A'}, sha256 {(binary.get('sha256') or 'N/A')[:16]}"),
+        ("Runtime env", f"IEDA_QOR_BUDGET_PROFILE={runtime_env.get('IEDA_QOR_BUDGET_PROFILE', 'N/A')}, ROUTING_THREADS={runtime_env.get('ROUTING_THREADS', 'N/A')}"),
+        ("Baseline ref", f"{baseline.get('report_json') or 'N/A'} ({baseline.get('label') or 'unlabeled'})"),
+        ("Acceptance", acceptance.get("pareto_rule", "N/A")),
+    ]
+    body = "".join(f"<tr><th>{html.escape(k)}</th><td>{html.escape(str(v))}</td></tr>" for k, v in rows)
+    return f'<div class="table-wrap"><table><tbody>{body}</tbody></table></div>'
+
+
+def baseline_metric_snapshot(design: dict) -> dict:
+    return {
+        "drc_total": design.get("drc", {}).get("total"),
+        "route_runtime_sec": design.get("stages", {}).get("routing", {}).get("runtime_sec"),
+        "placement_hpwl_um": design.get("stages", {}).get("placement", {}).get("def_hpwl_um"),
+        "routing_hpwl_um": design.get("stages", {}).get("routing", {}).get("def_hpwl_um"),
+        "def_routed_um": design.get("stages", {}).get("routing", {}).get("def_routed_um"),
+        "egr_wirelength_um": design.get("wirelength", {}).get("egr_um"),
+    }
+
+
+def apply_baseline(designs: list[dict], baseline_path: Path | None) -> dict:
+    if baseline_path is None:
+        return {"path": None, "matched": 0}
+    if not baseline_path.is_file():
+        raise FileNotFoundError(baseline_path)
+    payload = json.loads(baseline_path.read_text(encoding="utf-8"))
+    baseline_designs = payload.get("designs", [])
+    baseline_by_name = {
+        item.get("design"): baseline_metric_snapshot(item)
+        for item in baseline_designs
+        if isinstance(item, dict) and item.get("design")
+    }
+    matched = 0
+    for design in designs:
+        baseline = baseline_by_name.get(design["design"])
+        if not baseline:
+            continue
+        matched += 1
+        design["baseline"] = baseline
+        current = baseline_metric_snapshot(design)
+        design["delta_vs_baseline"] = {
+            key: pct_delta(baseline.get(key), current.get(key))
+            for key in baseline
+        }
+    return {"path": str(baseline_path), "matched": matched}
+
+
 def write_json(data: dict) -> Path:
     path = REPORT_ROOT / f"{REPORT_STEM}.json"
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -918,7 +1345,9 @@ def write_csv(designs: list[dict]) -> Path:
         "design", "pdk", "strategy", "status", "cell_count", "cell_area_um2", "die_side_um",
         "setup_wns_ns", "hold_wns_ns", "max_frequency_mhz", "total_power_w", "switch_power_w",
         "egr_wirelength_um", "def_routed_um", "drc_total", "high_density_bins_pct",
-        "congestion_valid", "route_runtime_sec", "ir_drop_status",
+        "congestion_valid", "congestion_average", "congestion_max_overflow", "congestion_nonzero_pct",
+        "route_runtime_sec", "drc_delta_pct", "route_runtime_delta_pct", "placement_hpwl_delta_pct",
+        "egr_wirelength_delta_pct", "ir_drop_status",
     )
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
@@ -939,7 +1368,14 @@ def write_csv(designs: list[dict]) -> Path:
                 "drc_total": design["drc"].get("total"),
                 "high_density_bins_pct": design["congestion"].get("high_density_bins_pct"),
                 "congestion_valid": design["congestion"].get("valid"),
+                "congestion_average": design["congestion"].get("average_edge_congestion"),
+                "congestion_max_overflow": design["congestion"].get("max_overflow"),
+                "congestion_nonzero_pct": design["congestion"].get("nonzero_bin_pct"),
                 "route_runtime_sec": design["stages"]["routing"].get("runtime_sec"),
+                "drc_delta_pct": design.get("delta_vs_baseline", {}).get("drc_total"),
+                "route_runtime_delta_pct": design.get("delta_vs_baseline", {}).get("route_runtime_sec"),
+                "placement_hpwl_delta_pct": design.get("delta_vs_baseline", {}).get("placement_hpwl_um"),
+                "egr_wirelength_delta_pct": design.get("delta_vs_baseline", {}).get("egr_wirelength_um"),
                 "ir_drop_status": design["ir_drop"]["status"],
             })
     return path
@@ -998,16 +1434,25 @@ def make_charts(designs: list[dict]) -> dict[str, Path]:
 
 def metric_table(designs: list[dict]) -> str:
     rows = [
-        "| Design | PDK | 状态 | Die (um) | Cells | Setup WNS (ns) | Fmax (MHz) | Power (mW) | EGR WL (um) | DRC | Route (s) | IR-drop |",
-        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| Design | PDK | 状态 | Die (um) | Cells | Setup WNS (ns) | Fmax (MHz) | Power (mW) | EGR WL (um) | DRC | DRC vs base | Route (s) | Route vs base | Place HPWL vs base | Cong. avg/max | IR-drop |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for d in designs:
+        delta = d.get("delta_vs_baseline", {})
+        congestion = d.get("congestion", {})
+        congestion_text = (
+            f"{number(congestion.get('average_edge_congestion'), 2)}/{number(congestion.get('max_overflow'), 0)}"
+            if congestion.get("valid")
+            else "invalid"
+        )
         rows.append(
             f"| {d['design']} | {d['pdk']} | {d['status']} | {number(d['floorplan'].get('die_side_um'))} | "
             f"{number(d['floorplan'].get('cell_count'), 0)} | {number(d['timing'].get('setup_wns_ns'))} | "
             f"{number(d['timing'].get('max_frequency_mhz'), 1)} | {number((d['power'].get('total_w') or 0) * 1000)} | "
             f"{number(d['wirelength'].get('egr_um'), 1)} | {number(d['drc'].get('total'), 0)} | "
-            f"{number(d['stages']['routing'].get('runtime_sec'), 1)} | 未运行 |"
+            f"{signed_pct(delta.get('drc_total'))} | {number(d['stages']['routing'].get('runtime_sec'), 1)} | "
+            f"{signed_pct(delta.get('route_runtime_sec'))} | {signed_pct(delta.get('placement_hpwl_um'))} | "
+            f"{congestion_text} | 未运行 |"
         )
     return "\n".join(rows)
 
@@ -1021,7 +1466,7 @@ def coverage_table() -> str:
 | Routed wirelength | N/A | N/A | N/A | 局部可见 | 局部可见 | 推导+EGR报告 | DEF ROUTED/FIXED 路径 |
 | STA | 未运行 | 未运行 | 未运行 | 未运行 | 未运行 | 实测但低置信 | 未回标 SPEF，报告 net delay 为 0 |
 | Power | 未运行 | 未运行 | 未运行 | 未运行 | 未运行 | 实测但低置信 | 无 VCD/SAIF，switch power 为 0 |
-| Congestion / maps | 未运行 | 未运行 | 9 类密度 CSV | 沿用布局 map | 沿用布局 map | EGR/early-router map 可用；汇总报告无效 | map 是空间原始证据；Average=-1 仅表示汇总接口不可用 |
+| Congestion / maps | 未运行 | 未运行 | 9 类密度 CSV | 沿用布局 map | 沿用布局 map | EGR/early-router map 与 summary JSON 可用 | summary 从 map 归约，避免旧版 Average=-1 sentinel |
 | DRC | 不适用 | 不适用 | 不适用 | 不适用 | 不适用 | 实测 | iDRC post-route |
 | IR-drop | 未运行 | 未运行 | 未运行 | 未运行 | 未运行 | 未运行 | 无 iPNP/iIR 结果，不填 0 |"""
 
@@ -1034,7 +1479,15 @@ def stage_table(d: dict) -> str:
     for key, label, _, _ in STAGES:
         stage = d["stages"][key]
         post_route = key == "routing"
-        congestion = "invalid(-1)" if post_route and not d["congestion"].get("valid") else "N/A"
+        if post_route and d["congestion"].get("valid"):
+            congestion = (
+                f"avg {number(d['congestion'].get('average_edge_congestion'), 2)}, "
+                f"max {number(d['congestion'].get('max_overflow'), 0)}"
+            )
+        elif post_route:
+            congestion = "invalid"
+        else:
+            congestion = "N/A"
         rows.append(
             f"| {label} | {number(stage.get('runtime_sec'), 2)} | {number(stage.get('memory_mb'), 1)} | "
             f"{number(stage.get('instances'), 0)} | {number(stage.get('timing_instances'), 0)} | "
@@ -1094,7 +1547,96 @@ def map_comparison_table(designs: list[dict]) -> str:
     return "\n".join(rows)
 
 
-def map_grid_md(d: dict) -> str:
+def repair_patch_summary(design: dict) -> dict:
+    return (
+        design.get("detailed_router", {})
+        .get("repair_actions", {})
+        .get("final_minarea_patch", {})
+    )
+
+
+def repair_patch_table(designs: list[dict]) -> str:
+    rows = [
+        "| Design | Action status | Candidates | Processed | Accepted | Runtime (s) | DRC delta | Min-area delta | PRL delta | Short delta |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for design in designs:
+        repair = repair_patch_summary(design)
+        rows.append(
+            f"| {design['design']} | {repair.get('status_summary') or repair.get('action_status') or 'N/A'} | "
+            f"{number(repair.get('candidate_count'), 0)} | "
+            f"{number(repair.get('processed_candidate_count'), 0)} | "
+            f"{number(repair.get('accepted_count'), 0)} | "
+            f"{number(repair.get('runtime_seconds'), 2)} | "
+            f"{number((repair.get('drc_delta') or {}).get('total'), 0)} | "
+            f"{number(repair.get('minimum_area_delta'), 0)} | "
+            f"{number(repair.get('prl_delta'), 0)} | "
+            f"{number(repair.get('short_delta'), 0)} |"
+        )
+    return "\n".join(rows)
+
+
+def repair_patch_detail_md(design: dict) -> str:
+    repair_actions = design.get("detailed_router", {}).get("repair_actions", {})
+    repair = repair_patch_summary(design)
+    path = Path(repair_actions.get("path", ""))
+    link = f"[repair_actions.json]({md_rel(path)})" if path.is_file() else "`repair_actions.json`"
+    return (
+        f"Final min-area patch：status `{repair.get('status_summary') or repair.get('action_status') or 'N/A'}`，"
+        f"candidate `{number(repair.get('candidate_count'), 0)}`，"
+        f"processed `{number(repair.get('processed_candidate_count'), 0)}`，"
+        f"accepted `{number(repair.get('accepted_count'), 0)}`，"
+        f"runtime `{number(repair.get('runtime_seconds'), 2)} s`，"
+        f"DRC delta `{number((repair.get('drc_delta') or {}).get('total'), 0)}`，"
+        f"minimum_area/PRL/short delta `{number(repair.get('minimum_area_delta'), 0)}`/"
+        f"`{number(repair.get('prl_delta'), 0)}`/`{number(repair.get('short_delta'), 0)}`。"
+        f"来源：{link}。"
+    )
+
+
+def baseline_delta_table(designs: list[dict]) -> str:
+    rows = [
+        "| Design | PDK | DRC old -> new | DRC delta | Route old -> new (s) | Route delta | Place HPWL delta | EGR WL delta |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for d in designs:
+        baseline = d.get("baseline", {})
+        delta = d.get("delta_vs_baseline", {})
+        if not baseline:
+            rows.append(f"| {d['design']} | {d['pdk']} | N/A | N/A | N/A | N/A | N/A | N/A |")
+            continue
+        rows.append(
+            f"| {d['design']} | {d['pdk']} | {number(baseline.get('drc_total'), 0)} -> {number(d['drc'].get('total'), 0)} | "
+            f"{signed_pct(delta.get('drc_total'))} | {number(baseline.get('route_runtime_sec'), 1)} -> "
+            f"{number(d['stages']['routing'].get('runtime_sec'), 1)} | {signed_pct(delta.get('route_runtime_sec'))} | "
+            f"{signed_pct(delta.get('placement_hpwl_um'))} | {signed_pct(delta.get('egr_wirelength_um'))} |"
+        )
+    return "\n".join(rows)
+
+
+def baseline_findings(designs: list[dict]) -> str:
+    matched = [d for d in designs if d.get("delta_vs_baseline")]
+    if not matched:
+        return ""
+    improved = [d for d in matched if (d["delta_vs_baseline"].get("drc_total") or 0) < 0]
+    regressed = [d for d in matched if (d["delta_vs_baseline"].get("drc_total") or 0) > 0]
+    runtime_improved = [d for d in matched if (d["delta_vs_baseline"].get("route_runtime_sec") or 0) < 0]
+    lines = [
+        f"- DRC：{len(improved)}/{len(matched)} 下降，{len(regressed)}/{len(matched)} 上升；"
+        "说明本轮配置/算法并非没有生效，而是存在 PDK 分化。",
+        f"- Runtime：{len(runtime_improved)}/{len(matched)} 下降；best-effort 和 SR cap 对 get-through 成本有明显作用。",
+        "- WNS/Fmax/Power/Die/Cells 大体不变是预期现象：这些指标当前主要由同一 RTL/netlist、同一 floorplan、无 SPEF STA、无真实 activity 决定。",
+    ]
+    worst = max(matched, key=lambda item: item["delta_vs_baseline"].get("drc_total") or -math.inf)
+    best = min(matched, key=lambda item: item["delta_vs_baseline"].get("drc_total") or math.inf)
+    lines.append(
+        f"- 最大 DRC 退化是 `{worst['design']}` ({signed_pct(worst['delta_vs_baseline'].get('drc_total'))})；"
+        f"最大改善是 `{best['design']}` ({signed_pct(best['delta_vs_baseline'].get('drc_total'))})。"
+    )
+    return "\n".join(lines)
+
+
+def map_grid_md(d: dict, design_count: int) -> str:
     cells = []
     for item in d["maps"]["representative"]:
         image_path = Path(item["image"])
@@ -1112,7 +1654,7 @@ def map_grid_md(d: dict) -> str:
         "#### 空间 Map 证据",
         "",
         f"共发现 `{d['maps']['raw_file_count']}` 个原始 map 文件，渲染 `{d['maps']['rendered_count']}` 张代表图。"
-        "同类图使用跨 13 个设计的统一色标；DRC 使用统一对数色标。全零图保留并明确标注。",
+        f"同类图使用跨 {design_count} 个设计的统一色标；DRC 使用统一对数色标。全零图保留并明确标注。",
         "",
         "<table>",
     ]
@@ -1149,14 +1691,34 @@ def pdk_findings(designs: list[dict]) -> str:
             dense_wl, loose_wl = dense["wirelength"].get("egr_um"), loose["wirelength"].get("egr_um")
             wl_delta = 100.0 * (loose_wl - dense_wl) / dense_wl if dense_wl and loose_wl else 0.0
             direction = "下降" if drc_delta < 0 else "上升"
-            lines.append(
-                prefix
-                + f"从 a(35%) 放宽到 t(25%) 后，EGR 线长增加 {wl_delta:+.1f}%，DRC {direction} "
-                f"{abs(drc_delta):.1f}%（{dense_drc:,} -> {loose_drc:,}）。"
-                + ("Sky130 呈现预期的密度缓解，但改善幅度仍不足以接近 clean。"
-                   if pdk == "sky130" else
-                   "更宽松的面积没有改善 DRC，说明该工艺当前的主导因素不是密度，而是规则、轨道/via 映射或路由代价。")
-            )
+            a_target = dense.get("floorplan", {}).get("target_utilization")
+            t_target = loose.get("floorplan", {}).get("target_utilization")
+            if a_target is not None and t_target is not None and abs(a_target - t_target) < 1e-9:
+                variant_note = (
+                    f"a/t 的目标利用率同为 {a_target * 100:.1f}%，EGR 线长变化 {wl_delta:+.1f}%，"
+                    f"DRC {direction} {abs(drc_delta):.1f}%（{dense_drc:,} -> {loose_drc:,}）。"
+                    "当前 a/b/t 更接近重复性样本，不能解释为利用率 DOE。"
+                )
+            else:
+                a_label = f"{a_target * 100:.1f}%" if a_target is not None else "a"
+                t_label = f"{t_target * 100:.1f}%" if t_target is not None else "t"
+                variant_note = (
+                    f"从 a({a_label}) 到 t({t_label}) 后，EGR 线长变化 {wl_delta:+.1f}%，"
+                    f"DRC {direction} {abs(drc_delta):.1f}%（{dense_drc:,} -> {loose_drc:,}）。"
+                )
+            if a_target is not None and t_target is not None and abs(a_target - t_target) < 1e-9:
+                root_cause_note = (
+                    "同利用率样本间的差异更可能来自状态配置、库/规则映射、路由预算或执行扰动，"
+                    "不能归因为面积放宽。"
+                )
+            elif pdk == "sky130":
+                root_cause_note = "Sky130 呈现预期的密度缓解，但改善幅度仍不足以接近 clean。"
+            else:
+                root_cause_note = (
+                    "更宽松的面积没有改善 DRC，说明该工艺当前的主导因素不是密度，"
+                    "而是规则、轨道/via 映射或路由代价。"
+                )
+            lines.append(prefix + variant_note + root_cause_note)
         else:
             lines.append(
                 prefix
@@ -1166,45 +1728,81 @@ def pdk_findings(designs: list[dict]) -> str:
 
 
 def build_markdown(
-    designs: list[dict], charts: dict[str, Path], map_charts: dict[str, Path], generated: str
+    designs: list[dict], charts: dict[str, Path], map_charts: dict[str, Path], generated: str, manifest: dict
 ) -> str:
     all_success = sum(d["status"] == "success" for d in designs)
     design_count = len(designs)
+    pdk_count = len({d["pdk"] for d in designs})
+    rendered_map_count = sum(d.get("maps", {}).get("rendered_count", 0) for d in designs)
+    congestion_valid_count = sum(1 for d in designs if d.get("congestion", {}).get("valid"))
+    has_baseline = any(d.get("delta_vs_baseline") for d in designs)
+    asset_dir_name = ASSET_ROOT.name
     drcs = [d["drc"]["total"] for d in designs if d["drc"].get("total") is not None]
+    fp_utils = [
+        d["stages"].get("floorplan", {}).get("core_usage")
+        for d in designs
+        if d["stages"].get("floorplan", {}).get("core_usage") is not None
+    ]
+    util_note = ""
+    if fp_utils:
+        util_note = (
+            f"- **实测 Floorplan CORE Usage**：{min(fp_utils)*100:.1f}% – {max(fp_utils)*100:.1f}% "
+            f"（目标 65%；Die/Core 由 `cell_area/target` 严格定边，已去掉旧版 MIN_CORE_SIDE 膨胀）。\n"
+        )
+    title = f"# AES {design_count} 项 @ 65% 利用率 iEDA.ai 物理设计详细对比报告"
     sections = [
-        "# AES 13 项 iEDA.ai 物理设计详细对比报告",
+        title,
         "",
         f"生成时间：{generated}  ",
-        f"范围：`{', '.join(DESIGNS)}`。",
+        f"数据根：`{RESULT_ROOT}`  ",
+        f"范围：`{', '.join(d['design'] for d in designs)}`。",
         "",
         "## 1. 执行结论",
         "",
-        f"- 流程完成度：**{all_success}/{design_count}** 已生成 post-route DEF、GDS、STA、功耗、线长、拥塞和 DRC 文件。",
-        f"- 物理签核质量：**0/{design_count} DRC clean**；违例总数范围 {number(min(drcs), 0)} 至 {number(max(drcs), 0)}。当前结果是流程贯通样本，不是 tapeout-ready 结果。",
+        f"- 流程完成度：**{all_success}/{design_count}** 已生成 post-route DEF、GDS（及阶段报告）；可选功耗阶段在无 VCD 时使用 vectorless toggle。",
+        util_note.rstrip(),
+        f"- 物理签核质量：**0/{design_count} DRC clean**；违例总数范围 {number(min(drcs), 0) if drcs else 'N/A'} 至 {number(max(drcs), 0) if drcs else 'N/A'}。当前结果是流程贯通样本，不是 tapeout-ready 结果。",
         "- 时序可信度：低。所有抽查路径的 `path net delay` 为 0，且存在未约束 I/O；正 slack 只能说明库内单元延迟下的代理检查通过。",
-        f"- 功耗可信度：低。{design_count} 项 `Net Switch Power` 均为 0，当前值主要是 internal/leakage 估算，不能用于动态功耗决策。",
-        "- 拥塞可信度：分层判断。汇总报告的 `Average Congestion=-1` 无效；但 placement density、EGR overflow 和 early-router 逐层 map CSV 是有效空间证据，已独立统计和成图。",
+        f"- 功耗可信度：低。vectorless 活动率仅为代理；无 VCD/SAIF 时不能用于动态功耗决策。",
+        f"- 拥塞可信度：**{congestion_valid_count}/{design_count} summary 有效**；summary 从 EGR/early-router map 归约，旧版 `Average Congestion=-1` sentinel 不再作为本报告口径。",
         f"- IR-drop：**0/{design_count} 执行**。没有电压降数据，报告显式记为 `N/A`。",
         "",
-        "> 结论分为“流程工程完成度”和“物理签核完成度”。前者较高，后者目前主要受 DRC、寄生参数、活动率、约束完整性和 PDN/IR 分析缺失限制。",
+        "> 结论分为“流程工程完成度”和“物理签核完成度”。前者以 DEF/GDS 贯通为准；后者仍受 DRC、寄生、约束和 PDN/IR 缺失限制。",
         "",
         "## 2. 数据口径与覆盖",
         "",
         coverage_table(),
         "",
+        "## 2.1 M0 实验元数据",
+        "",
+        manifest_summary_table(manifest),
+        "",
         "`DEF HPWL` 由每个 net 的实例放置原点 bbox 推导，不含 LEF pin offset，适用于同一 PDK/网表的阶段趋势；跨 PDK 只作方向性参考。面积、功耗、DRC 规则集合也不同，跨 PDK 排名不能解释为工艺优劣。",
         "",
-        "Map 图采用 CSV 原始网格，row 0 按笛卡尔坐标显示在底部。同一 map 类型在 13 个设计间使用统一色标，DRC 违例中心密度使用统一对数色标；因此颜色可横向比较，全零图不会被自动拉伸成伪热点。",
+        f"Map 图采用 CSV 原始网格，row 0 按笛卡尔坐标显示在底部。同一 map 类型在 {design_count} 个设计间使用统一色标，DRC 违例中心密度使用统一对数色标；因此颜色可横向比较，全零图不会被自动拉伸成伪热点。",
         "",
         "## 3. 横向总表",
         "",
         metric_table(designs),
+        "",
+        "### 3.1 iRT final min-area patch 观测",
+        "",
+        repair_patch_table(designs),
         "",
         "## 4. 关键横向图",
         "",
     ]
     for key in ("area", "frequency", "power", "drc", "routing"):
         sections.extend((f"![{key}]({md_rel(charts[key])})", ""))
+    if has_baseline:
+        sections.extend((
+            "## 4.1 与上一版基线对比",
+            "",
+            baseline_delta_table(designs),
+            "",
+            baseline_findings(designs),
+            "",
+        ))
     sections.extend((
         "## 5. 空间 Map 横向对比",
         "",
@@ -1212,7 +1810,7 @@ def build_markdown(
         "",
         map_comparison_table(designs),
         "",
-        "- ASAP7 a/b/t 的 EGR union 与 planar overflow map 均为全零；这是原始网格的事实，但不能修复或替代 `Average Congestion=-1` 的无效汇总接口。",
+        "- ASAP7 a/b/t 的 EGR union 近似全零、planar overflow 为全零或近似全零；这是原始网格事实，summary 会按 map 原值归约。",
         "- Sky130 的 EGR union 非零区域最广且峰值最高；ICS55 次之；Nangate45 的 planar overflow 很稀疏。不同 PDK 的 track/layer 资源定义不同，map 只用于工艺内状态趋势和热点定位。",
         "- DRC 图按违例矩形中心落入 180x180 网格，展示空间聚集度；它不替代按规则类型和几何面积的签核分析。",
         "",
@@ -1224,8 +1822,8 @@ def build_markdown(
         "",
         pdk_findings(designs),
         "",
-        "- `aes` 与 `aes_sky130_b` 的目标利用率同为 30%，结果几乎一致，可视为 baseline 重复性检查；两者不能作为独立策略样本扩大统计显著性。",
-        "- a/b/t 的核心变量是目标利用率 35%/30%/25%。更大的 die 通常降低局部密度，但在当前单轮详细布线 (`IEDA_RT_MAX_ITERATIONS=1`) 下，没有形成跨工艺一致的 DRC 单调改善。",
+        "- 本批 a/b/t 的 floorplan 目标利用率均为 65%，它们主要用于跨 PDK/状态重复性和稳定性检查，不能当作 35%/30%/25% 利用率 DOE。",
+        "- 当前单轮详细布线 (`IEDA_RT_MAX_ITERATIONS=1`) 与 best-effort SpaceRouter 预算优先保证流程贯通；DRC 数值应作为下一轮修复基线，而不是签核通过证据。",
         "## 7. 各设计阶段纵向对比、版图与 Maps",
         "",
     ))
@@ -1242,9 +1840,11 @@ def build_markdown(
             f"功耗 `{number((d['power'].get('total_w') or 0) * 1000)} mW`，DRC `{number(d['drc'].get('total'), 0)}`。"
             f"DRC 主项：{top_text}。未约束端口 `{warning['unconstrained_ports']}`，缺失 input slew pin `{warning['missing_input_slew_pins']}`。",
             "",
+            repair_patch_detail_md(d),
+            "",
             image_grid_md(d),
             "",
-            map_grid_md(d),
+            map_grid_md(d, design_count),
             "",
         ))
     sections.extend((
@@ -1252,14 +1852,14 @@ def build_markdown(
         "",
         "| 维度 | 评级 | 证据 | 判断 |",
         "|---|---|---|---|",
-        "| 多 PDK 流程贯通 | B | 4 PDK、13/13 GDS | 数据准备、映射、放置、CTS、布线和导出已可重复运行 |",
+        f"| 多 PDK 流程贯通 | B | {pdk_count} PDK、{all_success}/{design_count} GDS | 数据准备、映射、放置、CTS、布线和导出已可重复运行 |",
         "| 布局/CTS 工程完整性 | B- | 每阶段 DEF、CTS 专项图、合法化结果齐全 | 可做算法迭代，但需增加阶段质量门禁 |",
-        "| 布线/DRC | D | 0/13 clean，且数量级随 PDK 差异很大 | 目前不具备签核闭环 |",
+        f"| 布线/DRC | D | 0/{design_count} clean，且数量级随 PDK 差异很大 | 目前不具备签核闭环 |",
         "| STA | D+ | WNS/TNS 文件齐全，但 net delay=0、I/O 未全约束 | 只能做早期逻辑/库延迟代理 |",
         "| Power | D | switch power=0、无活动率 | 不可用于动态功耗或 IR 结论 |",
-        "| Congestion / maps | C- | 13/13 有密度、EGR、early-router 空间图，但 Average=-1 | 热点可审计，汇总指标与门禁仍不可用 |",
-        "| PDN / IR-drop | F | 0/13 数据 | 尚未进入质量闭环 |",
-        "| 可观测性/可追溯性 | B- | 日志、阶段图、208 张代表 map 和全部原始 map 索引齐全 | 已能空间审计，尚不能逐阶段自动判退 |",
+        f"| Congestion / maps | B- | {congestion_valid_count}/{design_count} 有有效 summary，{design_count}/{design_count} 有空间图 | 热点可审计，summary 已避免 -1 sentinel，但仍需进入自动判退 |",
+        f"| PDN / IR-drop | F | 0/{design_count} 数据 | 尚未进入质量闭环 |",
+        f"| 可观测性/可追溯性 | B- | 日志、阶段图、{rendered_map_count} 张代表 map 和全部原始 map 索引齐全 | 已能空间审计，尚不能逐阶段自动判退 |",
         "",
         "## 9. 后续优化方案",
         "",
@@ -1295,21 +1895,21 @@ def build_markdown(
         "",
         "| Gate | 当前 | 下一里程碑 |",
         "|---|---:|---:|",
-        "| Flow completion | 13/13 | 保持 13/13 可重复 |",
-        "| DRC clean | 0/13 | 每 PDK 至少 1 个 clean，再扩至 13/13 |",
-        "| SPEF-backed STA | 0/13 | 13/13，net delay 非零 |",
-        "| Fully constrained timing | 0/13 | unconstrained=0 |",
-        "| Activity-backed power | 0/13 | 13/13 有来源标签 |",
-        "| Valid congestion summary | 0/13 | 无 -1/NaN；与现有 EGR/early-router map 数值一致 |",
-        "| IR-drop | 0/13 | 13/13 有 worst/avg/map |",
-        "| Spatial maps | 13/13，208 张代表图 | 增加逐阶段 STA/power/congestion delta JSON |",
+        f"| Flow completion | {all_success}/{design_count} | 保持 {design_count}/{design_count} 可重复 |",
+        f"| DRC clean | 0/{design_count} | 每 PDK 至少 1 个 clean，再扩至 {design_count}/{design_count} |",
+        f"| SPEF-backed STA | 0/{design_count} | {design_count}/{design_count}，net delay 非零 |",
+        f"| Fully constrained timing | 0/{design_count} | unconstrained=0 |",
+        f"| Activity-backed power | 0/{design_count} | {design_count}/{design_count} 有来源标签 |",
+        f"| Valid congestion summary | {congestion_valid_count}/{design_count} | 保持无 -1/NaN，并与 EGR/early-router map 数值一致 |",
+        f"| IR-drop | 0/{design_count} | {design_count}/{design_count} 有 worst/avg/map |",
+        f"| Spatial maps | {design_count}/{design_count}，{rendered_map_count} 张代表图 | 增加逐阶段 STA/power/congestion delta JSON |",
         "",
         "## 11. 产物索引",
         "",
         f"- 机器可读数据：[`{REPORT_STEM}.json`]({REPORT_STEM}.json)",
         f"- 扁平对比数据：[`{REPORT_STEM}.csv`]({REPORT_STEM}.csv)",
         f"- 交互式/打印版：[`{REPORT_STEM}.html`]({REPORT_STEM}.html)",
-        "- 阶段与 map 图片：[`aes11_assets/`](aes11_assets/)",
+        f"- 阶段与 map 图片：[`{asset_dir_name}/`]({asset_dir_name}/)",
         "",
     ))
     return "\n".join(sections)
@@ -1321,8 +1921,14 @@ def markdown_to_html(
     charts: dict[str, Path],
     map_charts: dict[str, Path],
     generated: str,
+    manifest: dict,
 ) -> str:
     """Build a richer standalone index without requiring a Markdown package."""
+    design_count = len(designs)
+    pdk_count = len({d["pdk"] for d in designs})
+    success_count = sum(d["status"] == "success" for d in designs)
+    rendered_map_count = sum(d.get("maps", {}).get("rendered_count", 0) for d in designs)
+    congestion_valid_count = sum(1 for d in designs if d.get("congestion", {}).get("valid"))
     nav = "".join(f'<a href="#{html.escape(d["design"])}">{html.escape(d["design"])}</a>' for d in designs)
     overview_rows = []
     for d in designs:
@@ -1334,6 +1940,21 @@ def markdown_to_html(
             f"<td>{number(d['timing'].get('setup_wns_ns'))}</td><td>{number(d['timing'].get('max_frequency_mhz'), 1)}</td>"
             f"<td>{number((d['power'].get('total_w') or 0) * 1000)}</td><td>{number(d['drc'].get('total'), 0)}</td>"
             f"<td>{number(d['stages']['routing'].get('runtime_sec'), 1)}</td><td class=\"bad\">N/A</td></tr>"
+        )
+    repair_rows = []
+    for d in designs:
+        repair = repair_patch_summary(d)
+        repair_rows.append(
+            f"<tr><td><a href=\"#{html.escape(d['design'])}\">{html.escape(d['design'])}</a></td>"
+            f"<td>{html.escape(str(repair.get('status_summary') or repair.get('action_status') or 'N/A'))}</td>"
+            f"<td>{number(repair.get('candidate_count'), 0)}</td>"
+            f"<td>{number(repair.get('processed_candidate_count'), 0)}</td>"
+            f"<td>{number(repair.get('accepted_count'), 0)}</td>"
+            f"<td>{number(repair.get('runtime_seconds'), 2)}</td>"
+            f"<td>{number((repair.get('drc_delta') or {}).get('total'), 0)}</td>"
+            f"<td>{number(repair.get('minimum_area_delta'), 0)}</td>"
+            f"<td>{number(repair.get('prl_delta'), 0)}</td>"
+            f"<td>{number(repair.get('short_delta'), 0)}</td></tr>"
         )
     chart_html = "".join(
         f'<figure><img src="{rel(charts[key])}" alt="{key}"><figcaption>{key}</figcaption></figure>'
@@ -1366,7 +1987,15 @@ def markdown_to_html(
         for key, label, _, _ in STAGES:
             stage = d["stages"][key]
             post_route = key == "routing"
-            congestion = "invalid(-1)" if post_route and not d["congestion"].get("valid") else "N/A"
+            if post_route and d["congestion"].get("valid"):
+                congestion = (
+                    f"avg {number(d['congestion'].get('average_edge_congestion'), 2)}, "
+                    f"max {number(d['congestion'].get('max_overflow'), 0)}"
+                )
+            elif post_route:
+                congestion = "invalid"
+            else:
+                congestion = "N/A"
             stage_rows.append(
                 f"<tr><td>{label}</td><td>{number(stage.get('runtime_sec'), 2)}</td>"
                 f"<td>{number(stage.get('memory_mb'), 1)}</td><td>{number(stage.get('instances'), 0)}</td>"
@@ -1424,14 +2053,35 @@ def markdown_to_html(
         )
         top_drc = sorted(d["drc"]["by_type"].items(), key=lambda item: item[1], reverse=True)[:5]
         badges = "".join(f'<span class="tag">{html.escape(k)} {v:,}</span>' for k, v in top_drc)
+        repair_actions = d.get("detailed_router", {}).get("repair_actions", {})
+        repair = repair_patch_summary(d)
+        repair_path = Path(repair_actions.get("path", ""))
+        repair_link = (
+            f'<a href="{rel(repair_path)}">repair_actions.json</a>'
+            if repair_path.is_file()
+            else "repair_actions.json"
+        )
+        repair_note = (
+            f'<div class="callout"><b>Final min-area patch:</b> status '
+            f'{html.escape(str(repair.get("status_summary") or repair.get("action_status") or "N/A"))}; '
+            f'candidates {number(repair.get("candidate_count"), 0)}, '
+            f'processed {number(repair.get("processed_candidate_count"), 0)}, '
+            f'accepted {number(repair.get("accepted_count"), 0)}, '
+            f'runtime {number(repair.get("runtime_seconds"), 2)} s, '
+            f'DRC delta {number((repair.get("drc_delta") or {}).get("total"), 0)}, '
+            f'min-area/PRL/short {number(repair.get("minimum_area_delta"), 0)}/'
+            f'{number(repair.get("prl_delta"), 0)}/{number(repair.get("short_delta"), 0)}. '
+            f'Source: {repair_link}.</div>'
+        )
         design_sections.append(f"""
 <section id="{html.escape(d['design'])}">
   <div class="section-head"><div><p class="eyebrow">{d['pdk']} / strategy {d['strategy']}</p><h2>{html.escape(d['design'])}</h2></div><a href="#top">返回顶部</a></div>
   <div class="kpis"><div><b>{number(d['timing'].get('setup_wns_ns'))}</b><span>setup WNS ns</span></div><div><b>{number((d['power'].get('total_w') or 0)*1000)}</b><span>proxy power mW</span></div><div><b>{number(d['drc'].get('total'),0)}</b><span>DRC violations</span></div><div><b>N/A</b><span>IR-drop</span></div></div>
   <div class="tags">{badges}</div>
+  {repair_note}
   <div class="table-wrap"><table><thead><tr><th>Stage</th><th>Runtime s</th><th>Memory MB</th><th>Instances</th><th>Timing inst.</th><th>Core util.</th><th>DEF HPWL um</th><th>Routed um</th><th>Setup WNS ns</th><th>Power mW</th><th>Congestion</th><th>DRC</th><th>IR</th></tr></thead><tbody>{''.join(stage_rows)}</tbody></table></div>
   <div class="gallery">{''.join(image_cards)}</div>{cts_links}
-  <div class="map-head"><h3>空间 Map 证据</h3><p>发现 {d['maps']['raw_file_count']} 个原始 map 文件，渲染 {d['maps']['rendered_count']} 张代表图；同类图使用跨 13 个设计统一色标。</p></div>
+  <div class="map-head"><h3>空间 Map 证据</h3><p>发现 {d['maps']['raw_file_count']} 个原始 map 文件，渲染 {d['maps']['rendered_count']} 张代表图；同类图使用跨 {design_count} 个设计统一色标。</p></div>
   {map_sections}{raw_manifest}
 </section>""")
     css = """
@@ -1447,51 +2097,95 @@ main{max-width:1500px;margin:auto;padding:26px 22px 80px}section{padding:26px 0 
 .plan{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.plan article{border-top:4px solid #c74736;background:var(--band);padding:15px}.plan h3{margin:0 0 8px}.plan ol{padding-left:22px;margin:0}.fine{color:var(--muted);font-size:13px}@media(max-width:700px){.kpis{grid-template-columns:1fr 1fr}.gallery,.charts,.map-gallery,.map-comparisons{grid-template-columns:1fr}main{padding-left:12px;padding-right:12px}}
 @media print{nav{display:none}section{break-inside:auto}.gallery figure,.map-gallery figure{break-inside:avoid}details{display:block}.raw-index{display:block}body{font-size:11px}}
 """
-    return f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AES 13 项 iEDA.ai 详细对比</title><style>{css}</style></head>
-<body><header id="top"><p class="eyebrow">iEDA.ai benchmark evidence report</p><h1>AES 13 项物理设计详细对比</h1><p>横向比较 4 个 PDK，纵向追踪 7 个阶段和 208 张代表 map。生成时间 {generated}。结果严格区分实测、DEF 推导和未测项。</p></header><nav><a href="#summary">总览</a><a href="#coverage">覆盖率</a><a href="#maps">Maps</a><a href="#findings">结论</a>{nav}<a href="#plan">优化计划</a></nav><main>
-<section id="summary"><h2>执行结论</h2><div class="callout"><b>13/13 流程完成，但 0/13 DRC clean。</b> 当前产物证明多 PDK 流程可贯通，不代表已达到签核质量。STA 未回标寄生、功耗无活动率、拥塞报告返回 -1、IR-drop 未运行。</div><div class="table-wrap"><table><thead><tr><th>Design</th><th>PDK</th><th>State</th><th>Die um</th><th>Cells</th><th>Setup WNS ns</th><th>Fmax MHz</th><th>Power mW</th><th>DRC</th><th>Route s</th><th>IR</th></tr></thead><tbody>{''.join(overview_rows)}</tbody></table></div></section>
-<section id="coverage"><h2>数据覆盖与可信度</h2><div class="callout">时序与功耗数字虽然存在，但分别因 net delay=0 和 switch power=0 被标为低置信。IR-drop 用 N/A 表示，绝不以 0 代替未测。</div><p>逐阶段具备 DEF、结构、利用率、耗时、推导 HPWL 和布局图；STA、power、DRC 仅在 post-route。拥塞汇总报告无效，但 placement density、EGR overflow、early-router 逐层 CSV 是可用空间证据，已与汇总指标分开呈现。</p></section>
+    return f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AES {design_count} 项 iEDA.ai 详细对比</title><style>{css}</style></head>
+<body><header id="top"><p class="eyebrow">iEDA.ai benchmark evidence report</p><h1>AES {design_count} 项物理设计详细对比</h1><p>横向比较 {pdk_count} 个 PDK，纵向追踪 7 个阶段和 {rendered_map_count} 张代表 map。生成时间 {generated}。结果严格区分实测、DEF 推导和未测项。</p></header><nav><a href="#summary">总览</a><a href="#coverage">覆盖率</a><a href="#maps">Maps</a><a href="#findings">结论</a>{nav}<a href="#plan">优化计划</a></nav><main>
+<section id="summary"><h2>执行结论</h2><div class="callout"><b>{success_count}/{design_count} 流程完成，但 0/{design_count} DRC clean。</b> 当前产物证明多 PDK 流程可贯通，不代表已达到签核质量。STA 未回标寄生、功耗无活动率、拥塞报告返回 -1、IR-drop 未运行。</div><div class="table-wrap"><table><thead><tr><th>Design</th><th>PDK</th><th>State</th><th>Die um</th><th>Cells</th><th>Setup WNS ns</th><th>Fmax MHz</th><th>Power mW</th><th>DRC</th><th>Route s</th><th>IR</th></tr></thead><tbody>{''.join(overview_rows)}</tbody></table></div><h3>iRT final min-area patch 观测</h3><div class="table-wrap"><table><thead><tr><th>Design</th><th>Action status</th><th>Candidates</th><th>Processed</th><th>Accepted</th><th>Runtime s</th><th>DRC delta</th><th>Min-area delta</th><th>PRL delta</th><th>Short delta</th></tr></thead><tbody>{''.join(repair_rows)}</tbody></table></div></section>
+<section id="coverage"><h2>数据覆盖与可信度</h2><div class="callout">时序与功耗数字虽然存在，但分别因 net delay=0 和 switch power=0 被标为低置信。IR-drop 用 N/A 表示，绝不以 0 代替未测。</div><p>逐阶段具备 DEF、结构、利用率、耗时、推导 HPWL 和布局图；STA、power、DRC 仅在 post-route。拥塞 summary 从 EGR/early-router map 归约，{congestion_valid_count}/{design_count} 有效；空间 map 仍作为热点审计原始证据。</p><h3>M0 实验元数据</h3>{manifest_html(manifest)}</section>
 <section><h2>横向图</h2><div class="charts">{chart_html}</div></section>
-<section id="maps"><h2>空间 Map 横向对比</h2><div class="callout">每个设计渲染 16 张代表图并链接全部原始 map。相同类型采用跨 13 设计统一色标；DRC 采用统一对数色标；全零图明确标注，不做自动拉伸。</div><div class="table-wrap"><table><thead><tr><th>Design</th><th>Raw maps</th><th>Rendered</th><th>EGR union non-zero</th><th>EGR max</th><th>Planar overflow non-zero</th><th>Planar max</th><th>DRC non-zero bins</th><th>DRC bin max</th></tr></thead><tbody>{''.join(map_summary_rows)}</tbody></table></div><p class="fine">ASAP7 a/b/t 的 EGR union 与 planar overflow 原始网格均为全零，但这不能替代无效的 Average Congestion=-1 汇总接口。跨 PDK 资源定义不同，颜色主要用于同工艺状态趋势与热点定位。</p><div class="charts map-comparisons">{map_chart_html}</div></section>
-<section id="findings"><h2>质量判断</h2><div class="plan"><article><h3>流程工程：B</h3><p>4 个 PDK、13 个状态均输出 GDS，阶段检查点齐全。</p></article><article><h3>布线/DRC：D</h3><p>所有设计均有大量违例，当前 GDS 不能作为 tapeout-ready 结果。</p></article><article><h3>空间可观测性：B-</h3><p>密度、EGR、逐层路由和 DRC 热点可审计；拥塞汇总接口仍需修复。</p></article><article><h3>STA/Power：D</h3><p>寄生、约束和活动率缺失使 PPA 只能做早期代理比较。</p></article><article><h3>PDN/IR：F</h3><p>没有 iPNP/iIR 证据，不能评价电源完整性。</p></article></div></section>
+<section id="maps"><h2>空间 Map 横向对比</h2><div class="callout">每个设计渲染 16 张代表图并链接全部原始 map。相同类型采用跨 {design_count} 设计统一色标；DRC 采用统一对数色标；全零图明确标注，不做自动拉伸。</div><div class="table-wrap"><table><thead><tr><th>Design</th><th>Raw maps</th><th>Rendered</th><th>EGR union non-zero</th><th>EGR max</th><th>Planar overflow non-zero</th><th>Planar max</th><th>DRC non-zero bins</th><th>DRC bin max</th></tr></thead><tbody>{''.join(map_summary_rows)}</tbody></table></div><p class="fine">ASAP7 a/b/t 的 EGR union 近似全零、planar overflow 为全零或近似全零；summary 会按 map 原值归约。跨 PDK 资源定义不同，颜色主要用于同工艺状态趋势与热点定位。</p><div class="charts map-comparisons">{map_chart_html}</div></section>
+<section id="findings"><h2>质量判断</h2><div class="plan"><article><h3>流程工程：B</h3><p>{pdk_count} 个 PDK、{design_count} 个状态均输出 GDS，阶段检查点齐全。</p></article><article><h3>布线/DRC：D</h3><p>所有设计均有大量违例，当前 GDS 不能作为 tapeout-ready 结果。</p></article><article><h3>空间可观测性：B-</h3><p>密度、EGR、逐层路由、DRC 热点和有效拥塞 summary 可审计；仍需进入自动判退。</p></article><article><h3>STA/Power：D</h3><p>寄生、约束和活动率缺失使 PPA 只能做早期代理比较。</p></article><article><h3>PDN/IR：F</h3><p>没有 iPNP/iIR 证据，不能评价电源完整性。</p></article></div></section>
 {''.join(design_sections)}
 <section id="plan"><h2>优化路线</h2><div class="plan"><article><h3>P0 测量可信度</h3><ol><li>iRCX/SPEF 回标 STA</li><li>清零 unconstrained endpoint</li><li>接入 VCD/SAIF</li><li>修复 congestion -1</li><li>接通 iPNP/iIR</li></ol></article><article><h3>P1 DRC 闭环</h3><ol><li>按 violation type 建回归</li><li>扫描 1/3/5 轮详细布线</li><li>校准 track/via/rule</li><li>DRC clean 成为 GDS gate</li></ol></article><article><h3>P2 PPA 优化</h3><ol><li>利用率/留白/拥塞权重 DOE</li><li>CTS 多目标调参</li><li>逐阶段 PPA delta 门禁</li><li>跨 PDK 使用归一化指标</li></ol></article><article><h3>P3 Agent 闭环</h3><ol><li>JSON 观测面与有限动作</li><li>Pareto archive</li><li>输入/工具 hash 追踪</li><li>holdout design 验证</li></ol></article></div><p class="fine">完整证据、每项 DRC 主类、门禁定义和数据链接见 <a href="{REPORT_STEM}.md">Markdown 报告</a>；机器数据见 <a href="{REPORT_STEM}.json">JSON</a> / <a href="{REPORT_STEM}.csv">CSV</a>。</p></section>
 </main></body></html>"""
 
 
 def main() -> int:
+    import argparse
+
+    global RESULT_ROOT, REPORT_ROOT, ASSET_ROOT, REPORT_STEM, DESIGNS
+
+    parser = argparse.ArgumentParser(description="Generate AES detailed comparison report")
+    parser.add_argument("--result-root", type=Path, default=RESULT_ROOT)
+    parser.add_argument("--report-root", type=Path, default=REPORT_ROOT)
+    parser.add_argument("--asset-root", type=Path, default=None)
+    parser.add_argument("--stem", default=REPORT_STEM)
+    parser.add_argument("--baseline-json", type=Path, default=None, help="Optional prior detailed-comparison JSON for delta columns")
+    parser.add_argument(
+        "--designs",
+        nargs="+",
+        default=None,
+        help="Subset of designs (default: all DESIGNS present under result-root)",
+    )
+    parser.add_argument("--skip-missing", action="store_true", help="Skip designs without summary.json")
+    args = parser.parse_args()
+
+    RESULT_ROOT = args.result_root.resolve()
+    REPORT_ROOT = args.report_root.resolve()
+    REPORT_STEM = args.stem
+    ASSET_ROOT = (args.asset_root or (REPORT_ROOT / f"{REPORT_STEM}_assets")).resolve()
+    if args.designs:
+        DESIGNS = tuple(args.designs)
+    elif args.skip_missing:
+        DESIGNS = tuple(
+            name
+            for name in DESIGNS
+            if (RESULT_ROOT / name / "summary.json").is_file()
+        )
+
     REPORT_ROOT.mkdir(parents=True, exist_ok=True)
     ASSET_ROOT.mkdir(parents=True, exist_ok=True)
     generated = datetime.now().astimezone().isoformat(timespec="seconds")
+    manifest = read_experiment_manifest(RESULT_ROOT)
     designs = []
     for index, name in enumerate(DESIGNS, start=1):
+        summary_path = RESULT_ROOT / name / "summary.json"
+        if not summary_path.is_file():
+            if args.skip_missing:
+                print(f"[{index}/{len(DESIGNS)}] skip missing {name}", flush=True)
+                continue
+            raise FileNotFoundError(summary_path)
         print(f"[{index}/{len(DESIGNS)}] analyzing {name}", flush=True)
         designs.append(analyze_design(name))
+    baseline = apply_baseline(designs, args.baseline_json.resolve() if args.baseline_json else None)
     print("[maps] rendering representative grids and comparison sheets", flush=True)
     map_charts = generate_map_assets(designs)
     data = {
         "schema_version": 2,
         "generated_at": generated,
-        "scope": {"included": list(DESIGNS), "excluded": []},
+        "result_root": str(RESULT_ROOT),
+        "scope": {"included": [d["design"] for d in designs], "excluded": []},
+        "baseline": baseline,
+        "experiment_manifest": manifest,
         "measurement_notes": {
             "sta": "post-route report exists but interconnect path delays are zero; no SPEF back-annotation",
-            "power": "switching power is zero; no VCD/SAIF activity evidence",
-            "congestion": "aggregate average edge congestion is -1; raw placement/EGR/early-router maps are analyzed separately",
-            "spatial_maps": "same map types use a shared 13-design scale; DRC center density uses a shared logarithmic scale",
-            "ir_drop": "not run for all 13 designs",
+            "power": "switching power is zero without VCD/SAIF; vectorless toggle may be used for numeric totals",
+            "congestion": "congestion_summary.json is aggregated from EGR/early-router overflow maps; old -1 sentinel reports are not used when summary is valid",
+            "spatial_maps": "same map types use a shared design-set scale; DRC center density uses a shared logarithmic scale",
+            "ir_drop": "not run for all designs",
             "def_hpwl": "derived from placed instance origins; use for within-PDK/stage trends",
+            "core_utilization": "CORE Usage from iDB report_db; floorplan target is sized so stdcell_area/core_area ≈ 0.65",
         },
         "designs": designs,
     }
     json_path = write_json(data)
     csv_path = write_csv(designs)
     charts = make_charts(designs)
-    markdown = build_markdown(designs, charts, map_charts, generated)
+    markdown = build_markdown(designs, charts, map_charts, generated, manifest)
     md_path = REPORT_ROOT / f"{REPORT_STEM}.md"
     md_path.write_text(markdown + "\n", encoding="utf-8")
     html_path = REPORT_ROOT / f"{REPORT_STEM}.html"
     html_path.write_text(
-        markdown_to_html(markdown, designs, charts, map_charts, generated), encoding="utf-8"
+        markdown_to_html(markdown, designs, charts, map_charts, generated, manifest), encoding="utf-8"
     )
     print(f"JSON: {json_path}")
     print(f"CSV:  {csv_path}")

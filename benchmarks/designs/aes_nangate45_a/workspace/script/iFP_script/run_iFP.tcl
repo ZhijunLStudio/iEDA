@@ -47,9 +47,9 @@ set CORE_AREA $::env(CORE_AREA)
 #set DIE_AREA "0.0    0.0   1100   1100"
 #set CORE_AREA "10.0 10.0 1090.0  1090.0"
 
-set PLACE_SITE unithd 
-set IO_SITE unithd
-set CORNER_SITE unithddbl
+set PLACE_SITE FreePDK45_38x28_10R_NP_162NW_34O
+set IO_SITE FreePDK45_38x28_10R_NP_162NW_34O
+set CORNER_SITE FreePDK45_38x28_10R_NP_162NW_34O
 
 init_floorplan \
    -die_area $DIE_AREA \
@@ -63,7 +63,7 @@ source $::env(TCL_SCRIPT_DIR)/iFP_script/module/create_tracks.tcl
 #===========================================================
 ##  add io port for pdn
 #===========================================================
-add_pdn_io -net_name VDD   -direction INOUT -is_power 1 
+add_pdn_io -net_name VDD   -direction INOUT -is_power 1
 add_pdn_io -net_name VSS   -direction INOUT -is_power 0
 #===========================================================
 ##  Place IO Port
@@ -75,14 +75,14 @@ auto_place_pins -layer met5 -width 2000 -height 2000
 ##   Tap Cell
 #===========================================================
 tapcell \
-   -tapcell sky130_fd_sc_hd__tap_1 \
+   -tapcell FILLCELL_X1 \
    -distance 14 \
-   -endcap sky130_fd_sc_hd__fill_1
+   -endcap FILLCELL_X1
 
 #===========================================================
-##   PDN 
+##   PDN
 #===========================================================
-source $::env(TCL_SCRIPT_DIR)/iFP_script/module/pdn.tcl 
+source $::env(TCL_SCRIPT_DIR)/iFP_script/module/pdn.tcl
 
 #===========================================================
 ##   set clock net
@@ -90,7 +90,7 @@ source $::env(TCL_SCRIPT_DIR)/iFP_script/module/pdn.tcl
 source $::env(TCL_SCRIPT_DIR)/iFP_script/module/set_clocknet.tcl
 
 #===========================================================
-##   save def 
+##   save def
 #===========================================================
 set DEFAULT_OUTPUT_DEF "$::env(RESULT_DIR)/iFP_result.def"
 def_save -path [expr {[info exists ::env(OUTPUT_DEF)] ? $::env(OUTPUT_DEF) : $DEFAULT_OUTPUT_DEF}]
@@ -103,6 +103,6 @@ report_db -path "$::env(RESULT_DIR)/report/fp_db.rpt"
 # run_power -output $::env(RESULT_PATH)/sta/
 
 #===========================================================
-##   Exit 
+##   Exit
 #===========================================================
 flow_exit

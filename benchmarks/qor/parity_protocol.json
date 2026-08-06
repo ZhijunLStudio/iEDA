@@ -17,6 +17,34 @@
     "aes_ics55_b": "innovus",
     "aes_ics55_t": "innovus"
   },
+  "input_equivalence": {
+    "netlist_policy": "same_verilog_file",
+    "netlist_policy_detail": "Identical gate-level Verilog; no re-synthesis allowed for either side",
+    "library_pdk_policy": "same_lib_lef_tech",
+    "library_pdk_policy_detail": "Same .lib, LEF, tech file, RC model version; corner sets must match",
+    "constraints_policy": "same_sdc",
+    "constraints_policy_detail": "Same SDC file (clocks, IO delays, false paths, MCP); units must align",
+    "power_intent_policy": "symmetric_upf",
+    "power_intent_policy_detail": "If UPF exists, both sides load it; if not, both skip it",
+    "design_boundary_policy": "same_die_core_or_record_delta",
+    "design_boundary_policy_detail": "Either same die/core dimensions, or same utilization target with area delta recorded as independent G17 metric",
+    "randomness_policy": "fixed_seed_or_record",
+    "randomness_policy_detail": "iEDA uses fixed seed; commercial side disables random perturbation or records seed; QoR variance from 2 reruns contributes to uncertainty band",
+    "traceability_policy": "sha256_manifest",
+    "traceability_policy_detail": "Inputs, binaries, build parameters, and stage artifacts recorded with SHA-256; git HEAD is auxiliary only; dirty builds must be explicitly marked"
+  },
+  "flow_equivalence": {
+    "primary_pnr_policy": "one_per_design_frozen",
+    "primary_pnr_policy_detail": "Each design freezes either Innovus OR ICC2 as primary commercial flow; signoff side fixed to PT + StarRC + Calibre",
+    "effort_level_policy": "documented_default",
+    "effort_level_policy_detail": "Commercial side uses documented default effort (e.g., place_opt/route_opt standard effort); no secret hyperparameters to win benchmarks; hyperparameter changes must increment protocol version",
+    "report_point_policy": "aligned_stages",
+    "report_point_policy_detail": "Unified report points: post-place / post-cts / post-route / signoff-STA; do not compare commercial post-opt to iEDA post-place",
+    "metric_definition_policy": "same_sta_engine_same_spef",
+    "metric_definition_policy_detail": "WNS/TNS from same STA engine reading same SPEF (recommend: both export DEF/netlist then use PT to avoid 'iSTA favoring itself'); HPWL/area/power definitions in JSON schema",
+    "failure_semantics_policy": "honest_recording",
+    "failure_semantics_policy_detail": "Commercial side failure/timeout → mark 'commercial_fail', exclude from parity denominator; iEDA fake-clean (rc=0 + wrong artifacts) → G14 FAIL"
+  },
   "implementation": {
     "ieda_effort": "standard",
     "commercial_effort": "standard",
@@ -118,5 +146,27 @@
     "rcx": "starrc",
     "drc": "calibre",
     "power": "ptpx"
+  },
+  "judgment_formula": {
+    "description": "For metric m: let e=iEDA, c=commercial, epsilon_m=uncertainty band from rerun stddev",
+    "pass_criterion_smaller_is_better": "e_m <= c_m * (1 + delta_m) + epsilon_m",
+    "pass_criterion_larger_is_better": "e_m >= c_m * (1 - delta_m) - epsilon_m",
+    "note": "Each metric m is judged independently; cannot use strong metrics to mask weak ones"
+  },
+  "input_equivalence_rules": {
+    "netlist": "Identical Verilog file; no re-synthesis for either side",
+    "library_pdk": "Same .lib/LEF/tech/RC model version; corner sets match",
+    "constraints": "Same SDC (clocks, IO delays, false paths, MCP); units aligned",
+    "power_intent": "Symmetric UPF loading (both or neither)",
+    "design_boundary": "Same die/core OR same util target with area delta recorded",
+    "randomness": "iEDA fixed seed; commercial disables perturbation or records seed",
+    "traceability": "SHA-256 manifest for inputs/binaries/build/artifacts; dirty builds marked"
+  },
+  "flow_equivalence_rules": {
+    "primary_pnr": "One per design: Innovus OR ICC2 (frozen); signoff: PT+StarRC+Calibre",
+    "effort_level": "Documented default effort; no secret hyperparameters",
+    "report_points": "Aligned: post-place/post-cts/post-route/signoff-STA",
+    "metric_definition": "WNS/TNS from same STA+SPEF; HPWL/area/power in JSON schema",
+    "failure_semantics": "Commercial fail → exclude from denominator; iEDA fake-clean → G14 FAIL"
   }
 }

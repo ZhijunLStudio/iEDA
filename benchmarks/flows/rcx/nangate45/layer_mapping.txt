@@ -1,0 +1,14 @@
+# iRCX layer mapping: <design_layer> <process_layer>
+# Identity mapping for Nangate45 metal1-metal6 routing stack used by AES13.
+# Requires matching ITF/captab under Foundary/nangate45/rcx/ (not shipped yet).
+metal1 metal1
+via1 via1
+metal2 metal2
+via2 via2
+metal3 metal3
+via3 via3
+metal4 metal4
+via4 via4
+metal5 metal5
+via5 via5
+metal6 metal6

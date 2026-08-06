@@ -1,0 +1,19 @@
+{
+  "schema": "c-vio/v0",
+  "design": "example",
+  "rule_deck_hash": "unknown",
+  "source": "idrc_check_def",
+  "violations": [
+    {
+      "id": "v000000",
+      "type": "metal_short",
+      "layer": "met1",
+      "bbox": [0, 0, 10, 10],
+      "net_ids": ["netA", "netB"],
+      "severity": 4.0,
+      "source": "idrc_in_design"
+    }
+  ],
+  "summary": {"by_type": {"metal_short": 1}, "by_layer": {"met1": 1}, "total": 1},
+  "coverage": {"checked": ["metal_short"], "skipped": [], "unsupported": []}
+}

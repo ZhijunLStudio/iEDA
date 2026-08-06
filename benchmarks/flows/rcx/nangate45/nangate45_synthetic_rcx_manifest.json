@@ -1,0 +1,82 @@
+{
+  "schema": "synthetic-rcx/v1",
+  "trusted": false,
+  "pdk": "nangate45",
+  "tech_lef": "/home/lxq/AiEDA/Foundary/nangate45/lef/NangateOpenCellLibrary.tech.lef",
+  "mapping": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/nangate45/layer_mapping.txt",
+  "itf": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/nangate45/nangate45.itf",
+  "captab": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/nangate45/nangate45.captab",
+  "routing_layers": [
+    {
+      "name": "metal1",
+      "width": 0.07,
+      "spacing": 0.065,
+      "rpsq": 0.38,
+      "cpersqdist": 7.7161e-05,
+      "edgecap": 2.7365e-05
+    },
+    {
+      "name": "metal2",
+      "width": 0.07,
+      "spacing": 0.1,
+      "rpsq": 0.25,
+      "cpersqdist": 4.0896e-05,
+      "edgecap": 2.5157e-05
+    },
+    {
+      "name": "metal3",
+      "width": 0.07,
+      "spacing": 0.1,
+      "rpsq": 0.25,
+      "cpersqdist": 2.7745e-05,
+      "edgecap": 2.5157e-05
+    },
+    {
+      "name": "metal4",
+      "width": 0.14,
+      "spacing": 0.1,
+      "rpsq": 0.21,
+      "cpersqdist": 2.0743e-05,
+      "edgecap": 3.0908e-05
+    },
+    {
+      "name": "metal5",
+      "width": 0.14,
+      "spacing": 0.1,
+      "rpsq": 0.21,
+      "cpersqdist": 1.3527e-05,
+      "edgecap": 2.3863e-06
+    },
+    {
+      "name": "metal6",
+      "width": 0.14,
+      "spacing": 0.1,
+      "rpsq": 0.21,
+      "cpersqdist": 1.0036e-05,
+      "edgecap": 2.3863e-05
+    }
+  ],
+  "via_layers": [
+    {
+      "name": "via1",
+      "resistance": 5.0
+    },
+    {
+      "name": "via2",
+      "resistance": 5.0
+    },
+    {
+      "name": "via3",
+      "resistance": 5.0
+    },
+    {
+      "name": "via4",
+      "resistance": 3.0
+    },
+    {
+      "name": "via5",
+      "resistance": 3.0
+    }
+  ],
+  "note": "Synthetic ITF/captab for iEDA extraction smoke only; not foundry signoff data."
+}

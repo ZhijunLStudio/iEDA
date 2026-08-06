@@ -8,8 +8,10 @@
 #pragma once
 
 #include <map>
+#include <optional>
 
 #include "congestion_db.h"
+#include "congestion_summary.h"
 
 namespace ieval {
 
@@ -33,6 +35,9 @@ class CongestionAPI
   EGRMapSummary egrMap(std::string stage, std::string rt_dir_path);
   EGRMapSummary egrMapPure(std::string stage, std::string rt_dir_path);
   OverflowSummary egrOverflow(std::string stage, std::string rt_dir_path);
+  bool writeCongestionSummary(std::string stage, std::string output_path);
+  bool writeCongestionSummary(std::string stage, std::string rt_dir_path, std::string output_path);
+  std::optional<CongestionSummaryDocument> readCongestionSummary(std::string input_path);
   RUDYMapSummary rudyMap(std::string stage, CongestionNets congestion_nets, CongestionRegion region, int32_t grid_size);
   UtilizationSummary rudyUtilization(std::string stage, std::string rudy_dir_path, bool use_lut = false);
 

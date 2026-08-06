@@ -29,6 +29,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -60,6 +62,16 @@
 
 namespace icts {
 namespace {
+
+auto IsCtsBestEffortEnabled() -> bool
+{
+  const char* best_effort = std::getenv("IEDA_CTS_BEST_EFFORT");
+  if (best_effort == nullptr || best_effort[0] == '\0') {
+    best_effort = std::getenv("IEDA_RT_BEST_EFFORT");
+  }
+  return best_effort != nullptr
+         && (std::strcmp(best_effort, "1") == 0 || std::strcmp(best_effort, "true") == 0 || std::strcmp(best_effort, "TRUE") == 0);
+}
 
 auto FormatLogValue(const std::string& value) -> std::string
 {
@@ -487,9 +499,18 @@ auto SourceTrunkSegment::build(const Input& input, const Config& config) -> Buil
     return result;
   }
   if (result.summary.required_load_cap_idx > char_builder.get_cap_steps()) {
-    result.summary.failure_reason = "segment_hard_boundary_out_of_range";
-    EmitSegmentSummary(result, input, config);
-    return result;
+    if (IsCtsBestEffortEnabled()) {
+      LOG_WARNING << "SourceTrunkSegment: BEST_EFFORT clamping required_load_cap_idx from "
+                  << result.summary.required_load_cap_idx << " to " << char_builder.get_cap_steps()
+                  << " (segment_hard_boundary_out_of_range)";
+      result.summary.required_load_cap_idx = char_builder.get_cap_steps();
+      result.summary.used_boundary_relaxation = true;
+      result.summary.boundary_relaxation_reason = "segment_hard_boundary_out_of_range";
+    } else {
+      result.summary.failure_reason = "segment_hard_boundary_out_of_range";
+      EmitSegmentSummary(result, input, config);
+      return result;
+    }
   }
 
   htree::BufferPatternLibrary pattern_library(*input.wrapper);
@@ -545,6 +566,17 @@ auto SourceTrunkSegment::build(const Input& input, const Config& config) -> Buil
       if (result.output.best_char.has_value()) {
         result.summary.used_boundary_relaxation = true;
         result.summary.boundary_relaxation_reason = "dropped_soft_input_slew_boundary";
+      }
+    }
+    if (!result.output.best_char.has_value() && IsCtsBestEffortEnabled() && all_frontier_entries != nullptr
+        && !all_frontier_entries->empty()) {
+      LOG_WARNING << "SourceTrunkSegment: BEST_EFFORT selecting unconstrained segment candidate from frontier"
+                  << " (entries=" << all_frontier_entries->size() << ")";
+      result.output.best_char = SelectBestSegmentEntry(*all_frontier_entries);
+      result.summary.relaxed_candidate_count = all_frontier_entries->size();
+      if (result.output.best_char.has_value()) {
+        result.summary.used_boundary_relaxation = true;
+        result.summary.boundary_relaxation_reason = "no_hard_boundary_legal_segment_candidate";
       }
     }
     if (result.output.best_char.has_value()) {

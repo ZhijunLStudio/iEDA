@@ -1,0 +1,96 @@
+{
+  "schema": "c-rcx-inventory/v1",
+  "foundry_root": "/home/lxq/AiEDA/Foundary",
+  "pdks": {
+    "sky130": {
+      "itf_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/sky130/sky130.itf"
+      ],
+      "captab_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/sky130/sky130.captab"
+      ],
+      "spef_files": [
+        "/home/lxq/AiEDA/Foundary/sky130/spef/gcd.spef"
+      ],
+      "openrcx_rules": [],
+      "mapping_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/sky130/layer_mapping.txt"
+      ],
+      "synthetic_rcx_manifests": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/sky130/sky130_synthetic_rcx_manifest.json"
+      ],
+      "synthetic_ircx_ready": true,
+      "foundry_trusted_ircx_ready": false,
+      "trusted_ircx_ready": false,
+      "fallback_available": true,
+      "gaps": []
+    },
+    "nangate45": {
+      "itf_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/nangate45/nangate45.itf"
+      ],
+      "captab_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/nangate45/nangate45.captab"
+      ],
+      "spef_files": [],
+      "openrcx_rules": [
+        "/home/lxq/AiEDA/Foundary/nangate45/rcx_patterns.rules"
+      ],
+      "mapping_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/nangate45/layer_mapping.txt"
+      ],
+      "synthetic_rcx_manifests": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/nangate45/nangate45_synthetic_rcx_manifest.json"
+      ],
+      "synthetic_ircx_ready": true,
+      "foundry_trusted_ircx_ready": false,
+      "trusted_ircx_ready": false,
+      "fallback_available": true,
+      "gaps": []
+    },
+    "asap7": {
+      "itf_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/asap7/asap7.itf"
+      ],
+      "captab_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/asap7/asap7.captab"
+      ],
+      "spef_files": [],
+      "openrcx_rules": [
+        "/home/lxq/AiEDA/Foundary/asap7/rcx_patterns.rules"
+      ],
+      "mapping_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/asap7/layer_mapping.txt"
+      ],
+      "synthetic_rcx_manifests": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/asap7/asap7_synthetic_rcx_manifest.json"
+      ],
+      "synthetic_ircx_ready": true,
+      "foundry_trusted_ircx_ready": false,
+      "trusted_ircx_ready": false,
+      "fallback_available": true,
+      "gaps": []
+    },
+    "ics55": {
+      "itf_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/ics55/ics55.itf"
+      ],
+      "captab_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/ics55/ics55.captab"
+      ],
+      "spef_files": [],
+      "openrcx_rules": [],
+      "mapping_files": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/ics55/layer_mapping.txt"
+      ],
+      "synthetic_rcx_manifests": [
+        "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/ics55/ics55_synthetic_rcx_manifest.json"
+      ],
+      "synthetic_ircx_ready": true,
+      "foundry_trusted_ircx_ready": false,
+      "trusted_ircx_ready": false,
+      "fallback_available": false,
+      "gaps": []
+    }
+  }
+}

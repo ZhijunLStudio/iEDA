@@ -133,6 +133,21 @@ OverflowSummary CongestionAPI::egrOverflow(std::string stage, std::string rt_dir
   return overflow_summary;
 }
 
+bool CongestionAPI::writeCongestionSummary(std::string stage, std::string output_path)
+{
+  return writeCongestionSummary(stage, EVAL_CONGESTION_INST->getEGRDirPath(), output_path);
+}
+
+bool CongestionAPI::writeCongestionSummary(std::string stage, std::string rt_dir_path, std::string output_path)
+{
+  return writeCongestionSummaryJson(stage, rt_dir_path, output_path);
+}
+
+std::optional<CongestionSummaryDocument> CongestionAPI::readCongestionSummary(std::string input_path)
+{
+  return readCongestionSummaryJson(input_path);
+}
+
 UtilizationSummary CongestionAPI::rudyUtilization(std::string stage, bool use_lut)
 {
   UtilizationSummary utilization_summary;

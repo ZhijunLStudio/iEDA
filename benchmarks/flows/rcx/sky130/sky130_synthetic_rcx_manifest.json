@@ -1,0 +1,82 @@
+{
+  "schema": "synthetic-rcx/v1",
+  "trusted": false,
+  "pdk": "sky130",
+  "tech_lef": "/home/lxq/AiEDA/Foundary/sky130/lef/sky130_fd_sc_hd.tlef",
+  "mapping": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/sky130/layer_mapping.txt",
+  "itf": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/sky130/sky130.itf",
+  "captab": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/sky130/sky130.captab",
+  "routing_layers": [
+    {
+      "name": "li1",
+      "width": 0.17,
+      "spacing": 0.1,
+      "rpsq": 12.2,
+      "cpersqdist": 3.69866e-05,
+      "edgecap": 4.0697e-05
+    },
+    {
+      "name": "met1",
+      "width": 0.14,
+      "spacing": 0.1,
+      "rpsq": 0.125,
+      "cpersqdist": 2.57784e-05,
+      "edgecap": 4.0567e-05
+    },
+    {
+      "name": "met2",
+      "width": 0.14,
+      "spacing": 0.1,
+      "rpsq": 0.125,
+      "cpersqdist": 1.69423e-05,
+      "edgecap": 3.7759e-05
+    },
+    {
+      "name": "met3",
+      "width": 0.3,
+      "spacing": 0.1,
+      "rpsq": 0.047,
+      "cpersqdist": 1.23729e-05,
+      "edgecap": 4.0989e-05
+    },
+    {
+      "name": "met4",
+      "width": 0.3,
+      "spacing": 0.1,
+      "rpsq": 0.047,
+      "cpersqdist": 8.41537e-06,
+      "edgecap": 3.6676e-05
+    },
+    {
+      "name": "met5",
+      "width": 1.6,
+      "spacing": 0.1,
+      "rpsq": 0.0285,
+      "cpersqdist": 6.32063e-06,
+      "edgecap": 3.8851e-05
+    }
+  ],
+  "via_layers": [
+    {
+      "name": "mcon",
+      "resistance": 5.0
+    },
+    {
+      "name": "via",
+      "resistance": 5.0
+    },
+    {
+      "name": "via2",
+      "resistance": 5.0
+    },
+    {
+      "name": "via3",
+      "resistance": 5.0
+    },
+    {
+      "name": "via4",
+      "resistance": 5.0
+    }
+  ],
+  "note": "Synthetic ITF/captab for iEDA extraction smoke only; not foundry signoff data."
+}

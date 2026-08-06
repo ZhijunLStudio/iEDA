@@ -16,7 +16,13 @@
 // ***************************************************************************************
 #include "DetailedRouter.hpp"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdlib>
+#include <fstream>
+#include <map>
+#include <stdexcept>
+#include <string>
 
 #include "DRBox.hpp"
 #include "DRBoxId.hpp"
@@ -24,12 +30,199 @@
 #include "DRIterParam.hpp"
 #include "DRNet.hpp"
 #include "DRNode.hpp"
+#include "DRRuleAwareCost.hpp"
 #include "DetailedRouter.hpp"
 #include "GDSPlotter.hpp"
+#include "MemoryBudgetGuard.hpp"
 #include "Monitor.hpp"
 #include "RTInterface.hpp"
 
 namespace irt {
+
+namespace {
+
+int32_t getIntEnv(const char* env_name, const int32_t default_value)
+{
+  const char* env_value = std::getenv(env_name);
+  if (env_value == nullptr || env_value[0] == '\0') {
+    return default_value;
+  }
+  char* parse_end = nullptr;
+  long parsed = std::strtol(env_value, &parse_end, 10);
+  if (parse_end == env_value || *parse_end != '\0') {
+    return default_value;
+  }
+  return static_cast<int32_t>(parsed);
+}
+
+double getDoubleEnv(const char* env_name, const double default_value)
+{
+  const char* env_value = std::getenv(env_name);
+  if (env_value == nullptr || env_value[0] == '\0') {
+    return default_value;
+  }
+  char* parse_end = nullptr;
+  double parsed = std::strtod(env_value, &parse_end);
+  if (parse_end == env_value || *parse_end != '\0') {
+    return default_value;
+  }
+  return parsed;
+}
+
+bool getBoolEnv(const char* env_name, const bool default_value)
+{
+  const char* env_value = std::getenv(env_name);
+  if (env_value == nullptr || env_value[0] == '\0') {
+    return default_value;
+  }
+  std::string value(env_value);
+  if (value == "1" || value == "true" || value == "TRUE" || value == "yes" || value == "YES") {
+    return true;
+  }
+  if (value == "0" || value == "false" || value == "FALSE" || value == "no" || value == "NO") {
+    return false;
+  }
+  return default_value;
+}
+
+int32_t chooseAdaptiveBoxSize()
+{
+  if (const int32_t manual = getIntEnv("IEDA_RT_INITIAL_BOX_SIZE", 0); manual > 0) {
+    return manual;
+  }
+  // Without an explicit utilization hint, keep classic size=12 (zero-regression default).
+  const double utilization = getDoubleEnv("IEDA_RT_DESIGN_UTILIZATION", -1.0);
+  if (utilization < 0.0) {
+    return 12;
+  }
+  if (utilization < 0.40) {
+    return 12;
+  }
+  if (utilization < 0.60) {
+    return 24;
+  }
+  return 48;
+}
+
+DRRuleAwareCostConfig makeRuleAwareCostConfig()
+{
+  const auto& config = RTDM.getConfig();
+  DRRuleAwareCostConfig rule_config;
+  rule_config.enabled = getBoolEnv("IEDA_RT_RULE_AWARE_COST", config.enable_rule_aware_cost != 0);
+  rule_config.max_history_scale = std::max(1, getIntEnv("IEDA_RT_RULE_AWARE_MAX_HISTORY", config.rule_aware_max_history_scale));
+  rule_config.minarea_candidate_boost = std::max(0, getIntEnv("IEDA_RT_MINAREA_CANDIDATE_BOOST", 10));
+  return rule_config;
+}
+
+bool isEnhancedMinAreaRepairEnabled()
+{
+  return getBoolEnv("IEDA_RT_ENHANCED_MINAREA_REPAIR", RTDM.getConfig().enable_enhanced_minarea_repair != 0);
+}
+
+nlohmann::json violationTypeHistogramJson(const std::map<std::string, int32_t>& histogram)
+{
+  nlohmann::json result = nlohmann::json::object();
+  for (const auto& [type_name, count] : histogram) {
+    result[type_name] = count;
+  }
+  return result;
+}
+
+std::vector<std::pair<std::string, int32_t>> topViolationTypes(const std::map<std::string, int32_t>& histogram, int32_t limit = 5)
+{
+  std::vector<std::pair<std::string, int32_t>> ordered(histogram.begin(), histogram.end());
+  std::sort(ordered.begin(), ordered.end(), [](const auto& lhs, const auto& rhs) {
+    if (lhs.second != rhs.second) {
+      return lhs.second > rhs.second;
+    }
+    return lhs.first < rhs.first;
+  });
+  if (static_cast<int32_t>(ordered.size()) > limit) {
+    ordered.resize(limit);
+  }
+  return ordered;
+}
+
+std::map<std::string, int32_t> getCurrentViolationTypeHistogram()
+{
+  Die& die = RTDM.getDatabase().get_die();
+  std::map<std::string, int32_t> histogram;
+  for (Violation* violation : RTDM.getViolationSet(die)) {
+    histogram[GetViolationTypeName()(violation->get_violation_type())]++;
+  }
+  return histogram;
+}
+
+int32_t getHistogramTotal(const std::map<std::string, int32_t>& histogram)
+{
+  int32_t total = 0;
+  for (const auto& [type_name, count] : histogram) {
+    total += count;
+  }
+  return total;
+}
+
+std::map<std::string, int32_t> getViolationTypeHistogram(const std::vector<Violation>& violation_list)
+{
+  std::map<std::string, int32_t> histogram;
+  for (const Violation& violation : violation_list) {
+    histogram[GetViolationTypeName()(violation.get_violation_type())]++;
+  }
+  return histogram;
+}
+
+void applyPlateauEscalation(DRIterParam& dr_iter_param)
+{
+  const double violation_scale = std::max(1.1, getDoubleEnv("IEDA_RT_PLATEAU_VIOLATION_SCALE", 1.25));
+  const double history_scale = std::max(1.1, getDoubleEnv("IEDA_RT_PLATEAU_HISTORY_SCALE", 1.2));
+  const int32_t size_cap = std::max(12, getIntEnv("IEDA_RT_PLATEAU_SIZE_CAP", 96));
+  const int32_t size_boost = getIntEnv("IEDA_RT_PLATEAU_SIZE_BOOST", 0);
+  const int32_t max_candidate_patch_num = getIntEnv("IEDA_RT_PLATEAU_MAX_CAND_PATCH", 0);
+  const int32_t max_routed_times = getIntEnv("IEDA_RT_PLATEAU_MAX_REROUTE", 0);
+
+  dr_iter_param.set_violation_unit(dr_iter_param.get_violation_unit() * violation_scale);
+  dr_iter_param.set_fixed_rect_unit(dr_iter_param.get_fixed_rect_unit() * history_scale);
+  dr_iter_param.set_routed_rect_unit(dr_iter_param.get_routed_rect_unit() * history_scale);
+
+  const int32_t old_size = std::max(1, dr_iter_param.get_size());
+  int32_t new_size = size_boost > 0 ? (old_size + size_boost) : (old_size * 2);
+  new_size = std::min(new_size, size_cap);
+  if (new_size > old_size) {
+    const double offset_ratio = static_cast<double>(dr_iter_param.get_offset()) / static_cast<double>(old_size);
+    dr_iter_param.set_size(new_size);
+    dr_iter_param.set_offset(static_cast<int32_t>(offset_ratio * new_size));
+  }
+
+  dr_iter_param.set_max_routed_times(std::max(dr_iter_param.get_max_routed_times() + 2,
+                                              max_routed_times > 0 ? max_routed_times : dr_iter_param.get_max_routed_times()));
+  dr_iter_param.set_max_candidate_patch_num(
+      std::max(dr_iter_param.get_max_candidate_patch_num() + 5,
+               max_candidate_patch_num > 0 ? max_candidate_patch_num : dr_iter_param.get_max_candidate_patch_num()));
+}
+
+void escalateRemainingDRIterParams(std::vector<DRIterParam>& dr_iter_param_list, int32_t from_index)
+{
+  if (from_index < 0 || from_index >= static_cast<int32_t>(dr_iter_param_list.size())) {
+    return;
+  }
+  for (int32_t i = from_index; i < static_cast<int32_t>(dr_iter_param_list.size()); ++i) {
+    applyPlateauEscalation(dr_iter_param_list[i]);
+  }
+}
+
+/** WP-RT-01b: mild cost/reroute boost without global box×2 (component escalate path). */
+void applyComponentMildEscalation(DRIterParam& dr_iter_param)
+{
+  const double violation_scale = std::max(1.05, getDoubleEnv("IEDA_RT_COMPONENT_VIOLATION_SCALE", 1.15));
+  const double history_scale = std::max(1.05, getDoubleEnv("IEDA_RT_COMPONENT_HISTORY_SCALE", 1.1));
+  dr_iter_param.set_violation_unit(dr_iter_param.get_violation_unit() * violation_scale);
+  dr_iter_param.set_fixed_rect_unit(dr_iter_param.get_fixed_rect_unit() * history_scale);
+  dr_iter_param.set_routed_rect_unit(dr_iter_param.get_routed_rect_unit() * history_scale);
+  dr_iter_param.set_max_routed_times(dr_iter_param.get_max_routed_times() + 1);
+  dr_iter_param.set_max_candidate_patch_num(dr_iter_param.get_max_candidate_patch_num() + 2);
+}
+
+}  // namespace
 
 // public
 
@@ -123,22 +316,52 @@ void DetailedRouter::routeDRModel(DRModel& dr_model)
   DRConvergenceTracker convergence_tracker(DRConvergenceConfig{.window = config.dr_plateau_window,
                                                                .min_relative_improvement = config.dr_plateau_min_improvement,
                                                                .max_hotspot_change = config.dr_plateau_hotspot_change});
+  const bool enable_escalation = getBoolEnv("IEDA_RT_ENABLE_ESCALATION", config.enable_plateau_escalate != 0);
+  _rule_aware_cost_config = makeRuleAwareCostConfig();
+  const DRRuleAwareCostConfig& rule_cost = _rule_aware_cost_config;
+  const bool enhanced_minarea = isEnhancedMinAreaRepairEnabled();
+  _enable_component_escalate = getBoolEnv("IEDA_RT_COMPONENT_ESCALATE", config.enable_component_escalate != 0);
+  _enable_prl_short_repair = getBoolEnv("IEDA_RT_PRL_SHORT_REPAIR", config.enable_prl_short_repair != 0);
+  _component_halo_pitch_mult = std::max(1, getIntEnv("IEDA_RT_COMPONENT_HALO_PITCH", config.component_escalate_halo_pitch));
+  _component_escalate_level = 0;
+  _escalated_net_idx_set.clear();
+  _component_extra_iters_appended = false;
+  dr_model.get_iter_observation_list().clear();
+  dr_model.get_repair_action_observation_list().clear();
+  const int32_t initial_box_size = chooseAdaptiveBoxSize();
+  const int32_t size1 = initial_box_size;
+  const int32_t size2 = enable_escalation ? initial_box_size * 2 : initial_box_size;
+  const int32_t size3 = enable_escalation ? initial_box_size * 4 : initial_box_size;
+  RTLOG.info(Loc::current(), "DR adaptive box schedule: size1=", size1, ", size2=", size2, ", size3=", size3,
+             ", escalation=", enable_escalation ? "on" : "off",
+             ", rule_aware_cost=", rule_cost.enabled ? "on" : "off",
+             ", enhanced_minarea=", enhanced_minarea ? "on" : "off",
+             ", component_escalate=", _enable_component_escalate ? "on" : "off",
+             ", prl_short_repair=", _enable_prl_short_repair ? "on" : "off");
   /**
    * prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size, offset, schedule_interval, fixed_rect_unit, routed_rect_unit, violation_unit,
    * max_routed_times, max_candidate_patch_num
    */
   std::vector<DRIterParam> dr_iter_param_list;
   // clang-format off
-  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 0, 3, fixed_rect_unit, routed_rect_unit, violation_unit, 3, 10);
-  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 4, 3, fixed_rect_unit, routed_rect_unit, violation_unit, 3, 10);
-  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 8, 3, fixed_rect_unit, routed_rect_unit, violation_unit, 3, 10);
-  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 0, 3, 2 * fixed_rect_unit, 2 * routed_rect_unit, 2 * violation_unit, 5, 10);
-  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 4, 3, 2 * fixed_rect_unit, 2 * routed_rect_unit, 2 * violation_unit, 5, 10);
-  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 8, 3, 2 * fixed_rect_unit, 2 * routed_rect_unit, 2 * violation_unit, 5, 10);
-  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 0, 3, 4 * fixed_rect_unit, 4 * routed_rect_unit, 4 * violation_unit, 15, 10);
-  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 4, 3, 4 * fixed_rect_unit, 4 * routed_rect_unit, 4 * violation_unit, 15, 10);
-  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, 12, 8, 3, 4 * fixed_rect_unit, 4 * routed_rect_unit, 4 * violation_unit, 15, 10);
+  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size1, 0, 3, fixed_rect_unit, routed_rect_unit, violation_unit, 3, 10);
+  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size1, std::max(1, size1 / 3), 3, fixed_rect_unit, routed_rect_unit, violation_unit, 3, 10);
+  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size1, std::max(2, (size1 * 2) / 3), 3, fixed_rect_unit, routed_rect_unit, violation_unit, 3, 10);
+  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size2, 0, 3, 2 * fixed_rect_unit, 2 * routed_rect_unit, 2 * violation_unit, 5, 10);
+  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size2, std::max(1, size2 / 3), 3, 2 * fixed_rect_unit, 2 * routed_rect_unit, 2 * violation_unit, 5, 10);
+  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size2, std::max(2, (size2 * 2) / 3), 3, 2 * fixed_rect_unit, 2 * routed_rect_unit, 2 * violation_unit, 5, 10);
+  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size3, 0, 3, 4 * fixed_rect_unit, 4 * routed_rect_unit, 4 * violation_unit, 15, 10);
+  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size3, std::max(1, size3 / 3), 3, 4 * fixed_rect_unit, 4 * routed_rect_unit, 4 * violation_unit, 15, 10);
+  dr_iter_param_list.emplace_back(prefer_wire_unit, non_prefer_wire_unit, bend_unit, via_unit, size3, std::max(2, (size3 * 2) / 3), 3, 4 * fixed_rect_unit, 4 * routed_rect_unit, 4 * violation_unit, 15, 10);
   // clang-format on
+  if (enhanced_minarea) {
+    for (DRIterParam& param : dr_iter_param_list) {
+      param.set_max_candidate_patch_num(
+          enhancedMinAreaCandidateBudget(param.get_max_candidate_patch_num(), true, rule_cost.minarea_candidate_boost));
+    }
+    RTLOG.info(Loc::current(), "Enhanced min-area repair: boosted max_candidate_patch_num (boost=",
+               rule_cost.minarea_candidate_boost, ")");
+  }
   if (const char* max_iter_env = std::getenv("IEDA_RT_MAX_ITERATIONS")) {
     char* parse_end = nullptr;
     long requested_max_iter = std::strtol(max_iter_env, &parse_end, 10);
@@ -153,6 +376,7 @@ void DetailedRouter::routeDRModel(DRModel& dr_model)
   initRoutingState(dr_model);
   for (int32_t i = 0, iter = 1; i < static_cast<int32_t>(dr_iter_param_list.size()); i++, iter++) {
     Monitor iter_monitor;
+    const auto iter_start_time = std::chrono::steady_clock::now();
     RTLOG.info(Loc::current(), "***** Begin iteration ", iter, "/", dr_iter_param_list.size(), "(", RTUTIL.getPercentage(iter, dr_iter_param_list.size()),
                ") *****");
     // debugPlotDRModel(dr_model, "before");
@@ -166,18 +390,83 @@ void DetailedRouter::routeDRModel(DRModel& dr_model)
     uploadNetResult(dr_model);
     uploadNetPatch(dr_model);
     uploadViolation(dr_model);
-    patchFinalMinArea(dr_model);
+    const bool skip_final_minarea
+        = getBoolEnv("IEDA_RT_BEST_EFFORT", false) && getBoolEnv("IEDA_RT_BEST_EFFORT_SKIP_FINAL_MINAREA", true);
+    if (skip_final_minarea) {
+      RTLOG.warn(Loc::current(),
+                 "IEDA_RT_BEST_EFFORT=1 and IEDA_RT_BEST_EFFORT_SKIP_FINAL_MINAREA=1: skip patchFinalMinArea to finish early");
+      const std::map<std::string, int32_t> before_histogram = getCurrentViolationTypeHistogram();
+      nlohmann::json action;
+      action["action_type"] = "final_minarea_patch";
+      action["iter"] = dr_model.get_iter();
+      action["best_effort"] = true;
+      action["skip_requested"] = true;
+      action["status"] = "skipped";
+      action["reason"] = "best_effort_skip_final_minarea";
+      action["candidate_count"] = 0;
+      action["accepted_count"] = 0;
+      action["runtime_seconds"] = 0.0;
+      action["drc_before"]["total"] = getHistogramTotal(before_histogram);
+      action["drc_before"]["by_type"] = violationTypeHistogramJson(before_histogram);
+      action["drc_after"] = action["drc_before"];
+      recordRepairAction(dr_model, action);
+    } else {
+      patchFinalMinArea(dr_model);
+    }
     uploadViolation(dr_model);
     updateBestResult(dr_model);
     // debugPlotDRModel(dr_model, "after");
     updateSummary(dr_model);
-    const auto& convergence = convergence_tracker.observe(buildConvergenceState(dr_model));
+    DRIterationState iter_state = buildConvergenceState(dr_model);
+    const double iter_runtime_seconds
+        = std::chrono::duration<double>(std::chrono::steady_clock::now() - iter_start_time).count();
+    int32_t iter_task_count = 0;
+    for (std::vector<DRBoxId>& dr_box_id_list : dr_model.get_dr_box_id_list_list()) {
+      iter_task_count += static_cast<int32_t>(dr_box_id_list.size());
+    }
+    recordIterationDelta(dr_model, iter_state, iter_runtime_seconds, iter_task_count);
+    const auto& convergence = convergence_tracker.observe(iter_state);
     if (convergence.plateau) {
       RTLOG.warn(Loc::current(), "Detailed routing plateau at iteration ", iter, ": residual hotspots are stable (violations=",
                  getRouteViolationNum(dr_model), ", severity_improvement=", convergence.severity_improvement,
                  ", hotspot_change=", convergence.hotspot_change, ").");
+      // WP-RT-01b: if plateau hits the last scheduled iter, append extra mild-escalated
+      // rounds so component escalate can actually act (A/B-3 bugfix).
+      if (_enable_component_escalate && (i + 1) >= static_cast<int32_t>(dr_iter_param_list.size())) {
+        const int32_t extra = std::max(0, getIntEnv("IEDA_RT_COMPONENT_EXTRA_ITERS", 2));
+        const int32_t hard_cap = std::max(static_cast<int32_t>(dr_iter_param_list.size()),
+                                          getIntEnv("IEDA_RT_COMPONENT_ITER_CAP", 12));
+        if (extra > 0 && !_component_extra_iters_appended) {
+          DRIterParam seed = dr_iter_param_list.back();
+          applyComponentMildEscalation(seed);
+          const int32_t room = hard_cap - static_cast<int32_t>(dr_iter_param_list.size());
+          const int32_t to_add = std::min(extra, std::max(0, room));
+          for (int32_t k = 0; k < to_add; ++k) {
+            dr_iter_param_list.push_back(seed);
+          }
+          _component_extra_iters_appended = to_add > 0;
+          if (to_add > 0) {
+            RTLOG.info(Loc::current(), "***** Component escalate appended ", to_add,
+                       " extra DR iteration(s) after last-iter plateau (cap=", hard_cap, ") *****");
+          }
+        }
+      }
+      // Select conflict component + boost nets; mild-scale remaining (incl. appended) iters.
+      if (_enable_component_escalate && (i + 1) < static_cast<int32_t>(dr_iter_param_list.size())) {
+        applyComponentEscalateOnPlateau(dr_model, dr_iter_param_list, i + 1);
+      } else if (_enable_component_escalate) {
+        // Still record escalated nets even if no remaining iters (weight boost on any later path).
+        applyComponentEscalateOnPlateau(dr_model, dr_iter_param_list, static_cast<int32_t>(dr_iter_param_list.size()));
+      }
+      // Optional legacy global escalate (box×2 path) — only when explicitly enabled.
+      if (enable_escalation && (i + 1) < static_cast<int32_t>(dr_iter_param_list.size())) {
+        escalateRemainingDRIterParams(dr_iter_param_list, i + 1);
+        RTLOG.info(Loc::current(), "***** Plateau escalate remaining DR iterations from ", iter + 1, " *****");
+      }
     }
     outputConvergenceJson(convergence_tracker, false);
+    outputIterationDeltaJson(dr_model);
+    outputRepairActionsJson(dr_model);
     printSummary(dr_model);
     outputNetCSV(dr_model);
     outputViolationCSV(dr_model);
@@ -188,9 +477,15 @@ void DetailedRouter::routeDRModel(DRModel& dr_model)
       break;
     }
   }
+  const auto final_start_time = std::chrono::steady_clock::now();
   selectBestResult(dr_model);
-  const auto& final_convergence = convergence_tracker.observe(buildConvergenceState(dr_model));
+  DRIterationState final_state = buildConvergenceState(dr_model);
+  const double final_runtime_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - final_start_time).count();
+  recordIterationDelta(dr_model, final_state, final_runtime_seconds, 0);
+  const auto& final_convergence = convergence_tracker.observe(final_state);
   outputConvergenceJson(convergence_tracker, true);
+  outputIterationDeltaJson(dr_model);
+  outputRepairActionsJson(dr_model);
   if (!final_convergence.clean) {
     const auto& final_state = convergence_tracker.history().back();
     RTLOG.warn(Loc::current(), "Detailed routing produced an incomplete result (routed_nets=", final_state.routed_net_num, "/",
@@ -432,6 +727,23 @@ void DetailedRouter::routeDRBoxMap(DRModel& dr_model)
   Monitor monitor;
   RTLOG.info(Loc::current(), "Starting...");
 
+  MemoryBudgetGuard memory_guard(8192);
+  const int32_t memory_check_interval = getIntEnv("IEDA_RT_MEMORY_CHECK_INTERVAL", 6);
+  const int32_t check_interval = getIntEnv("IEDA_RT_PLATEAU_CHECK_INTERVAL", 36);
+  const double explosion_threshold = getDoubleEnv("IEDA_RT_PLATEAU_EXPLOSION_THRESHOLD", 2.0);
+  const bool best_effort = getBoolEnv("IEDA_RT_BEST_EFFORT", false);
+  const int32_t max_boxes = getIntEnv("IEDA_RT_MAX_BOXES", 0);
+  int32_t prev_violation_count = 0;
+  bool plateau_detected = false;
+  const auto dr_deadline = (best_effort && getIntEnv("IEDA_RT_MAX_DR_SECONDS", 90) > 0)
+                               ? (std::chrono::steady_clock::now()
+                                  + std::chrono::seconds(getIntEnv("IEDA_RT_MAX_DR_SECONDS", 90)))
+                               : std::chrono::steady_clock::time_point::max();
+
+  RTLOG.info(Loc::current(), "65pct guards: best_effort=", best_effort ? 1 : 0,
+             ", plateau_interval=", check_interval, ", explosion_threshold=", explosion_threshold,
+             ", max_boxes=", max_boxes, ", max_memory_mb=", memory_guard.getMaxMemoryMB());
+
   GridMap<DRBox>& dr_box_map = dr_model.get_dr_box_map();
 
   size_t total_box_num = 0;
@@ -441,10 +753,23 @@ void DetailedRouter::routeDRBoxMap(DRModel& dr_model)
 
   size_t routed_box_num = 0;
   for (std::vector<DRBoxId>& dr_box_id_list : dr_model.get_dr_box_id_list_list()) {
+    if (memory_guard.isAborted() || plateau_detected || std::chrono::steady_clock::now() >= dr_deadline) {
+      break;
+    }
     Monitor stage_monitor;
-    // Box setup and result upload mutate shared RTDM GCell indexes. Keep this
-    // loop serial until those indexes support concurrent pointer updates.
+    // Keep box loop serial: RTDM GCell indexes are not concurrency-safe in iEDA.ai.
     for (DRBoxId& dr_box_id : dr_box_id_list) {
+      if (memory_guard.isAborted() || plateau_detected) {
+        break;
+      }
+      if (std::chrono::steady_clock::now() >= dr_deadline) {
+        RTLOG.warn(Loc::current(), "Reached IEDA_RT_MAX_DR_SECONDS; stopping detailed routing early");
+        break;
+      }
+      if (max_boxes > 0 && static_cast<int32_t>(routed_box_num) >= max_boxes) {
+        RTLOG.warn(Loc::current(), "Reached IEDA_RT_MAX_BOXES=", max_boxes, "; stopping detailed routing early");
+        break;
+      }
       DRBox& dr_box = dr_box_map[dr_box_id.get_x()][dr_box_id.get_y()];
       buildFixedRect(dr_box);
       buildAccessPoint(dr_box);
@@ -460,17 +785,53 @@ void DetailedRouter::routeDRBoxMap(DRModel& dr_model)
         buildOrientNetMap(dr_box);
         buildNetShadowMap(dr_box);
         exemptPinShape(dr_model, dr_box);
-        // debugCheckDRBox(dr_box);
-        // debugPlotDRBox(dr_box, "before");
         routeDRBox(dr_box);
-        // debugPlotDRBox(dr_box, "after");
       }
       selectBestResult(dr_box);
       freeDRBox(dr_box);
+      ++routed_box_num;
+      if (routed_box_num > 0 && (routed_box_num % static_cast<size_t>(memory_check_interval)) == 0) {
+        if (!memory_guard.checkBudget()) {
+          RTLOG.error(Loc::current(), "Memory budget exceeded during box routing; aborting remaining boxes");
+          break;
+        }
+      }
     }
-    routed_box_num += dr_box_id_list.size();
+    const int32_t curr_violations = getRouteViolationNum(dr_model);
     RTLOG.info(Loc::current(), "Routed ", routed_box_num, "/", total_box_num, "(", RTUTIL.getPercentage(routed_box_num, total_box_num), ") boxes with ",
-               getRouteViolationNum(dr_model), " violations", stage_monitor.getStatsInfo());
+               curr_violations, " violations", stage_monitor.getStatsInfo());
+
+    if (memory_guard.isAborted()) {
+      RTLOG.warn(Loc::current(), "Detailed routing soft-stopped after memory budget abort");
+      break;
+    }
+    if (max_boxes > 0 && static_cast<int32_t>(routed_box_num) >= max_boxes) {
+      break;
+    }
+    if (std::chrono::steady_clock::now() >= dr_deadline) {
+      break;
+    }
+
+    if (routed_box_num > 0 && (routed_box_num % static_cast<size_t>(check_interval)) == 0) {
+      if (prev_violation_count > 0) {
+        const double growth_rate = (curr_violations - prev_violation_count) / static_cast<double>(prev_violation_count);
+        RTLOG.info(Loc::current(), "Plateau check at box ", routed_box_num, "/", total_box_num,
+                   ": violations=", curr_violations, " growth=", growth_rate);
+        if (growth_rate > explosion_threshold) {
+          RTLOG.error(Loc::current(), "VIOLATION EXPLOSION DETECTED at box ", routed_box_num, "/", total_box_num);
+          plateau_detected = true;
+          break;
+        }
+      }
+      prev_violation_count = curr_violations;
+    }
+  }
+
+  if (plateau_detected && !best_effort) {
+    throw std::runtime_error("Routing failed: violation explosion detected (plateau)");
+  }
+  if (plateau_detected && best_effort) {
+    RTLOG.warn(Loc::current(), "IEDA_RT_BEST_EFFORT=1: continuing with partial detailed routes after plateau");
   }
 
   RTLOG.info(Loc::current(), "Completed", monitor.getStatsInfo());
@@ -979,13 +1340,44 @@ void DetailedRouter::exemptPinShape(DRModel& dr_model, DRBox& dr_box)
 
 void DetailedRouter::routeDRBox(DRBox& dr_box)
 {
+  // ASAP7@65% can hang forever inside a single box's violation-driven reroute loop.
+  // Under BEST_EFFORT, keep at most one short pass over a capped task subset.
+  const bool best_effort = getBoolEnv("IEDA_RT_BEST_EFFORT", false);
+  const int32_t max_tasks = getIntEnv("IEDA_RT_MAX_TASKS_PER_BOX", best_effort ? 4 : 0);
+  const int32_t max_box_seconds = getIntEnv("IEDA_RT_MAX_BOX_SECONDS", best_effort ? 20 : 0);
+  const auto box_deadline = (max_box_seconds > 0)
+                                ? (std::chrono::steady_clock::now() + std::chrono::seconds(max_box_seconds))
+                                : std::chrono::steady_clock::time_point::max();
+
   std::vector<DRTask*> routing_task_list = initTaskSchedule(dr_box);
+  if (max_tasks > 0 && static_cast<int32_t>(routing_task_list.size()) > max_tasks) {
+    RTLOG.warn(Loc::current(), "IEDA_RT_BEST_EFFORT: capping DR box tasks from ", routing_task_list.size(), " to ", max_tasks);
+    routing_task_list.resize(static_cast<size_t>(max_tasks));
+  }
+
+  int32_t tasks_done = 0;
   while (!routing_task_list.empty()) {
+    if (std::chrono::steady_clock::now() >= box_deadline) {
+      RTLOG.warn(Loc::current(), "IEDA_RT_MAX_BOX_SECONDS reached; leaving current DR box early");
+      break;
+    }
     for (DRTask* routing_task : routing_task_list) {
+      if (max_tasks > 0 && tasks_done >= max_tasks) {
+        break;
+      }
+      if (std::chrono::steady_clock::now() >= box_deadline) {
+        break;
+      }
       updateGraph(dr_box, routing_task);
       routeDRTask(dr_box, routing_task);
-      patchDRTask(dr_box, routing_task); 
+      patchDRTask(dr_box, routing_task);
       routing_task->addRoutedTimes();
+      ++tasks_done;
+    }
+    if (best_effort) {
+      updateRouteViolationList(dr_box);
+      updateBestResult(dr_box);
+      break;
     }
     updateRouteViolationList(dr_box);
     updateBestResult(dr_box);
@@ -1027,12 +1419,20 @@ void DetailedRouter::updateGraph(DRBox& dr_box, DRTask* dr_task)
 void DetailedRouter::routeDRTask(DRBox& dr_box, DRTask* dr_task)
 {
   initSingleRouteTask(dr_box, dr_task);
+  const bool best_effort = getBoolEnv("IEDA_RT_BEST_EFFORT", false);
+  const int32_t max_paths = getIntEnv("IEDA_RT_MAX_PATHS_PER_TASK", best_effort ? 32 : 0);
+  int32_t path_count = 0;
   while (!isConnectedAllEnd(dr_box)) {
+    if (max_paths > 0 && path_count >= max_paths) {
+      RTLOG.warn(Loc::current(), "IEDA_RT_MAX_PATHS_PER_TASK reached; leaving task partially connected");
+      break;
+    }
     routeSinglePath(dr_box);
     updatePathResult(dr_box);
     updateDirectionSet(dr_box);
     resetStartAndEnd(dr_box);
     resetSinglePath(dr_box);
+    ++path_count;
   }
   updateTaskResult(dr_box);
   resetSingleRouteTask(dr_box);
@@ -1467,7 +1867,9 @@ double DetailedRouter::getNodeCost(DRBox& dr_box, DRNode* curr_node, Orientation
   double cost = 0;
   cost += curr_node->getFixedRectCost(net_idx, orientation, fixed_rect_unit);
   cost += curr_node->getRoutedRectCost(net_idx, orientation, routed_rect_unit);
-  cost += curr_node->getViolationCost(orientation, violation_unit);
+  // Use cached WP-RT-01 config (filled in routeDRModel) — no getenv on A* hot path.
+  cost += curr_node->getViolationCost(orientation, violation_unit, _rule_aware_cost_config.enabled,
+                                      _rule_aware_cost_config.max_history_scale);
   return cost;
 }
 
@@ -2130,10 +2532,7 @@ std::vector<Violation> DetailedRouter::getRouteViolationList(DRBox& dr_box)
 
 int32_t DetailedRouter::getViolationWeight(ViolationType violation_type)
 {
-  if (violation_type == ViolationType::kCutEOLSpacing) {
-    return 1;
-  }
-  return 1;
+  return ruleAwareWeight(violation_type, _rule_aware_cost_config.enabled);
 }
 
 int32_t DetailedRouter::getViolationScore(const std::vector<Violation>& violation_list)
@@ -2168,12 +2567,40 @@ void DetailedRouter::updateTaskSchedule(DRBox& dr_box, std::vector<DRTask*>& rou
 
   std::set<DRTask*> visited_routing_task_set;
   std::vector<DRTask*> new_routing_task_list;
-  for (Violation& violation : dr_box.get_route_violation_list()) {
+  std::map<DRTask*, int32_t> task_priority_map;
+  // Prefer short/PRL (and escalated nets) when WP-RT-01b repair lever is on.
+  std::vector<Violation> ordered_violations = dr_box.get_route_violation_list();
+  if (_enable_prl_short_repair || _enable_component_escalate) {
+    std::stable_sort(ordered_violations.begin(), ordered_violations.end(),
+                     [this](const Violation& a, const Violation& b) {
+                       int32_t pa = prlShortRepairPriority(a.get_violation_type());
+                       int32_t pb = prlShortRepairPriority(b.get_violation_type());
+                       if (_enable_component_escalate && _component_escalate_level > 0) {
+                         auto touches_escalated = [this](const Violation& v) {
+                           for (int32_t net_idx : v.get_violation_net_set()) {
+                             if (_escalated_net_idx_set.count(net_idx) != 0) {
+                               return true;
+                             }
+                           }
+                           return false;
+                         };
+                         if (touches_escalated(a)) {
+                           pa += 1000;
+                         }
+                         if (touches_escalated(b)) {
+                           pb += 1000;
+                         }
+                       }
+                       return pa > pb;
+                     });
+  }
+  for (Violation& violation : ordered_violations) {
     EXTLayerRect& violation_shape = violation.get_violation_shape();
     if (!RTUTIL.isOpenOverlap(dr_box.get_box_rect().get_real_rect(), 
       RTUTIL.getEnlargedRect(violation_shape.get_real_rect(), RTDM.getOnlyPitch()))) {
       continue;
     }
+    const int32_t type_priority = _enable_prl_short_repair ? prlShortRepairPriority(violation.get_violation_type()) : 0;
     for (DRTask* dr_task : dr_box.get_dr_task_list()) {
       if (!RTUTIL.exist(violation.get_violation_net_set(), dr_task->get_net_idx())) {
         continue;
@@ -2181,8 +2608,23 @@ void DetailedRouter::updateTaskSchedule(DRBox& dr_box, std::vector<DRTask*>& rou
       if (dr_task->get_routed_times() < max_routed_times && !RTUTIL.exist(visited_routing_task_set, dr_task)) {
         visited_routing_task_set.insert(dr_task);
         new_routing_task_list.push_back(dr_task);
+        int32_t priority = type_priority;
+        if (_enable_component_escalate && _escalated_net_idx_set.count(dr_task->get_net_idx()) != 0) {
+          priority += 1000;
+        }
+        task_priority_map[dr_task] = priority;
+      } else if (RTUTIL.exist(visited_routing_task_set, dr_task)) {
+        int32_t& priority = task_priority_map[dr_task];
+        priority = std::max(priority, type_priority);
+        if (_enable_component_escalate && _escalated_net_idx_set.count(dr_task->get_net_idx()) != 0) {
+          priority = std::max(priority, type_priority + 1000);
+        }
       }
     }
+  }
+  if ((_enable_prl_short_repair || _enable_component_escalate) && new_routing_task_list.size() > 1) {
+    std::stable_sort(new_routing_task_list.begin(), new_routing_task_list.end(),
+                     [&task_priority_map](DRTask* a, DRTask* b) { return task_priority_map[a] > task_priority_map[b]; });
   }
   routing_task_list = new_routing_task_list;
 
@@ -2196,6 +2638,53 @@ void DetailedRouter::updateTaskSchedule(DRBox& dr_box, std::vector<DRTask*>& rou
     new_dr_task_list.push_back(routing_task);
   }
   dr_box.set_dr_task_list(new_dr_task_list);
+}
+
+void DetailedRouter::applyComponentEscalateOnPlateau(DRModel& dr_model, std::vector<DRIterParam>& dr_iter_param_list, int32_t from_index)
+{
+  Die& die = RTDM.getDatabase().get_die();
+  std::vector<DRConflictViolationRef> refs;
+  refs.reserve(RTDM.getViolationSet(die).size());
+  int32_t index = 0;
+  for (Violation* violation : RTDM.getViolationSet(die)) {
+    if (violation == nullptr) {
+      continue;
+    }
+    DRConflictViolationRef ref;
+    ref.index = index++;
+    ref.type = violation->get_violation_type();
+    const EXTLayerRect& shape = violation->get_violation_shape();
+    ref.layer_idx = shape.get_layer_idx();
+    ref.ll_x = shape.get_real_ll_x();
+    ref.ll_y = shape.get_real_ll_y();
+    ref.ur_x = shape.get_real_ur_x();
+    ref.ur_y = shape.get_real_ur_y();
+    ref.severity = std::max(1, getViolationWeight(violation->get_violation_type()));
+    for (int32_t net_idx : violation->get_violation_net_set()) {
+      if (net_idx >= 0) {
+        ref.net_ids.push_back(net_idx);
+      }
+    }
+    refs.push_back(std::move(ref));
+  }
+
+  const int32_t halo = RTDM.getOnlyPitch() * std::max(1, _component_halo_pitch_mult);
+  const std::vector<DRConflictComponent> components = buildConflictComponents(refs, halo);
+  const int32_t best = selectHighestSeverityComponent(components);
+  if (best < 0) {
+    RTLOG.warn(Loc::current(), "Component escalate: no conflict components found; skip.");
+    return;
+  }
+
+  _component_escalate_level = std::min(4, _component_escalate_level + 1);
+  _escalated_net_idx_set = components[best].net_ids;
+  for (int32_t i = from_index; i < static_cast<int32_t>(dr_iter_param_list.size()); ++i) {
+    applyComponentMildEscalation(dr_iter_param_list[i]);
+  }
+  RTLOG.info(Loc::current(), "***** Component escalate level=", _component_escalate_level, " nets=",
+             static_cast<int32_t>(_escalated_net_idx_set.size()), " component_severity=", components[best].severity_sum,
+             " violations_in_comp=", static_cast<int32_t>(components[best].violation_indices.size()), " (no global box×2) *****");
+  (void) dr_model;
 }
 
 void DetailedRouter::selectBestResult(DRBox& dr_box)
@@ -2243,6 +2732,13 @@ void DetailedRouter::uploadNetResult(DRModel& dr_model)
 {
   Monitor monitor;
   RTLOG.info(Loc::current(), "Starting...");
+
+  if (getBoolEnv("IEDA_RT_BEST_EFFORT", false)) {
+    RTLOG.warn(Loc::current(),
+               "IEDA_RT_BEST_EFFORT=1: skip uploadNetResult connectivity rebuild to preserve partial routes");
+    RTLOG.info(Loc::current(), "Completed", monitor.getStatsInfo());
+    return;
+  }
 
   Die& die = RTDM.getDatabase().get_die();
   std::vector<DRNet>& dr_net_list = dr_model.get_dr_net_list();
@@ -2484,11 +2980,12 @@ DRIterationState DetailedRouter::buildConvergenceState(DRModel& dr_model)
   state.total_net_num = dr_summary.total_net_num;
 
   for (Violation* violation : RTDM.getViolationSet(die)) {
-    state.violation_score += getViolationWeight(violation->get_violation_type());
+    const ViolationType violation_type = violation->get_violation_type();
+    state.violation_score += getViolationWeight(violation_type);
+    state.violation_type_count_map[GetViolationTypeName()(violation_type)]++;
     const EXTLayerRect& shape = violation->get_violation_shape();
-    state.hotspot_set.insert(RTUTIL.getString(static_cast<int32_t>(violation->get_violation_type()), ":", shape.get_layer_idx(), ":",
-                                               shape.get_real_ll_x(), ":", shape.get_real_ll_y(), ":", shape.get_real_ur_x(), ":",
-                                               shape.get_real_ur_y()));
+    state.hotspot_set.insert(RTUTIL.getString(static_cast<int32_t>(violation_type), ":", shape.get_layer_idx(), ":", shape.get_real_ll_x(),
+                                               ":", shape.get_real_ll_y(), ":", shape.get_real_ur_x(), ":", shape.get_real_ur_y()));
   }
   return state;
 }
@@ -2508,6 +3005,11 @@ void DetailedRouter::outputConvergenceJson(const DRConvergenceTracker& tracker, 
   result["route_complete"] = final_state && decisions.back().clean;
   result["route_incomplete"] = final_state && !decisions.back().clean;
   result["residual_drc"] = history.back().violation_num;
+  result["residual_drc_by_type"] = violationTypeHistogramJson(history.back().violation_type_count_map);
+  result["top_residual_drc_types"] = nlohmann::json::array();
+  for (const auto& [type_name, count] : topViolationTypes(history.back().violation_type_count_map)) {
+    result["top_residual_drc_types"].push_back({{"type", type_name}, {"count", count}});
+  }
   result["plateau_detected"] = std::any_of(decisions.begin(), decisions.end(), [](const auto& item) { return item.plateau; });
   result["config"] = {{"window", tracker.config().window},
                       {"min_relative_improvement", tracker.config().min_relative_improvement},
@@ -2521,6 +3023,7 @@ void DetailedRouter::outputConvergenceJson(const DRConvergenceTracker& tracker, 
                                     {"total_net_num", state.total_net_num},
                                     {"completeness", decision.completeness},
                                     {"violation_num", state.violation_num},
+                                    {"violation_by_type", violationTypeHistogramJson(state.violation_type_count_map)},
                                     {"violation_score", state.violation_score},
                                     {"hotspot_num", state.hotspot_set.size()},
                                     {"total_wire_length", state.total_wire_length},
@@ -2535,6 +3038,89 @@ void DetailedRouter::outputConvergenceJson(const DRConvergenceTracker& tracker, 
   }
 
   const std::string path = RTUTIL.getString(RTDM.getConfig().dr_temp_directory_path, "iter_dr_series.json");
+  std::ofstream* stream = RTUTIL.getOutputFileStream(path);
+  (*stream) << result.dump(2);
+  RTUTIL.closeFileStream(stream);
+}
+
+void DetailedRouter::recordIterationDelta(DRModel& dr_model, const DRIterationState& state, double runtime_seconds, int32_t task_count)
+{
+  nlohmann::json current;
+  current["iter"] = state.iter;
+  current["drc_total"] = state.violation_num;
+  current["drc_by_type"] = violationTypeHistogramJson(state.violation_type_count_map);
+  current["runtime_seconds"] = runtime_seconds;
+  current["task_count"] = task_count;
+  current["routed_net_num"] = state.routed_net_num;
+  current["total_net_num"] = state.total_net_num;
+  current["hotspot_num"] = state.hotspot_set.size();
+  current["total_wire_length"] = state.total_wire_length;
+  current["total_via_num"] = state.total_via_num;
+
+  std::vector<nlohmann::json>& observation_list = dr_model.get_iter_observation_list();
+  if (!observation_list.empty()) {
+    const nlohmann::json& previous = observation_list.back();
+    current["delta"]["drc_total"] = current["drc_total"].get<int32_t>() - previous["drc_total"].get<int32_t>();
+    current["delta"]["runtime_seconds"] = runtime_seconds;
+    current["delta"]["fixed_by_type"] = nlohmann::json::object();
+    current["delta"]["new_by_type"] = nlohmann::json::object();
+    for (const auto& [type_name, curr_count] : state.violation_type_count_map) {
+      const int32_t prev_count = previous["drc_by_type"].value(type_name, 0);
+      const int32_t delta = curr_count - prev_count;
+      if (delta > 0) {
+        current["delta"]["new_by_type"][type_name] = delta;
+      } else if (delta < 0) {
+        current["delta"]["fixed_by_type"][type_name] = -delta;
+      }
+    }
+    for (auto iter = previous["drc_by_type"].begin(); iter != previous["drc_by_type"].end(); ++iter) {
+      const std::string type_name = iter.key();
+      if (state.violation_type_count_map.find(type_name) != state.violation_type_count_map.end()) {
+        continue;
+      }
+      const int32_t fixed_count = iter.value().get<int32_t>();
+      if (fixed_count > 0) {
+        current["delta"]["fixed_by_type"][type_name] = fixed_count;
+      }
+    }
+  } else {
+    current["delta"]["drc_total"] = 0;
+    current["delta"]["runtime_seconds"] = runtime_seconds;
+    current["delta"]["fixed_by_type"] = nlohmann::json::object();
+    current["delta"]["new_by_type"] = nlohmann::json::object();
+  }
+  observation_list.push_back(current);
+}
+
+void DetailedRouter::outputIterationDeltaJson(DRModel& dr_model)
+{
+  nlohmann::json result;
+  result["schema_version"] = 1;
+  result["stage"] = "detailed_route";
+  result["compatible_with"] = "iter_dr_series.json";
+  result["iterations"] = dr_model.get_iter_observation_list();
+
+  const std::string path = RTUTIL.getString(RTDM.getConfig().dr_temp_directory_path, "iter_delta.json");
+  std::ofstream* stream = RTUTIL.getOutputFileStream(path);
+  (*stream) << result.dump(2);
+  RTUTIL.closeFileStream(stream);
+}
+
+void DetailedRouter::recordRepairAction(DRModel& dr_model, nlohmann::json action)
+{
+  action["schema_version"] = 1;
+  action["stage"] = "detailed_route";
+  dr_model.get_repair_action_observation_list().push_back(action);
+}
+
+void DetailedRouter::outputRepairActionsJson(DRModel& dr_model)
+{
+  nlohmann::json result;
+  result["schema_version"] = 1;
+  result["stage"] = "detailed_route";
+  result["actions"] = dr_model.get_repair_action_observation_list();
+
+  const std::string path = RTUTIL.getString(RTDM.getConfig().dr_temp_directory_path, "repair_actions.json");
   std::ofstream* stream = RTUTIL.getOutputFileStream(path);
   (*stream) << result.dump(2);
   RTUTIL.closeFileStream(stream);
@@ -2564,6 +3150,40 @@ void DetailedRouter::patchFinalMinArea(DRModel& dr_model)
   Monitor monitor;
   RTLOG.info(Loc::current(), "Starting...");
 
+  const auto patch_start_time = std::chrono::steady_clock::now();
+  const std::map<std::string, int32_t> before_histogram = getCurrentViolationTypeHistogram();
+  nlohmann::json action;
+  action["action_type"] = "final_minarea_patch";
+  action["iter"] = dr_model.get_iter();
+  action["best_effort"] = getBoolEnv("IEDA_RT_BEST_EFFORT", false);
+  action["skip_requested"] = getBoolEnv("IEDA_RT_BEST_EFFORT", false) && getBoolEnv("IEDA_RT_BEST_EFFORT_SKIP_FINAL_MINAREA", true);
+  action["drc_before"]["total"] = getHistogramTotal(before_histogram);
+  action["drc_before"]["by_type"] = violationTypeHistogramJson(before_histogram);
+  action["candidate_count"] = 0;
+  action["processed_candidate_count"] = 0;
+  action["skipped_candidate_count"] = 0;
+  action["accepted_count"] = 0;
+  action["boxes_visited"] = 0;
+  action["boxes_patched"] = 0;
+
+  const bool best_effort = getBoolEnv("IEDA_RT_BEST_EFFORT", false);
+  const int32_t max_final_minarea_tasks = std::max(0, getIntEnv("IEDA_RT_MAX_FINAL_MINAREA_TASKS", 0));
+  int32_t processed_final_minarea_tasks = 0;
+  bool final_minarea_budget_exhausted = false;
+  action["max_final_minarea_tasks"] = max_final_minarea_tasks;
+
+  if (best_effort && getBoolEnv("IEDA_RT_BEST_EFFORT_SKIP_FINAL_MINAREA", true)) {
+    RTLOG.warn(Loc::current(), "IEDA_RT_BEST_EFFORT=1 and IEDA_RT_BEST_EFFORT_SKIP_FINAL_MINAREA=1: skip patchFinalMinArea body");
+    action["status"] = "skipped";
+    action["reason"] = "best_effort_skip_final_minarea";
+    action["drc_after"] = action["drc_before"];
+    action["runtime_seconds"] = std::chrono::duration<double>(std::chrono::steady_clock::now() - patch_start_time).count();
+    recordRepairAction(dr_model, action);
+    outputRepairActionsJson(dr_model);
+    RTLOG.info(Loc::current(), "Completed", monitor.getStatsInfo());
+    return;
+  }
+
   initDRBoxMap(dr_model);
   buildBoxSchedule(dr_model);
 
@@ -2573,8 +3193,39 @@ void DetailedRouter::patchFinalMinArea(DRModel& dr_model)
     // mutates shared GCell indexes, so the box loop must remain serial.
     for (DRBoxId& dr_box_id : dr_box_id_list) {
       DRBox& dr_box = dr_box_map[dr_box_id.get_x()][dr_box_id.get_y()];
+      action["boxes_visited"] = action["boxes_visited"].get<int32_t>() + 1;
       buildFinalPatchBox(dr_model, dr_box);
       if (!dr_box.get_dr_task_list().empty()) {
+        std::vector<DRTask*>& dr_task_list = dr_box.get_dr_task_list();
+        const int32_t raw_task_count = static_cast<int32_t>(dr_task_list.size());
+        action["candidate_count"] = action["candidate_count"].get<int32_t>() + raw_task_count;
+        RTLOG.info(Loc::current(), RTUTIL.getString("Final min-area box (", dr_box_id.get_x(), ",", dr_box_id.get_y(),
+                                                    ") candidates=", raw_task_count, " processed=",
+                                                    processed_final_minarea_tasks, " max_tasks=", max_final_minarea_tasks));
+        if (max_final_minarea_tasks > 0) {
+          const int32_t remaining_task_budget = max_final_minarea_tasks - processed_final_minarea_tasks;
+          if (remaining_task_budget <= 0) {
+            action["skipped_candidate_count"] = action["skipped_candidate_count"].get<int32_t>() + raw_task_count;
+            final_minarea_budget_exhausted = true;
+            RTLOG.warn(Loc::current(), RTUTIL.getString("IEDA_RT_MAX_FINAL_MINAREA_TASKS=", max_final_minarea_tasks,
+                                                        ": skip remaining final min-area boxes"));
+            freeDRBox(dr_box);
+            break;
+          }
+          if (raw_task_count > remaining_task_budget) {
+            for (int32_t idx = raw_task_count - 1; idx >= remaining_task_budget; --idx) {
+              delete dr_task_list[idx];
+              dr_task_list[idx] = nullptr;
+              dr_task_list.pop_back();
+            }
+            action["skipped_candidate_count"] = action["skipped_candidate_count"].get<int32_t>() + raw_task_count - remaining_task_budget;
+            final_minarea_budget_exhausted = true;
+          }
+        }
+        const int32_t task_count = static_cast<int32_t>(dr_task_list.size());
+        action["processed_candidate_count"] = action["processed_candidate_count"].get<int32_t>() + task_count;
+        processed_final_minarea_tasks += task_count;
+        action["boxes_patched"] = action["boxes_patched"].get<int32_t>() + 1;
         buildBoxTrackAxis(dr_box);
         buildLayerNodeMap(dr_box);
         buildLayerShadowMap(dr_box);
@@ -2585,12 +3236,40 @@ void DetailedRouter::patchFinalMinArea(DRModel& dr_model)
           patchDRTask(dr_box, dr_task);
         }
 #pragma omp critical(DRFinalPatchUpload)
-        uploadFinalPatch(dr_box);
+        { action["accepted_count"] = action["accepted_count"].get<int32_t>() + uploadFinalPatch(dr_box); }
       }
       freeDRBox(dr_box);
     }
+    if (final_minarea_budget_exhausted && max_final_minarea_tasks > 0
+        && processed_final_minarea_tasks >= max_final_minarea_tasks) {
+      break;
+    }
   }
 
+  const std::map<std::string, int32_t> after_histogram = getViolationTypeHistogram(getRouteViolationList(dr_model));
+  action["status"] = final_minarea_budget_exhausted ? "run_limited" : "run";
+  if (final_minarea_budget_exhausted) {
+    action["reason"] = "final_minarea_task_budget_exhausted";
+  }
+  action["drc_after"]["total"] = getHistogramTotal(after_histogram);
+  action["drc_after"]["by_type"] = violationTypeHistogramJson(after_histogram);
+  action["drc_delta"]["total"] = getHistogramTotal(after_histogram) - getHistogramTotal(before_histogram);
+  action["drc_delta"]["by_type"] = nlohmann::json::object();
+  for (const auto& [type_name, after_count] : after_histogram) {
+    const int32_t before_count = before_histogram.count(type_name) > 0 ? before_histogram.at(type_name) : 0;
+    const int32_t delta = after_count - before_count;
+    if (delta != 0) {
+      action["drc_delta"]["by_type"][type_name] = delta;
+    }
+  }
+  for (const auto& [type_name, before_count] : before_histogram) {
+    if (after_histogram.find(type_name) == after_histogram.end() && before_count != 0) {
+      action["drc_delta"]["by_type"][type_name] = -before_count;
+    }
+  }
+  action["runtime_seconds"] = std::chrono::duration<double>(std::chrono::steady_clock::now() - patch_start_time).count();
+  recordRepairAction(dr_model, action);
+  outputRepairActionsJson(dr_model);
   RTLOG.info(Loc::current(), "Completed", monitor.getStatsInfo());
 }
 
@@ -2631,9 +3310,10 @@ void DetailedRouter::buildFinalPatchBox(DRModel& dr_model, DRBox& dr_box)
   }
 }
 
-void DetailedRouter::uploadFinalPatch(DRBox& dr_box)
+int32_t DetailedRouter::uploadFinalPatch(DRBox& dr_box)
 {
   std::map<int32_t, std::set<EXTLayerRect*>> net_patch_map = RTDM.getNetDetailedPatchMap(dr_box.get_box_rect());
+  int32_t accepted_count = 0;
 
   auto hasSamePatch = [&net_patch_map](int32_t net_idx, EXTLayerRect& patch) {
     for (EXTLayerRect* exist_patch : net_patch_map[net_idx]) {
@@ -2652,8 +3332,10 @@ void DetailedRouter::uploadFinalPatch(DRBox& dr_box)
       EXTLayerRect* new_patch = new EXTLayerRect(patch);
       RTDM.updateNetDetailedPatchToGCellMap(ChangeType::kAdd, net_idx, new_patch);
       net_patch_map[net_idx].insert(new_patch);
+      ++accepted_count;
     }
   }
+  return accepted_count;
 }
 
 void DetailedRouter::uploadBestResult(DRModel& dr_model)
@@ -2787,13 +3469,28 @@ void DetailedRouter::addRouteViolationToGraph(DRBox& dr_box, Violation& violatio
       break;
     }
   }
-  addRouteViolationToGraph(dr_box, searched_rect, overlap_segment_list);
+  int32_t weight = getViolationWeight(violation.get_violation_type());
+  if (_enable_component_escalate && _component_escalate_level > 0) {
+    bool touches_escalated = false;
+    for (int32_t net_idx : violation.get_violation_net_set()) {
+      if (_escalated_net_idx_set.count(net_idx) != 0) {
+        touches_escalated = true;
+        break;
+      }
+    }
+    if (touches_escalated) {
+      weight = componentWeightBoost(weight, _component_escalate_level);
+    }
+  }
+  addRouteViolationToGraph(dr_box, searched_rect, overlap_segment_list, weight);
 }
 
-void DetailedRouter::addRouteViolationToGraph(DRBox& dr_box, LayerRect& searched_rect, std::vector<Segment<LayerCoord>>& overlap_segment_list)
+void DetailedRouter::addRouteViolationToGraph(DRBox& dr_box, LayerRect& searched_rect, std::vector<Segment<LayerCoord>>& overlap_segment_list,
+                                              int32_t violation_weight)
 {
   ScaleAxis& box_track_axis = dr_box.get_box_track_axis();
   std::vector<GridMap<DRNode>>& layer_node_map = dr_box.get_layer_node_map();
+  const int32_t weight = std::max(1, violation_weight);
 
   for (Segment<LayerCoord>& overlap_segment : overlap_segment_list) {
     LayerCoord& first_coord = overlap_segment.get_first();
@@ -2842,17 +3539,17 @@ void DetailedRouter::addRouteViolationToGraph(DRBox& dr_box, LayerRect& searched
     Orientation oppo_orientation = RTUTIL.getOppositeOrientation(orientation);
     for (DRNode* valid_node : valid_node_set) {
       if (LayerCoord(*valid_node) != first_coord) {
-        valid_node->addViolationNumber(oppo_orientation);
+        valid_node->addViolationNumber(oppo_orientation, weight);
         DRNode* neighbor_node = valid_node->getNeighborNode(oppo_orientation);
         if (neighbor_node != nullptr) {
-          neighbor_node->addViolationNumber(orientation);
+          neighbor_node->addViolationNumber(orientation, weight);
         }
       }
       if (LayerCoord(*valid_node) != second_coord) {
-        valid_node->addViolationNumber(orientation);
+        valid_node->addViolationNumber(orientation, weight);
         DRNode* neighbor_node = valid_node->getNeighborNode(orientation);
         if (neighbor_node != nullptr) {
-          neighbor_node->addViolationNumber(oppo_orientation);
+          neighbor_node->addViolationNumber(oppo_orientation, weight);
         }
       }
     }

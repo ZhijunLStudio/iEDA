@@ -128,6 +128,20 @@ auto SelectDiscreteHTreeSolution(HTreeSynthesisState& state) -> HTreeSelectionBu
     covered_global_candidate_pool = htree::FilterGlobalEntriesBySinkLoadRegionCoverage(
         exploration.output.global_candidate_pool, exploration.output.candidate_evaluations, result.output.topology, segment_pattern_library,
         exploration.output.sink_load_region_legality_context);
+    if (config.allow_boundary_relaxation && covered_global_feasible_pool.output.entries.empty()
+        && !exploration.output.global_feasible_pool.empty()) {
+      LOG_WARNING << "HTree: BEST_EFFORT using uncovered global feasible pool after sink-load coverage filter emptied it"
+                  << " (refs=" << exploration.output.global_feasible_pool.size() << ")";
+      covered_global_feasible_pool.output.entries = exploration.output.global_feasible_pool;
+      covered_global_feasible_pool.summary.first_failure_reason.clear();
+    }
+    if (config.allow_boundary_relaxation && covered_global_candidate_pool.output.entries.empty()
+        && !exploration.output.global_candidate_pool.empty()) {
+      LOG_WARNING << "HTree: BEST_EFFORT using uncovered global candidate pool after sink-load coverage filter emptied it"
+                  << " (refs=" << exploration.output.global_candidate_pool.size() << ")";
+      covered_global_candidate_pool.output.entries = exploration.output.global_candidate_pool;
+      covered_global_candidate_pool.summary.first_failure_reason.clear();
+    }
     coverage_stage.finished({
         {"covered_feasible_refs", std::to_string(covered_global_feasible_pool.output.entries.size())},
         {"covered_candidate_refs", std::to_string(covered_global_candidate_pool.output.entries.size())},
@@ -215,13 +229,21 @@ auto SelectDiscreteHTreeSolution(HTreeSynthesisState& state) -> HTreeSelectionBu
     });
   }
   if (!selected_sink_load_region_legality.legal) {
-    LOG_WARNING << "HTree: selected global frontier entry is missing sink-load-region legality coverage.";
-    return HTreeSelectionBuild{
-        .selected = false,
-        .failure_reason = "sink_load_region_legality_missing",
-        .engine = htree::HTreeSelectionEngine::kDiscrete,
-        .selected_solution = {},
-    };
+    if (config.allow_boundary_relaxation) {
+      LOG_WARNING << "HTree: BEST_EFFORT continuing despite missing sink-load-region legality coverage"
+                  << " (failure_reason="
+                  << (selected_sink_load_region_legality.failure_reason.empty() ? "none"
+                                                                                : selected_sink_load_region_legality.failure_reason)
+                  << ")";
+    } else {
+      LOG_WARNING << "HTree: selected global frontier entry is missing sink-load-region legality coverage.";
+      return HTreeSelectionBuild{
+          .selected = false,
+          .failure_reason = "sink_load_region_legality_missing",
+          .engine = htree::HTreeSelectionEngine::kDiscrete,
+          .selected_solution = {},
+      };
+    }
   }
   selected_summary.htree_load_group_count = selected_sink_load_region_legality.cap_distribution.group_count;
   selected_summary.htree_load_cap_min_pf = selected_sink_load_region_legality.cap_distribution.cap_min_pf;

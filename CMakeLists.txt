@@ -116,6 +116,11 @@ include(cmake/operation/ista.cmake)
 include(cmake/operation/ipa.cmake)
 include(cmake/rust.cmake)
 
+find_package(Boost REQUIRED)
+find_package(ZLIB REQUIRED)
+include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
+include_directories(SYSTEM ${ZLIB_INCLUDE_DIRS})
+
 if(ENABLE_AI)
 add_definitions(-DENABLE_AI)
 add_subdirectory(src/ai)

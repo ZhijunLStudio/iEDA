@@ -46,21 +46,6 @@
     <source>3/0@1</source>
   </properties>
   <properties>
-    <frame-color>#0072B2</frame-color>
-    <fill-color>#0072B2</fill-color>
-    <frame-brightness>0</frame-brightness>
-    <fill-brightness>0</fill-brightness>
-    <dither-pattern>I5</dither-pattern>
-    <visible>true</visible>
-    <transparent>false</transparent>
-    <width>1</width>
-    <marked>false</marked>
-    <xfill>false</xfill>
-    <animation>0</animation>
-    <name>core_clock htree_buffer level 6</name>
-    <source>4/0@1</source>
-  </properties>
-  <properties>
     <frame-color>#F0E442</frame-color>
     <fill-color>#F0E442</fill-color>
     <frame-brightness>0</frame-brightness>
@@ -73,7 +58,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock htree_buffer level 5</name>
-    <source>5/0@1</source>
+    <source>4/0@1</source>
   </properties>
   <properties>
     <frame-color>#000000</frame-color>
@@ -88,7 +73,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock htree_buffer level 4</name>
-    <source>6/0@1</source>
+    <source>5/0@1</source>
   </properties>
   <properties>
     <frame-color>#C44E52</frame-color>
@@ -103,7 +88,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock htree_buffer level 3</name>
-    <source>7/0@1</source>
+    <source>6/0@1</source>
   </properties>
   <properties>
     <frame-color>#56B4E9</frame-color>
@@ -118,7 +103,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock htree_buffer level 2</name>
-    <source>8/0@1</source>
+    <source>7/0@1</source>
   </properties>
   <properties>
     <frame-color>#E69F00</frame-color>
@@ -133,7 +118,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock htree_buffer level 1</name>
-    <source>9/0@1</source>
+    <source>8/0@1</source>
   </properties>
   <properties>
     <frame-color>#CC79A7</frame-color>
@@ -148,7 +133,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock htree_buffer level 0</name>
-    <source>10/0@1</source>
+    <source>9/0@1</source>
   </properties>
   <properties>
     <frame-color>#E69F00</frame-color>
@@ -163,22 +148,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock routing downstream_htree regular_downstream_root</name>
-    <source>11/0@1</source>
-  </properties>
-  <properties>
-    <frame-color>#D55E00</frame-color>
-    <fill-color>#D55E00</fill-color>
-    <frame-brightness>0</frame-brightness>
-    <fill-brightness>0</fill-brightness>
-    <dither-pattern>I5</dither-pattern>
-    <visible>true</visible>
-    <transparent>false</transparent>
-    <width>1</width>
-    <marked>false</marked>
-    <xfill>false</xfill>
-    <animation>0</animation>
-    <name>core_clock routing downstream_htree htree_buffer level 6</name>
-    <source>12/0@1</source>
+    <source>10/0@1</source>
   </properties>
   <properties>
     <frame-color>#0072B2</frame-color>
@@ -193,7 +163,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock routing downstream_htree htree_buffer level 5</name>
-    <source>13/0@1</source>
+    <source>11/0@1</source>
   </properties>
   <properties>
     <frame-color>#F0E442</frame-color>
@@ -208,7 +178,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock routing downstream_htree htree_buffer level 4</name>
-    <source>14/0@1</source>
+    <source>12/0@1</source>
   </properties>
   <properties>
     <frame-color>#000000</frame-color>
@@ -223,7 +193,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock routing downstream_htree htree_buffer level 3</name>
-    <source>15/0@1</source>
+    <source>13/0@1</source>
   </properties>
   <properties>
     <frame-color>#C44E52</frame-color>
@@ -238,7 +208,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock routing downstream_htree htree_buffer level 2</name>
-    <source>16/0@1</source>
+    <source>14/0@1</source>
   </properties>
   <properties>
     <frame-color>#56B4E9</frame-color>
@@ -253,7 +223,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock routing downstream_htree htree_buffer level 1</name>
-    <source>17/0@1</source>
+    <source>15/0@1</source>
   </properties>
   <properties>
     <frame-color>#E69F00</frame-color>
@@ -268,7 +238,7 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock routing downstream_htree htree_buffer level 0</name>
-    <source>18/0@1</source>
+    <source>16/0@1</source>
   </properties>
   <properties>
     <frame-color>#E69F00</frame-color>
@@ -283,6 +253,6 @@
     <xfill>false</xfill>
     <animation>0</animation>
     <name>core_clock routing source_to_root_segment source_to_root level 0</name>
-    <source>19/0@1</source>
+    <source>17/0@1</source>
   </properties>
 </layer-properties>

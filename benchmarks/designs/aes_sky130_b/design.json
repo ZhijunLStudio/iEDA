@@ -16,7 +16,7 @@
   "floorplan": {
     "die_area": "0.0 0.0 800 800",
     "core_area": "80.0 80.0 720.0 720.0",
-    "core_utilization": 0.6
+    "core_utilization": 0.65
   },
   "clocks": [
     {

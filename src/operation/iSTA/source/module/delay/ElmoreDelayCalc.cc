@@ -49,6 +49,9 @@
  * @date 2021-01-27
  */
 #include "ElmoreDelayCalc.hh"
+#include <algorithm>
+#include <cctype>
+#include <limits>
 #include <numeric>
 #include <queue>
 #include <utility>
@@ -150,12 +153,58 @@ RctNode* RcTree::rcNode(const std::string& name) {
     return &(itr->second);
   }
 
+  const std::string port_node_prefix = name + ":";
+  RctNode* fallback_port_node = nullptr;
+  int fallback_index = std::numeric_limits<int>::max();
+  for (auto& [node_name, node] : _str2nodes) {
+    if (node_name.rfind(port_node_prefix, 0) != 0) {
+      continue;
+    }
+    const std::string suffix = node_name.substr(port_node_prefix.size());
+    if (suffix.empty()
+        || !std::all_of(suffix.begin(), suffix.end(),
+                        [](unsigned char ch) { return std::isdigit(ch); })) {
+      continue;
+    }
+    const int index = std::stoi(suffix);
+    if (index < fallback_index) {
+      fallback_index = index;
+      fallback_port_node = &node;
+    }
+  }
+  if (fallback_port_node) {
+    return fallback_port_node;
+  }
+
   return nullptr;
 }
 
 RctNode* RcTree::node(const std::string& name) {
   if (const auto itr = _str2nodes.find(name); itr != _str2nodes.end()) {
     return &(itr->second);
+  }
+
+  const std::string port_node_prefix = name + ":";
+  RctNode* fallback_port_node = nullptr;
+  int fallback_index = std::numeric_limits<int>::max();
+  for (auto& [node_name, node] : _str2nodes) {
+    if (node_name.rfind(port_node_prefix, 0) != 0) {
+      continue;
+    }
+    const std::string suffix = node_name.substr(port_node_prefix.size());
+    if (suffix.empty()
+        || !std::all_of(suffix.begin(), suffix.end(),
+                        [](unsigned char ch) { return std::isdigit(ch); })) {
+      continue;
+    }
+    const int index = std::stoi(suffix);
+    if (index < fallback_index) {
+      fallback_index = index;
+      fallback_port_node = &node;
+    }
+  }
+  if (fallback_port_node) {
+    return fallback_port_node;
   }
 
   return nullptr;
@@ -601,9 +650,10 @@ std::vector<RctEdge*> RcTree::getWireTopo(const char* to_node_name) {
 
   get_topo_edge(nullptr, _root);
 
-  LOG_FATAL_IF((wire_topo.empty() ||
-                (*wire_topo.begin())->_to.get_name() != to_node_name))
-      << "not found to node name " << to_node_name;
+  if (wire_topo.empty() || (*wire_topo.begin())->_to.get_name() != to_node_name) {
+    LOG_WARNING << "not found to node name " << to_node_name;
+    return {};
+  }
 
   return wire_topo;
 }
@@ -1495,9 +1545,10 @@ std::vector<RctEdge*> RcNet::getWireTopo(const char* to_node_name) {
   auto* rc_tree = rct();
   get_topo_edge(nullptr, rc_tree->_root);
 
-  LOG_FATAL_IF((wire_topo.empty() ||
-               (*wire_topo.begin())->_to.get_name() != to_node_name))
-      << "not found to node name " << to_node_name;
+  if (wire_topo.empty() || (*wire_topo.begin())->_to.get_name() != to_node_name) {
+    LOG_WARNING << "not found to node name " << to_node_name;
+    return {};
+  }
 
   return wire_topo;
 }

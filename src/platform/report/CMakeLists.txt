@@ -9,6 +9,7 @@ add_subdirectory(report_drc)
 
 add_library(ieda_report
   report_manager.cpp
+  quality_gate.cpp
 )
 
 target_link_libraries(ieda_report 
@@ -24,4 +25,5 @@ target_link_libraries(ieda_report
 target_include_directories(ieda_report 
     PUBLIC 
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${HOME_THIRDPARTY}/json
 )

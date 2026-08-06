@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iterator>
+#include <map>
 #include <set>
 #include <string>
 #include <utility>
@@ -27,6 +28,7 @@ struct DRIterationState
   int64_t violation_score = 0;
   double total_wire_length = 0.0;
   int32_t total_via_num = 0;
+  std::map<std::string, int32_t> violation_type_count_map;
   std::set<std::string> hotspot_set;
 };
 

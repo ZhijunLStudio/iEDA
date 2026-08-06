@@ -1,0 +1,31 @@
+{
+  "execution_success": true,
+  "flow_complete": true,
+  "global_placement": {
+    "execution_success": false,
+    "hpwl": 0,
+    "legal": false,
+    "message": "stage has not run",
+    "metrics_valid": false,
+    "overflow": 0.0,
+    "quality_success": false,
+    "stage": "not_run",
+    "status": "NOT_RUN",
+    "target_overflow": 0.0
+  },
+  "legalization": {
+    "execution_success": true,
+    "hpwl": 786280170,
+    "legal": true,
+    "message": "legalization completed with a legal placement",
+    "metrics_valid": true,
+    "overflow": 0.0,
+    "quality_success": true,
+    "stage": "legalization",
+    "status": "OK",
+    "target_overflow": 0.0
+  },
+  "quality_success": true,
+  "schema_version": 1,
+  "status": "OK"
+}

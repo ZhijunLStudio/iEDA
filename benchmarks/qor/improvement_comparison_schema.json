@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0",
+  "description": "Schema for comparing iRT improvement effects across multiple runs",
+  "comparison_types": {
+    "before_after": {
+      "description": "Single improvement before/after comparison",
+      "required_fields": ["baseline_run", "improved_run", "improvement_id"]
+    },
+    "multi_variant": {
+      "description": "Multi-variant horizontal comparison",
+      "required_fields": ["variants", "common_config"]
+    }
+  },
+  "metrics": {
+    "convergence": {
+      "routing_completed": {
+        "type": "boolean",
+        "description": "Whether routing completed successfully"
+      },
+      "boxes_completed": {
+        "type": "string",
+        "format": "int/total",
+        "example": "144/324"
+      },
+      "iterations_completed": {
+        "type": "string",
+        "format": "int/max",
+        "example": "3/9"
+      },
+      "final_violations": {
+        "type": "integer",
+        "description": "Final DRC violation count"
+      },
+      "violation_trend": {
+        "type": "array",
+        "items": "integer",
+        "description": "Violation counts per checkpoint"
+      }
+    },
+    "quality": {
+      "drc_count": {
+        "type": "integer",
+        "description": "Total DRC violations"
+      },
+      "wirelength_um": {
+        "type": "float",
+        "description": "Total wirelength in micrometers"
+      },
+      "via_count": {
+        "type": "integer",
+        "description": "Total via count"
+      },
+      "setup_wns_ns": {
+        "type": "float",
+        "description": "Setup worst negative slack in nanoseconds"
+      },
+      "hold_wns_ns": {
+        "type": "float",
+        "description": "Hold worst negative slack in nanoseconds"
+      }
+    },
+    "performance": {
+      "wall_time_sec": {
+        "type": "float",
+        "description": "Wall clock time in seconds"
+      },
+      "cpu_time_sec": {
+        "type": "float",
+        "description": "CPU time in seconds"
+      },
+      "peak_memory_mb": {
+        "type": "float",
+        "description": "Peak memory usage in megabytes"
+      },
+      "memory_trend": {
+        "type": "array",
+        "items": "float",
+        "description": "Memory usage per checkpoint in MB"
+      }
+    },
+    "stability": {
+      "exit_code": {
+        "type": "integer",
+        "description": "Process exit code"
+      },
+      "termination_reason": {
+        "type": "string",
+        "enum": ["completed", "plateau", "oom", "timeout", "error"]
+      },
+      "plateau_detected": {
+        "type": "boolean",
+        "description": "Whether plateau was detected"
+      },
+      "oom_occurred": {
+        "type": "boolean",
+        "description": "Whether out-of-memory occurred"
+      }
+    }
+  },
+  "environment_variables": {
+    "IEDA_RT_INITIAL_BOX_SIZE": "int (12, 24, 48)",
+    "IEDA_RT_ENABLE_ESCALATION": "bool (0, 1)",
+    "IEDA_RT_DESIGN_UTILIZATION": "float (0.0-1.0)",
+    "IEDA_RT_PLATEAU_CHECK_INTERVAL": "int",
+    "IEDA_RT_PLATEAU_EXPLOSION_THRESHOLD": "float",
+    "IEDA_RT_MAX_MEMORY_MB": "int",
+    "IEDA_RT_MAX_ITERATIONS": "int"
+  }
+}

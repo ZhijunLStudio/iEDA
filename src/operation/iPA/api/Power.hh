@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "ActivityProvenance.hh"
 #include "core/PwrAnalysisData.hh"
 #include "core/PwrGraph.hh"

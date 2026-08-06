@@ -268,6 +268,12 @@ nlohmann::json Config::getDataByJson(nlohmann::json value, std::vector<std::stri
 
 void Config::checkConfig()
 {
+  float target_density = _nes_config.get_target_density();
+  LOG_FATAL_IF(target_density <= 0.0 || target_density >= 1.0)
+    << "Invalid GP target_density: " << target_density << " (must be in (0,1)).";
+
+  LOG_WARNING_IF(target_density < 0.6) << "iPL GP target_density=" << target_density << " is below 0.60; floorplan utilization may remain too loose.";
+  LOG_WARNING_IF(target_density > 0.90) << "iPL GP target_density=" << target_density << " is above 0.90; overflow risk may increase.";
 }
 
 void Config::printConfig()

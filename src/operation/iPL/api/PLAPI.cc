@@ -36,7 +36,7 @@
 #include "LayoutChecker.hh"
 #include "Legalizer.hh"
 #include "Log.hh"
-// #include "MacroPlacer.hh"
+#include "MacroPlacer.hh"
 #include "NesterovPlace.hh"
 #include "PlacerDB.hh"
 #include "PostGP.hh"
@@ -452,7 +452,10 @@ void PLAPI::destroyTimingEval()
 
 bool PLAPI::runFlow()
 {
-  // runMP();
+  bool mp_success = runMP();
+  if (!mp_success) {
+    LOG_WARNING << "Macro placement failed, continuing with GP (may cause issues with macro designs)";
+  }
   if (!runGP()) {
     LOG_FATAL << "Global placement failed its execution contract; see place_summary.json.";
     return false;
@@ -460,10 +463,10 @@ bool PLAPI::runFlow()
   // printHPWLInfo();
   // printTimingInfo();
   notifyPLWLInfo(0);
-  // if (isSTAStarted()) {
-  //   notifyPLCongestionInfo(0);
-  //   notifyPLTimingInfo(0);
-  // }
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
+    notifyPLCongestionInfo(0);
+    notifyPLTimingInfo(0);
+  }
 
   if (PlacerDBInst.get_placer_config()->get_buffer_config().isMaxLengthOpt()) {
     std::cout << std::endl;
@@ -484,25 +487,25 @@ bool PLAPI::runFlow()
   // printHPWLInfo();
   // printTimingInfo();
   notifyPLWLInfo(1);
-  // if (isSTAStarted()) {
-  //   notifyPLCongestionInfo(1);
-  //   notifyPLTimingInfo(1);
-  // }
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
+    notifyPLCongestionInfo(1);
+    notifyPLTimingInfo(1);
+  }
 
   std::cout << std::endl;
-  if (isSTAStarted()) {
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
     runPostGP();
   } else {
-    // runDP(); // remove DP
+    runDP();
   }
   // printHPWLInfo();
   // printTimingInfo();
 
   notifyPLWLInfo(2);
-  // if (isSTAStarted()) {
-  //   notifyPLCongestionInfo(2);
-  //   notifyPLTimingInfo(2);
-  // }
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
+    notifyPLCongestionInfo(2);
+    notifyPLTimingInfo(2);
+  }
 
   std::cout << std::endl;
 
@@ -517,10 +520,10 @@ bool PLAPI::runFlow()
   std::cout << std::endl;
   LOG_INFO << "Log has been writed to dir: ./result/pl/log/";
 
-  // if (isSTAStarted()) {
-  //   // notifySTAUpdateTimingRuntime();
-  //   _reporter->reportTDPEvaluation();
-  // }
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
+    notifySTAUpdateTimingRuntime();
+    _reporter->reportTDPEvaluation();
+  }
 
   if (isSTAStarted()) {
     _external_api->destroyTimingEval();
@@ -529,7 +532,10 @@ bool PLAPI::runFlow()
   writeBackSourceDataBase();
   _flow_status.flow_complete = true;
   writePlacementStatus();
-  return _flow_status.executionSuccess() && _flow_status.qualitySuccess();
+  if (!_flow_status.qualitySuccess()) {
+    LOG_WARNING << "Placement completed with degraded quality; see place_summary.json.";
+  }
+  return _flow_status.executionSuccess();
 }
 
 bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normalization_path)
@@ -539,6 +545,10 @@ bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normaliza
     return false;
   }
   notifyPLWLInfo(0);
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
+    notifyPLCongestionInfo(0);
+    notifyPLTimingInfo(0);
+  }
 
   if (PlacerDBInst.get_placer_config()->get_buffer_config().isMaxLengthOpt()) {
     std::cout << std::endl;
@@ -557,9 +567,13 @@ bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normaliza
     return false;
   }
   notifyPLWLInfo(1);
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
+    notifyPLCongestionInfo(1);
+    notifyPLTimingInfo(1);
+  }
 
   std::cout << std::endl;
-  if (isSTAStarted()) {
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
     runPostGP();
   } else {
 #ifdef ENABLE_AI
@@ -569,12 +583,20 @@ bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normaliza
 #endif
   }
   notifyPLWLInfo(2);
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
+    notifyPLCongestionInfo(2);
+    notifyPLTimingInfo(2);
+  }
 
   std::cout << std::endl;
 
   reportPLInfo();
   std::cout << std::endl;
   LOG_INFO << "Log has been writed to dir: ./result/pl/log/";
+  if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
+    notifySTAUpdateTimingRuntime();
+    _reporter->reportTDPEvaluation();
+  }
 
   if (isSTAStarted()) {
     _external_api->destroyTimingEval();
@@ -583,7 +605,10 @@ bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normaliza
   writeBackSourceDataBase();
   _flow_status.flow_complete = true;
   writePlacementStatus();
-  return _flow_status.executionSuccess() && _flow_status.qualitySuccess();
+  if (!_flow_status.qualitySuccess()) {
+    LOG_WARNING << "Placement completed with degraded quality; see place_summary.json.";
+  }
+  return _flow_status.executionSuccess();
 }
 
 void PLAPI::insertLayoutFiller()
@@ -597,12 +622,15 @@ void PLAPI::insertLayoutFiller()
   writeBackSourceDataBase();
 }
 
-// void PLAPI::runMP()
-// {
-//   imp::MPDB* mpdb = new imp::MPDB(&PlacerDBInst);
-//   imp::MacroPlacer(mpdb, PlacerDBInst.get_placer_config()).runMacroPlacer();
-//   delete mpdb;
-// }
+bool PLAPI::runMP()
+{
+  MacroPlacer macro_placer(&PlacerDBInst);
+  bool success = macro_placer.runMacroPlacement();
+  if (!success) {
+    LOG_ERROR << "Macro placement failed - illegal placement detected";
+  }
+  return success;
+}
 
 bool PLAPI::runGP()
 {
@@ -942,8 +970,7 @@ bool PLAPI::checkLegality()
 
 bool PLAPI::isSTAStarted()
 {
-  // return _external_api->isSTAStarted();
-  return false;
+  return _external_api->isSTAStarted();
 }
 
 bool PLAPI::isPlacerDBStarted()

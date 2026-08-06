@@ -1,0 +1,726 @@
+{
+  "timestamp": "2026-07-30T09:59:07.383467",
+  "schema_version": "1.0",
+  "utilization": 0.35,
+  "target_utilization": 0.7,
+  "protocol_version": "1.1",
+  "protocol_id": "aes13-commercial-parity-v1.1",
+  "designs": [
+    {
+      "name": "aes_asap7_a",
+      "pdk": "asap7",
+      "strategy": "a",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_asap7_a/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": -1491.028,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -819.877,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 1493.528,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 49392.414,
+          "flute_um": 56956.089,
+          "egr_um": 57032.0
+        },
+        "drc": {
+          "total": 13423,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 3820.924,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 0.0,
+          "vertical_total": 0.0,
+          "union_total": 0.0,
+          "horizontal_max": 0.0,
+          "vertical_max": 0.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_asap7_b",
+      "pdk": "asap7",
+      "strategy": "b",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_asap7_b/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": -1491.028,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -819.877,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 1493.528,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 51088.693,
+          "flute_um": 58655.202,
+          "egr_um": 58717.0
+        },
+        "drc": {
+          "total": 13929,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 3898.689,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 0.0,
+          "vertical_total": 0.0,
+          "union_total": 0.0,
+          "horizontal_max": 0.0,
+          "vertical_max": 0.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_asap7_t",
+      "pdk": "asap7",
+      "strategy": "t",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_asap7_t/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": -1491.028,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -819.877,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 1493.528,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 53254.227,
+          "flute_um": 60827.261,
+          "egr_um": 60838.0
+        },
+        "drc": {
+          "total": 14312,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 3968.908,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 0.0,
+          "vertical_total": 0.0,
+          "union_total": 0.0,
+          "horizontal_max": 0.0,
+          "vertical_max": 0.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_ics55_a",
+      "pdk": "ics55",
+      "strategy": "a",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_ics55_a/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": 0.845,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.105,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 1.612,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 204096.529,
+          "flute_um": 239465.433,
+          "egr_um": 238615.0
+        },
+        "drc": {
+          "total": 1726,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 1432.547,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 40642.0,
+          "vertical_total": 10299.0,
+          "union_total": 50941.0,
+          "horizontal_max": 36.0,
+          "vertical_max": 36.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_ics55_b",
+      "pdk": "ics55",
+      "strategy": "b",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_ics55_b/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": 0.845,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.105,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 1.612,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 210603.621,
+          "flute_um": 245311.777,
+          "egr_um": 244375.0
+        },
+        "drc": {
+          "total": 1917,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 1533.242,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 41110.0,
+          "vertical_total": 9803.0,
+          "union_total": 50913.0,
+          "horizontal_max": 36.0,
+          "vertical_max": 26.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_ics55_t",
+      "pdk": "ics55",
+      "strategy": "t",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_ics55_t/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": 0.845,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.105,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 1.612,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 218992.853,
+          "flute_um": 253696.36,
+          "egr_um": 252895.0
+        },
+        "drc": {
+          "total": 2201,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 1618.282,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 38694.0,
+          "vertical_total": 11216.0,
+          "union_total": 49910.0,
+          "horizontal_max": 34.0,
+          "vertical_max": 36.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_nangate45_a",
+      "pdk": "nangate45",
+      "strategy": "a",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_nangate45_a/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": 1.38,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.14,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 1.079,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 152493.4565,
+          "flute_um": 178228.869,
+          "egr_um": 177578.0
+        },
+        "drc": {
+          "total": 18033,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 5689.341,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 547.0,
+          "vertical_total": 4707.0,
+          "union_total": 5254.0,
+          "horizontal_max": 18.0,
+          "vertical_max": 26.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_nangate45_b",
+      "pdk": "nangate45",
+      "strategy": "b",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_nangate45_b/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": 1.38,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.14,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 1.079,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 157978.115,
+          "flute_um": 183554.6475,
+          "egr_um": 182967.0
+        },
+        "drc": {
+          "total": 18395,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 5783.163,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 587.0,
+          "vertical_total": 5235.0,
+          "union_total": 5822.0,
+          "horizontal_max": 13.0,
+          "vertical_max": 24.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_nangate45_t",
+      "pdk": "nangate45",
+      "strategy": "t",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_nangate45_t/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": 1.38,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.14,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 1.079,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 165500.524,
+          "flute_um": 190694.1495,
+          "egr_um": 190141.0
+        },
+        "drc": {
+          "total": 21562,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 6277.513,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 655.0,
+          "vertical_total": 5725.0,
+          "union_total": 6380.0,
+          "horizontal_max": 14.0,
+          "vertical_max": 26.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_sky130_b",
+      "pdk": "sky130",
+      "strategy": "b",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_sky130_b/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": -2.299,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.084,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 4.651,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 347519.234,
+          "flute_um": 412410.326,
+          "egr_um": 413683.0
+        },
+        "drc": {
+          "total": 158333,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 5142.8,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 99856.0,
+          "vertical_total": 93291.0,
+          "union_total": 193147.0,
+          "horizontal_max": 48.0,
+          "vertical_max": 46.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_sky130_t",
+      "pdk": "sky130",
+      "strategy": "t",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes11-functional-parallel-20260725-rv2.3/aes_sky130_t/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": -2.299,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.084,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 4.651,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 362690.899,
+          "flute_um": 427301.444,
+          "egr_um": 428770.0
+        },
+        "drc": {
+          "total": 161582,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 5205.56,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 102868.0,
+          "vertical_total": 92574.0,
+          "union_total": 195442.0,
+          "horizontal_max": 46.0,
+          "vertical_max": 44.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes",
+      "pdk": "sky130",
+      "strategy": "baseline",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes13-final-20260724-rv2.3/aes/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": -2.299,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.084,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 4.651,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 347519.234,
+          "flute_um": 412410.326,
+          "egr_um": 413683.0
+        },
+        "drc": {
+          "total": 158333,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 5404.562,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 99856.0,
+          "vertical_total": 93291.0,
+          "union_total": 193147.0,
+          "horizontal_max": 48.0,
+          "vertical_max": 46.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    },
+    {
+      "name": "aes_sky130_a",
+      "pdk": "sky130",
+      "strategy": "a",
+      "status": "fail",
+      "quality_file": "/home/lxq/AiEDA/iEDA.ai/benchmarks/results/aes13-final-20260724-rv2.3/aes_sky130_a/quality_summary.json",
+      "metrics": {
+        "timing": {
+          "setup_wns_ns": -2.299,
+          "setup_tns_ns": null,
+          "hold_wns_ns": -0.084,
+          "hold_tns_ns": null,
+          "worst_path_delay_ns": 4.651,
+          "unconstrained_endpoint_count": 0
+        },
+        "physical": {
+          "hpwl_um": 337403.682,
+          "flute_um": 400563.571,
+          "egr_um": 401488.0
+        },
+        "drc": {
+          "total": 166251,
+          "short": null,
+          "min_spacing": null,
+          "min_area": null
+        },
+        "power": {
+          "total_w": null,
+          "switch_w": null,
+          "internal_w": null,
+          "leakage_w": null
+        },
+        "performance": {
+          "routing_runtime_sec": 5515.461,
+          "routing_iterations": 1
+        },
+        "congestion": {
+          "horizontal_total": 98763.0,
+          "vertical_total": 100715.0,
+          "union_total": 199478.0,
+          "horizontal_max": 54.0,
+          "vertical_max": 52.0
+        },
+        "structure": {
+          "cell_count": null,
+          "cell_area_um2": null,
+          "die_area": null,
+          "core_area": null,
+          "target_utilization": null
+        }
+      }
+    }
+  ],
+  "summary": {
+    "total_designs": 13,
+    "success_count": 13,
+    "success_rate": 1.0,
+    "drc_clean_count": 0,
+    "drc_clean_rate": 0.0,
+    "avg_drc_count": 57692.07692307692,
+    "setup_wns_worst_ns": -1491.028,
+    "setup_wns_best_ns": 1.38,
+    "hold_wns_worst_ns": -819.877,
+    "hold_wns_best_ns": -0.084,
+    "pdks": [
+      "asap7",
+      "ics55",
+      "sky130",
+      "nangate45"
+    ],
+    "strategies": [
+      "a",
+      "baseline",
+      "t",
+      "b"
+    ]
+  },
+  "provenance": {
+    "binary_sha256": "1e80b4f4f39de8dacd46220fdfdeb923de44455c4a6f0ed0736713c6d034a80d",
+    "git_commit": "1ca482dfa228bf3d11ac29680c346eecb8fe0cef",
+    "dirty": true,
+    "protocol_sha256": "d308cd8d6ad5b53c67260811f273bded3c0f91695a1911d293d9fd82425de789",
+    "build_manifest_sha256": "bbdceb6363cc95a3b5a046bc8701db86e94381ba043a8f59186af2430b8b0c71",
+    "hardware_manifest_sha256": "09f1e02f169080c883ea9f032bf808f4a9045b8da422790af46e42c0674d8d79"
+  },
+  "notes": [
+    "This baseline represents 70% target utilization runs (documented as '35% baseline' in master plan)",
+    "All 13 configurations executed successfully end-to-end",
+    "None achieved DRC-clean status (G11 gate: fail)",
+    "Timing data lacks SPEF backing (G7 gate: fail)",
+    "Power data unavailable without VCD/SAIF (G9 gate: not_run)",
+    "Performance data is observational only (not comparable per G21)"
+  ]
+}

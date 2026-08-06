@@ -23,6 +23,7 @@
  */
 #include "PwrCalcToggleSP.hh"
 
+#include <cmath>
 #include <ranges>
 #include <string>
 
@@ -351,12 +352,15 @@ unsigned PwrCalcToggleSP::calcToggleSP(
     // If the_src_pwr_vertex calc toggle is zero, set output vertex as vdd const
     // or gnd const.
     if (toggle_data == 0) {
-      output_vertex->set_is_const();
-      LOG_FATAL_IF(sp_data != 0 && sp_data != 1) << "calc error.";
-      if (sp_data == 0) {
+      if (std::abs(sp_data) < 1e-12) {
+        output_vertex->set_is_const();
         output_vertex->set_is_const_gnd();
-      } else {
+      } else if (std::abs(sp_data - 1.0) < 1e-12) {
+        output_vertex->set_is_const();
         output_vertex->set_is_const_vdd();
+      } else {
+        LOG_WARNING << "zero toggle with non-constant SP " << sp_data
+                    << " at output vertex " << output_vertex->getName();
       }
     }
   }

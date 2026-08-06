@@ -172,6 +172,34 @@ def parse_drc(report_path: Path) -> int | None:
     return sum(map(int, rows)) if rows else None
 
 
+def load_congestion_summary(result_dir: Path) -> dict[str, dict[str, float | int]] | None:
+    summary_path = result_dir / "congestion_summary.json"
+    if not summary_path.is_file():
+        return None
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if payload.get("schema") != "C-CONG" or not payload.get("valid"):
+        return None
+    maps = payload.get("maps") or {}
+    parsed: dict[str, dict[str, float | int]] = {}
+    for direction in ("horizontal", "vertical", "union"):
+        node = maps.get(direction)
+        if not isinstance(node, dict):
+            return None
+        parsed[direction] = {
+            "bin_count": int(node.get("bin_count", 0)),
+            "total": float(node.get("total", 0.0)),
+            "max": float(node.get("max", 0.0)),
+            "mean": float(node.get("mean", 0.0)),
+            "top_1_pct_mean": float(node.get("top_1_pct_mean", 0.0)),
+            "top_5_pct_mean": float(node.get("top_5_pct_mean", 0.0)),
+            "nonzero_bin_pct": float(node.get("nonzero_bin_pct", 0.0)),
+        }
+    return parsed
+
+
 def parse_overflow_csv(path: Path) -> dict[str, float | int]:
     values: list[float] = []
     with path.open(newline="", encoding="utf-8") as stream:
@@ -359,14 +387,20 @@ def build_quality_summary(
         )
 
     congestion_valid = True
+    summary_maps = load_congestion_summary(result_dir)
     for direction in ("horizontal", "vertical", "union"):
         map_path = result_dir / "egr_congestion_map" / f"place_egr_{direction}_overflow.csv"
         try:
-            summary = parse_overflow_csv(map_path)
+            if summary_maps is not None:
+                summary = summary_maps[direction]
+                provenance = str((result_dir / "congestion_summary.json").resolve())
+            else:
+                summary = parse_overflow_csv(map_path)
+                provenance = str(map_path.resolve())
             for key, value in summary.items():
                 unit = "percent" if key.endswith("pct") else ("count" if key == "bin_count" else "overflow")
-                metrics[f"congestion.{direction}.{key}"] = metric(value, unit, str(map_path.resolve()))
-        except (OSError, ValueError) as exc:
+                metrics[f"congestion.{direction}.{key}"] = metric(value, unit, provenance)
+        except (OSError, ValueError, KeyError) as exc:
             congestion_valid = False
             for key in ("bin_count", "total", "max", "mean", "top_1_pct_mean", "top_5_pct_mean", "nonzero_bin_pct"):
                 unit = "percent" if key.endswith("pct") else ("count" if key == "bin_count" else "overflow")

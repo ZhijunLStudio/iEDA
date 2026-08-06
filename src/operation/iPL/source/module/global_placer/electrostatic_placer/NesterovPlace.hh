@@ -135,6 +135,7 @@ class NesterovPlace
 
   void updateMaxLengthNetWeight();
   void updateTimingNetWeight();
+  void inflateInstancesByRouteUtil(std::vector<NesInstance*>& inst_list);
 
   // DEBUG.
   void printAcrossLongNet(std::ofstream& file_stream, int32_t max_width, int32_t max_height);

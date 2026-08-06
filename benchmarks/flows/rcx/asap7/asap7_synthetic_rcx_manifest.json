@@ -1,0 +1,118 @@
+{
+  "schema": "synthetic-rcx/v1",
+  "trusted": false,
+  "pdk": "asap7",
+  "tech_lef": "/home/lxq/AiEDA/Foundary/asap7/lef/asap7_tech_1x_201209.lef",
+  "mapping": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/asap7/layer_mapping.txt",
+  "itf": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/asap7/asap7.itf",
+  "captab": "/home/lxq/AiEDA/iEDA.ai/benchmarks/flows/rcx/asap7/asap7.captab",
+  "routing_layers": [
+    {
+      "name": "M1",
+      "width": 0.018,
+      "spacing": 0.018,
+      "rpsq": 0.25,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "M2",
+      "width": 0.018,
+      "spacing": 0.018,
+      "rpsq": 0.25,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "M3",
+      "width": 0.018,
+      "spacing": 0.018,
+      "rpsq": 0.25,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "M4",
+      "width": 0.024,
+      "spacing": 0.024,
+      "rpsq": 0.25,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "M5",
+      "width": 0.024,
+      "spacing": 0.024,
+      "rpsq": 0.25,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "M6",
+      "width": 0.032,
+      "spacing": 0.032,
+      "rpsq": 0.25,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "M7",
+      "width": 0.032,
+      "spacing": 0.032,
+      "rpsq": 0.25,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "M8",
+      "width": 0.04,
+      "spacing": 0.1,
+      "rpsq": 0.25,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    },
+    {
+      "name": "M9",
+      "width": 0.04,
+      "spacing": 0.1,
+      "rpsq": 0.25,
+      "cpersqdist": 2e-05,
+      "edgecap": 2e-05
+    }
+  ],
+  "via_layers": [
+    {
+      "name": "V1",
+      "resistance": 5.0
+    },
+    {
+      "name": "V2",
+      "resistance": 5.0
+    },
+    {
+      "name": "V3",
+      "resistance": 5.0
+    },
+    {
+      "name": "V4",
+      "resistance": 5.0
+    },
+    {
+      "name": "V5",
+      "resistance": 5.0
+    },
+    {
+      "name": "V6",
+      "resistance": 5.0
+    },
+    {
+      "name": "V7",
+      "resistance": 5.0
+    },
+    {
+      "name": "V8",
+      "resistance": 5.0
+    }
+  ],
+  "note": "Synthetic ITF/captab for iEDA extraction smoke only; not foundry signoff data."
+}

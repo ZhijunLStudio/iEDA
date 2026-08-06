@@ -1,0 +1,20 @@
+# iRCX layer mapping: <design_layer> <process_layer>
+# Synthetic smoke mapping for ASAP7 routing stack.
+# Generated ITF/captab from this mapping is untrusted and not foundry signoff RC.
+M1 M1
+V1 V1
+M2 M2
+V2 V2
+M3 M3
+V3 V3
+M4 M4
+V4 V4
+M5 M5
+V5 V5
+M6 M6
+V6 V6
+M7 M7
+V7 V7
+M8 M8
+V8 V8
+M9 M9

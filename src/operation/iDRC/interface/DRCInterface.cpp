@@ -18,6 +18,9 @@
 #include "DRCInterface.hpp"
 
 #include <array>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 
 #include "AdjacentCutSpacingRule.hpp"
 #include "DataManager.hpp"
@@ -131,6 +134,7 @@ void DRCInterface::checkDef()
   }
   printSummary(type_violation_map);
   outputViolationJson(type_violation_map);
+  outputCVioJson(type_violation_map);
   outputViolationFile(type_violation_map);
   outputTofeature(type_violation_map);
 
@@ -387,6 +391,14 @@ void DRCInterface::wrapConfig(std::map<std::string, std::any>& config_map)
   DRCDM.getConfig().temp_directory_path = DRCUTIL.getConfigValue<std::string>(config_map, "-temp_directory_path", "./drc_temp_directory");
   DRCDM.getConfig().thread_number = DRCUTIL.getConfigValue<int32_t>(config_map, "-thread_number", 128);
   DRCDM.getConfig().rule_coverage_table_path = DRCUTIL.getConfigValue<std::string>(config_map, "-rule_coverage_table", "");
+  DRCDM.getConfig().enable_c_vio_json = DRCUTIL.getConfigValue<int32_t>(config_map, "-enable_c_vio_json", 0);
+  DRCDM.getConfig().c_vio_json_path = DRCUTIL.getConfigValue<std::string>(config_map, "-c_vio_json_path", "");
+  if (const char* env = std::getenv("IEDA_DRC_ENABLE_C_VIO"); env != nullptr && env[0] != '\0') {
+    DRCDM.getConfig().enable_c_vio_json = (std::string(env) == "1" || std::string(env) == "true" || std::string(env) == "TRUE") ? 1 : 0;
+  }
+  if (const char* env_path = std::getenv("IEDA_DRC_C_VIO_PATH"); env_path != nullptr && env_path[0] != '\0') {
+    DRCDM.getConfig().c_vio_json_path = env_path;
+  }
   omp_set_num_threads(std::max(DRCDM.getConfig().thread_number, 1));
   /////////////////////////////////////////////
 }
@@ -1388,6 +1400,147 @@ void DRCInterface::outputViolationJson(std::map<std::string, std::vector<ids::Vi
   (*violation_json_file) << violation_json_list;
   DRCUTIL.closeFileStream(violation_json_file);
   outputRuleCoverageJson();
+}
+
+namespace {
+
+auto cVioCanonicalType(const std::string& type) -> std::string
+{
+  // RFC-20260730-C-VIO: unknown types map to other (never drop).
+  static const std::set<std::string> kKnown = {
+      "metal_short",
+      "parallel_run_length_spacing",
+      "minimum_area",
+      "nonsufficient_metal_overlap",
+  };
+  if (kKnown.count(type) != 0) {
+    return type;
+  }
+  return type.empty() ? "other" : type;
+}
+
+auto cVioSeverity(const std::string& type) -> double
+{
+  if (type == "metal_short") {
+    return 4.0;
+  }
+  if (type == "parallel_run_length_spacing" || type == "minimum_area") {
+    return 3.0;
+  }
+  if (type == "nonsufficient_metal_overlap") {
+    return 2.0;
+  }
+  return 1.0;
+}
+
+}  // namespace
+
+void DRCInterface::outputCVioJson(std::map<std::string, std::vector<ids::Violation>>& type_violation_map)
+{
+  if (DRCDM.getConfig().enable_c_vio_json == 0) {
+    return;
+  }
+
+  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  std::map<int32_t, std::vector<int32_t>>& cut_to_adjacent_routing_map = DRCDM.getDatabase().get_cut_to_adjacent_routing_map();
+
+  std::vector<idb::IdbNet*>& idb_net_list = dmInst->get_idb_def_service()->get_design()->get_net_list()->get_net_list();
+  std::vector<idb::IdbSpecialNet*>& idb_special_net_list = dmInst->get_idb_def_service()->get_design()->get_special_net_list()->get_net_list();
+  int32_t regular_net_num = static_cast<int32_t>(idb_net_list.size());
+  auto get_net_name = [&](int32_t net_idx, const std::string& obs_name) {
+    if (0 <= net_idx && net_idx < regular_net_num) {
+      return idb_net_list[net_idx]->get_net_name();
+    }
+    int32_t special_net_idx = net_idx - regular_net_num;
+    if (0 <= special_net_idx && special_net_idx < static_cast<int32_t>(idb_special_net_list.size())) {
+      return idb_special_net_list[special_net_idx]->get_net_name();
+    }
+    return obs_name;
+  };
+
+  nlohmann::json root;
+  root["schema"] = "c-vio/v0";
+  root["design"] = DRCDM.getDatabase().get_design_name();
+  root["rule_deck_hash"] = "unknown";
+  root["source"] = "idrc_check_def";
+
+  nlohmann::json violations = nlohmann::json::array();
+  nlohmann::json by_type = nlohmann::json::object();
+  nlohmann::json by_layer = nlohmann::json::object();
+  int32_t total = 0;
+  int32_t id_counter = 0;
+
+  for (auto& [type, violation_list] : type_violation_map) {
+    const std::string canon = cVioCanonicalType(type);
+    for (ids::Violation& violation : violation_list) {
+      int32_t layer_idx = violation.layer_idx;
+      if (!violation.is_routing) {
+        std::vector<int32_t>& routing_layer_idx_list = cut_to_adjacent_routing_map[layer_idx];
+        if (!routing_layer_idx_list.empty()) {
+          layer_idx = *std::min_element(routing_layer_idx_list.begin(), routing_layer_idx_list.end());
+        }
+      }
+      std::string layer_name = "unknown";
+      if (layer_idx >= 0 && layer_idx < static_cast<int32_t>(routing_layer_list.size())) {
+        layer_name = routing_layer_list[layer_idx].get_layer_name();
+      }
+
+      nlohmann::json item;
+      char id_buf[32];
+      std::snprintf(id_buf, sizeof(id_buf), "v%06d", id_counter++);
+      item["id"] = id_buf;
+      item["type"] = canon;
+      item["layer"] = layer_name;
+      item["bbox"] = {violation.ll_x, violation.ll_y, violation.ur_x, violation.ur_y};
+      item["net_ids"] = nlohmann::json::array();
+      for (int32_t net_idx : violation.violation_net_set) {
+        item["net_ids"].push_back(get_net_name(net_idx, "obs"));
+      }
+      item["severity"] = cVioSeverity(canon);
+      item["source"] = "idrc_in_design";
+      violations.push_back(std::move(item));
+
+      by_type[canon] = by_type.value(canon, 0) + 1;
+      by_layer[layer_name] = by_layer.value(layer_name, 0) + 1;
+      total++;
+    }
+  }
+
+  root["violations"] = std::move(violations);
+  root["summary"] = {{"by_type", by_type}, {"by_layer", by_layer}, {"total", total}};
+  root["coverage"] = {{"checked", nlohmann::json(_last_rule_coverage.getChecked())},
+                      {"skipped", nlohmann::json(_last_rule_coverage.getSkipped())},
+                      {"unsupported", nlohmann::json(_last_rule_coverage.getUnsupported())}};
+
+  std::string out_path = DRCDM.getConfig().c_vio_json_path;
+  if (out_path.empty()) {
+    out_path = DRCUTIL.getString(DRCDM.getConfig().temp_directory_path, "c_vio.json");
+  }
+  const std::filesystem::path report_path(out_path);
+  const std::filesystem::path temporary_path = report_path.string() + ".tmp";
+  {
+    std::ofstream output(temporary_path, std::ios::trunc);
+    if (!output.is_open()) {
+      DRCLOG.warn(Loc::current(), "Cannot open C-VIO report: ", temporary_path.string());
+      return;
+    }
+    output << root.dump(2) << '\n';
+    output.flush();
+    if (!output) {
+      DRCLOG.warn(Loc::current(), "Cannot write C-VIO report: ", temporary_path.string());
+      return;
+    }
+  }
+  std::error_code error;
+  std::filesystem::remove(report_path, error);
+  error.clear();
+  std::filesystem::rename(temporary_path, report_path, error);
+  if (error) {
+    std::filesystem::remove(temporary_path);
+    DRCLOG.warn(Loc::current(), "Cannot publish C-VIO report: ", report_path.string(), ": ", error.message());
+    return;
+  }
+  DRCLOG.info(Loc::current(), "Wrote C-VIO JSON (", total, " violations) → ", report_path.string());
 }
 
 void DRCInterface::outputRuleCoverageJson()

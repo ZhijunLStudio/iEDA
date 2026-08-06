@@ -8,6 +8,6 @@
         "output_def": "./no/ino_result.def",
         "report_file": "./no/report.txt"
     },
-    "insert_buffer": "sky130_fd_sc_hs__buf_8",
+    "insert_buffer": "sky130_fd_sc_hd__buf_8",
     "max_fanout": 30
 }

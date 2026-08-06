@@ -38,6 +38,15 @@ class Config
   double dr_plateau_min_improvement = 0.02;  // optional
   double dr_plateau_hotspot_change = 0.25;   // optional
   int32_t fail_on_residual_drc = 0;          // optional
+  // WP-RT-01 levers (default OFF → zero regression / no A* cost change)
+  int32_t enable_plateau_escalate = 0;         // optional; env IEDA_RT_ENABLE_ESCALATION overrides
+  int32_t enable_rule_aware_cost = 0;          // optional; env IEDA_RT_RULE_AWARE_COST overrides
+  int32_t enable_enhanced_minarea_repair = 0;  // optional; env IEDA_RT_ENHANCED_MINAREA_REPAIR overrides
+  int32_t rule_aware_max_history_scale = 8;    // optional; caps A* violation history multiplier
+  // WP-RT-01b levers (default OFF)
+  int32_t enable_component_escalate = 0;   // optional; env IEDA_RT_COMPONENT_ESCALATE
+  int32_t enable_prl_short_repair = 0;     // optional; env IEDA_RT_PRL_SHORT_REPAIR
+  int32_t component_escalate_halo_pitch = 2;  // optional; halo = pitch * this
   /////////////////////////////////////////////
   // **********        RT         ********** //
   std::string log_file_path;         // building

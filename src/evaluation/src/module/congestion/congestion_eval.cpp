@@ -46,6 +46,10 @@ std::optional<std::filesystem::path> resolveOverflowMapPath(const std::string& r
   if (!feature_path.empty()) {
     candidates.push_back(std::filesystem::path(feature_path) / "egr_congestion_map" / file_name);
   }
+  const std::string& output_path = dmInst->get_config().get_output_path();
+  if (!output_path.empty() && output_path != getDefaultOutputPath()) {
+    candidates.push_back(std::filesystem::path(output_path) / "egr_congestion_map" / file_name);
+  }
 
   for (const auto& candidate : candidates) {
     std::error_code error;

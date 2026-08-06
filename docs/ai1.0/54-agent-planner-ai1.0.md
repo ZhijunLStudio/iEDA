@@ -1,9 +1,4 @@
-<!--
-Copyright (c) 2026-2030 Southeast University
-Copyright (c) 2026-2030 National Center of Technology Innovation for EDA
-iEDA is licensed under Mulan PSL v2.
--->
-# 54 · Agent Planner、Critic 与停止策略实施方案 · ai1.1
+54 · Agent Planner、Critic 与停止策略实施方案 · ai1.1
 
 > 当前成熟度：`D0/DRAFT`。`43` 明确 Runtime 不内置 LLM SDK；当前仓库未见独立 Planner。
 >
@@ -13,12 +8,12 @@ iEDA is licensed under Mulan PSL v2.
 
 Planner 是可替换的决策层，Runtime 是确定性执行/事务层：
 
-| Planner | Runtime |
-|---|---|
-| 解释 GoalSpec、选能力、形成 plan/proposal | 验 schema/权限/状态，运行 DAG |
-| 根据证据修改搜索策略 | fork/lease/budget/cancel/recovery |
-| 建议升级 fidelity 或停止 | 执行 router/policy，拒绝越权 |
-| 对候选给决策理由 | 根据证书和 policy commit |
+| Planner                                   | Runtime                           |
+| ----------------------------------------- | --------------------------------- |
+| 解释 GoalSpec、选能力、形成 plan/proposal | 验 schema/权限/状态，运行 DAG     |
+| 根据证据修改搜索策略                      | fork/lease/budget/cancel/recovery |
+| 建议升级 fidelity 或停止                  | 执行 router/policy，拒绝越权      |
+| 对候选给决策理由                          | 根据证书和 policy commit          |
 
 没有 Planner 也必须能用固定规则/搜索 baseline 完成 Timing Lab；LLM 不是架构前置依赖。
 
@@ -113,28 +108,28 @@ src/planner/
 
 ## 8. 安全与失败语义
 
-| 风险 | 确定性防线 |
-|---|---|
-| 幻觉工具/参数 | capability/schema validation |
-| 通过改 SDC 改善 WNS | GoalSpec 固定 IntentRef；R4 独立流 |
-| 无限反思/重试 | node/call/retry/budget hard limit |
-| 越 scope 动作 | Runtime lease + frozen certificate |
-| prompt/report injection | 结构化 adapter；外部文本标 untrusted data |
-| 选择 partial/unknown 候选 | Verification bundle policy |
-| 泄漏客户案例 | Experience tenant/family ACL |
+| 风险                      | 确定性防线                                |
+| ------------------------- | ----------------------------------------- |
+| 幻觉工具/参数             | capability/schema validation              |
+| 通过改 SDC 改善 WNS       | GoalSpec 固定 IntentRef；R4 独立流        |
+| 无限反思/重试             | node/call/retry/budget hard limit         |
+| 越 scope 动作             | Runtime lease + frozen certificate        |
+| prompt/report injection   | 结构化 adapter；外部文本标 untrusted data |
+| 选择 partial/unknown 候选 | Verification bundle policy                |
+| 泄漏客户案例              | Experience tenant/family ACL              |
 
 Planner 异常只使 plan 失败，不能使 branch 自动 commit。输出无法校验时返回 `INVALID_PLAN` 并保存 trace。
 
 ## 9. 里程碑
 
-| 阶段 | 交付 | 退出门禁 |
-|---|---|---|
+| 阶段            | 交付                         | 退出门禁                                |
+| --------------- | ---------------------------- | --------------------------------------- |
 | PLAN-A0（2 周） | GoalSpec/PlanGraph/validator | 未知能力、无界循环、缺 validator 全拒绝 |
-| PLAN-A1（3 周） | Timing ECO rule baseline | 10 cases 可重放，零 LLM 依赖 |
-| PLAN-A2（3 周） | critic/recovery/stop | 故障注入无无限重试/越权 |
-| PLAN-A3（4 周） | model-backed proposal/rank | held-out regret 优于或不差 baseline |
-| PLAN-A4（4 周） | experience-guided planning | 同预算 accepted-action rate 有统计改善 |
-| PLAN-A5（后续） | planner/critic 多角色 | 仅在成本收益证据后启用 |
+| PLAN-A1（3 周） | Timing ECO rule baseline     | 10 cases 可重放，零 LLM 依赖            |
+| PLAN-A2（3 周） | critic/recovery/stop         | 故障注入无无限重试/越权                 |
+| PLAN-A3（4 周） | model-backed proposal/rank   | held-out regret 优于或不差 baseline     |
+| PLAN-A4（4 周） | experience-guided planning   | 同预算 accepted-action rate 有统计改善  |
+| PLAN-A5（后续） | planner/critic 多角色        | 仅在成本收益证据后启用                  |
 
 ## 10. 测试与可杀假说
 

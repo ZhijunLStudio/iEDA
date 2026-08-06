@@ -369,6 +369,13 @@ void RTInterface::wrapConfig(std::map<std::string, std::any>& config_map)
   RTDM.getConfig().dr_plateau_min_improvement = RTUTIL.getConfigValue<double>(config_map, "-dr_plateau_min_improvement", 0.02);
   RTDM.getConfig().dr_plateau_hotspot_change = RTUTIL.getConfigValue<double>(config_map, "-dr_plateau_hotspot_change", 0.25);
   RTDM.getConfig().fail_on_residual_drc = RTUTIL.getConfigValue<int32_t>(config_map, "-fail_on_residual_drc", 0);
+  RTDM.getConfig().enable_plateau_escalate = RTUTIL.getConfigValue<int32_t>(config_map, "-enable_plateau_escalate", 0);
+  RTDM.getConfig().enable_rule_aware_cost = RTUTIL.getConfigValue<int32_t>(config_map, "-enable_rule_aware_cost", 0);
+  RTDM.getConfig().enable_enhanced_minarea_repair = RTUTIL.getConfigValue<int32_t>(config_map, "-enable_enhanced_minarea_repair", 0);
+  RTDM.getConfig().rule_aware_max_history_scale = RTUTIL.getConfigValue<int32_t>(config_map, "-rule_aware_max_history_scale", 8);
+  RTDM.getConfig().enable_component_escalate = RTUTIL.getConfigValue<int32_t>(config_map, "-enable_component_escalate", 0);
+  RTDM.getConfig().enable_prl_short_repair = RTUTIL.getConfigValue<int32_t>(config_map, "-enable_prl_short_repair", 0);
+  RTDM.getConfig().component_escalate_halo_pitch = RTUTIL.getConfigValue<int32_t>(config_map, "-component_escalate_halo_pitch", 2);
   if (RTDM.getConfig().dr_plateau_window < 2) {
     RTLOG.error(Loc::current(), "-dr_plateau_window must be at least 2!");
   }
@@ -377,6 +384,12 @@ void RTInterface::wrapConfig(std::map<std::string, std::any>& config_map)
   }
   if (RTDM.getConfig().dr_plateau_hotspot_change < 0.0 || RTDM.getConfig().dr_plateau_hotspot_change > 1.0) {
     RTLOG.error(Loc::current(), "-dr_plateau_hotspot_change must be in [0, 1]!");
+  }
+  if (RTDM.getConfig().rule_aware_max_history_scale < 1) {
+    RTLOG.error(Loc::current(), "-rule_aware_max_history_scale must be >= 1!");
+  }
+  if (RTDM.getConfig().component_escalate_halo_pitch < 1) {
+    RTLOG.error(Loc::current(), "-component_escalate_halo_pitch must be >= 1!");
   }
   /////////////////////////////////////////////
 }
