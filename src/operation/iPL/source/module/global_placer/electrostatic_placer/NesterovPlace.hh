@@ -37,33 +37,11 @@
 
 #include "Config.hh"
 #include "Log.hh"
+#include "NesterovPlaceContract.hh"
 #include "PlacerDB.hh"
 #include "config/NesterovPlaceConfig.hh"
 #include "database/NesterovDatabase.hh"
 namespace ipl {
-
-enum class NesterovPlaceOutcome
-{
-  kNotRun,
-  kConverged,
-  kDiverged,
-  kMaxIter,
-  kInvalidMetric,
-  kOverflowTargetMiss,
-};
-
-struct NesterovIterationRecord
-{
-  int32_t iter = 0;
-  int64_t hpwl = 0;
-  float overflow = 0.0f;
-  float step_length = 0.0f;
-  float gradient_norm = 0.0f;
-  float density_penalty = 0.0f;
-  float route_util = 0.0f;
-  bool quad_penalty_enabled = false;
-  bool entropy_injected = false;
-};
 
 struct NesterovPlaceResult
 {
@@ -111,7 +89,7 @@ class NesterovPlace
   float _quad_penalty_coeff = 0.005;
   int64_t _total_inst_area = 0;
   bool _enable_json_output = false;
-    int32_t _global_right_padding = 0;
+  int32_t _global_right_padding = 0;
 
   void resetOverflowRecordList();
   void resetHPWLRecordList();

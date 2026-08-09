@@ -121,6 +121,14 @@ target_include_directories(
 )
 add_test(NAME ipl_nesterov_place_config_test COMMAND ipl_nesterov_place_config_test)
 
+add_executable(ipl_nesterov_contract_test NesterovContractTest.cc)
+target_include_directories(
+  ipl_nesterov_contract_test
+  PRIVATE
+    ${iPL_SOURCE}
+)
+add_test(NAME ipl_nesterov_contract_test COMMAND ipl_nesterov_contract_test)
+
 add_executable(ipl_config_validation_test ConfigValidationTest.cc)
 target_link_libraries(ipl_config_validation_test PRIVATE ipl-configurator ipl-module-logger)
 target_include_directories(ipl_config_validation_test PRIVATE ${iPL_SOURCE})
@@ -141,6 +149,17 @@ target_include_directories(
     ${iPL_SOURCE}/module/topology_manager
 )
 add_test(NAME ipl_hpwirelength_test COMMAND ipl_hpwirelength_test)
+
+add_executable(ipl_wa_wirelength_gradient_test WAWirelengthGradientTest.cc)
+target_link_libraries(ipl_wa_wirelength_gradient_test PRIVATE ipl_module_evaluator_wirelength ipl-module-topology_manager)
+target_include_directories(
+  ipl_wa_wirelength_gradient_test
+  PRIVATE
+    ${iPL_SOURCE}
+    ${iPL_SOURCE}/module/evaluator/wirelength
+    ${iPL_SOURCE}/module/topology_manager
+)
+add_test(NAME ipl_wa_wirelength_gradient_test COMMAND ipl_wa_wirelength_gradient_test)
 
 add_executable(ipl_nfspread_result_test NFSpreadResultTest.cc)
 target_include_directories(

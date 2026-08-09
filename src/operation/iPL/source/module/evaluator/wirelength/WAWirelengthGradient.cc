@@ -26,6 +26,8 @@
 
 #include "WAWirelengthGradient.hh"
 
+#include <cmath>
+
 #include "omp.h"
 #include "usage/usage.hh"
 
@@ -227,6 +229,9 @@ void WAWirelengthGradient::updateWirelengthForce(float coeff_x, float coeff_y, f
 
 void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coeff_y, float min_force_bar, int32_t thread_num, GridManager* grid_manager)
 {
+  if (grid_manager == nullptr) {
+    return;
+  }
   float util_max = std::max(grid_manager->get_h_util_max(), grid_manager->get_v_util_max());
   LOG_INFO << "Congestion Utilizaiton: horizontal_max = " << grid_manager->get_h_util_max() << ",  vertical_max = " << grid_manager->get_v_util_max();
 
@@ -272,8 +277,13 @@ void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coef
 
     float f_x = 0.f;
     float f_y = 0.f;
-    f_x = bin_util_h_max / util_max;
-    f_y = bin_util_v_max / util_max;
+    if (!std::isfinite(util_max) || util_max <= 0.0F) {
+      f_x = 0.0F;
+      f_y = 0.0F;
+    } else {
+      f_x = bin_util_h_max / util_max;
+      f_y = bin_util_v_max / util_max;
+    }
 
     double a = 1 + (f_x - f_y);
     double b = 1 - (f_x - f_y) * 1.5;

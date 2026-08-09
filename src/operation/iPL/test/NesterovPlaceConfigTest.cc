@@ -27,6 +27,14 @@ int main()
   std::string reason;
   ok &= require(cfg.validate(&reason), "default NesterovPlaceConfig must validate");
   ok &= require(reason.empty(), "valid config must not leave an error reason");
+  ok &= require(cfg.get_thread_num() == 1 && cfg.get_info_iter_num() == 10 && cfg.get_max_iter() == 250
+                    && cfg.get_max_back_track() == 10,
+                "default iteration controls must match the reviewed snapshot");
+  ok &= require(cfg.get_target_density() == 0.7F && cfg.get_target_overflow() == 0.1F
+                    && cfg.get_bin_cnt_x() == 16 && cfg.get_bin_cnt_y() == 16,
+                "default density controls must match the reviewed snapshot");
+  ok &= require(!cfg.isOptMaxWirelength() && !cfg.isOptTiming() && !cfg.isOptCongestion(),
+                "experimental GP optimization strategies must remain disabled by default");
 
   cfg.set_thread_num(0);
   ok &= require(!cfg.validate(&reason) && reason == "thread_num must be positive", "invalid thread count must fail validation");
