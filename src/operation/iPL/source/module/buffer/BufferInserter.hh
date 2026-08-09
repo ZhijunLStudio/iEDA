@@ -76,7 +76,7 @@ class BufferInserter
 
   void add_buffer_master_list(Cell* master) { _buffer_master_list.push_back(master); }
 
-  void runBufferInsertionForMaxWireLength();
+  bool runBufferInsertionForMaxWireLength();
 
  private:
   int32_t _buffer_cnt;

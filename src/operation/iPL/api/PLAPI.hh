@@ -27,6 +27,7 @@
 #define IPL_API_H
 
 #include "PlacementStatus.hh"
+#include "PlacementResult.hh"
 #include "external_api/ExternalAPI.hh"
 #include "report/PLReporter.hh"
 
@@ -46,24 +47,27 @@ class PLAPI
 
   void initAPI(std::string pl_json_path, idb::IdbBuilder* idb_builder);
   bool runFlow();
+  PlacementFlowResult runFlowResult();
   bool runAiFlow(const std::string& onnx_path, const std::string& normalization_path);
+  PlacementFlowResult runAiFlowResult(const std::string& onnx_path, const std::string& normalization_path);
   void runIncrementalFlow();
   void insertLayoutFiller();
 
   bool runGP();
+  PlacementFlowResult runGPResult();
   bool runMP();
-  void runNetworkFlowSpread();
+  bool runNetworkFlowSpread();
 
   bool runLG();
   bool runIncrLG();
   bool runIncrLG(std::vector<std::string> inst_name_list);
-  void runPostGP();
-  void runDP();
+  bool runPostGP();
+  bool runDP();
 #ifdef ENABLE_AI
-  void runDPwithAiWireLengthPredictor(const std::string& onnx_path, const std::string& normalization_path);
+  bool runDPwithAiWireLengthPredictor(const std::string& onnx_path, const std::string& normalization_path);
 #endif
-  void runBufferInsertion();
-  void writeBackSourceDataBase();
+  bool runBufferInsertion();
+  bool writeBackSourceDataBase();
 
   std::string obtainTargetDir();
 
@@ -127,7 +131,13 @@ class PLAPI
 
   void enableJsonOutput() { _enable_json_output = true; }
   bool isJsonOutputEnabled() { return _enable_json_output; }
+  void resetFlowStatus() { _flow_status = PlacementFlowStatus{}; }
   const PlacementFlowStatus& lastRunStatus() const { return _flow_status; }
+
+  // Focused failure-injection seam for API/command boundary regression tests.
+  // Empty value disables injection and has no production-flow effect.
+  void setFailureInjectionForTest(std::string stage) { _failure_injection_stage = std::move(stage); }
+  void clearFailureInjectionForTest() { _failure_injection_stage.clear(); }
 
   /*****************************Timing-driven Placement: START*****************************/
   double obtainPinEarlySlack(std::string pin_name);
@@ -166,6 +176,7 @@ class PLAPI
   PLReporter* _reporter;
 
   bool _enable_json_output = false;
+  std::string _failure_injection_stage;
   PlacementFlowStatus _flow_status;
 
   PLAPI() = default;
@@ -174,7 +185,10 @@ class PLAPI
   ~PLAPI();
   PLAPI& operator=(const PLAPI&) = delete;
   PLAPI& operator=(PLAPI&&) = delete;
-  void writePlacementStatus();
+
+  bool shouldInjectFailure(const std::string& stage) const { return _failure_injection_stage == stage; }
+  bool failInjectedStage(const std::string& stage, PlacementStatusCode code, const std::string& reason);
+  bool writePlacementStatus();
 };
 
 }  // namespace ipl

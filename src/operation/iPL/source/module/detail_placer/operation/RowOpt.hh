@@ -34,6 +34,7 @@
 #include "config/DetailPlacerConfig.hh"
 #include "database/DPDatabase.hh"
 #include "DPOperator.hh"
+#include "RowOptResult.hh"
 
 namespace ipl {
 class RowOpt
@@ -48,7 +49,8 @@ public:
     RowOpt& operator=(const RowOpt&) = delete;
     RowOpt& operator=(RowOpt&&) = delete;
 
-    void runRowOpt();
+    RowOptResult runRowOpt();
+    const RowOptResult& lastResult() const { return _last_result; }
 
 private:
     DPConfig* _config;
@@ -57,6 +59,7 @@ private:
 
     int32_t _site_width;
     std::map<DPInterval*, DPCluster*> _interval_to_root;
+    RowOptResult _last_result;
     
     void updateIntervalInfo();
     void pickAndSortMovableInstList(std::vector<DPInstance*>& movable_inst_list);
@@ -73,6 +76,7 @@ private:
     void collapseClusters(DPCluster* dest_cluster, DPCluster* src_cluster);
 
     void resetAllInterval();
+    bool checkOutputLegal() const;
 
 };
 }

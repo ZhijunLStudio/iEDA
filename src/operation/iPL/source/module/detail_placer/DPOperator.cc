@@ -204,18 +204,19 @@ int64_t DPOperator::calInstPairAffectiveHPWL(DPInstance* inst_1, DPInstance* ins
 
 bool DPOperator::checkIfClustered()
 {
-  bool flag = true;
-  // for (auto* inst : _database->get_design()->get_inst_list()) {
-  //   if (inst->get_state() == DPINSTANCE_STATE::kFixed) {
-  //     continue;
-  //   }
-
-  //   if (!inst->get_belong_cluster()) {
-  //     flag = false;
-  //     break;
-  //   }
-  // }
-  return flag;
+  if (_database == nullptr || _database->get_design() == nullptr) {
+    return false;
+  }
+  for (auto* inst : _database->get_design()->get_inst_list()) {
+    if (inst == nullptr || inst->get_state() == DPINSTANCE_STATE::kFixed
+        || inst->get_state() == DPINSTANCE_STATE::kUnPlaced) {
+      continue;
+    }
+    if (inst->get_belong_cluster() == nullptr) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void DPOperator::updateInstClustering()

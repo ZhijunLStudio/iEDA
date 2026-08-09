@@ -40,7 +40,7 @@ class PostGP
   PostGP& operator=(const PostGP&) = delete;
   PostGP& operator=(PostGP&&) = delete;
 
-  void runIncrTimingPlace();
+  bool runIncrTimingPlace();
   void runBufferBalancing();
   void runCellBalancing();
   void runLoadReduction();

@@ -20,5 +20,6 @@ target_link_libraries(ipl-api
 target_include_directories(ipl-api
     PUBLIC
         ${iPL_API}
+        ${iPL_EXTERNAL_API}
         ${iPL_SOURCE}/module/macro_placer
 )

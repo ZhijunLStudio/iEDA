@@ -16,11 +16,13 @@
 // ***************************************************************************************
 #include "DetailPlacer.hh"
 
+#include "json/json.hpp"
 #include "module/evaluator/density/Density.hh"
 #include "module/evaluator/wirelength/HPWirelength.hh"
 #ifdef ENABLE_AI
 #include "ai_wirelength.hh"
 #endif
+#include "module/checker/layout_checker/LayoutChecker.hh"
 #include "operation/BinOpt.hh"
 #include "operation/InstanceSwap.hh"
 #include "operation/LocalReorder.hh"
@@ -30,6 +32,35 @@
 #include "utility/Utility.hh"
 
 namespace ipl {
+
+namespace {
+
+using DPPlacementSnapshot = std::vector<std::pair<DPInstance*, Point<int32_t>>>;
+
+DPPlacementSnapshot snapshotDPPlacement(DPDatabase& database)
+{
+  DPPlacementSnapshot snapshot;
+  if (database.get_design() == nullptr) {
+    return snapshot;
+  }
+  for (auto* inst : database.get_design()->get_inst_list()) {
+    if (inst != nullptr) {
+      snapshot.emplace_back(inst, inst->get_coordi());
+    }
+  }
+  return snapshot;
+}
+
+void restoreDPPlacement(const DPPlacementSnapshot& snapshot)
+{
+  for (const auto& [inst, coordinate] : snapshot) {
+    if (inst != nullptr) {
+      inst->updateCoordi(coordinate.get_x(), coordinate.get_y());
+    }
+  }
+}
+
+}  // namespace
 
 DetailPlacer::DetailPlacer(Config* pl_config, PlacerDB* placer_db)
 {
@@ -474,18 +505,284 @@ void DetailPlacer::initIntervalList()
 
 bool DetailPlacer::checkIsLegal()
 {
-  return true;
+  LayoutChecker checker(_database._placer_db);
+  auto violations = checker.obtainViolationList();
+  if (!violations.empty()) {
+    for (const auto& violation : violations) {
+      std::string names;
+      for (size_t index = 0; index < violation.instance_names.size(); ++index) {
+        if (index != 0) {
+          names += ", ";
+        }
+        names += violation.instance_names.at(index);
+      }
+      LOG_ERROR << "Detail placement legality failed: " << layoutViolationTypeName(violation.type) << " -> " << names << " ("
+                << violation.reason << ")";
+    }
+  }
+  return violations.empty();
 }
 
-void DetailPlacer::runDetailPlace()
+RowOptResult DetailPlacer::runRowOpt()
+{
+  const auto dp_snapshot = snapshotDPPlacement(_database);
+  auto transaction = _database._placer_db->beginStageTransaction("row_opt");
+  if (!transaction.active) {
+    RowOptResult result;
+    result.outcome = RowOptOutcome::kInvalidInput;
+    result.reason = "row optimization could not open a PlacerDB transaction";
+    return result;
+  }
+
+  RowOpt row_opt(&_config, &_database, &_operator);
+  auto result = row_opt.runRowOpt();
+  if (!result.completed || !result.legal) {
+    restoreDPPlacement(dp_snapshot);
+    _database._placer_db->rollbackStageTransaction(transaction);
+    result.rolled_back = true;
+    return result;
+  }
+  if (result.changed_count == 0) {
+    _database._placer_db->rollbackStageTransaction(transaction);
+    return result;
+  }
+
+  _operator.updateTopoManager();
+  _database._design->writeBackToPL(_database._shift_x, _database._shift_y);
+  _database._placer_db->updateTopoManager();
+  _database._placer_db->updateGridManager();
+
+  if (!checkIsLegal()) {
+    result.legal = false;
+    result.outcome = RowOptOutcome::kIllegalOutput;
+    result.reason = "row optimization write-back produced an illegal placement";
+    restoreDPPlacement(dp_snapshot);
+    result.rolled_back = _database._placer_db->rollbackStageTransaction(transaction);
+    if (!result.rolled_back) {
+      result.reason += "; rollback failed";
+    }
+    return result;
+  }
+  if (!_database._placer_db->commitStageTransaction(transaction)) {
+    result.outcome = RowOptOutcome::kIllegalOutput;
+    result.reason = "row optimization could not commit its PlacerDB transaction";
+    return result;
+  }
+  return result;
+}
+
+InstanceSwapResult DetailPlacer::runGlobalSwap()
+{
+  return runInstanceSwap(false);
+}
+
+InstanceSwapResult DetailPlacer::runVerticalSwap()
+{
+  return runInstanceSwap(true);
+}
+
+LocalReorderResult DetailPlacer::runLocalReorder()
+{
+  return runLocalReorderStage();
+}
+
+LocalReorderResult DetailPlacer::runLocalReorderStage()
+{
+  const auto dp_snapshot = snapshotDPPlacement(_database);
+  auto transaction = _database._placer_db->beginStageTransaction("local_reorder");
+  if (!transaction.active) {
+    LocalReorderResult result;
+    result.outcome = LocalReorderOutcome::kInvalidInput;
+    result.reason = "local reorder could not open a PlacerDB transaction";
+    return result;
+  }
+
+  LocalReorder reorder(&_config, &_database, &_operator);
+  auto result = reorder.runLocalReorder();
+  if (!result.completed || !result.legal) {
+    restoreDPPlacement(dp_snapshot);
+    result.rolled_back = _database._placer_db->rollbackStageTransaction(transaction);
+    return result;
+  }
+  if (result.changed_count == 0) {
+    _database._placer_db->rollbackStageTransaction(transaction);
+    return result;
+  }
+
+  _operator.updateTopoManager();
+  _database._design->writeBackToPL(_database._shift_x, _database._shift_y);
+  _database._placer_db->updateTopoManager();
+  _database._placer_db->updateGridManager();
+  if (!checkIsLegal()) {
+    result.legal = false;
+    result.outcome = LocalReorderOutcome::kIllegalOutput;
+    result.reason = "local reorder write-back produced an illegal placement";
+    restoreDPPlacement(dp_snapshot);
+    result.rolled_back = _database._placer_db->rollbackStageTransaction(transaction);
+    return result;
+  }
+  if (!_database._placer_db->commitStageTransaction(transaction)) {
+    result.reason = "local reorder could not commit its PlacerDB transaction";
+  }
+  return result;
+}
+
+BinOptResult DetailPlacer::runBinOpt()
+{
+  return runBinOptStage();
+}
+
+BinOptResult DetailPlacer::runBinOptStage()
+{
+  const auto dp_snapshot = snapshotDPPlacement(_database);
+  auto transaction = _database._placer_db->beginStageTransaction("bin_opt");
+  if (!transaction.active) {
+    BinOptResult result;
+    result.outcome = BinOptOutcome::kInvalidInput;
+    result.reason = "bin optimization could not open a PlacerDB transaction";
+    return result;
+  }
+
+  BinOpt bin_opt(&_config, &_database, &_operator);
+  auto result = bin_opt.runBinOpt();
+  if (!result.completed || !result.legal) {
+    restoreDPPlacement(dp_snapshot);
+    result.rolled_back = _database._placer_db->rollbackStageTransaction(transaction);
+    return result;
+  }
+  if (result.changed_count == 0) {
+    _database._placer_db->rollbackStageTransaction(transaction);
+    return result;
+  }
+
+  _operator.updateTopoManager();
+  _database._design->writeBackToPL(_database._shift_x, _database._shift_y);
+  _database._placer_db->updateTopoManager();
+  _database._placer_db->updateGridManager();
+  if (!checkIsLegal()) {
+    result.legal = false;
+    result.outcome = BinOptOutcome::kIllegalOutput;
+    result.reason = "bin optimization write-back produced an illegal placement";
+    restoreDPPlacement(dp_snapshot);
+    result.rolled_back = _database._placer_db->rollbackStageTransaction(transaction);
+    return result;
+  }
+  if (!_database._placer_db->commitStageTransaction(transaction)) {
+    result.reason = "bin optimization could not commit its PlacerDB transaction";
+  }
+  return result;
+}
+
+InstanceSwapResult DetailPlacer::runInstanceSwap(bool vertical)
+{
+  const auto dp_snapshot = snapshotDPPlacement(_database);
+  auto transaction = _database._placer_db->beginStageTransaction(vertical ? "vertical_swap" : "global_swap");
+  if (!transaction.active) {
+    InstanceSwapResult result;
+    result.outcome = InstanceSwapOutcome::kInvalidInput;
+    result.reason = "instance swap could not open a PlacerDB transaction";
+    return result;
+  }
+
+  InstanceSwap instance_swap(&_config, &_database, &_operator);
+  auto result = vertical ? instance_swap.runVerticalSwap() : instance_swap.runGlobalSwap();
+  if (!result.completed || !result.legal) {
+    restoreDPPlacement(dp_snapshot);
+    result.rolled_back = _database._placer_db->rollbackStageTransaction(transaction);
+    if (!result.rolled_back) {
+      result.outcome = InstanceSwapOutcome::kRollbackFailed;
+      result.reason += "; rollback failed";
+    }
+    return result;
+  }
+  if (result.changed_count == 0) {
+    _database._placer_db->rollbackStageTransaction(transaction);
+    return result;
+  }
+
+  _operator.updateTopoManager();
+  _database._design->writeBackToPL(_database._shift_x, _database._shift_y);
+  _database._placer_db->updateTopoManager();
+  _database._placer_db->updateGridManager();
+  if (!checkIsLegal()) {
+    result.legal = false;
+    result.outcome = InstanceSwapOutcome::kIllegalOutput;
+    result.reason = "instance swap write-back produced an illegal placement";
+    restoreDPPlacement(dp_snapshot);
+    result.rolled_back = _database._placer_db->rollbackStageTransaction(transaction);
+    if (!result.rolled_back) {
+      result.outcome = InstanceSwapOutcome::kRollbackFailed;
+      result.reason += "; rollback failed";
+    }
+    return result;
+  }
+  if (!_database._placer_db->commitStageTransaction(transaction)) {
+    result.outcome = InstanceSwapOutcome::kRollbackFailed;
+    result.reason = "instance swap could not commit its PlacerDB transaction";
+  }
+  return result;
+}
+
+bool DetailPlacer::runDetailPlace()
 {
   LOG_INFO << "-----------------Start Detail Placement-----------------";
   ieda::Stats dp_status;
+  _last_result = DetailPlacementResult{};
+  _last_result.legal_before = checkIsLegal();
+  _last_result.hpwl_before = calTotalHPWL();
+  if (!_last_result.legal_before) {
+    _last_result.outcome = DetailPlacementOutcome::kInputIllegal;
+    _last_result.hpwl_after = _last_result.hpwl_before;
+    _last_result.reason = "placement before detail placement is illegal";
+    return false;
+  }
+
+  auto transaction = _database._placer_db->beginStageTransaction("detail_placement");
+  if (!transaction.active) {
+    _last_result.outcome = DetailPlacementOutcome::kAlgorithmFailed;
+    _last_result.hpwl_after = _last_result.hpwl_before;
+    _last_result.reason = "detail placement could not open a PlacerDB transaction";
+    return false;
+  }
+
+  const auto record_operator = [this](const std::string& name, bool enabled, bool entered, bool completed, int64_t changed,
+                                      int64_t before, int64_t after, int64_t candidates, int64_t accepted,
+                                      const std::string& reason, const nlohmann::json& details = nlohmann::json::object()) {
+    auto record = nlohmann::json{{"operator", name},
+                                 {"enabled", enabled},
+                                 {"entered", entered},
+                                 {"completed", completed},
+                                 {"changed_count", changed},
+                                 {"hpwl_before", before},
+                                 {"hpwl_after", after},
+                                 {"candidate_count", candidates},
+                                 {"accepted_count", accepted},
+                                 {"reason", reason}};
+    for (const auto& item : details.items()) {
+      record[item.key()] = item.value();
+    }
+    _last_result.operator_exhibit.push_back(record.dump());
+  };
 
   LOG_INFO << "Execution Origin Instance Shift: ";
-  RowOpt row_opt(&_config, &_database, &_operator);
-  row_opt.runRowOpt();
-  _operator.updateTopoManager();
+  if (_config.isEnableRowOpt()) {
+    RowOpt row_opt(&_config, &_database, &_operator);
+    auto row_opt_result = row_opt.runRowOpt();
+    _operator.updateTopoManager();
+    row_opt_result.hpwl_after = calTotalHPWL();
+    record_operator("row_opt", true, true, row_opt_result.completed, row_opt_result.changed_count,
+                    row_opt_result.hpwl_before, row_opt_result.hpwl_after, -1, -1, row_opt_result.reason);
+    if (!row_opt_result.completed || !row_opt_result.legal) {
+      _last_result.outcome = DetailPlacementOutcome::kAlgorithmFailed;
+      _last_result.hpwl_after = _last_result.hpwl_before;
+      _last_result.reason = "row optimization failed: " + row_opt_result.reason;
+      _database._placer_db->rollbackStageTransaction(transaction);
+      return false;
+    }
+  } else {
+    record_operator("row_opt", false, false, true, 0, calTotalHPWL(), calTotalHPWL(), -1, -1,
+                    "disabled by configuration");
+  }
   LOG_INFO << "After RowOpt HPWL: " << calTotalHPWL();
   // _operator.updateGridManager();
   // LOG_INFO << "After Origin Peak Bin Density: " << calPeakBinDensity();
@@ -499,22 +796,71 @@ void DetailPlacer::runDetailPlace()
   do {
     LOG_INFO << "Execution Swap Iteration: " << swap_iter;
 
-    InstanceSwap swap_opt(&_config, &_database, &_operator);
-    swap_opt.runGlobalSwap();
-    _operator.updateTopoManager();
-    LOG_INFO << "---After Global Swap HPWL: " << calTotalHPWL();
-    // _operator.updateGridManager();
-    // LOG_INFO << "---After Global Swap Peak Density: " << calPeakBinDensity();
+    if (_config.isEnableInstanceSwap()) {
+      InstanceSwap swap_opt(&_config, &_database, &_operator);
+      auto global_swap_result = swap_opt.runGlobalSwap();
+      _operator.updateTopoManager();
+      global_swap_result.hpwl_after = calTotalHPWL();
+      record_operator("instance_swap_global", true, true, global_swap_result.completed, global_swap_result.changed_count,
+                      global_swap_result.hpwl_before, global_swap_result.hpwl_after, global_swap_result.candidate_count,
+                      global_swap_result.accepted_count, global_swap_result.reason);
+      if (!global_swap_result.isSuccessful()) {
+        _last_result.outcome = DetailPlacementOutcome::kAlgorithmFailed;
+        _last_result.hpwl_after = calTotalHPWL();
+        _last_result.reason = "global swap failed: " + global_swap_result.reason;
+        _database._placer_db->rollbackStageTransaction(transaction);
+        return false;
+      }
 
-    swap_opt.runVerticalSwap();
-    _operator.updateTopoManager();
+      auto vertical_swap_result = swap_opt.runVerticalSwap();
+      _operator.updateTopoManager();
+      vertical_swap_result.hpwl_after = calTotalHPWL();
+      record_operator("instance_swap_vertical", true, true, vertical_swap_result.completed,
+                      vertical_swap_result.changed_count, vertical_swap_result.hpwl_before, vertical_swap_result.hpwl_after,
+                      vertical_swap_result.candidate_count, vertical_swap_result.accepted_count, vertical_swap_result.reason);
+      if (!vertical_swap_result.isSuccessful()) {
+        _last_result.outcome = DetailPlacementOutcome::kAlgorithmFailed;
+        _last_result.hpwl_after = calTotalHPWL();
+        _last_result.reason = "vertical swap failed: " + vertical_swap_result.reason;
+        _database._placer_db->rollbackStageTransaction(transaction);
+        return false;
+      }
+    } else {
+      const int64_t hpwl = calTotalHPWL();
+      record_operator("instance_swap_global", false, false, true, 0, hpwl, hpwl, -1, -1,
+                      "disabled by configuration");
+      record_operator("instance_swap_vertical", false, false, true, 0, hpwl, hpwl, -1, -1,
+                      "disabled by configuration");
+    }
     LOG_INFO << "---After Vertical Swap HPWL: " << calTotalHPWL();
     // _operator.updateGridManager();
     // LOG_INFO << "---After Vertical Swap Peak Density: " << calPeakBinDensity();
 
-    LocalReorder reorder_opt(&_config, &_database, &_operator);
-    reorder_opt.runLocalReorder();
-    _operator.updateTopoManager();
+    if (_config.isEnableLocalReorder()) {
+      LocalReorder reorder_opt(&_config, &_database, &_operator);
+      auto reorder_result = reorder_opt.runLocalReorder();
+      _operator.updateTopoManager();
+      reorder_result.hpwl_after = calTotalHPWL();
+      record_operator("local_reorder", true, true, reorder_result.completed, reorder_result.changed_count,
+                      reorder_result.hpwl_before, reorder_result.hpwl_after, reorder_result.candidate_count,
+                      reorder_result.accepted_count, reorder_result.reason,
+                      nlohmann::json{{"window_count", reorder_result.window_count},
+                                     {"search_count", reorder_result.search_count},
+                                     {"search_budget", reorder_result.search_budget},
+                                     {"max_window", reorder_result.max_window},
+                                     {"budget_exhausted", reorder_result.budget_exhausted}});
+      if (!reorder_result.isSuccessful()) {
+        _last_result.outcome = DetailPlacementOutcome::kAlgorithmFailed;
+        _last_result.hpwl_after = calTotalHPWL();
+        _last_result.reason = "local reorder failed: " + reorder_result.reason;
+        _database._placer_db->rollbackStageTransaction(transaction);
+        return false;
+      }
+    } else {
+      const int64_t hpwl = calTotalHPWL();
+      record_operator("local_reorder", false, false, true, 0, hpwl, hpwl, -1, -1,
+                      "disabled by configuration");
+    }
     LOG_INFO << "---After Local Reorder HPWL: " << calTotalHPWL();
     // _operator.updateGridManager();
     // LOG_INFO << "---After Local Reorder Peak Density: " << calPeakBinDensity();
@@ -529,9 +875,44 @@ void DetailPlacer::runDetailPlace()
     // _operator.updateGridManager();
     // LOG_INFO << "---After Bin Opt Peak Density: " << calPeakBinDensity();
 
-    RowOpt row_opt_test(&_config, &_database, &_operator);
-    row_opt_test.runRowOpt();
-    _operator.updateTopoManager();
+    if (_config.isEnableBinOpt()) {
+      BinOpt bin_opt(&_config, &_database, &_operator);
+      const auto bin_opt_result = bin_opt.runBinOpt();
+      record_operator("bin_opt", true, true, bin_opt_result.completed, bin_opt_result.changed_count,
+                      bin_opt_result.hpwl_before, bin_opt_result.hpwl_after, bin_opt_result.candidate_count, -1,
+                      bin_opt_result.reason);
+      if (!bin_opt_result.isSuccessful()) {
+        _last_result.outcome = DetailPlacementOutcome::kAlgorithmFailed;
+        _last_result.hpwl_after = calTotalHPWL();
+        _last_result.reason = "bin optimization failed: " + bin_opt_result.reason;
+        _database._placer_db->rollbackStageTransaction(transaction);
+        return false;
+      }
+    } else {
+      record_operator("bin_opt", false, false, true, 0, calTotalHPWL(), calTotalHPWL(), -1, -1,
+                      "disabled by configuration");
+    }
+
+    if (_config.isEnableRowOpt()) {
+      RowOpt row_opt_test(&_config, &_database, &_operator);
+      auto row_opt_test_result = row_opt_test.runRowOpt();
+      _operator.updateTopoManager();
+      row_opt_test_result.hpwl_after = calTotalHPWL();
+      record_operator("row_opt_iteration", true, true, row_opt_test_result.completed,
+                      row_opt_test_result.changed_count, row_opt_test_result.hpwl_before, row_opt_test_result.hpwl_after,
+                      -1, -1, row_opt_test_result.reason);
+      if (!row_opt_test_result.isSuccessful()) {
+        _last_result.outcome = DetailPlacementOutcome::kAlgorithmFailed;
+        _last_result.hpwl_after = calTotalHPWL();
+        _last_result.reason = "row optimization iteration failed: " + row_opt_test_result.reason;
+        _database._placer_db->rollbackStageTransaction(transaction);
+        return false;
+      }
+    } else {
+      const int64_t hpwl = calTotalHPWL();
+      record_operator("row_opt_iteration", false, false, true, 0, hpwl, hpwl, -1, -1,
+                      "disabled by configuration");
+    }
     LOG_INFO << "---After Row Opt HPWL: " << calTotalHPWL();
     // _operator.updateGridManager();
     // LOG_INFO << "After Row Opt Peak Density: " << calPeakBinDensity();
@@ -545,9 +926,25 @@ void DetailPlacer::runDetailPlace()
   do {
     LOG_INFO << "Execution Final Instance Shift Iteration: " << shift_iter;
 
-    RowOpt row_opt2(&_config, &_database, &_operator);
-    row_opt2.runRowOpt();
-    _operator.updateTopoManager();
+    if (_config.isEnableRowOpt()) {
+      RowOpt row_opt2(&_config, &_database, &_operator);
+      auto row_opt2_result = row_opt2.runRowOpt();
+      _operator.updateTopoManager();
+      row_opt2_result.hpwl_after = calTotalHPWL();
+      record_operator("row_opt_final", true, true, row_opt2_result.completed, row_opt2_result.changed_count,
+                      row_opt2_result.hpwl_before, row_opt2_result.hpwl_after, -1, -1, row_opt2_result.reason);
+      if (!row_opt2_result.isSuccessful()) {
+        _last_result.outcome = DetailPlacementOutcome::kAlgorithmFailed;
+        _last_result.hpwl_after = calTotalHPWL();
+        _last_result.reason = "final row optimization failed: " + row_opt2_result.reason;
+        _database._placer_db->rollbackStageTransaction(transaction);
+        return false;
+      }
+    } else {
+      const int64_t hpwl = calTotalHPWL();
+      record_operator("row_opt_final", false, false, true, 0, hpwl, hpwl, -1, -1,
+                      "disabled by configuration");
+    }
 
     update_hpwl = calTotalHPWL();
     improve_ratio = static_cast<double>(front_hpwl - update_hpwl) / front_hpwl;
@@ -564,19 +961,48 @@ void DetailPlacer::runDetailPlace()
   _database._design->writeBackToPL(_database._shift_x, _database._shift_y);
   _database._placer_db->updateTopoManager();
   _database._placer_db->updateGridManager();
+  _last_result.changed_count = transaction.changedInstanceCount();
+  _last_result.hpwl_after = calTotalHPWL();
+  _last_result.legal_after = checkIsLegal();
+  if (!_last_result.legal_after) {
+    LOG_WARNING << "Detail placement completed but legality check failed after writeback.";
+    _last_result.outcome = DetailPlacementOutcome::kOutputIllegal;
+    _last_result.reason = "detail placement produced an illegal placement";
+    if (_database._placer_db->rollbackStageTransaction(transaction)) {
+      _last_result.rolled_back = true;
+    } else {
+      _last_result.outcome = DetailPlacementOutcome::kRollbackFailed;
+      _last_result.reason = "detail placement produced an illegal placement and rollback failed";
+    }
+    return false;
+  }
+
+  if (!_database._placer_db->commitStageTransaction(transaction)) {
+    _last_result.outcome = DetailPlacementOutcome::kAlgorithmFailed;
+    _last_result.reason = "detail placement could not commit PlacerDB transaction";
+    return false;
+  }
+  _last_result.outcome = DetailPlacementOutcome::kCompleted;
+  _last_result.execution_success = true;
+  _last_result.reason = "detail placement completed";
 
   double time_delta = dp_status.elapsedRunTime();
   LOG_INFO << "Detail Plaement Total Time Elapsed: " << time_delta << "s";
   LOG_INFO << "-----------------Finish Detail Placement-----------------";
+  return true;
 }
 
-void DetailPlacer::runDetailPlaceNFS()
+bool DetailPlacer::runDetailPlaceNFS()
 {
   LOG_INFO << "-----------------Start Network Flow Cell Spreading-----------------";
   ieda::Stats dp_status;
 
   NFSpread nfspread_opt(&_config, &_database, &_operator);
-  nfspread_opt.runNFSpread();
+  _last_nfs_result = nfspread_opt.runNFSpread();
+  if (!_last_nfs_result.isSuccessful()) {
+    LOG_ERROR << "Network flow cell spreading failed: " << _last_nfs_result.reason;
+    return false;
+  }
   _operator.updateTopoManager();
 
   _database._design->writeBackToPL(_database._shift_x, _database._shift_y);
@@ -586,6 +1012,7 @@ void DetailPlacer::runDetailPlaceNFS()
   double time_delta = dp_status.elapsedRunTime();
   LOG_INFO << "Detail Plaement Total Time Elapsed: " << time_delta << "s";
   LOG_INFO << "-----------------Finish Network Flow Cell Spreading-----------------";
+  return true;
 }
 
 void DetailPlacer::notifyPLPlaceDensity()

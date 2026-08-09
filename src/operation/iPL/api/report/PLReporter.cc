@@ -99,56 +99,40 @@ namespace ipl {
     int32_t power_violated_cnt = 0;
     int32_t overlap_violated_cnt = 0;
 
-    LayoutChecker* checker = new LayoutChecker(&PlacerDBInst);
-    LOG_INFO << "Detect Core outside Instances...";
-    std::vector<Instance*> illegal_outside_inst_list = checker->obtainIllegalInstInsideCore();
-    if (static_cast<int32_t>(illegal_outside_inst_list.size()) != 0) {
-      core_violated_cnt = static_cast<int32_t>(illegal_outside_inst_list.size());
-      LOG_ERROR << "Illegal Outside Instances Count : " << core_violated_cnt;
-      violation_detail_stream << "Illegal Outside Instances Count : " << illegal_outside_inst_list.size() << std::endl;
-      for (auto inst : illegal_outside_inst_list) {
-        violation_detail_stream << "Illegal Location Instance " << inst->get_name() << " Location : " << inst->get_shape().get_ll_x() << ","
-          << inst->get_shape().get_ll_y() << " " << inst->get_shape().get_ur_x() << "," << inst->get_shape().get_ur_y()
-          << std::endl;
+    LayoutChecker checker(&PlacerDBInst);
+    LOG_INFO << "Detect layout legality violations...";
+    const auto violation_list = checker.obtainViolationList();
+    for (const auto& violation : violation_list) {
+      switch (violation.type) {
+        case LayoutViolationType::kOutsideCore:
+          ++core_violated_cnt;
+          break;
+        case LayoutViolationType::kRowSiteAlignment:
+          ++rowsite_violated_cnt;
+          break;
+        case LayoutViolationType::kPowerAlignment:
+          ++power_violated_cnt;
+          break;
+        case LayoutViolationType::kOverlap:
+          ++overlap_violated_cnt;
+          break;
       }
-      violation_detail_stream << std::endl;
-    }
 
-    LOG_INFO << "Detect Instances' Alignment...";
-    std::vector<Instance*> illegal_loc_inst_list = checker->obtainIllegalInstAlignRowSite();
-    if (static_cast<int32_t>(illegal_loc_inst_list.size()) != 0) {
-      rowsite_violated_cnt = static_cast<int32_t>(illegal_loc_inst_list.size());
-      LOG_ERROR << "Illegal Alignment Instances Count : " << rowsite_violated_cnt;
-      violation_detail_stream << "Illegal Alignment Instances Count : " << illegal_loc_inst_list.size() << std::endl;
-      for (auto inst : illegal_loc_inst_list) {
-        violation_detail_stream << "Illegal Location Instance " << inst->get_name() << " Location : " << inst->get_shape().get_ll_x() << ","
-          << inst->get_shape().get_ll_y() << " " << inst->get_shape().get_ur_x() << "," << inst->get_shape().get_ur_y()
-          << std::endl;
+      std::string names;
+      for (size_t index = 0; index < violation.instance_names.size(); ++index) {
+        if (index != 0) {
+          names += ", ";
+        }
+        names += violation.instance_names.at(index);
       }
-      violation_detail_stream << std::endl;
-    }
 
-    LOG_INFO << "Detect Power Alignment...";
-    std::vector<Instance*> illegal_power_inst_list = checker->obtainIllegalInstAlignPower();
-    if (static_cast<int32_t>(illegal_power_inst_list.size()) != 0) {
-      power_violated_cnt = static_cast<int32_t>(illegal_power_inst_list.size());
-      LOG_ERROR << "Illegal Power Orient Instances Count : " << power_violated_cnt;
-      violation_detail_stream << "Illegal Power Orient Instances Count : " << illegal_power_inst_list.size() << std::endl;
-      for (auto inst : illegal_power_inst_list) {
-        violation_detail_stream << "Illegal Power Orient Instance " << inst->get_name() << " Location : " << inst->get_shape().get_ll_x()
-          << "," << inst->get_shape().get_ll_y() << " " << inst->get_shape().get_ur_x() << ","
-          << inst->get_shape().get_ur_y() << std::endl;
-      }
-      violation_detail_stream << std::endl;
+      violation_detail_stream << layoutViolationTypeName(violation.type) << " : " << names << " Location : "
+                              << violation.shape.get_ll_x() << "," << violation.shape.get_ll_y() << " "
+                              << violation.shape.get_ur_x() << "," << violation.shape.get_ur_y() << " Reason : "
+                              << violation.reason << std::endl;
+      LOG_ERROR << layoutViolationTypeName(violation.type) << " : " << names << " (" << violation.reason << ")";
     }
-
-    LOG_INFO << "Detect Overlap Between Instances...";
-    if (!checker->isNoOverlapAmongInsts()) {
-      overlap_violated_cnt = reportOverlapInfo(violation_detail_stream);
-      LOG_ERROR << "Overlap Exist";
-    }
-
-    delete checker;
+    violation_detail_stream << std::endl;
 
     (*report_tbl)[1][0] = "Core Range Violated Count";
     (*report_tbl)[1][1] = std::to_string(core_violated_cnt);

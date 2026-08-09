@@ -248,8 +248,7 @@ unsigned CmdPlacerRunGP::exec()
     return 0;
   }
   auto* inst = iplf::PlacerIO::getInstance();
-  inst->runGlobalPlacement();
-  return 1;
+  return ipl::placementTclResult(inst->runGlobalPlacement());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -270,8 +269,7 @@ unsigned CmdPlacerRunMP::exec()
     return 0;
   }
   auto* inst = iplf::PlacerIO::getInstance();
-  inst->runMacroPlacement();
-  return 1;
+  return ipl::placementTclResult(inst->runMacroPlacement());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -292,8 +290,7 @@ unsigned CmdPlacerRunLG::exec()
     return 0;
   }
   auto* inst = iplf::PlacerIO::getInstance();
-  inst->runLegalization();
-  return 1;
+  return ipl::placementTclResult(inst->runLegalization());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -314,8 +311,7 @@ unsigned CmdPlacerRunDP::exec()
     return 0;
   }
   auto* inst = iplf::PlacerIO::getInstance();
-  inst->runDetailPlacement();
-  return 1;
+  return ipl::placementTclResult(inst->runDetailPlacement());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

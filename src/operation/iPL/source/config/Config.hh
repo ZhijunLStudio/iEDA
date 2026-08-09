@@ -27,7 +27,9 @@
 #ifndef IPL_SRC_CONFIG_H
 #define IPL_SRC_CONFIG_H
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 #include "BufferInserterConfig.hh"
 #include "DetailPlacerConfig.hh"
@@ -39,6 +41,13 @@
 #include "json/json.hpp"
 
 namespace ipl {
+
+struct ConfigValidationResult
+{
+  bool valid = false;
+  std::string path;
+  std::string reason;
+};
 
 // using imp::MacroPlacerConfig;
 class Config
@@ -52,8 +61,13 @@ class Config
   Config& operator=(const Config&) = delete;
   Config& operator=(Config&&) = delete;
 
+  static ConfigValidationResult validateJson(const nlohmann::json& json);
+  static ConfigValidationResult validateFile(const std::string& json_file);
+
   // function.
   void printConfig();
+  const nlohmann::json& effectiveConfigJson() const { return _effective_config; }
+  std::string effectiveConfigHash() const;
 
   // NesterovPlace config.
   NesterovPlaceConfig& get_nes_config() { return _nes_config; }
@@ -91,6 +105,7 @@ class Config
   int32_t _ignore_net_degree;
   bool _is_timing_effort;
   bool _is_congestion_effort;
+  nlohmann::json _effective_config;
 
   void setConfigFromJson(const std::string& json_file);
   void initConfig(const std::string& json_file);

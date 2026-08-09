@@ -6,6 +6,7 @@
         "is_congestion_effort": 0,
         "ignore_net_degree": 100,
         "num_threads": 8,
+        "info_iter_num": 10,
         "GP": {
             "global_right_padding": 0,
             "Wirelength": {
@@ -41,7 +42,13 @@
         "DP": {
             "max_displacement": 1000000,
             "global_right_padding": 0,
-            "enable_networkflow" : 0
+            "enable_networkflow" : 0,
+            "local_reorder_max_window": 2,
+            "local_reorder_budget": -1,
+            "enable_row_opt": 1,
+            "enable_instance_swap": 1,
+            "enable_local_reorder": 1,
+            "enable_bin_opt": 0
         },
         "Filler": {
             "first_iter": [],

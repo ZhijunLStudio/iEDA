@@ -688,19 +688,68 @@ void NesterovPlace::initNesInstanceDensitySize()
   }
 }
 
+bool NesterovPlace::isFiniteMetric(float value) const
+{
+  return std::isfinite(value);
+}
+
+void NesterovPlace::resetRunState()
+{
+  _last_result = NesterovPlaceResult{};
+  _iteration_records.clear();
+  _best_hpwl = INT64_MAX;
+  _best_overflow = FLT_MAX;
+  _nes_database->_is_diverged = false;
+  resetOverflowRecordList();
+  resetHPWLRecordList();
+}
+
+void NesterovPlace::recordIteration(int32_t iter_num, float overflow, int64_t hpwl, float step_length, float gradient_norm,
+                                    float route_util, bool quad_penalty_enabled, bool entropy_injected)
+{
+  NesterovIterationRecord record;
+  record.iter = iter_num;
+  record.hpwl = hpwl;
+  record.overflow = overflow;
+  record.step_length = step_length;
+  record.gradient_norm = gradient_norm;
+  record.density_penalty = _nes_database->_density_penalty;
+  record.route_util = route_util;
+  record.quad_penalty_enabled = quad_penalty_enabled;
+  record.entropy_injected = entropy_injected;
+  _iteration_records.push_back(record);
+}
+
+void NesterovPlace::finalizeResult(NesterovPlaceOutcome outcome, int32_t iterations, int64_t hpwl, float overflow, float gradient_norm,
+                                   float step_length, float density_penalty, float route_util, std::string reason)
+{
+  _last_result.success = (outcome == NesterovPlaceOutcome::kConverged);
+  _last_result.outcome = outcome;
+  _last_result.iterations = iterations;
+  _last_result.hpwl = hpwl;
+  _last_result.overflow = overflow;
+  _last_result.gradient_norm = gradient_norm;
+  _last_result.step_length = step_length;
+  _last_result.density_penalty = density_penalty;
+  _last_result.route_util = route_util;
+  _last_result.reason = std::move(reason);
+  _last_result.iteration_records = _iteration_records;
+}
+
 bool NesterovPlace::runNesterovPlace()
 {
   std::cout << std::endl;
   LOG_INFO << "-----------------Start Global Placement-----------------";
   ieda::Stats gp_status;
+  resetRunState();
 
   std::vector<NesInstance*> placable_inst_list = std::move(this->obtianPlacableNesInstanceList());
   initNesterovPlace(placable_inst_list);
 
   // main
   NesterovSolve(placable_inst_list);
-  if (_nes_database->_is_diverged) {
-    LOG_ERROR << "Global placement terminated after Nesterov divergence.";
+  if (_last_result.outcome == NesterovPlaceOutcome::kDiverged || _last_result.outcome == NesterovPlaceOutcome::kInvalidMetric) {
+    LOG_ERROR << "Global placement terminated: " << _last_result.reason;
     return false;
   }
   PlacerDBInst.updateTopoManager();
@@ -709,7 +758,7 @@ bool NesterovPlace::runNesterovPlace()
   double time_delta = gp_status.elapsedRunTime();
   LOG_INFO << "Global Placement Total Time Elapsed: " << time_delta << "s";
   LOG_INFO << "-----------------Finish Global Placement-----------------";
-  return true;
+  return _last_result.success;
 }
 
 void NesterovPlace::initNesterovPlace(std::vector<NesInstance*>& inst_list)
@@ -1285,6 +1334,8 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
   // diverged control.
   if (_nes_database->_is_diverged) {
     LOG_ERROR << "Detect diverged, The reason may be parameters setting.";
+    finalizeResult(NesterovPlaceOutcome::kDiverged, 0, 0, 0.0f, 0.0f, 0.0f, _nes_database->_density_penalty, 0.0f,
+                   "diverged before optimization started");
     return;
   }
 
@@ -1344,6 +1395,10 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
   // WP-PL-01: snapshot density_scale with best placement so diverge rollback restores inflation.
   std::vector<float> best_density_scale_list(inst_size, 1.0f);
   std::vector<float> cur_density_scale_list(inst_size, 1.0f);
+  int32_t finished_iter = 0;
+  float final_step_length = 0.0f;
+  float final_gradient_norm = 0.0f;
+  float final_route_util = 0.0f;
 
   if (_nes_config.isOptCongestion()) {
     _nes_database->_bin_grid->evalRouteCap(_nes_config.get_thread_num());
@@ -1352,6 +1407,7 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
 
   // algorithm core loop.
   for (int32_t iter_num = 1; iter_num <= _nes_config.get_max_iter(); iter_num++) {
+    bool iter_entropy_injected = false;
     solver->runNextIter(iter_num, _nes_config.get_thread_num());
     int32_t num_backtrack = 0;
     for (; num_backtrack < _nes_config.get_max_back_track(); num_backtrack++) {
@@ -1385,6 +1441,14 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
       updateTopologyManager();
 
       sum_overflow = static_cast<float>(_nes_database->_bin_grid->get_overflow_area_without_filler()) / _total_inst_area;
+      hpwl = _nes_database->_wirelength->obtainTotalWirelength();
+      if (!isFiniteMetric(sum_overflow) || sum_overflow < 0.0f || !isFiniteMetric(static_cast<float>(hpwl)) || hpwl < 0) {
+        _nes_database->_is_diverged = true;
+        finalizeResult(NesterovPlaceOutcome::kInvalidMetric, iter_num, hpwl, sum_overflow,
+                       _nes_database->_wirelength_grad_sum + _nes_database->_density_grad_sum, solver->get_next_steplength(),
+                       _nes_database->_density_penalty, 0.0f, "global placement produced an invalid metric");
+        break;
+      }
       // The following parameters threshold "iter_num" and "sum_overflow" for congestion optimization can be adjusted
       // Start earlier (iter>=100) so route-util inflation has room to reshape density before legalization.
       if (_nes_config.isOptCongestion() && iter_num >= 100 && iter_num % 10 == 0) {
@@ -1411,6 +1475,7 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
           _nes_database->_bin_grid->fastGaussianBlur();
           _nes_database->_bin_grid->evalRouteUtil();
           inflateInstancesByRouteUtil(inst_list);
+          iter_entropy_injected = true;
           // _nes_database->_bin_grid->plotOverflowUtil(sum_overflow, iter_num);
 
           // TODO: GR based congestion-driven optimization.
@@ -1444,22 +1509,33 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
   }
 }
 
-if (num_backtrack == _nes_config.get_max_back_track()) {
-  LOG_ERROR << "Detect divergence,"
-            << " The reason may be high init_density_penalty value";
-  _nes_database->_is_diverged = true;
-}
-
-if (_nes_database->_is_diverged) {
-  break;
-}
-
-if (RECORD_ITER_INFO) {
-  if (iter_num == 1) {
-    info_stream << "WireLength Grad Sum,Density Grad Sum,Density Weight,StepLength" << std::endl;
+  if (num_backtrack == _nes_config.get_max_back_track()) {
+    LOG_ERROR << "Detect divergence,"
+              << " The reason may be high init_density_penalty value";
+    _nes_database->_is_diverged = true;
   }
-  printIterInfoToCsv(info_stream, iter_num);
-}
+
+  if (_nes_database->_is_diverged) {
+    finalizeResult(NesterovPlaceOutcome::kDiverged, iter_num, prev_hpwl, sum_overflow,
+                   _nes_database->_wirelength_grad_sum + _nes_database->_density_grad_sum, solver->get_next_steplength(),
+                   _nes_database->_density_penalty, final_route_util, "nesterov diverged during iteration");
+    break;
+  }
+
+  if (RECORD_ITER_INFO) {
+    if (iter_num == 1) {
+      info_stream << "WireLength Grad Sum,Density Grad Sum,Density Weight,StepLength" << std::endl;
+    }
+    printIterInfoToCsv(info_stream, iter_num);
+  }
+
+  final_step_length = solver->get_next_steplength();
+  final_gradient_norm = _nes_database->_wirelength_grad_sum + _nes_database->_density_grad_sum;
+  if (_nes_config.isOptCongestion()) {
+    final_route_util = std::max(_nes_database->_grid_manager->get_h_util_max(), _nes_database->_grid_manager->get_v_util_max());
+  }
+  recordIteration(iter_num, sum_overflow, prev_hpwl, final_step_length, final_gradient_norm, final_route_util, is_add_quad_penalty,
+                  iter_entropy_injected);
 
 if (_nes_config.isOptMaxWirelength()) {
   if (cur_opt_overflow_step >= 0 && sum_overflow < opt_overflow_list[cur_opt_overflow_step]) {
@@ -1519,12 +1595,14 @@ if (sum_overflow_threshold > sum_overflow) {
   hpwl_attach_sum_overflow = prev_hpwl;
 }
 
-if (sum_overflow < 0.32f && sum_overflow - sum_overflow_threshold >= 0.05f && hpwl_attach_sum_overflow * 1.25f < prev_hpwl) {
-  LOG_ERROR << "Detect divergence. \n"
-            << "    The reason may be max_phi_cof value: try to decrease max_phi_cof";
-  _nes_database->_is_diverged = true;
-  break;
-}
+  if (sum_overflow < 0.32f && sum_overflow - sum_overflow_threshold >= 0.05f && hpwl_attach_sum_overflow * 1.25f < prev_hpwl) {
+    LOG_ERROR << "Detect divergence. \n"
+              << "    The reason may be max_phi_cof value: try to decrease max_phi_cof";
+    _nes_database->_is_diverged = true;
+    finalizeResult(NesterovPlaceOutcome::kDiverged, iter_num, prev_hpwl, sum_overflow, final_gradient_norm, final_step_length,
+                   _nes_database->_density_penalty, final_route_util, "overflow and HPWL diverged");
+    break;
+  }
 
 _overflow_record_list.push_back(sum_overflow);
 _hpwl_record_list.push_back(hpwl);
@@ -1569,7 +1647,7 @@ if (iter_num - last_perturb_iter > min_perturb_interval && checkPlateau(50, 0.01
 }
 
 // minimun iteration is 30
-if ((iter_num > 30 && sum_overflow <= _nes_config.get_target_overflow()) || stop_placement) {
+  if ((iter_num > 30 && sum_overflow <= _nes_config.get_target_overflow()) || stop_placement) {
   if (PRINT_LONG_NET) {
     long_net_stream << "CURRENT ITERATION: " << iter_num << std::endl;
     long_net_stream << std::endl;
@@ -1583,16 +1661,27 @@ if ((iter_num > 30 && sum_overflow <= _nes_config.get_target_overflow()) || stop
 
   if (PRINT_COORDI) {
     saveNesterovPlaceData(iter_num);
+    }
+
+    LOG_INFO << "[NesterovSolve] Finished with Overflow:" << sum_overflow << " HPWL : " << prev_hpwl;
+    const bool converged = (iter_num > 30 && sum_overflow <= _nes_config.get_target_overflow());
+    finalizeResult(converged ? NesterovPlaceOutcome::kConverged : NesterovPlaceOutcome::kOverflowTargetMiss, iter_num, prev_hpwl,
+                   sum_overflow, final_gradient_norm, final_step_length, _nes_database->_density_penalty, final_route_util,
+                   converged ? "global placement converged" : "global placement stopped before reaching target overflow");
+    break;
   }
 
-  LOG_INFO << "[NesterovSolve] Finished with Overflow:" << sum_overflow << " HPWL : " << prev_hpwl;
-  break;
-}
+  finished_iter = iter_num;
 }
 
 if (_nes_database->_is_diverged) {
   LOG_ERROR << "Detect divergence, The reason may be parameters setting.";
   return;
+}
+
+if (_last_result.outcome == NesterovPlaceOutcome::kNotRun) {
+  finalizeResult(NesterovPlaceOutcome::kMaxIter, finished_iter, prev_hpwl, sum_overflow, final_gradient_norm, final_step_length,
+                 _nes_database->_density_penalty, final_route_util, "global placement reached max_iter");
 }
 
 notifyPLOverflowInfo(sum_overflow);

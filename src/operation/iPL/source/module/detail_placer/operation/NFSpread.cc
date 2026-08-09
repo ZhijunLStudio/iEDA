@@ -34,18 +34,55 @@ NFSpread::~NFSpread()
 {
 }
 
-void NFSpread::runNFSpread() 
+NFSpreadResult NFSpread::runNFSpread()
 {
-	init();
+	_moved_count = 0;
+	_overflow_before = 0;
+	_overflow_after = 0;
+	_iteration = 0;
+	_no_path_count = 0;
+
+	NFSpreadResult result;
+	if (!init()) {
+		result.reason = _num_movable_cells == 0 ? "network flow spread has no movable cells"
+		                                         : "network flow spread could not initialize a legal capacity graph";
+		return result;
+	}
 	computeAbu();
 	cellSpreading();
 	computeAbu();
-	
+
+	result.moved_count = _moved_count;
+	result.overflow_before = _overflow_before;
+	result.overflow_after = _overflow_after;
+	result.iterations = _iteration;
+	result.feasible = _overflow_before == 0 || _overflow_after < _overflow_before;
+	result.no_progress = _overflow_before > 0 && _overflow_after >= _overflow_before;
+	result.execution_success = result.feasible && !result.no_progress;
+	if (_overflow_before == 0) {
+		result.reason = "network flow spread had no overflow to reduce";
+	} else if (result.no_progress) {
+		result.reason = "network flow spread made no measurable overflow progress";
+	} else {
+		result.reason = "network flow spread reduced overflow";
+	}
+	if (_no_path_count > 0 && result.no_progress) {
+		result.feasible = false;
+		result.execution_success = false;
+		result.reason = "network flow spread found no feasible path for overflow";
+	}
+	return result;
 }
 
-void NFSpread::init()
+bool NFSpread::init()
 {
-	computeBinWidth();
+	if (_config == nullptr || _database == nullptr || _operator == nullptr || _database->get_layout() == nullptr
+	    || _database->get_design() == nullptr) {
+		return false;
+	}
+	if (!computeBinWidth()) {
+		return false;
+	}
 	initRows();
 	initBlockages();
 	connectVerticalSegments();
@@ -54,6 +91,7 @@ void NFSpread::init()
 	initNodes();
 	removeBlockageOverlap();
 	updateInitLegalPos();
+	return !_bin_list.empty();
 }
 
 void NFSpread::computeAbu()
@@ -229,7 +267,7 @@ void NFSpread::cellSpreading(const int max_iteration)
 }
 
 
-void NFSpread::computeBinWidth()
+bool NFSpread::computeBinWidth()
 {
 	int64_t total_width = 0;
 	std::vector<DPInstance*> inst_list = _database->get_design()->get_inst_list();
@@ -241,8 +279,14 @@ void NFSpread::computeBinWidth()
 		total_width += inst->get_shape().get_width();
 		_num_movable_cells++;
 	}
+	if (_num_movable_cells == 0 || total_width <= 0) {
+		_bin_length_x = -1;
+		_bin_length_y = -1;
+		return false;
+	}
 	_bin_length_x = (20 * total_width / static_cast<double>(_num_movable_cells));
 	_bin_length_y = _database->get_layout()->get_row_height();
+	return _bin_length_x > 0 && _bin_length_y > 0;
 }
 
 void NFSpread::initRows()
@@ -658,9 +702,10 @@ void NFSpread::performNetworkFlow()
 {
 	_iteration = 0;
 	_total_overflow = updateOverflowedBins();
+	_overflow_before = _total_overflow;
 	report(std::cout, true);
 
-	while (_overflowed_bin_list.size() > 0 && _iteration <= _max_iterations) {
+	while (_overflowed_bin_list.size() > 0 && _iteration < _max_iterations) {
 		if(_max_overfilled_area_ratio < 1.0) {
 			break;
 		} 
@@ -685,11 +730,14 @@ void NFSpread::performNetworkFlow()
 
 			if (sink) {
 				moveCells(sink);
-			}  
+			} else {
+				++_no_path_count;
+			}
 		}  
 		_iteration++;
 		_total_overflow = updateOverflowedBins();
 	}
+	_overflow_after = _total_overflow;
 	report();
 }
 
@@ -704,7 +752,8 @@ int64_t NFSpread::updateOverflowedBins()
 		if (bin->getSupply() > 0){
 			total_overflow += bin->getSupply();
 			_overflowed_bin_list.push_back(bin);
-			double ratio = bin->getSupply() / static_cast<double> (bin->getPlaceableSpace());
+			const int64_t placeable_space = bin->getPlaceableSpace();
+			double ratio = placeable_space > 0 ? bin->getSupply() / static_cast<double>(placeable_space) : 1.0;
 			_avg_overfilled_area_ratio += ratio;
 			_max_overfilled_area_ratio = std::max(_max_overfilled_area_ratio, ratio);
 		}
@@ -1009,6 +1058,7 @@ void NFSpread::sortNodes(std::vector<NodeFlow> & instances)
 
 bool NFSpread::moveCells(TNode* leaf)
 {
+	bool moved = false;
 	TNode * node_sink = leaf;
 	TNode * node_src = leaf->_parent;
 	// int64_t last_flow = node_sink->_flow;
@@ -1020,16 +1070,16 @@ bool NFSpread::moveCells(TNode* leaf)
 
 		if (isNeighbor) { // horizontal and partial moves 
 			// last_flow = moveHorizontalNeighborFlow(src, sink, flow);
-			moveHorizontalNeighborFlow(src, sink, flow);
+			moved = moveHorizontalNeighborFlow(src, sink, flow) > 0 || moved;
 		} else { // vertical moves
 			// last_flow = moveFullCellFlow(src, sink, flow);
-			moveFullCellFlow(src, sink, flow);
+			moved = moveFullCellFlow(src, sink, flow) > 0 || moved;
 		}
 
 		node_sink = node_src;
 		node_src = node_src->_parent;
 	}
-	return true;
+	return moved;
 }
 
 int64_t NFSpread::moveHorizontalNeighborFlow(DPBin* src, DPBin* sink, const int64_t flow)
@@ -1076,11 +1126,20 @@ void NFSpread::computeHorizontalPosition(DPBin* sink, const Rectangle<int64_t>& 
 	}
 }
 
-void NFSpread::moveNode(DPNode* node, DPSegment* src, DPSegment* sink ,int64_t target_pos_x, int64_t target_pos_y)
+bool NFSpread::moveNode(DPNode* node, DPSegment* src, DPSegment* sink, int64_t target_pos_x, int64_t target_pos_y)
 {
+	if (node == nullptr || src == nullptr || sink == nullptr) {
+		return false;
+	}
+	const bool changed = node->getPositionX() != target_pos_x || node->getPositionY() != target_pos_y;
+	if (!changed) {
+		return false;
+	}
 	removeNode(src, node);
 	node->get_inst()->updateCoordi(target_pos_x, target_pos_y);
 	insertNode(sink, node);
+	++_moved_count;
+	return true;
 }
     
 int64_t NFSpread::moveFullCellFlow(DPBin* src, DPBin* sink, const int64_t flow)

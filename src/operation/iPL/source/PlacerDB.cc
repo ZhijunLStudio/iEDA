@@ -56,8 +56,27 @@ namespace ipl {
     }
   }
 
-  PlacerDB::PlacerDB() : _config(nullptr), _db_wrapper(nullptr), _topo_manager(nullptr), _grid_manager(nullptr)
+  PlacerDB::PlacerDB() : _config(nullptr), _db_wrapper(nullptr), _topo_manager(nullptr), _grid_manager(nullptr), _revision(0)
   {
+  }
+
+  int64_t PlacerDB::StageTransaction::changedInstanceCount() const
+  {
+    int64_t changed_count = 0;
+    for (const auto& snapshot : instance_snapshots) {
+      if (!snapshot.instance) {
+        continue;
+      }
+      if (snapshot.shape.get_ll_x() != snapshot.instance->get_shape().get_ll_x()
+          || snapshot.shape.get_ll_y() != snapshot.instance->get_shape().get_ll_y()
+          || snapshot.shape.get_ur_x() != snapshot.instance->get_shape().get_ur_x()
+          || snapshot.shape.get_ur_y() != snapshot.instance->get_shape().get_ur_y()
+          || snapshot.orient != snapshot.instance->get_orient()
+          || snapshot.state != snapshot.instance->get_instance_state()) {
+        ++changed_count;
+      }
+    }
+    return changed_count;
   }
 
   PlacerDB::~PlacerDB()
@@ -91,7 +110,104 @@ namespace ipl {
     updateGridManager();
     // updateFromSourceDataBase();
     adaptTargetDensity();
+    _revision = 0;
     printPlacerDB();
+  }
+
+  PlacerDB::StageTransaction PlacerDB::beginStageTransaction(std::string stage_name) const
+  {
+    StageTransaction transaction;
+    transaction.stage_name = std::move(stage_name);
+    transaction.base_revision = _revision;
+    transaction.active = true;
+
+    if (!_db_wrapper || !get_design()) {
+      LOG_WARNING << "Cannot begin iPL stage transaction without initialized PlacerDB.";
+      transaction.active = false;
+      return transaction;
+    }
+
+    const auto instance_list = get_design()->get_instance_list();
+    transaction.instance_snapshots.reserve(instance_list.size());
+    for (auto* inst : instance_list) {
+      if (!inst) {
+        continue;
+      }
+
+      StageTransaction::InstanceSnapshot snapshot;
+      snapshot.instance = inst;
+      snapshot.shape = inst->get_shape();
+      snapshot.orient = inst->get_orient();
+      snapshot.state = inst->get_instance_state();
+      transaction.instance_snapshots.push_back(snapshot);
+    }
+
+    return transaction;
+  }
+
+  bool PlacerDB::commitStageTransaction(StageTransaction& transaction)
+  {
+    if (!transaction.active) {
+      LOG_WARNING << "Cannot commit inactive iPL stage transaction: " << transaction.stage_name;
+      return false;
+    }
+
+    if (transaction.base_revision != _revision) {
+      LOG_WARNING << "Cannot commit stale iPL stage transaction: " << transaction.stage_name;
+      transaction.active = false;
+      return false;
+    }
+
+    ++_revision;
+    transaction.active = false;
+    transaction.instance_snapshots.clear();
+    refreshDerivedManagers();
+    return true;
+  }
+
+  bool PlacerDB::rollbackStageTransaction(StageTransaction& transaction)
+  {
+    if (!transaction.active) {
+      LOG_WARNING << "Cannot rollback inactive iPL stage transaction: " << transaction.stage_name;
+      return false;
+    }
+
+    if (transaction.base_revision != _revision) {
+      LOG_WARNING << "Cannot rollback stale iPL stage transaction: " << transaction.stage_name;
+      transaction.active = false;
+      return false;
+    }
+
+    for (const auto& snapshot : transaction.instance_snapshots) {
+      if (!snapshot.instance) {
+        continue;
+      }
+
+      snapshot.instance->set_shape(snapshot.shape.get_ll_x(), snapshot.shape.get_ll_y(), snapshot.shape.get_ur_x(),
+                                   snapshot.shape.get_ur_y());
+      snapshot.instance->set_instance_state(snapshot.state);
+      if (snapshot.instance->get_cell_master()) {
+        snapshot.instance->set_orient(snapshot.orient);
+      }
+    }
+
+    transaction.active = false;
+    transaction.instance_snapshots.clear();
+    refreshDerivedManagers();
+    return true;
+  }
+
+  void PlacerDB::refreshDerivedManagers()
+  {
+    if (_topo_manager) {
+      updateTopoManager();
+    }
+    if (_grid_manager) {
+      delete _grid_manager;
+      _grid_manager = nullptr;
+      initGridManager();
+      updateGridManager();
+    }
   }
 
   void PlacerDB::updatePlacerConfig(std::string pl_json_path)
@@ -561,8 +677,13 @@ namespace ipl {
   {
     float cur_util = this->obtainUtilization();
     float user_target_density = this->get_placer_config()->get_nes_config().get_target_density();
-    if (user_target_density < cur_util) {
-      float setting_util = cur_util + 0.001;
+    float setting_util = user_target_density;
+    if (cur_util > 0.0f && cur_util < 0.65f) {
+      setting_util = 0.60f;
+    } else if (user_target_density < cur_util) {
+      setting_util = cur_util + 0.001f;
+    }
+    if (std::fabs(setting_util - user_target_density) > 1e-6f) {
       this->get_placer_config()->get_nes_config().set_target_density(setting_util);
     }
   }

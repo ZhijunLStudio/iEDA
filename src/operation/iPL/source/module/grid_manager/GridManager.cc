@@ -41,8 +41,21 @@ void GridManager::obtainOverlapGridList(std::vector<Grid*>& grid_list, Rectangle
 {
   LOG_ERROR_IF(!grid_list.empty()) << "Pass overlap_grid_list is not Empty!";
 
+  if (rect.get_ll_x() >= rect.get_ur_x() || rect.get_ll_y() >= rect.get_ur_y()) {
+    grid_list.clear();
+    return;
+  }
+
   std::pair<int, int> y_range = _utility.obtainMinMaxIdx(_shape.get_ll_y(), _grid_size_y, rect.get_ll_y(), rect.get_ur_y());
   std::pair<int, int> x_range = _utility.obtainMinMaxIdx(_shape.get_ll_x(), _grid_size_x, rect.get_ll_x(), rect.get_ur_x());
+
+  _utility.correctPairRange(y_range, 0, _grid_cnt_y);
+  _utility.correctPairRange(x_range, 0, _grid_cnt_x);
+
+  if (y_range.first >= y_range.second || x_range.first >= x_range.second) {
+    grid_list.clear();
+    return;
+  }
 
   int32_t y_cnt = y_range.second - y_range.first;
   int32_t x_cnt = x_range.second - x_range.first;
@@ -411,7 +424,6 @@ int64_t GridManager::obtainOverlapArea(Grid* grid, const Rectangle<int32_t>& rec
   int64_t overlap_rect_uy = std::min(grid_shape.get_ur_y(), rect.get_ur_y());
 
   if (overlap_rect_lx >= overlap_rect_ux || overlap_rect_ly >= overlap_rect_uy) {
-    LOG_WARNING << "Overlap of grid and input rect produce wrong rectangle!";
     return 0;
   } else {
     return (overlap_rect_ux - overlap_rect_lx) * (overlap_rect_uy - overlap_rect_ly);
@@ -428,12 +440,9 @@ Rectangle<int32_t> GridManager::obtainOverlapRect(Grid* grid, const Rectangle<in
   int32_t overlap_rect_uy = std::min(grid_shape.get_ur_y(), rect.get_ur_y());
 
   if (overlap_rect_lx >= overlap_rect_ux || overlap_rect_ly >= overlap_rect_uy) {
-    int32_t fake_rect_lx = (overlap_rect_lx + overlap_rect_ux) / 2;
-    int32_t fake_rect_ly = (overlap_rect_ly + overlap_rect_uy) / 2;
-    Rectangle rect(fake_rect_lx, fake_rect_ly, fake_rect_lx, fake_rect_ly);
-    return rect;
+    return Rectangle<int32_t>(overlap_rect_lx, overlap_rect_ly, overlap_rect_lx, overlap_rect_ly);
   } else {
-    Rectangle rect(overlap_rect_lx,overlap_rect_ly,overlap_rect_ux,overlap_rect_uy);
+    Rectangle<int32_t> rect(overlap_rect_lx, overlap_rect_ly, overlap_rect_ux, overlap_rect_uy);
     return rect;
   }
 }

@@ -77,7 +77,7 @@ class PlacerIO
   bool runMacroPlacement();
   bool runGlobalPlacement();
   bool runLegalization();
-  void runDetailPlacement();
+  bool runDetailPlacement();
 
   bool checkLegality();
   bool reportPlacement();

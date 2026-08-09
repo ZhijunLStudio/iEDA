@@ -27,12 +27,33 @@
 #ifndef IPL_CHECKER_LAYOUT_CHECKER_H
 #define IPL_CHECKER_LAYOUT_CHECKER_H
 
+#include <cstdint>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "Log.hh"
 #include "PlacerDB.hh"
 
 namespace ipl {
+
+enum class LayoutViolationType
+{
+  kOutsideCore,
+  kRowSiteAlignment,
+  kPowerAlignment,
+  kOverlap
+};
+
+struct LayoutViolation
+{
+  LayoutViolationType type = LayoutViolationType::kOutsideCore;
+  std::vector<std::string> instance_names;
+  Rectangle<int32_t> shape;
+  std::string reason;
+};
+
+std::string layoutViolationTypeName(LayoutViolationType type);
 
 class LayoutChecker
 {
@@ -50,6 +71,7 @@ class LayoutChecker
   bool isAllPlacedInstAlignRowSite();
   bool isAllPlacedInstAlignPower();
   bool isNoOverlapAmongInsts();
+  std::vector<LayoutViolation> obtainViolationList();
 
   std::vector<Instance*> obtainIllegalInstInsideCore();
   std::vector<Instance*> obtainIllegalInstAlignRowSite();

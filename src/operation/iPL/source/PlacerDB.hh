@@ -28,6 +28,10 @@
 #ifndef IPL_PLACER_BASE_H
 #define IPL_PLACER_BASE_H
 
+#include <cstdint>
+#include <string>
+#include <vector>
+
 #include "config/Config.hh"
 #include "data/Design.hh"
 #include "data/Layout.hh"
@@ -43,6 +47,27 @@ namespace ipl {
 class PlacerDB
 {
  public:
+  struct StageTransaction
+  {
+    std::string stage_name;
+    int64_t base_revision = 0;
+    bool active = false;
+    int64_t changedInstanceCount() const;
+
+   private:
+    struct InstanceSnapshot
+    {
+      Instance* instance = nullptr;
+      Rectangle<int32_t> shape;
+      Orient orient = Orient::kNone;
+      INSTANCE_STATE state = INSTANCE_STATE::kNone;
+    };
+
+    std::vector<InstanceSnapshot> instance_snapshots;
+
+    friend class PlacerDB;
+  };
+
   static PlacerDB& getInst();
   static void destoryInst();
   void initPlacerDB(std::string pl_json_path, DBWrapper* db_wrapper);
@@ -60,7 +85,13 @@ class PlacerDB
   TopologyManager* get_topo_manager() const { return _topo_manager; }
   GridManager* get_grid_manager() const { return _grid_manager; }
 
+  int64_t get_revision() const { return _revision; }
+
   // Function.
+  StageTransaction beginStageTransaction(std::string stage_name) const;
+  bool commitStageTransaction(StageTransaction& transaction);
+  bool rollbackStageTransaction(StageTransaction& transaction);
+
   void printPlacerDB() const;
   void printLayoutInfo() const;
   void printInstanceInfo() const;
@@ -82,7 +113,7 @@ class PlacerDB
 
   void saveVerilogForDebug(std::string path);
 
-  void writeBackSourceDataBase() { _db_wrapper->writeBackSourceDatabase(); }
+  bool writeBackSourceDataBase() { return _db_wrapper->writeBackSourceDatabase(); }
   void writeDef(std::string file_name) { _db_wrapper->writeDef(file_name); }
 
   bool isInitialized() { return _db_wrapper != nullptr; }
@@ -125,6 +156,7 @@ class PlacerDB
 
   TopologyManager* _topo_manager;
   GridManager* _grid_manager;
+  int64_t _revision;
 
   PlacerDB();
   PlacerDB(const PlacerDB&) = delete;
@@ -134,6 +166,7 @@ class PlacerDB
   PlacerDB& operator=(PlacerDB&&) = delete;
   void initGridManager();
   void initGridManagerFixedArea();
+  void refreshDerivedManagers();
 
   void sortDataForParallel();
   void initIgnoreNets(int32_t ignore_net_degree);

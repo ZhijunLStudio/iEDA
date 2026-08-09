@@ -1,5 +1,7 @@
 add_library(ipl-configurator Configurator.cc)
 
+target_link_libraries(ipl-configurator PUBLIC log)
+
 target_include_directories(ipl-configurator
     PUBLIC
     ${iPL_CONFIG}

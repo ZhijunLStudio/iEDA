@@ -25,12 +25,357 @@
  */
 
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <vector>
 
 #include "Config.hh"
 #include "module/logger/Log.hh"
 
 namespace ipl {
+
+namespace {
+
+using Json = nlohmann::json;
+
+ConfigValidationResult invalidConfig(std::string path, std::string reason)
+{
+  return ConfigValidationResult{false, std::move(path), std::move(reason)};
+}
+
+ConfigValidationResult validateObject(const Json& object, const std::string& path,
+                                      const std::vector<std::pair<std::string, bool>>& keys)
+{
+  if (!object.is_object()) {
+    return invalidConfig(path, "expected object");
+  }
+
+  for (const auto& [key, value] : object.items()) {
+    bool known = false;
+    for (const auto& [allowed, required] : keys) {
+      (void) required;
+      if (key == allowed) {
+        known = true;
+        break;
+      }
+    }
+    if (!known) {
+      return invalidConfig(path + "." + key, "unknown configuration key");
+    }
+  }
+  for (const auto& [key, required] : keys) {
+    if (required && !object.contains(key)) {
+      return invalidConfig(path + "." + key, "missing required configuration key");
+    }
+  }
+  return ConfigValidationResult{true, {}, {}};
+}
+
+ConfigValidationResult requireType(const Json& object, const std::string& path, const char* key, bool integer)
+{
+  const auto& value = object.at(key);
+  if (integer ? !value.is_number_integer() : !value.is_number()) {
+    return invalidConfig(path + "." + key, integer ? "expected integer" : "expected number");
+  }
+  return ConfigValidationResult{true, {}, {}};
+}
+
+ConfigValidationResult requireStringArray(const Json& object, const std::string& path, const char* key)
+{
+  const auto& value = object.at(key);
+  if (!value.is_array()) {
+    return invalidConfig(path + "." + key, "expected array of strings");
+  }
+  for (std::size_t index = 0; index < value.size(); ++index) {
+    if (!value.at(index).is_string()) {
+      return invalidConfig(path + "." + key + "[" + std::to_string(index) + "]", "expected string");
+    }
+  }
+  return ConfigValidationResult{true, {}, {}};
+}
+
+ConfigValidationResult validateConfigSchema(const Json& json)
+{
+  auto result = validateObject(json, "$", {{"PL", true}});
+  if (!result.valid) {
+    return result;
+  }
+  const auto& pl = json.at("PL");
+  result = validateObject(pl, "$.PL",
+                          {{"is_max_length_opt", true}, {"max_length_constraint", true}, {"is_timing_effort", true},
+                           {"is_congestion_effort", true}, {"ignore_net_degree", true}, {"num_threads", true},
+                           {"info_iter_num", true}, {"GP", true}, {"BUFFER", true}, {"LG", true}, {"DP", true},
+                           {"Filler", true}});
+  if (!result.valid) {
+    return result;
+  }
+  for (const char* key : {"is_max_length_opt", "max_length_constraint", "is_timing_effort", "is_congestion_effort",
+                          "ignore_net_degree", "num_threads", "info_iter_num"}) {
+    result = requireType(pl, "$.PL", key, true);
+    if (!result.valid) {
+      return result;
+    }
+  }
+
+  const auto& gp = pl.at("GP");
+  result = validateObject(gp, "$.PL.GP", {{"global_right_padding", false}, {"Wirelength", true}, {"Density", true}, {"Nesterov", true}});
+  if (!result.valid) {
+    return result;
+  }
+  if (gp.contains("global_right_padding")) {
+    result = requireType(gp, "$.PL.GP", "global_right_padding", true);
+    if (!result.valid) {
+      return result;
+    }
+  }
+
+  const auto& wirelength = gp.at("Wirelength");
+  result = validateObject(wirelength, "$.PL.GP.Wirelength",
+                          {{"init_wirelength_coef", true}, {"reference_hpwl", true}, {"min_wirelength_force_bar", true}});
+  if (!result.valid) {
+    return result;
+  }
+  for (const char* key : {"init_wirelength_coef", "reference_hpwl", "min_wirelength_force_bar"}) {
+    result = requireType(wirelength, "$.PL.GP.Wirelength", key, false);
+    if (!result.valid) {
+      return result;
+    }
+  }
+
+  const auto& density = gp.at("Density");
+  result = validateObject(density, "$.PL.GP.Density",
+                          {{"target_density", true}, {"is_adaptive_bin", true}, {"bin_cnt_x", true}, {"bin_cnt_y", true}});
+  if (!result.valid) {
+    return result;
+  }
+  result = requireType(density, "$.PL.GP.Density", "target_density", false);
+  if (!result.valid) {
+    return result;
+  }
+  for (const char* key : {"is_adaptive_bin", "bin_cnt_x", "bin_cnt_y"}) {
+    result = requireType(density, "$.PL.GP.Density", key, true);
+    if (!result.valid) {
+      return result;
+    }
+  }
+
+  const auto& nesterov = gp.at("Nesterov");
+  result = validateObject(nesterov, "$.PL.GP.Nesterov",
+                          {{"max_iter", true}, {"max_backtrack", true}, {"init_density_penalty", true},
+                           {"target_overflow", true}, {"initial_prev_coordi_update_coef", true}, {"min_precondition", true},
+                           {"min_phi_coef", true}, {"max_phi_coef", true}});
+  if (!result.valid) {
+    return result;
+  }
+  for (const char* key : {"max_iter", "max_backtrack"}) {
+    result = requireType(nesterov, "$.PL.GP.Nesterov", key, true);
+    if (!result.valid) {
+      return result;
+    }
+  }
+  for (const char* key : {"init_density_penalty", "target_overflow", "initial_prev_coordi_update_coef", "min_precondition",
+                          "min_phi_coef", "max_phi_coef"}) {
+    result = requireType(nesterov, "$.PL.GP.Nesterov", key, false);
+    if (!result.valid) {
+      return result;
+    }
+  }
+
+  const auto& buffer = pl.at("BUFFER");
+  result = validateObject(buffer, "$.PL.BUFFER", {{"max_buffer_num", true}, {"buffer_type", true}});
+  if (!result.valid) {
+    return result;
+  }
+  result = requireType(buffer, "$.PL.BUFFER", "max_buffer_num", true);
+  if (!result.valid) {
+    return result;
+  }
+  result = requireStringArray(buffer, "$.PL.BUFFER", "buffer_type");
+  if (!result.valid) {
+    return result;
+  }
+
+  for (const char* section_name : {"LG", "DP"}) {
+    const auto& section = pl.at(section_name);
+    const bool is_dp = std::string(section_name) == "DP";
+    result = validateObject(section, std::string("$.PL.") + section_name,
+                            is_dp ? std::vector<std::pair<std::string, bool>>{{"max_displacement", true},
+                                                                                {"global_right_padding", true},
+                                                                                {"enable_networkflow", true},
+                                                                                {"local_reorder_max_window", false},
+                                                                                {"local_reorder_budget", false},
+                                                                                {"enable_row_opt", false},
+                                                                                {"enable_instance_swap", false},
+                                                                                {"enable_local_reorder", false},
+                                                                                {"enable_bin_opt", false}}
+                                  : std::vector<std::pair<std::string, bool>>{{"max_displacement", true},
+                                                                                {"global_right_padding", true}});
+    if (!result.valid) {
+      return result;
+    }
+    result = requireType(section, std::string("$.PL.") + section_name, "max_displacement", true);
+    if (!result.valid) {
+      return result;
+    }
+    result = requireType(section, std::string("$.PL.") + section_name, "global_right_padding", true);
+    if (!result.valid) {
+      return result;
+    }
+    if (is_dp) {
+      result = requireType(section, "$.PL.DP", "enable_networkflow", true);
+      if (!result.valid) {
+        return result;
+      }
+      for (const char* key : {"local_reorder_max_window", "enable_row_opt", "enable_instance_swap",
+                              "enable_local_reorder", "enable_bin_opt"}) {
+        if (section.contains(key)) {
+          result = requireType(section, "$.PL.DP", key, true);
+          if (!result.valid) {
+            return result;
+          }
+        }
+      }
+      if (section.contains("local_reorder_budget")) {
+        result = requireType(section, "$.PL.DP", "local_reorder_budget", true);
+        if (!result.valid) {
+          return result;
+        }
+      }
+    }
+  }
+
+  const auto& filler = pl.at("Filler");
+  result = validateObject(filler, "$.PL.Filler", {{"first_iter", true}, {"second_iter", true}, {"min_filler_width", true}});
+  if (!result.valid) {
+    return result;
+  }
+  for (const char* key : {"first_iter", "second_iter"}) {
+    result = requireStringArray(filler, "$.PL.Filler", key);
+    if (!result.valid) {
+      return result;
+    }
+  }
+  return requireType(filler, "$.PL.Filler", "min_filler_width", true);
+}
+
+auto fnv1a64(const std::string& value) -> std::string
+{
+  uint64_t hash = 14695981039346656037ULL;
+  for (unsigned char character : value) {
+    hash ^= character;
+    hash *= 1099511628211ULL;
+  }
+  std::ostringstream stream;
+  stream << std::hex << std::setfill('0') << std::setw(16) << hash;
+  return stream.str();
+}
+
+}  // namespace
+
+ConfigValidationResult Config::validateJson(const nlohmann::json& json)
+{
+  auto result = validateConfigSchema(json);
+  if (!result.valid) {
+    return result;
+  }
+
+  const auto& pl = json.at("PL");
+  for (const char* key : {"is_max_length_opt", "is_timing_effort", "is_congestion_effort"}) {
+    const int32_t value = pl.at(key).get<int32_t>();
+    if (value != 0 && value != 1) {
+      return invalidConfig(std::string("$.PL.") + key, "expected 0 or 1");
+    }
+  }
+  if (pl.at("num_threads").get<int32_t>() <= 0) {
+    return invalidConfig("$.PL.num_threads", "must be positive");
+  }
+  if (pl.at("info_iter_num").get<int32_t>() == 0) {
+    return invalidConfig("$.PL.info_iter_num", "must be positive or negative to select the compatibility default");
+  }
+  if (pl.at("ignore_net_degree").get<int32_t>() < 0) {
+    return invalidConfig("$.PL.ignore_net_degree", "must be non-negative");
+  }
+  if (pl.at("max_length_constraint").get<int32_t>() <= 0) {
+    return invalidConfig("$.PL.max_length_constraint", "must be positive");
+  }
+
+  const auto& gp = pl.at("GP");
+  NesterovPlaceConfig nesterov_config;
+  nesterov_config.set_thread_num(pl.at("num_threads").get<int32_t>());
+  const int32_t info_iter_num = pl.at("info_iter_num").get<int32_t>();
+  nesterov_config.set_info_iter_num(info_iter_num < 0 ? 10 : info_iter_num);
+  nesterov_config.set_init_wirelength_coef(gp.at("Wirelength").at("init_wirelength_coef").get<float>());
+  nesterov_config.set_reference_hpwl(gp.at("Wirelength").at("reference_hpwl").get<float>());
+  nesterov_config.set_min_wirelength_force_bar(gp.at("Wirelength").at("min_wirelength_force_bar").get<float>());
+  nesterov_config.set_target_density(gp.at("Density").at("target_density").get<float>());
+  nesterov_config.set_bin_cnt_x(gp.at("Density").at("bin_cnt_x").get<int32_t>());
+  nesterov_config.set_bin_cnt_y(gp.at("Density").at("bin_cnt_y").get<int32_t>());
+  nesterov_config.set_max_iter(gp.at("Nesterov").at("max_iter").get<int32_t>());
+  nesterov_config.set_max_back_track(gp.at("Nesterov").at("max_backtrack").get<int32_t>());
+  nesterov_config.set_init_density_penalty(gp.at("Nesterov").at("init_density_penalty").get<float>());
+  nesterov_config.set_target_overflow(gp.at("Nesterov").at("target_overflow").get<float>());
+  nesterov_config.set_initial_prev_coordi_update_coef(
+      gp.at("Nesterov").at("initial_prev_coordi_update_coef").get<float>());
+  nesterov_config.set_min_precondition(gp.at("Nesterov").at("min_precondition").get<float>());
+  nesterov_config.set_min_phi_coef(gp.at("Nesterov").at("min_phi_coef").get<float>());
+  nesterov_config.set_max_phi_coef(gp.at("Nesterov").at("max_phi_coef").get<float>());
+  nesterov_config.set_global_padding(gp.value("global_right_padding", 0));
+  nesterov_config.set_is_opt_max_wirelength(pl.at("is_max_length_opt").get<int32_t>() == 1);
+  nesterov_config.set_max_net_wirelength(pl.at("max_length_constraint").get<int32_t>());
+  std::string reason;
+  if (!nesterov_config.validate(&reason)) {
+    return invalidConfig("$.PL.GP", reason);
+  }
+
+  for (const char* section_name : {"LG", "DP"}) {
+    const auto& section = pl.at(section_name);
+    if (section.at("max_displacement").get<int32_t>() < 0) {
+      return invalidConfig(std::string("$.PL.") + section_name + ".max_displacement", "must be non-negative");
+    }
+    if (section.at("global_right_padding").get<int32_t>() < 0) {
+      return invalidConfig(std::string("$.PL.") + section_name + ".global_right_padding", "must be non-negative");
+    }
+  }
+  const int32_t networkflow = pl.at("DP").at("enable_networkflow").get<int32_t>();
+  if (networkflow != 0 && networkflow != 1) {
+    return invalidConfig("$.PL.DP.enable_networkflow", "expected 0 or 1");
+  }
+  if (pl.at("DP").value("local_reorder_max_window", 2) < 2) {
+    return invalidConfig("$.PL.DP.local_reorder_max_window", "must be at least 2");
+  }
+  if (pl.at("DP").value("local_reorder_budget", static_cast<int64_t>(-1)) < -1) {
+    return invalidConfig("$.PL.DP.local_reorder_budget", "must be -1 or non-negative");
+  }
+  for (const char* key : {"enable_row_opt", "enable_instance_swap", "enable_local_reorder", "enable_bin_opt"}) {
+    const int32_t default_value = std::string(key) == "enable_bin_opt" ? 0 : 1;
+    const int32_t value = pl.at("DP").value(key, default_value);
+    if (value != 0 && value != 1) {
+      return invalidConfig(std::string("$.PL.DP.") + key, "expected 0 or 1");
+    }
+  }
+  if (pl.at("BUFFER").at("max_buffer_num").get<int32_t>() < 0) {
+    return invalidConfig("$.PL.BUFFER.max_buffer_num", "must be non-negative");
+  }
+  if (pl.at("Filler").at("min_filler_width").get<int32_t>() <= 0) {
+    return invalidConfig("$.PL.Filler.min_filler_width", "must be positive");
+  }
+  return ConfigValidationResult{true, {}, {}};
+}
+
+ConfigValidationResult Config::validateFile(const std::string& json_file)
+{
+  std::ifstream stream(json_file);
+  if (!stream.good()) {
+    return invalidConfig(json_file, "cannot open configuration file");
+  }
+  try {
+    nlohmann::json json;
+    stream >> json;
+    return validateJson(json);
+  } catch (const std::exception& error) {
+    return invalidConfig(json_file, std::string("malformed JSON: ") + error.what());
+  }
+}
 
 void Config::setConfigFromJson(const std::string& json_file)
 {
@@ -47,8 +392,19 @@ void Config::initConfig(const std::string& json_file)
   }
 
   nlohmann::json json;
-  in_stream >> json;
+  try {
+    in_stream >> json;
+  } catch (const std::exception& error) {
+    LOG_FATAL << "Malformed configuration file " << json_file << ": " << error.what();
+  }
+  const auto validation = validateJson(json);
+  LOG_FATAL_IF(!validation.valid) << "Invalid iPL configuration at " << validation.path << ": " << validation.reason;
   initConfigByJson(json);
+  _effective_config = std::move(json);
+  if (!_effective_config["PL"]["GP"].contains("global_right_padding")) {
+    _effective_config["PL"]["GP"]["global_right_padding"] = 0;
+  }
+  _effective_config["PL"]["info_iter_num"] = _nes_config.get_info_iter_num();
 
   in_stream.close();
 }
@@ -101,6 +457,12 @@ void Config::initConfigByJson(nlohmann::json json)
   int32_t dp_max_displacement = getDataByJson(json, {"PL", "DP", "max_displacement"});
   int32_t dp_global_padding = getDataByJson(json, {"PL", "DP", "global_right_padding"});
   int32_t dp_enable_networkflow = getDataByJson(json, {"PL", "DP", "enable_networkflow"});
+  int32_t dp_local_reorder_max_window = json.at("PL").at("DP").value("local_reorder_max_window", 2);
+  int64_t dp_local_reorder_budget = json.at("PL").at("DP").value("local_reorder_budget", static_cast<int64_t>(-1));
+  int32_t dp_enable_row_opt = json.at("PL").at("DP").value("enable_row_opt", 1);
+  int32_t dp_enable_instance_swap = json.at("PL").at("DP").value("enable_instance_swap", 1);
+  int32_t dp_enable_local_reorder = json.at("PL").at("DP").value("enable_local_reorder", 1);
+  int32_t dp_enable_bin_opt = json.at("PL").at("DP").value("enable_bin_opt", 0);
 
   // Filler
   std::vector<std::vector<std::string>> filler_group_list;
@@ -213,6 +575,12 @@ void Config::initConfigByJson(nlohmann::json json)
   _dp_config.set_max_displacement(dp_max_displacement);
   _dp_config.set_global_padding(dp_global_padding);
   _dp_config.set_enable_networkflow(dp_enable_networkflow);
+  _dp_config.set_local_reorder_max_window(dp_local_reorder_max_window);
+  _dp_config.set_local_reorder_budget(dp_local_reorder_budget);
+  _dp_config.set_enable_row_opt(dp_enable_row_opt);
+  _dp_config.set_enable_instance_swap(dp_enable_instance_swap);
+  _dp_config.set_enable_local_reorder(dp_enable_local_reorder);
+  _dp_config.set_enable_bin_opt(dp_enable_bin_opt);
 
   // Filler
   _filler_config.set_thread_num(num_threads);
@@ -268,6 +636,9 @@ nlohmann::json Config::getDataByJson(nlohmann::json value, std::vector<std::stri
 
 void Config::checkConfig()
 {
+  std::string reason;
+  LOG_FATAL_IF(!_nes_config.validate(&reason)) << "Invalid GP Nesterov configuration: " << reason;
+
   float target_density = _nes_config.get_target_density();
   LOG_FATAL_IF(target_density <= 0.0 || target_density >= 1.0)
     << "Invalid GP target_density: " << target_density << " (must be in (0,1)).";
@@ -278,7 +649,12 @@ void Config::checkConfig()
 
 void Config::printConfig()
 {
-  //
+  LOG_INFO << "iPL effective configuration hash: " << effectiveConfigHash();
+}
+
+std::string Config::effectiveConfigHash() const
+{
+  return fnv1a64(_effective_config.dump());
 }
 
 }  // namespace ipl

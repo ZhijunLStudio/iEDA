@@ -16,6 +16,8 @@
 // ***************************************************************************************
 #include "RowOpt.hh"
 
+#include <map>
+
 #include "module/logger/Log.hh"
 
 namespace ipl {
@@ -235,8 +237,28 @@ void RowOpt::correctOptimalLineInInterval(std::pair<int32_t, int32_t>& optimal_l
   }
 }
 
-void RowOpt::runRowOpt()
+RowOptResult RowOpt::runRowOpt()
 {
+  _last_result = RowOptResult{};
+  if (_database == nullptr || _database->get_design() == nullptr || _database->get_layout() == nullptr || _operator == nullptr) {
+    _last_result.outcome = RowOptOutcome::kInvalidInput;
+    _last_result.reason = "row optimization has incomplete database";
+    return _last_result;
+  }
+  if (_database->get_layout()->get_interval_2d_list().empty() || _database->get_layout()->get_row_height() <= 0 || _site_width <= 0) {
+    _last_result.outcome = RowOptOutcome::kInvalidInput;
+    _last_result.reason = "row optimization has no usable row intervals";
+    return _last_result;
+  }
+
+  std::map<DPInstance*, Point<int32_t>> before_coordinates;
+  for (auto* inst : _database->get_design()->get_inst_list()) {
+    if (inst != nullptr) {
+      before_coordinates.emplace(inst, inst->get_coordi());
+    }
+  }
+  _last_result.hpwl_before = _operator->calTotalHPWL();
+
   int32_t interval_count = 0;
   for (auto pair : _interval_to_root) {
     DPInterval* interval = pair.first;
@@ -293,6 +315,56 @@ void RowOpt::runRowOpt()
 
     ++interval_count;
   }
+
+  for (const auto& before : before_coordinates) {
+    if (before.first->get_coordi().get_x() != before.second.get_x()
+        || before.first->get_coordi().get_y() != before.second.get_y()) {
+      ++_last_result.changed_count;
+    }
+  }
+  _last_result.hpwl_after = _operator->calTotalHPWL();
+  _last_result.completed = true;
+  _last_result.legal = checkOutputLegal();
+  if (!_last_result.legal) {
+    _last_result.outcome = RowOptOutcome::kIllegalOutput;
+    _last_result.reason = "row optimization produced an out-of-interval instance";
+  } else if (_last_result.changed_count == 0) {
+    _last_result.outcome = RowOptOutcome::kNoOp;
+    _last_result.reason = "row optimization made no coordinate changes";
+  } else {
+    _last_result.outcome = RowOptOutcome::kCompleted;
+    _last_result.reason = "row optimization completed";
+  }
+  return _last_result;
+}
+
+bool RowOpt::checkOutputLegal() const
+{
+  auto* layout = _database->get_layout();
+  const auto& intervals = layout->get_interval_2d_list();
+  const int32_t row_height = layout->get_row_height();
+  for (auto* inst : _database->get_design()->get_inst_list()) {
+    if (inst == nullptr || inst->get_state() == DPINSTANCE_STATE::kFixed
+        || inst->get_state() == DPINSTANCE_STATE::kUnPlaced) {
+      continue;
+    }
+    const auto shape = inst->get_shape();
+    const int32_t row_index = shape.get_ll_y() / row_height;
+    if (row_index < 0 || row_index >= static_cast<int32_t>(intervals.size())) {
+      return false;
+    }
+    bool in_interval = false;
+    for (auto* interval : intervals.at(row_index)) {
+      if (interval != nullptr && interval->checkInLine(shape.get_ll_x(), shape.get_ur_x())) {
+        in_interval = true;
+        break;
+      }
+    }
+    if (!in_interval) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void RowOpt::collapseClusters(DPCluster* dest_cluster, DPCluster* src_cluster)

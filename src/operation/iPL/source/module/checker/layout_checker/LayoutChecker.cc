@@ -26,9 +26,27 @@
 
 #include "LayoutChecker.hh"
 
+#include <algorithm>
 #include <set>
+#include <sstream>
 
 namespace ipl {
+
+std::string layoutViolationTypeName(LayoutViolationType type)
+{
+  switch (type) {
+    case LayoutViolationType::kOutsideCore:
+      return "outside_core";
+    case LayoutViolationType::kRowSiteAlignment:
+      return "row_site_alignment";
+    case LayoutViolationType::kPowerAlignment:
+      return "power_alignment";
+    case LayoutViolationType::kOverlap:
+      return "overlap";
+    default:
+      return "unknown";
+  }
+}
 
 LayoutChecker::LayoutChecker(PlacerDB* placer_db)
 {
@@ -152,6 +170,77 @@ bool LayoutChecker::isNoOverlapAmongInsts()
   } else {
     return true;
   }
+}
+
+std::vector<LayoutViolation> LayoutChecker::obtainViolationList()
+{
+  std::vector<LayoutViolation> violation_list;
+
+  const auto append_single_instance = [&violation_list](LayoutViolationType type, Instance* inst, std::string reason) {
+    LayoutViolation violation;
+    violation.type = type;
+    violation.instance_names.push_back(inst->get_name());
+    violation.shape = inst->get_shape();
+    violation.reason = std::move(reason);
+    violation_list.push_back(std::move(violation));
+  };
+
+  for (auto* inst : obtainIllegalInstInsideCore()) {
+    append_single_instance(LayoutViolationType::kOutsideCore, inst, "instance outside core");
+  }
+
+  for (auto* inst : obtainIllegalInstAlignRowSite()) {
+    append_single_instance(LayoutViolationType::kRowSiteAlignment, inst, "instance not aligned to row/site");
+  }
+
+  for (auto* inst : obtainIllegalInstAlignPower()) {
+    append_single_instance(LayoutViolationType::kPowerAlignment, inst, "instance power orientation mismatch");
+  }
+
+  std::set<std::string> seen_overlap_keys;
+  for (auto clique : obtainOverlapInstClique()) {
+    std::sort(clique.begin(), clique.end(), [](Instance* lhs, Instance* rhs) { return lhs->get_name() < rhs->get_name(); });
+
+    std::vector<std::string> clique_names;
+    clique_names.reserve(clique.size());
+    for (auto* inst : clique) {
+      clique_names.push_back(inst->get_name());
+    }
+
+    std::ostringstream clique_key;
+    for (size_t index = 0; index < clique_names.size(); ++index) {
+      if (index != 0) {
+        clique_key << '|';
+      }
+      clique_key << clique_names.at(index);
+    }
+
+    if (!seen_overlap_keys.insert(clique_key.str()).second) {
+      continue;
+    }
+
+    LayoutViolation violation;
+    violation.type = LayoutViolationType::kOverlap;
+    violation.instance_names = std::move(clique_names);
+    violation.shape = clique.empty() ? Rectangle<int32_t>() : clique.front()->get_shape();
+    violation.reason = clique.size() == 1 ? "maybe overlap with blockage" : "instances overlap on an occupied grid";
+    violation_list.push_back(std::move(violation));
+  }
+
+  std::sort(violation_list.begin(), violation_list.end(), [](const LayoutViolation& lhs, const LayoutViolation& rhs) {
+    if (lhs.type != rhs.type) {
+      return static_cast<int>(lhs.type) < static_cast<int>(rhs.type);
+    }
+    if (lhs.instance_names.empty() || rhs.instance_names.empty()) {
+      return lhs.instance_names.size() < rhs.instance_names.size();
+    }
+    if (lhs.instance_names.front() != rhs.instance_names.front()) {
+      return lhs.instance_names.front() < rhs.instance_names.front();
+    }
+    return lhs.reason < rhs.reason;
+  });
+
+  return violation_list;
 }
 
 std::vector<Instance*> LayoutChecker::obtainIllegalInstInsideCore()

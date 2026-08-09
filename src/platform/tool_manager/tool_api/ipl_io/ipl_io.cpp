@@ -63,7 +63,8 @@ bool PlacerIO::runPlacement(std::string config, bool enableJsonOutput)
   }
 
   ieda::Stats stats;
-  const bool placement_succeeded = ipl::propagatePlacementFlowResult([] { return iPLAPIInst.runFlow(); });
+  const auto placement_result = iPLAPIInst.runFlowResult();
+  const bool placement_succeeded = ipl::placementTclResult(placement_result);
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
@@ -82,14 +83,15 @@ bool PlacerIO::runAiPlacement(std::string config, std::string onnx_path, std::st
   }
 
   ieda::Stats stats;
-  iPLAPIInst.runAiFlow(onnx_path, normalization_path);
+  const auto placement_result = iPLAPIInst.runAiFlowResult(onnx_path, normalization_path);
+  const bool placement_succeeded = ipl::placementTclResult(placement_result);
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
 
   // destroyPlacer();
 
-  return true;
+  return placement_succeeded;
 }
 
 
@@ -170,15 +172,17 @@ bool PlacerIO::runFillerInsertion(std::string config)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool PlacerIO::runMacroPlacement()
 {
-  // if (!iPLAPIInst.isPlacerDBStarted()) {
-  //   this->initPlacer("");
-  // } else {
-  //   iPLAPIInst.updatePlacerDB();
-  // }
-
-  // iPLAPIInst.runMP();
-
-  return true;
+  if (!iPLAPIInst.isPlacerDBStarted()) {
+    this->initPlacer("");
+  } else {
+    iPLAPIInst.updatePlacerDB();
+  }
+  iPLAPIInst.resetFlowStatus();
+  const bool success = iPLAPIInst.runMP();
+  if (success && !iPLAPIInst.writeBackSourceDataBase()) {
+    return false;
+  }
+  return success;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,9 +196,9 @@ bool PlacerIO::runGlobalPlacement()
     iPLAPIInst.updatePlacerDB();
   }
 
-  iPLAPIInst.runGP();
-
-  return true;
+  iPLAPIInst.resetFlowStatus();
+  const bool success = iPLAPIInst.runGPResult().success;
+  return success && iPLAPIInst.writeBackSourceDataBase();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -209,6 +213,9 @@ bool PlacerIO::runLegalization()
   }
 
   bool flag = iPLAPIInst.runLG();
+  if (flag) {
+    flag = iPLAPIInst.writeBackSourceDataBase();
+  }
 
   return flag;
 }
@@ -216,7 +223,7 @@ bool PlacerIO::runLegalization()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void PlacerIO::runDetailPlacement()
+bool PlacerIO::runDetailPlacement()
 {
   if (!iPLAPIInst.isPlacerDBStarted()) {
     this->initPlacer("");
@@ -224,7 +231,8 @@ void PlacerIO::runDetailPlacement()
     iPLAPIInst.updatePlacerDB();
   }
 
-  iPLAPIInst.runDP();
+  const bool success = iPLAPIInst.runDP();
+  return success && iPLAPIInst.writeBackSourceDataBase();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

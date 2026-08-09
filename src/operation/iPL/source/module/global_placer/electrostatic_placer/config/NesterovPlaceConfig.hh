@@ -27,6 +27,7 @@
 #ifndef IPL_OPERATOR_GP_NESTEROV_PLACE_CONFIG_H
 #define IPL_OPERATOR_GP_NESTEROV_PLACE_CONFIG_H
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -44,7 +45,7 @@ class NesterovPlaceConfig
   NesterovPlaceConfig& operator=(NesterovPlaceConfig&& other) = default;
 
   // getter.
-  int32_t get_thread_num() const { return _thread_num;}
+  int32_t get_thread_num() const { return _thread_num; }
   int32_t get_info_iter_num() const { return _info_iter_num; }
   float   get_init_wirelength_coef() const { return _init_wirelength_coef; }
   float   get_reference_hpwl() const { return _reference_hpwl; }
@@ -66,7 +67,69 @@ class NesterovPlaceConfig
   bool isOptCongestion() const { return _is_opt_congestion;}
   int32_t get_max_net_wirelength() const { return _max_net_wirelength;}
   int32_t get_global_padding() const { return _global_padding; }
-  const std::vector<float>& get_opt_overflow_list() {return _opt_overflow_list;} 
+  const std::vector<float>& get_opt_overflow_list() { return _opt_overflow_list; }
+
+  bool validate(std::string* reason = nullptr) const
+  {
+    const auto fail = [reason](const std::string& message) {
+      if (reason != nullptr) {
+        *reason = message;
+      }
+      return false;
+    };
+
+    if (_thread_num <= 0) {
+      return fail("thread_num must be positive");
+    }
+    if (_info_iter_num <= 0) {
+      return fail("info_iter_num must be positive");
+    }
+    if (!std::isfinite(_init_wirelength_coef) || _init_wirelength_coef <= 0.0f) {
+      return fail("init_wirelength_coef must be positive and finite");
+    }
+    if (!std::isfinite(_reference_hpwl) || _reference_hpwl <= 0.0f) {
+      return fail("reference_hpwl must be positive and finite");
+    }
+    if (!std::isfinite(_min_wirelength_force_bar)) {
+      return fail("min_wirelength_force_bar must be finite");
+    }
+    if (!std::isfinite(_target_density) || _target_density <= 0.0f || _target_density >= 1.0f) {
+      return fail("target_density must be in (0,1)");
+    }
+    if (_bin_cnt_x <= 0 || _bin_cnt_y <= 0) {
+      return fail("bin counts must be positive");
+    }
+    if (_max_iter <= 0) {
+      return fail("max_iter must be positive");
+    }
+    if (_max_back_track <= 0) {
+      return fail("max_back_track must be positive");
+    }
+    if (!std::isfinite(_init_density_penalty) || _init_density_penalty <= 0.0f) {
+      return fail("init_density_penalty must be positive and finite");
+    }
+    if (!std::isfinite(_target_overflow) || _target_overflow <= 0.0f || _target_overflow >= 1.0f) {
+      return fail("target_overflow must be in (0,1)");
+    }
+    if (!std::isfinite(_initial_prev_coordi_update_coef) || _initial_prev_coordi_update_coef < 0.0f) {
+      return fail("initial_prev_coordi_update_coef must be non-negative and finite");
+    }
+    if (!std::isfinite(_min_precondition) || _min_precondition <= 0.0f) {
+      return fail("min_precondition must be positive and finite");
+    }
+    if (!std::isfinite(_min_phi_coef) || !std::isfinite(_max_phi_coef) || _min_phi_coef <= 0.0f || _max_phi_coef <= 0.0f
+        || _min_phi_coef > _max_phi_coef) {
+      return fail("phi coefficients must satisfy 0 < min_phi_coef <= max_phi_coef");
+    }
+    if (_is_opt_max_wirelength && _max_net_wirelength <= 0) {
+      return fail("max_net_wirelength must be positive when max wirelength optimization is enabled");
+    }
+    if (_global_padding < 0) {
+      return fail("global_padding must be non-negative");
+    }
+
+    return true;
+  }
 
   // setter.
   void set_thread_num(int32_t num_thread) { _thread_num = num_thread; }
@@ -94,38 +157,38 @@ class NesterovPlaceConfig
   void add_opt_target_overflow(float overflow) { _opt_overflow_list.push_back(overflow);}
 
  private:
-  int32_t _thread_num;
-  int32_t _info_iter_num;
+  int32_t _thread_num = 1;
+  int32_t _info_iter_num = 10;
   // about wirelength.
-  float _init_wirelength_coef;
-  float _reference_hpwl;
-  float _min_wirelength_force_bar;
+  float _init_wirelength_coef = 1.0F;
+  float _reference_hpwl = 1.0F;
+  float _min_wirelength_force_bar = 1.0F;
 
   // about density.
-  float   _target_density;
-  bool _is_adaptive_bin;
-  int32_t _bin_cnt_x;
-  int32_t _bin_cnt_y;
+  float _target_density = 0.7F;
+  bool _is_adaptive_bin = false;
+  int32_t _bin_cnt_x = 16;
+  int32_t _bin_cnt_y = 16;
 
   // about nesterov.
-  int32_t _max_iter;
-  int32_t _max_back_track;
-  float   _init_density_penalty;
-  float   _target_overflow;
-  float   _initial_prev_coordi_update_coef;
-  float   _min_precondition;
-  float   _min_phi_coef;
-  float   _max_phi_coef;
+  int32_t _max_iter = 250;
+  int32_t _max_back_track = 10;
+  float _init_density_penalty = 1.0F;
+  float _target_overflow = 0.1F;
+  float _initial_prev_coordi_update_coef = 0.9F;
+  float _min_precondition = 1.0e-6F;
+  float _min_phi_coef = 0.1F;
+  float _max_phi_coef = 0.98F;
 
   // about maxlength constraint
-  bool _is_opt_max_wirelength;
-  int32_t _max_net_wirelength;
+  bool _is_opt_max_wirelength = false;
+  int32_t _max_net_wirelength = -1;
 
   // about timing.
-  bool _is_opt_timing;
+  bool _is_opt_timing = false;
 
   // about congestion.
-  bool _is_opt_congestion;
+  bool _is_opt_congestion = false;
 
   // about opt target overflow list
   std::vector<float> _opt_overflow_list;

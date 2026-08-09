@@ -17,14 +17,74 @@
 
 #include "Legalizer.hh"
 
+#include <algorithm>
+
 #include "LGMethodCreator.hh"
 #include "LGMethodInterface.hh"
 #include "abacus/Abacus.hh"
 
 namespace ipl {
 
+namespace {
+
+int32_t clampValue(int32_t value, int32_t lower, int32_t upper)
+{
+  if (upper < lower) {
+    return lower;
+  }
+  return std::max(lower, std::min(value, upper));
+}
+
+int32_t snapToPitch(int32_t value, int32_t origin, int32_t pitch)
+{
+  if (pitch <= 0) {
+    return value;
+  }
+  return origin + ((value - origin) / pitch) * pitch;
+}
+
+void clampInstanceToCore(Instance* inst, const Layout* layout)
+{
+  if (inst == nullptr || layout == nullptr || inst->isFixed() || inst->isFakeInstance() || inst->isOutsideInstance()) {
+    return;
+  }
+
+  const Rectangle<int32_t> core_shape = layout->get_core_shape();
+  const int32_t core_lx = core_shape.get_ll_x();
+  const int32_t core_ly = core_shape.get_ll_y();
+  const int32_t core_ux = core_shape.get_ur_x();
+  const int32_t core_uy = core_shape.get_ur_y();
+  const int32_t site_width = layout->get_site_width();
+  const int32_t row_height = layout->get_row_height();
+  const Rectangle<int32_t> inst_shape = inst->get_shape();
+  const int32_t inst_width = inst_shape.get_width();
+  const int32_t inst_height = inst_shape.get_height();
+
+  int32_t max_llx = std::max(core_lx, core_ux - inst_width);
+  int32_t max_lly = std::max(core_ly, core_uy - inst_height);
+  int32_t llx = clampValue(inst_shape.get_ll_x(), core_lx, max_llx);
+  int32_t lly = clampValue(inst_shape.get_ll_y(), core_ly, max_lly);
+
+  if (inst->get_cell_master() != nullptr && !inst->get_cell_master()->isMacro()) {
+    llx = clampValue(snapToPitch(llx, core_lx, site_width), core_lx, max_llx);
+    lly = clampValue(snapToPitch(lly, core_ly, row_height), core_ly, max_lly);
+  }
+
+  if (llx != inst_shape.get_ll_x() || lly != inst_shape.get_ll_y()) {
+    inst->update_coordi(llx, lly);
+  }
+}
+
+}  // namespace
+
 void Legalizer::initLegalizer(Config* pl_config, PlacerDB* placer_db)
 {
+  if (pl_config == nullptr || placer_db == nullptr) {
+    LOG_ERROR << "Cannot initialize legalizer with null config or placer db.";
+    _mode = LG_MODE::kNone;
+    _method = nullptr;
+    return;
+  }
   initLGConfig(pl_config);
   initLGDatabase(placer_db);
 
@@ -434,6 +494,10 @@ void Legalizer::initSegmentList()
 
 bool Legalizer::runLegalize()
 {
+  if (!isInitialized()) {
+    LOG_ERROR << "Legalizer is not initialized.";
+    return false;
+  }
   LOG_INFO << "-----------------Start Legalization-----------------";
   ieda::Stats lg_status;
 
@@ -462,10 +526,16 @@ bool Legalizer::runLegalize()
 
 bool Legalizer::runIncrLegalize()
 {
+  if (!isInitialized()) {
+    LOG_ERROR << "Legalizer is not initialized.";
+    return false;
+  }
+  if (_target_inst_list.empty() && _mode == LG_MODE::kIncremental) {
+    LOG_INFO << "Incremental legalization has no target instances; nothing to do.";
+    return true;
+  }
   LOG_INFO << "-----------------Start Incrmental Legalization-----------------";
   ieda::Stats incr_lg_status;
-
-  _mode = LG_MODE::kIncremental; // tmp for incremental placement
 
   bool is_succeed = true;
   if (!_method->isInitialized()) {
@@ -500,6 +570,10 @@ bool Legalizer::runIncrLegalize()
 }
 
 bool Legalizer::runRollback(bool clear_but_not_rollback){
+  if (!isInitialized()) {
+    LOG_ERROR << "Legalizer is not initialized.";
+    return false;
+  }
   bool is_succeed = _method->runRollback(clear_but_not_rollback);
   if(is_succeed){
     alignInstanceOrient();
@@ -554,6 +628,7 @@ void Legalizer::notifyPLMovementInfo()
 
 void Legalizer::writebackPlacerDB()
 {
+  const Layout* layout = _database._placer_db->get_layout();
   for (auto* lg_inst : _database._lgInstance_list) {
     if (lg_inst->get_state() == LGINSTANCE_STATE::kFixed) {
       continue;
@@ -567,6 +642,7 @@ void Legalizer::writebackPlacerDB()
       auto* pl_inst = it->second;
       pl_inst->set_orient(lg_inst->get_orient());
       pl_inst->update_coordi(inst_lx, inst_ly);
+      clampInstanceToCore(pl_inst, layout);
     }
   }
 }

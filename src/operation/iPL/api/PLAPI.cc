@@ -64,13 +64,39 @@ auto stageStatusJson(const PlacementStageStatus& status) -> nlohmann::json
   return {{"status", placementStatusCodeName(status.code)},
           {"stage", status.stage},
           {"message", status.message},
+          {"entered", status.entered},
+          {"completed", status.completed},
+          {"skipped", status.skipped},
           {"execution_success", status.execution_success},
           {"quality_success", status.quality_success},
           {"metrics_valid", status.metrics_valid},
           {"legal", status.legal},
           {"overflow", status.overflow},
           {"target_overflow", status.target_overflow},
-          {"hpwl", status.hpwl}};
+          {"hpwl", status.hpwl},
+          {"metric_before", status.metric_before},
+          {"metric_after", status.metric_after},
+          {"changed_count", status.changed_count},
+          {"exhibit", status.exhibit}};
+}
+
+auto nesterovIterationExhibit(const std::vector<NesterovIterationRecord>& records) -> std::vector<std::string>
+{
+  std::vector<std::string> exhibit;
+  exhibit.reserve(records.size());
+  for (const auto& record : records) {
+    exhibit.push_back(nlohmann::json{{"iter", record.iter},
+                                    {"hpwl", record.hpwl},
+                                    {"overflow", record.overflow},
+                                    {"step_length", record.step_length},
+                                    {"gradient_norm", record.gradient_norm},
+                                    {"density_penalty", record.density_penalty},
+                                    {"route_util", record.route_util},
+                                    {"quad_penalty_enabled", record.quad_penalty_enabled},
+                                    {"entropy_injected", record.entropy_injected}}
+                          .dump());
+  }
+  return exhibit;
 }
 
 }  // namespace
@@ -202,14 +228,64 @@ void PLAPI::createPLDirectory()
   }
 }
 
-void PLAPI::writePlacementStatus()
+bool PLAPI::failInjectedStage(const std::string& stage, PlacementStatusCode code, const std::string& reason)
 {
-  PlacementStatusCode overall_code = PlacementStatusCode::kNotRun;
-  if (_flow_status.gp_ran) {
-    overall_code = _flow_status.global_placement.code;
+  if (!shouldInjectFailure(stage)) {
+    return false;
   }
-  if (_flow_status.lg_ran && (!_flow_status.gp_ran || !_flow_status.legalization.quality_success)) {
-    overall_code = _flow_status.legalization.code;
+  _flow_status = PlacementFlowStatus{};
+  _flow_status.failed_stage = stage;
+  _flow_status.overall_reason = reason;
+  auto status = PlacementStatusEvaluator::stage(stage, code, false, false, false, reason);
+  if (stage == "macro_placement") {
+    _flow_status.macro_placement = status;
+  } else if (stage == "global_placement") {
+    _flow_status.global_placement = status;
+    _flow_status.gp_ran = true;
+  } else if (stage == "legalization") {
+    _flow_status.legalization = status;
+    _flow_status.lg_ran = true;
+  } else if (stage == "detail_placement") {
+    _flow_status.detail_placement = status;
+  } else if (stage == "post_global_placement") {
+    _flow_status.post_global_placement = status;
+  } else {
+    _flow_status.artifact = PlacementStatusEvaluator::artifact(false, reason);
+  }
+  writePlacementStatus();
+  return true;
+}
+
+bool PLAPI::writePlacementStatus()
+{
+  if (_flow_status.flow_complete && shouldInjectFailure("artifact")) {
+    _failure_injection_stage.clear();
+    _flow_status.flow_complete = false;
+    _flow_status.artifact = PlacementStatusEvaluator::artifact(false, "failure injected before artifact publication");
+    _flow_status.setFailure(_flow_status.artifact);
+    return false;
+  }
+  if (!_flow_status.artifact.entered) {
+    _flow_status.artifact = PlacementStatusEvaluator::artifact(true);
+  }
+
+  PlacementStatusCode overall_code = PlacementStatusCode::kNotRun;
+  const PlacementStageStatus* stages[] = {&_flow_status.macro_placement,
+                                          &_flow_status.global_placement,
+                                          &_flow_status.buffer_insertion,
+                                          &_flow_status.network_flow,
+                                          &_flow_status.legalization,
+                                          &_flow_status.post_global_placement,
+                                          &_flow_status.detail_placement,
+                                          &_flow_status.artifact};
+  for (const auto* stage : stages) {
+    if (stage->entered && (!stage->execution_success || !stage->quality_success)) {
+      overall_code = stage->code;
+      break;
+    }
+    if (stage->entered) {
+      overall_code = stage->code;
+    }
   }
 
   nlohmann::json summary{{"schema_version", 1},
@@ -217,32 +293,65 @@ void PLAPI::writePlacementStatus()
                          {"flow_complete", _flow_status.flow_complete},
                          {"execution_success", _flow_status.executionSuccess()},
                          {"quality_success", _flow_status.qualitySuccess()},
+                         {"strict_success", _flow_status.strictSuccess()},
+                         {"failed_stage", _flow_status.failed_stage},
+                         {"reason", _flow_status.overall_reason},
+                         {"macro_placement", stageStatusJson(_flow_status.macro_placement)},
                          {"global_placement", stageStatusJson(_flow_status.global_placement)},
-                         {"legalization", stageStatusJson(_flow_status.legalization)}};
+                         {"buffer_insertion", stageStatusJson(_flow_status.buffer_insertion)},
+                         {"network_flow", stageStatusJson(_flow_status.network_flow)},
+                         {"legalization", stageStatusJson(_flow_status.legalization)},
+                         {"post_global_placement", stageStatusJson(_flow_status.post_global_placement)},
+                         {"detail_placement", stageStatusJson(_flow_status.detail_placement)},
+                         {"artifact", stageStatusJson(_flow_status.artifact)}};
 
   const std::filesystem::path output_path = std::filesystem::path(obtainTargetDir()) / "pl" / "report" / "place_summary.json";
-  const std::filesystem::path temporary_path = output_path.string() + ".tmp";
-  {
-    std::ofstream stream(temporary_path);
-    LOG_FATAL_IF(!stream.good()) << "Cannot write placement status artifact: " << temporary_path;
-    stream << summary.dump(2) << '\n';
-    stream.close();
-    LOG_FATAL_IF(!stream) << "Failed while writing placement status artifact: " << temporary_path;
+  const std::filesystem::path stage_report_path = output_path.parent_path() / "ipl_stage_report.json";
+  const std::string serialized_summary = summary.dump(2) + '\n';
+  for (const auto& artifact_path : {output_path, stage_report_path}) {
+    const std::filesystem::path temporary_path = artifact_path.string() + ".tmp";
+    {
+      std::ofstream stream(temporary_path);
+      if (!stream.good()) {
+        _flow_status.artifact = PlacementStatusEvaluator::artifact(false, "cannot open placement status artifact");
+        _flow_status.setFailure(_flow_status.artifact);
+        LOG_ERROR << "Cannot write placement status artifact: " << temporary_path;
+        return false;
+      }
+      stream << serialized_summary;
+      stream.close();
+      if (!stream) {
+        _flow_status.artifact = PlacementStatusEvaluator::artifact(false, "failed while writing placement status artifact");
+        _flow_status.setFailure(_flow_status.artifact);
+        LOG_ERROR << "Failed while writing placement status artifact: " << temporary_path;
+        return false;
+      }
+    }
+    std::error_code error;
+    std::filesystem::rename(temporary_path, artifact_path, error);
+    if (error) {
+      _flow_status.artifact
+          = PlacementStatusEvaluator::artifact(false, "cannot publish placement status artifact: " + error.message());
+      _flow_status.setFailure(_flow_status.artifact);
+      LOG_ERROR << "Cannot publish placement status artifact " << artifact_path << ": " << error.message();
+      return false;
+    }
   }
-  std::error_code error;
-  std::filesystem::rename(temporary_path, output_path, error);
-  LOG_FATAL_IF(error) << "Cannot publish placement status artifact " << output_path << ": " << error.message();
+  return true;
 }
 
 void PLAPI::runIncrementalFlow()
 {
+  resetFlowStatus();
   if (!runLG()) {
     LOG_FATAL << "Incremental flow legalization failed; see place_summary.json.";
     return;
   }
   notifyPLWLInfo(1);
   reportPLInfo();
-  writeBackSourceDataBase();
+  if (!writeBackSourceDataBase()) {
+    return;
+  }
   _flow_status.flow_complete = true;
   writePlacementStatus();
 }
@@ -452,13 +561,32 @@ void PLAPI::destroyTimingEval()
 
 bool PLAPI::runFlow()
 {
-  bool mp_success = runMP();
-  if (!mp_success) {
-    LOG_WARNING << "Macro placement failed, continuing with GP (may cause issues with macro designs)";
+  return runFlowResult().success;
+}
+
+PlacementFlowResult PLAPI::runFlowResult()
+{
+  resetFlowStatus();
+  _flow_status.macro_placement = PlacementStatusEvaluator::skippedStage("macro_placement", "not entered");
+  _flow_status.buffer_insertion = PlacementStatusEvaluator::skippedStage("buffer_insertion", "configuration disabled");
+  _flow_status.network_flow = PlacementStatusEvaluator::skippedStage("network_flow", "configuration disabled");
+  _flow_status.post_global_placement = PlacementStatusEvaluator::skippedStage("post_global_placement", "not selected");
+  _flow_status.detail_placement = PlacementStatusEvaluator::skippedStage("detail_placement", "not selected");
+
+  const auto abort_flow = [this](const std::string& stage, const std::string& reason) {
+    _flow_status.failed_stage = stage;
+    _flow_status.overall_reason = reason;
+    _flow_status.flow_complete = false;
+    writePlacementStatus();
+    LOG_ERROR << reason << "; see place_summary.json.";
+    return PlacementFlowResult::fromStatus(_flow_status);
+  };
+
+  if (!runMP()) {
+    return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
   }
   if (!runGP()) {
-    LOG_FATAL << "Global placement failed its execution contract; see place_summary.json.";
-    return false;
+    return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
   }
   // printHPWLInfo();
   // printTimingInfo();
@@ -470,19 +598,22 @@ bool PLAPI::runFlow()
 
   if (PlacerDBInst.get_placer_config()->get_buffer_config().isMaxLengthOpt()) {
     std::cout << std::endl;
-    runBufferInsertion();
+    if (!runBufferInsertion()) {
+      return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+    }
     printHPWLInfo();
   }
 
   if (PlacerDBInst.get_placer_config()->get_dp_config().isEnableNetworkflow()) {
     std::cout << std::endl;
-    runNetworkFlowSpread();
+    if (!runNetworkFlowSpread()) {
+      return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+    }
   }
 
   std::cout << std::endl;
   if (!runLG()) {
-    LOG_FATAL << "Legalization failed its execution or legality contract; see place_summary.json.";
-    return false;
+    return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
   }
   // printHPWLInfo();
   // printTimingInfo();
@@ -494,9 +625,13 @@ bool PLAPI::runFlow()
 
   std::cout << std::endl;
   if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
-    runPostGP();
+    if (!runPostGP()) {
+      return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+    }
   } else {
-    runDP();
+    if (!runDP()) {
+      return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+    }
   }
   // printHPWLInfo();
   // printTimingInfo();
@@ -529,20 +664,46 @@ bool PLAPI::runFlow()
     _external_api->destroyTimingEval();
   }
 
-  writeBackSourceDataBase();
+  if (!writeBackSourceDataBase()) {
+    return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+  }
   _flow_status.flow_complete = true;
-  writePlacementStatus();
+  if (!writePlacementStatus()) {
+    return PlacementFlowResult::fromStatus(_flow_status);
+  }
   if (!_flow_status.qualitySuccess()) {
     LOG_WARNING << "Placement completed with degraded quality; see place_summary.json.";
   }
-  return _flow_status.executionSuccess();
+  return PlacementFlowResult::fromStatus(_flow_status);
 }
 
 bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normalization_path)
 {
+  return runAiFlowResult(onnx_path, normalization_path).success;
+}
+
+PlacementFlowResult PLAPI::runAiFlowResult(const std::string& onnx_path, const std::string& normalization_path)
+{
+  resetFlowStatus();
+  _flow_status.macro_placement = PlacementStatusEvaluator::skippedStage("macro_placement", "not entered");
+  _flow_status.buffer_insertion = PlacementStatusEvaluator::skippedStage("buffer_insertion", "configuration disabled");
+  _flow_status.network_flow = PlacementStatusEvaluator::skippedStage("network_flow", "configuration disabled");
+  _flow_status.post_global_placement = PlacementStatusEvaluator::skippedStage("post_global_placement", "not selected");
+  _flow_status.detail_placement = PlacementStatusEvaluator::skippedStage("detail_placement", "not selected");
+  const auto abort_flow = [this](const std::string& stage, const std::string& reason) {
+    _flow_status.failed_stage = stage;
+    _flow_status.overall_reason = reason;
+    _flow_status.flow_complete = false;
+    writePlacementStatus();
+    LOG_ERROR << reason << "; see place_summary.json.";
+    return PlacementFlowResult::fromStatus(_flow_status);
+  };
+
+  if (!runMP()) {
+    return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+  }
   if (!runGP()) {
-    LOG_FATAL << "Global placement failed its execution contract; see place_summary.json.";
-    return false;
+    return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
   }
   notifyPLWLInfo(0);
   if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
@@ -552,19 +713,22 @@ bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normaliza
 
   if (PlacerDBInst.get_placer_config()->get_buffer_config().isMaxLengthOpt()) {
     std::cout << std::endl;
-    runBufferInsertion();
+    if (!runBufferInsertion()) {
+      return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+    }
     printHPWLInfo();
   }
 
   if (PlacerDBInst.get_placer_config()->get_dp_config().isEnableNetworkflow()) {
     std::cout << std::endl;
-    runNetworkFlowSpread();
+    if (!runNetworkFlowSpread()) {
+      return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+    }
   }
 
   std::cout << std::endl;
   if (!runLG()) {
-    LOG_FATAL << "Legalization failed its execution or legality contract; see place_summary.json.";
-    return false;
+    return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
   }
   notifyPLWLInfo(1);
   if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
@@ -574,12 +738,18 @@ bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normaliza
 
   std::cout << std::endl;
   if (PlacerDBInst.get_placer_config()->isTimingEffort() && isSTAStarted()) {
-    runPostGP();
+    if (!runPostGP()) {
+      return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+    }
   } else {
 #ifdef ENABLE_AI
-    runDPwithAiWireLengthPredictor(onnx_path, normalization_path);
+    if (!runDPwithAiWireLengthPredictor(onnx_path, normalization_path)) {
+      return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+    }
 #else
-    runDP();
+    if (!runDP()) {
+      return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+    }
 #endif
   }
   notifyPLWLInfo(2);
@@ -602,13 +772,17 @@ bool PLAPI::runAiFlow(const std::string& onnx_path, const std::string& normaliza
     _external_api->destroyTimingEval();
   }
 
-  writeBackSourceDataBase();
+  if (!writeBackSourceDataBase()) {
+    return abort_flow(_flow_status.failed_stage, _flow_status.overall_reason);
+  }
   _flow_status.flow_complete = true;
-  writePlacementStatus();
+  if (!writePlacementStatus()) {
+    return PlacementFlowResult::fromStatus(_flow_status);
+  }
   if (!_flow_status.qualitySuccess()) {
     LOG_WARNING << "Placement completed with degraded quality; see place_summary.json.";
   }
-  return _flow_status.executionSuccess();
+  return PlacementFlowResult::fromStatus(_flow_status);
 }
 
 void PLAPI::insertLayoutFiller()
@@ -624,45 +798,145 @@ void PLAPI::insertLayoutFiller()
 
 bool PLAPI::runMP()
 {
+  if (failInjectedStage("macro_placement", PlacementStatusCode::kMPInfeasible,
+                        "failure injected before macro placement")) {
+    return false;
+  }
   MacroPlacer macro_placer(&PlacerDBInst);
   bool success = macro_placer.runMacroPlacement();
-  if (!success) {
-    LOG_ERROR << "Macro placement failed - illegal placement detected";
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  if (success && macro_placer.get_macro_count() == 0) {
+    _flow_status.macro_placement = PlacementStatusEvaluator::skippedStage("macro_placement", "no macros in design");
+  } else {
+    _flow_status.macro_placement = PlacementStatusEvaluator::macroPlacement(
+        success, success, hpwl.obtainTotalWirelength(), success ? "" : "macro placement failed or produced no feasible legal placement");
   }
+  _flow_status.macro_placement.exhibit = macro_placer.get_last_exhibit();
+  _flow_status.setFailure(_flow_status.macro_placement);
+  writePlacementStatus();
   return success;
 }
 
 bool PLAPI::runGP()
 {
-  _flow_status = PlacementFlowStatus{};
+  return runGPResult().success;
+}
+
+PlacementFlowResult PLAPI::runGPResult()
+{
+  if (failInjectedStage("global_placement", PlacementStatusCode::kGPInvalidMetric,
+                        "failure injected before global placement")) {
+    return PlacementFlowResult::fromStage(_flow_status.global_placement);
+  }
+  auto transaction = PlacerDBInst.beginStageTransaction("global_placement");
+  if (!transaction.active) {
+    _flow_status.global_placement = PlacementStatusEvaluator::stage(
+        "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false,
+        "global placement could not start a PlacerDB transaction");
+    _flow_status.gp_ran = true;
+    _flow_status.setFailure(_flow_status.global_placement);
+    writePlacementStatus();
+    return PlacementFlowResult::fromStage(_flow_status.global_placement);
+  }
+
   // CenterPlace(&PlacerDBInst).runCenterPlace();
   RandomPlace(&PlacerDBInst).runRandomPlace();
   NesterovPlace nesterov_place(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());
   nesterov_place.printNesterovDatabase();
-  const bool converged = nesterov_place.runNesterovPlace();
+  nesterov_place.runNesterovPlace();
+  const auto& gp_run = nesterov_place.lastResult();
+  const int64_t changed_instance_count = transaction.changedInstanceCount();
 
   HPWirelength hpwl(PlacerDBInst.get_topo_manager());
-  _flow_status.global_placement = PlacementStatusEvaluator::globalPlacement(
-      !converged, PlacerDBInst.gp_overflow, PlacerDBInst.get_placer_config()->get_nes_config().get_target_overflow(),
-      hpwl.obtainTotalWirelength(), hasRoutableNet());
+  switch (gp_run.outcome) {
+    case NesterovPlaceOutcome::kConverged:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kOk, true, true, true, gp_run.reason, gp_run.hpwl, gp_run.hpwl,
+          changed_instance_count, {});
+      break;
+    case NesterovPlaceOutcome::kOverflowTargetMiss:
+    case NesterovPlaceOutcome::kMaxIter:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPOverflowTargetMiss, true, false, true, gp_run.reason, gp_run.hpwl,
+          gp_run.hpwl, changed_instance_count, {});
+      break;
+    case NesterovPlaceOutcome::kInvalidMetric:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false, gp_run.reason, gp_run.hpwl, gp_run.hpwl,
+          changed_instance_count, {});
+      break;
+    case NesterovPlaceOutcome::kDiverged:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPDiverged, false, false, false, gp_run.reason, gp_run.hpwl, gp_run.hpwl,
+          changed_instance_count, {});
+      break;
+    case NesterovPlaceOutcome::kNotRun:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false, "global placement did not run", 0, 0, 0,
+          {});
+      break;
+  }
+  _flow_status.global_placement.overflow = gp_run.overflow;
+  _flow_status.global_placement.target_overflow = PlacerDBInst.get_placer_config()->get_nes_config().get_target_overflow();
+  _flow_status.global_placement.hpwl = gp_run.hpwl;
+  _flow_status.global_placement.metric_after = gp_run.hpwl;
+  _flow_status.global_placement.exhibit = nesterovIterationExhibit(gp_run.iteration_records);
   _flow_status.gp_ran = true;
+
+  const bool stage_success = _flow_status.global_placement.execution_success && _flow_status.global_placement.quality_success;
+  if (stage_success) {
+    if (!PlacerDBInst.commitStageTransaction(transaction)) {
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false,
+          "global placement could not commit its PlacerDB transaction", gp_run.hpwl, gp_run.hpwl, changed_instance_count);
+      _flow_status.global_placement.changed_count = changed_instance_count;
+    }
+  } else if (!PlacerDBInst.rollbackStageTransaction(transaction)) {
+    _flow_status.global_placement.message += "; failed to rollback global placement transaction";
+  }
+
+  _flow_status.setFailure(_flow_status.global_placement);
   writePlacementStatus();
-  LOG_FATAL_IF(!_flow_status.global_placement.execution_success)
-      << _flow_status.global_placement.message << "; see place_summary.json.";
-  return _flow_status.global_placement.execution_success;
+  LOG_ERROR_IF(!_flow_status.global_placement.execution_success) << _flow_status.global_placement.message;
+  return PlacementFlowResult::fromStage(_flow_status.global_placement);
 }
 
 bool PLAPI::runLG()
 {
+  if (failInjectedStage("legalization", PlacementStatusCode::kLGSolverFailed,
+                        "failure injected before legalization")) {
+    return false;
+  }
+  auto transaction = PlacerDBInst.beginStageTransaction("legalization");
+  if (!transaction.active) {
+    _flow_status.legalization = PlacementStatusEvaluator::legalization(false, false, 0);
+    _flow_status.legalization.message = "legalization could not start a PlacerDB transaction";
+    _flow_status.lg_ran = true;
+    _flow_status.setFailure(_flow_status.legalization);
+    writePlacementStatus();
+    return false;
+  }
+
   LegalizerInst.initLegalizer(PlacerDBInst.get_placer_config(), &PlacerDBInst);
   const bool solver_success = LegalizerInst.runLegalize();
   const bool legal = solver_success && checkLegality();
   HPWirelength hpwl(PlacerDBInst.get_topo_manager());
   _flow_status.legalization = PlacementStatusEvaluator::legalization(solver_success, legal, hpwl.obtainTotalWirelength());
   _flow_status.lg_ran = true;
+
+  const bool stage_success = _flow_status.legalization.execution_success && _flow_status.legalization.quality_success;
+  if (stage_success) {
+    if (!PlacerDBInst.commitStageTransaction(transaction)) {
+      _flow_status.legalization = PlacementStatusEvaluator::legalization(false, false, hpwl.obtainTotalWirelength());
+      _flow_status.legalization.message = "legalization could not commit its PlacerDB transaction";
+    }
+  } else if (!PlacerDBInst.rollbackStageTransaction(transaction)) {
+    _flow_status.legalization.message += "; failed to rollback legalization transaction";
+  }
+
+  _flow_status.setFailure(_flow_status.legalization);
   writePlacementStatus();
   LOG_ERROR_IF(!_flow_status.legalization.execution_success) << _flow_status.legalization.message;
-  LOG_FATAL_IF(!_flow_status.legalization.execution_success) << _flow_status.legalization.message << "; see place_summary.json.";
   return _flow_status.legalization.execution_success;
 }
 
@@ -681,11 +955,43 @@ bool PLAPI::runIncrLG(std::vector<std::string> inst_name_list)
   return flag;
 }
 
-void PLAPI::runPostGP()
+bool PLAPI::runPostGP()
 {
-  //
+  if (failInjectedStage("post_global_placement", PlacementStatusCode::kPostGPFailed,
+                        "failure injected before post global placement")) {
+    return false;
+  }
+  auto transaction = PlacerDBInst.beginStageTransaction("post_global_placement");
+  if (!transaction.active) {
+    _flow_status.post_global_placement = PlacementStatusEvaluator::postGlobalPlacement(
+        false, false, 0, 0, "post global placement could not start a PlacerDB transaction");
+    _flow_status.setFailure(_flow_status.post_global_placement);
+    writePlacementStatus();
+    return false;
+  }
+
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  const int64_t metric_before = hpwl.obtainTotalWirelength();
   PostGP post_gp(PlacerDBInst.get_placer_config(), &PlacerDBInst);
-  post_gp.runIncrTimingPlace();
+  const bool success = post_gp.runIncrTimingPlace();
+  const int64_t metric_after = hpwl.obtainTotalWirelength();
+  const bool legal = success && checkLegality();
+  _flow_status.post_global_placement
+      = PlacementStatusEvaluator::postGlobalPlacement(success, legal, metric_before, metric_after);
+
+  const bool stage_success = _flow_status.post_global_placement.execution_success && _flow_status.post_global_placement.quality_success;
+  if (stage_success) {
+    if (!PlacerDBInst.commitStageTransaction(transaction)) {
+      _flow_status.post_global_placement = PlacementStatusEvaluator::postGlobalPlacement(
+          false, false, metric_before, metric_after, "post global placement could not commit its PlacerDB transaction");
+    }
+  } else if (!PlacerDBInst.rollbackStageTransaction(transaction)) {
+    _flow_status.post_global_placement.message += "; failed to rollback post global placement transaction";
+  }
+
+  _flow_status.setFailure(_flow_status.post_global_placement);
+  writePlacementStatus();
+  return success && legal;
 }
 
 bool PLAPI::runIncrLG()
@@ -696,29 +1002,50 @@ bool PLAPI::runIncrLG()
   return flag;
 }
 
-void PLAPI::runDP()
+bool PLAPI::runDP()
 {
+  if (failInjectedStage("detail_placement", PlacementStatusCode::kDPFailed,
+                        "failure injected before detail placement")) {
+    return false;
+  }
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  const int64_t metric_before = hpwl.obtainTotalWirelength();
   bool legal_flag = checkLegality();
   if (!legal_flag) {
-    LOG_WARNING << "Design Instances before detail placement are not legal";
-    return;
+    _flow_status.detail_placement = PlacementStatusEvaluator::detailPlacement(false, false, metric_before, metric_before,
+                                                                               "placement before detail placement is illegal");
+    _flow_status.setFailure(_flow_status.detail_placement);
+    writePlacementStatus();
+    return false;
   }
 
   DetailPlacer detail_place(PlacerDBInst.get_placer_config(), &PlacerDBInst);
-  detail_place.runDetailPlace();
-
-  if (!checkLegality()) {
-    LOG_WARNING << "DP result is not legal";
-  }
+  const bool success = detail_place.runDetailPlace();
+  const auto& dp_result = detail_place.lastResult();
+  HPWirelength hpwl_after(PlacerDBInst.get_topo_manager());
+  const int64_t metric_after = hpwl_after.obtainTotalWirelength();
+  const bool legal_after = success ? checkLegality() : dp_result.legal_after;
+  _flow_status.detail_placement = PlacementStatusEvaluator::detailPlacement(
+      success, legal_after, metric_before, success ? metric_after : dp_result.hpwl_after, dp_result.reason);
+  _flow_status.detail_placement.changed_count = dp_result.changed_count;
+  _flow_status.detail_placement.exhibit = dp_result.operator_exhibit;
+  _flow_status.setFailure(_flow_status.detail_placement);
+  writePlacementStatus();
+  return success && legal_after;
 }
 
 #ifdef ENABLE_AI
-void PLAPI::runDPwithAiWireLengthPredictor(const std::string& onnx_path, const std::string& normalization_path)
+bool PLAPI::runDPwithAiWireLengthPredictor(const std::string& onnx_path, const std::string& normalization_path)
 {
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  const int64_t metric_before = hpwl.obtainTotalWirelength();
   bool legal_flag = checkLegality();
   if (!legal_flag) {
-    LOG_WARNING << "Design Instances before detail placement are not legal";
-    return;
+    _flow_status.detail_placement = PlacementStatusEvaluator::detailPlacement(false, false, metric_before, metric_before,
+                                                                               "placement before detail placement is illegal");
+    _flow_status.setFailure(_flow_status.detail_placement);
+    writePlacementStatus();
+    return false;
   }
 
   DetailPlacer detail_place(PlacerDBInst.get_placer_config(), &PlacerDBInst);
@@ -726,24 +1053,40 @@ void PLAPI::runDPwithAiWireLengthPredictor(const std::string& onnx_path, const s
   if (!detail_place.init_ai_wirelength_model(onnx_path, normalization_path)) {
     LOG_ERROR << "Failed to load AI wirelength model: " << onnx_path;
     LOG_ERROR << "Falling back to traditional HPWL";
-    return;
+    return runDP();
   }
 
-  detail_place.runDetailPlace();
-
-  if (!checkLegality()) {
-    LOG_WARNING << "DP result is not legal";
-  }
+  const bool success = detail_place.runDetailPlace();
+  const auto& dp_result = detail_place.lastResult();
+  HPWirelength hpwl_after(PlacerDBInst.get_topo_manager());
+  const int64_t metric_after = hpwl_after.obtainTotalWirelength();
+  const bool legal_after = success ? checkLegality() : dp_result.legal_after;
+  _flow_status.detail_placement = PlacementStatusEvaluator::detailPlacement(
+      success, legal_after, metric_before, success ? metric_after : dp_result.hpwl_after, dp_result.reason);
+  _flow_status.detail_placement.changed_count = dp_result.changed_count;
+  _flow_status.setFailure(_flow_status.detail_placement);
+  writePlacementStatus();
+  return success && legal_after;
 }
 #endif
 
 // run networkflow to spread cell
 // Input: after global placement. Output: low density distribution result with overlap.
 // Legalization is further needed.
-void PLAPI::runNetworkFlowSpread()
+bool PLAPI::runNetworkFlowSpread()
 {
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  const int64_t metric_before = hpwl.obtainTotalWirelength();
   DetailPlacer detail_place(PlacerDBInst.get_placer_config(), &PlacerDBInst);
-  detail_place.runDetailPlaceNFS();
+  const bool success = detail_place.runDetailPlaceNFS();
+  const auto& nfs_result = detail_place.lastNetworkFlowResult();
+  const int64_t metric_after = hpwl.obtainTotalWirelength();
+  _flow_status.network_flow = PlacementStatusEvaluator::optionalStage(
+      "network_flow", success, PlacementStatusCode::kNFSFailed, metric_before, metric_after, nfs_result.reason,
+      nfs_result.reason, nfs_result.moved_count);
+  _flow_status.setFailure(_flow_status.network_flow);
+  writePlacementStatus();
+  return success;
 }
 
 void PLAPI::notifyPLWLInfo(int stage)
@@ -894,10 +1237,19 @@ std::vector<std::string> PLAPI::obtainClockNameList()
   return _external_api->obtainClockNameList();
 }
 
-void PLAPI::runBufferInsertion()
+bool PLAPI::runBufferInsertion()
 {
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  const int64_t metric_before = hpwl.obtainTotalWirelength();
   BufferInserter buffer_inserter(PlacerDBInst.get_placer_config(), &PlacerDBInst);
-  buffer_inserter.runBufferInsertionForMaxWireLength();
+  const bool success = buffer_inserter.runBufferInsertionForMaxWireLength();
+  const int64_t metric_after = hpwl.obtainTotalWirelength();
+  _flow_status.buffer_insertion = PlacementStatusEvaluator::optionalStage(
+      "buffer_insertion", success, PlacementStatusCode::kBufferFailed, metric_before, metric_after, "buffer insertion completed",
+      "buffer insertion failed");
+  _flow_status.setFailure(_flow_status.buffer_insertion);
+  writePlacementStatus();
+  return success;
 }
 
 void PLAPI::updatePlacerDB()
@@ -916,9 +1268,22 @@ bool PLAPI::insertSignalBuffer(std::pair<std::string, std::string> source_sink_n
   return _external_api->insertSignalBuffer(source_sink_net, sink_pin_list, master_inst_buffer, buffer_center_loc);
 }
 
-void PLAPI::writeBackSourceDataBase()
+bool PLAPI::writeBackSourceDataBase()
 {
-  PlacerDBInst.writeBackSourceDataBase();
+  if (shouldInjectFailure("writeback")) {
+    _failure_injection_stage.clear();
+    _flow_status.artifact = PlacementStatusEvaluator::artifact(false, "failure injected during source database writeback");
+    _flow_status.setFailure(_flow_status.artifact);
+    writePlacementStatus();
+    return false;
+  }
+  if (!PlacerDBInst.writeBackSourceDataBase()) {
+    _flow_status.artifact = PlacementStatusEvaluator::artifact(false, "failed to write back source database");
+    _flow_status.setFailure(_flow_status.artifact);
+    writePlacementStatus();
+    return false;
+  }
+  return true;
 }
 
 std::string PLAPI::obtainTargetDir()
@@ -949,23 +1314,22 @@ std::vector<Rectangle<int32_t>> PLAPI::obtainAvailableWhiteSpaceList(std::pair<i
 
 bool PLAPI::checkLegality()
 {
-  bool legal_flag = true;
-
   LayoutChecker checker(&PlacerDBInst);
-  if (!checker.isAllPlacedInstInsideCore()) {
-    legal_flag = false;
+  auto violations = checker.obtainViolationList();
+  if (!violations.empty()) {
+    LOG_ERROR << "Layout legality failed with " << violations.size() << " violation(s).";
+    for (const auto& violation : violations) {
+      std::string names;
+      for (size_t index = 0; index < violation.instance_names.size(); ++index) {
+        if (index != 0) {
+          names += ", ";
+        }
+        names += violation.instance_names.at(index);
+      }
+      LOG_ERROR << layoutViolationTypeName(violation.type) << ": " << names << " (" << violation.reason << ")";
+    }
   }
-  if (!checker.isAllPlacedInstAlignRowSite()) {
-    legal_flag = false;
-  }
-  if (!checker.isAllPlacedInstAlignPower()) {
-    legal_flag = false;
-  }
-  if (!checker.isNoOverlapAmongInsts()) {
-    legal_flag = false;
-  }
-
-  return legal_flag;
+  return violations.empty();
 }
 
 bool PLAPI::isSTAStarted()

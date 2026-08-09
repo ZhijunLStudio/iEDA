@@ -39,6 +39,29 @@ namespace ipl {
 
 using namespace idb;
 
+enum class IDBWriteBackOutcome
+{
+  kNotRun,
+  kCompleted,
+  kMissingDesign,
+  kPreflightFailed,
+  kUpdateFailed,
+  kCreateFailed,
+  kRollbackFailed
+};
+
+struct IDBWriteBackResult
+{
+  IDBWriteBackOutcome outcome = IDBWriteBackOutcome::kNotRun;
+  bool execution_success = false;
+  bool rollback_success = false;
+  int64_t updated_count = 0;
+  int64_t created_count = 0;
+  std::string reason = "iDB write-back has not run";
+
+  bool isSuccessful() const { return execution_success && outcome == IDBWriteBackOutcome::kCompleted; }
+};
+
 class IDBWrapper : public DBWrapper
 {
  public:
@@ -61,7 +84,8 @@ class IDBWrapper : public DBWrapper
   void writeDef(std::string file_name) override;
   void updateFromSourceDataBase() override;
   void updateFromSourceDataBase(std::vector<std::string> inst_list) override;
-  void writeBackSourceDatabase() override;
+  bool writeBackSourceDatabase() override;
+  const IDBWriteBackResult& lastWriteBackResult() const { return _last_write_back_result; }
   void initInstancesForFragmentedRow() override;
 
   // FOR DEBUG.
@@ -70,6 +94,7 @@ class IDBWrapper : public DBWrapper
 
  private:
   IDBWDatabase* _idbw_database;
+  IDBWriteBackResult _last_write_back_result;
 
   void wrapIDBData();
   void wrapLayout(IdbLayout* idb_layout);

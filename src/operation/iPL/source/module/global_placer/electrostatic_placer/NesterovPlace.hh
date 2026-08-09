@@ -29,8 +29,11 @@
 
 #include <float.h>
 
+#include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <string>
+#include <vector>
 
 #include "Config.hh"
 #include "Log.hh"
@@ -38,6 +41,44 @@
 #include "config/NesterovPlaceConfig.hh"
 #include "database/NesterovDatabase.hh"
 namespace ipl {
+
+enum class NesterovPlaceOutcome
+{
+  kNotRun,
+  kConverged,
+  kDiverged,
+  kMaxIter,
+  kInvalidMetric,
+  kOverflowTargetMiss,
+};
+
+struct NesterovIterationRecord
+{
+  int32_t iter = 0;
+  int64_t hpwl = 0;
+  float overflow = 0.0f;
+  float step_length = 0.0f;
+  float gradient_norm = 0.0f;
+  float density_penalty = 0.0f;
+  float route_util = 0.0f;
+  bool quad_penalty_enabled = false;
+  bool entropy_injected = false;
+};
+
+struct NesterovPlaceResult
+{
+  bool success = false;
+  NesterovPlaceOutcome outcome = NesterovPlaceOutcome::kNotRun;
+  int32_t iterations = 0;
+  int64_t hpwl = 0;
+  float overflow = 0.0f;
+  float gradient_norm = 0.0f;
+  float step_length = 0.0f;
+  float density_penalty = 0.0f;
+  float route_util = 0.0f;
+  std::string reason;
+  std::vector<NesterovIterationRecord> iteration_records;
+};
 
 class NesterovPlace
 {
@@ -52,6 +93,8 @@ class NesterovPlace
   NesterovPlace& operator=(NesterovPlace&&) = delete;
 
   bool runNesterovPlace();
+  const NesterovPlaceResult& lastResult() const { return _last_result; }
+  const std::vector<NesterovIterationRecord>& iterationRecords() const { return _iteration_records; }
   void printNesterovDatabase();
 
   bool isJsonOutputEnabled() { return _enable_json_output; }
@@ -77,6 +120,12 @@ class NesterovPlace
   void entropyInjection(float shrink_factor, float noise_intensity);
   bool checkDivergence(int32_t window, float threshold, bool is_routability = false);
   bool checkLongTimeOverflowUnchanged(int32_t window, float threshold);
+  bool isFiniteMetric(float value) const;
+  void resetRunState();
+  void recordIteration(int32_t iter_num, float overflow, int64_t hpwl, float step_length, float gradient_norm, float route_util,
+                       bool quad_penalty_enabled, bool entropy_injected);
+  void finalizeResult(NesterovPlaceOutcome outcome, int32_t iterations, int64_t hpwl, float overflow, float gradient_norm,
+                      float step_length, float density_penalty, float route_util, std::string reason);
 
   void initNesConfig(Config* config);
   void calculateAdaptiveBinCnt();
@@ -158,6 +207,9 @@ class NesterovPlace
   void notifyPLBinSize();
   void notifyPLOverflowInfo(float final_overflow);
   void notifyPLPlaceDensity();
+
+  NesterovPlaceResult _last_result;
+  std::vector<NesterovIterationRecord> _iteration_records;
 };
 inline NesterovPlace::NesterovPlace(Config* config, PlacerDB* placer_db, bool enableJsonOutput)
     : _nes_database(nullptr), _enable_json_output(enableJsonOutput)
