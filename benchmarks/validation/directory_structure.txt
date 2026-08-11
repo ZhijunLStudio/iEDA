@@ -1,0 +1,21 @@
+validation/
+├── iPA_vs_PTPX/
+│   ├── README.md                 # This file
+│   ├── run_comparison.py         # Main validation driver
+│   ├── designs/
+│   │   ├── aes_sky130_a/
+│   │   │   ├── iPA_report.json
+│   │   │   ├── ptpx_report.rpt
+│   │   │   └── comparison.json
+│   │   └── ...
+│   ├── scripts/
+│   │   ├── run_iPA.tcl           # iPA analysis template
+│   │   ├── run_ptpx.tcl          # PTPX analysis template
+│   │   └── parse_reports.py     # Report parser utilities
+│   └── reports/
+│       ├── summary.md            # High-level summary
+│       ├── correlation.png       # iPA vs PTPX scatter plot
+│       └── residuals.png         # Error distribution
+└── iIR_vs_Voltus/
+    ├── README.md
+    └── ...

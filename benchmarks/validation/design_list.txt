@@ -1,0 +1,15 @@
+# Commercial Parity Validation Design List
+# Format: design_name | PDK | activity_source | ir_budget_mv | notes
+
+# P2 iPA vs PTPX validation designs
+aes_sky130_a|sky130|vcd|50|Primary validation design with VCD
+aes_asap7_a|asap7|vcd|100|High-density 7nm validation
+aes_nangate45_a|nangate45|vcd|75|Multi-PDK validation
+salsa20_sky130_a|sky130|vcd|50|Larger crypto core
+apb4_timer_ics55_t|ics55|default|75|Default toggle fallback validation
+
+# P2 iIR vs Voltus validation designs
+aes_sky130_a|sky130|iPA_vcd|50|iPA→iIR integration validation
+aes_asap7_a|asap7|iPA_vcd|100|High-density IR stress case
+salsa20_sky130_a|sky130|iPA_vcd|50|Uniform power distribution
+aes_nangate45_a|nangate45|iPA_default|75|Fallback current validation
