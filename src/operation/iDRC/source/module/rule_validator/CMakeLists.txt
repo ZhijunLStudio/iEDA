@@ -23,6 +23,7 @@ target_link_libraries(idrc_rule_coverage_test
     PRIVATE
     idrc_rule_coverage
 )
+add_test(NAME idrc_rule_coverage_test COMMAND idrc_rule_coverage_test)
 
 add_library(idrc_rule_validator
     ## module rule_validator

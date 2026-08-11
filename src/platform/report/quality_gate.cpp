@@ -249,10 +249,21 @@ GateResult checkDrcClean(const std::filesystem::path& root)
   const auto primary_series_path = root / "rt" / "detailed_router" / "iter_dr_series.json";
   const auto report_series_path = root / "report" / "rt" / "detailed_router" / "iter_dr_series.json";
   const auto series_path = nonEmptyFileExists(primary_series_path) ? primary_series_path : report_series_path;
+  const std::vector<std::filesystem::path> summary_candidates = {root / "report" / "drc" / "drc_summary.json",
+                                                                  root / "report" / "drc_summary.json",
+                                                                  root / "drc_summary.json",
+                                                                  root.parent_path() / "drc_temp_directory" / "drc_summary.json"};
+  const auto summary_iter = std::find_if(summary_candidates.begin(), summary_candidates.end(), nonEmptyFileExists);
+  const std::filesystem::path summary_path = summary_iter == summary_candidates.end() ? summary_candidates.front() : *summary_iter;
   nlohmann::json evidence;
   evidence["iter_dr_series"] = fileEvidence(series_path);
   evidence["iter_dr_series_candidates"] = nlohmann::json::array({fileEvidence(primary_series_path), fileEvidence(report_series_path)});
   evidence["drc_report"] = fileEvidence(root / "report" / "drc" / "iRT_drc.rpt");
+  evidence["drc_summary"] = fileEvidence(summary_path);
+  evidence["drc_summary_candidates"] = nlohmann::json::array();
+  for (const auto& candidate : summary_candidates) {
+    evidence["drc_summary_candidates"].push_back(fileEvidence(candidate));
+  }
 
   const auto series = readJson(series_path);
   if (!series.has_value()) {
@@ -269,6 +280,46 @@ GateResult checkDrcClean(const std::filesystem::path& root)
   evidence["residual_drc"] = *residual_drc;
   if (*residual_drc != 0) {
     return makeGate("drc_clean", "fail", "hard", "signoff", "residual detailed-route DRC is non-zero", evidence);
+  }
+
+  const auto summary = readJson(summary_path);
+  if (!summary.has_value()) {
+    return makeGate("drc_clean", "fail", "hard", "signoff",
+                    "missing or invalid iDRC coverage summary; zero residual DRC is not signoff evidence", evidence);
+  }
+  evidence["coverage_schema_version"] = stringValue(*summary, {"schema_version"});
+  evidence["coverage_status"] = stringValue(*summary, {"status"});
+  evidence["check_profile"] = stringValue(*summary, {"check_profile"});
+  evidence["signoff_clean"] = boolValue(*summary, {"signoff_clean"});
+
+  if (evidence["coverage_schema_version"] != "ieda.drc.coverage.v1") {
+    return makeGate("drc_clean", "fail", "hard", "signoff", "iDRC coverage summary has an unsupported schema", evidence);
+  }
+  if (!summary->contains("signoff_clean") || !summary->at("signoff_clean").is_boolean()) {
+    return makeGate("drc_clean", "fail", "hard", "signoff", "iDRC coverage summary has no boolean signoff_clean verdict", evidence);
+  }
+  if (evidence["check_profile"].get<std::string>().empty()) {
+    return makeGate("drc_clean", "fail", "hard", "signoff", "iDRC coverage summary has no check profile", evidence);
+  }
+  const auto coverage_violation_count = integerValue(*summary, {"violation_count"});
+  if (!coverage_violation_count.has_value()) {
+    return makeGate("drc_clean", "fail", "hard", "signoff", "iDRC coverage summary has no violation count", evidence);
+  }
+  evidence["coverage_violation_count"] = *coverage_violation_count;
+  if (*coverage_violation_count != 0) {
+    return makeGate("drc_clean", "fail", "hard", "signoff", "iDRC violations remain", evidence);
+  }
+
+  const std::string coverage_status = evidence["coverage_status"].get<std::string>();
+  if (coverage_status == "partial_clean") {
+    return makeGate("drc_clean", "fail", "hard", "signoff",
+                    "iDRC coverage status is partial_clean; fast or subset checks cannot satisfy signoff", evidence);
+  }
+  if (coverage_status != "clean" && coverage_status != "signoff_clean") {
+    return makeGate("drc_clean", "fail", "hard", "signoff", "iDRC coverage status is not clean", evidence);
+  }
+  if (!evidence["signoff_clean"].get<bool>()) {
+    return makeGate("drc_clean", "fail", "hard", "signoff", "iDRC coverage does not provide signoff-clean evidence", evidence);
   }
   return makeGate("drc_clean", "pass", "hard", "signoff", "", evidence);
 }

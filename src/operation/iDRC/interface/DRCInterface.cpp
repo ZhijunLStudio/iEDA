@@ -20,7 +20,9 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <filesystem>
+#include <stdexcept>
 
 #include "AdjacentCutSpacingRule.hpp"
 #include "DataManager.hpp"
@@ -36,6 +38,9 @@
 namespace idrc {
 
 namespace {
+
+template <typename JsonType>
+void writeAtomicJsonReport(const std::filesystem::path& report_path, const JsonType& payload, const char* label);
 
 auto getEngineRuleNames() -> std::set<std::string>
 {
@@ -123,24 +128,36 @@ void DRCInterface::initDRC(std::map<std::string, std::any> config_map, bool enab
   DRCLOG.info(Loc::current(), "Completed", monitor ? monitor->getStatsInfo() : "");
 }
 
-void DRCInterface::checkDef()
+bool DRCInterface::checkDef()
 {
   bool origin_quiet = DRCLOG.isQuiet();
   DRCLOG.disableQuiet();
 
-  std::map<std::string, std::vector<ids::Violation>> type_violation_map;
-  for (ids::Violation& ids_violation : getViolationList(buildEnvShapeList(), buildResultShapeList(), {}, {})) {
-    type_violation_map[ids_violation.violation_type].push_back(ids_violation);
+  bool check_succeeded = false;
+  try {
+    std::map<std::string, std::vector<ids::Violation>> type_violation_map;
+    for (ids::Violation& ids_violation : getViolationList(buildEnvShapeList(), buildResultShapeList(), {}, {})) {
+      type_violation_map[ids_violation.violation_type].push_back(ids_violation);
+    }
+    printSummary(type_violation_map);
+    outputViolationJson(type_violation_map);
+    outputCVioJson(type_violation_map);
+    outputViolationFile(type_violation_map);
+    outputTofeature(type_violation_map);
+    check_succeeded = _last_rule_coverage.canRun();
+  } catch (const std::exception& error) {
+    DRCLOG.warn(Loc::current(), "DRC check failed: ", error.what());
   }
-  printSummary(type_violation_map);
-  outputViolationJson(type_violation_map);
-  outputCVioJson(type_violation_map);
-  outputViolationFile(type_violation_map);
-  outputTofeature(type_violation_map);
 
   if (origin_quiet) {
     DRCLOG.enableQuiet();
   }
+  return check_succeeded;
+}
+
+auto DRCInterface::getTempDirectoryPath() const -> std::string
+{
+  return DRCDM.getConfig().temp_directory_path;
 }
 
 void DRCInterface::destroyDRC()
@@ -183,7 +200,7 @@ std::vector<ids::Violation> DRCInterface::getViolationList(const std::vector<ids
   }
   if (!_last_rule_coverage.canRun()) {
     outputRuleCoverageJson();
-    DRCLOG.error(Loc::current(), "DRC rule selection refused: ", _last_rule_coverage.refusalSummary());
+    throw std::runtime_error("DRC rule selection refused: " + _last_rule_coverage.refusalSummary());
   }
 
   std::vector<DRCShape> drc_env_shape_list;
@@ -1377,10 +1394,10 @@ void DRCInterface::outputViolationJson(std::map<std::string, std::vector<ids::Vi
     }
     return obs_name;
   };
-  std::vector<nlohmann::json> violation_json_list;
+  nlohmann::ordered_json violation_json_list = nlohmann::ordered_json::array();
   for (auto& [type, violation_list] : type_violation_map) {
     for (ids::Violation& violation : violation_list) {
-      nlohmann::json violation_json;
+      nlohmann::ordered_json violation_json;
       violation_json["type"] = violation.violation_type;
 
       int32_t layer_idx = violation.layer_idx;
@@ -1395,10 +1412,8 @@ void DRCInterface::outputViolationJson(std::map<std::string, std::vector<ids::Vi
       violation_json_list.push_back(violation_json);
     }
   }
-  std::string violation_json_file_path = DRCUTIL.getString(temp_directory_path, "violation_map.json");
-  std::ofstream* violation_json_file = DRCUTIL.getOutputFileStream(violation_json_file_path);
-  (*violation_json_file) << violation_json_list;
-  DRCUTIL.closeFileStream(violation_json_file);
+  const std::filesystem::path violation_json_file_path = std::filesystem::path(temp_directory_path) / "violation_map.json";
+  writeAtomicJsonReport(violation_json_file_path, violation_json_list, "violation JSON report");
   outputRuleCoverageJson();
 }
 
@@ -1433,6 +1448,32 @@ auto cVioSeverity(const std::string& type) -> double
   return 1.0;
 }
 
+template <typename JsonType>
+void writeAtomicJsonReport(const std::filesystem::path& report_path, const JsonType& payload, const char* label)
+{
+  const std::filesystem::path temporary_path = report_path.string() + ".tmp";
+  {
+    std::ofstream output(temporary_path, std::ios::trunc);
+    if (!output.is_open()) {
+      throw std::runtime_error(std::string("Cannot open ") + label + ": " + temporary_path.string());
+    }
+    output << payload.dump(2) << '\n';
+    output.flush();
+    if (!output) {
+      throw std::runtime_error(std::string("Cannot write ") + label + ": " + temporary_path.string());
+    }
+  }
+
+  std::error_code error;
+  std::filesystem::remove(report_path, error);
+  error.clear();
+  std::filesystem::rename(temporary_path, report_path, error);
+  if (error) {
+    std::filesystem::remove(temporary_path);
+    throw std::runtime_error(std::string("Cannot publish ") + label + ": " + report_path.string() + ": " + error.message());
+  }
+}
+
 }  // namespace
 
 void DRCInterface::outputCVioJson(std::map<std::string, std::vector<ids::Violation>>& type_violation_map)
@@ -1463,6 +1504,8 @@ void DRCInterface::outputCVioJson(std::map<std::string, std::vector<ids::Violati
   root["design"] = DRCDM.getDatabase().get_design_name();
   root["rule_deck_hash"] = "unknown";
   root["source"] = "idrc_check_def";
+  root["status"] = _last_rule_coverage.status();
+  root["check_profile"] = _last_rule_coverage.profile();
 
   nlohmann::json violations = nlohmann::json::array();
   nlohmann::json by_type = nlohmann::json::object();
@@ -1510,63 +1553,23 @@ void DRCInterface::outputCVioJson(std::map<std::string, std::vector<ids::Violati
   root["summary"] = {{"by_type", by_type}, {"by_layer", by_layer}, {"total", total}};
   root["coverage"] = {{"checked", nlohmann::json(_last_rule_coverage.getChecked())},
                       {"skipped", nlohmann::json(_last_rule_coverage.getSkipped())},
-                      {"unsupported", nlohmann::json(_last_rule_coverage.getUnsupported())}};
+                      {"unsupported", nlohmann::json(_last_rule_coverage.getUnsupported())},
+                      {"status", _last_rule_coverage.status()},
+                      {"check_profile", _last_rule_coverage.profile()}};
 
   std::string out_path = DRCDM.getConfig().c_vio_json_path;
   if (out_path.empty()) {
     out_path = DRCUTIL.getString(DRCDM.getConfig().temp_directory_path, "c_vio.json");
   }
   const std::filesystem::path report_path(out_path);
-  const std::filesystem::path temporary_path = report_path.string() + ".tmp";
-  {
-    std::ofstream output(temporary_path, std::ios::trunc);
-    if (!output.is_open()) {
-      DRCLOG.warn(Loc::current(), "Cannot open C-VIO report: ", temporary_path.string());
-      return;
-    }
-    output << root.dump(2) << '\n';
-    output.flush();
-    if (!output) {
-      DRCLOG.warn(Loc::current(), "Cannot write C-VIO report: ", temporary_path.string());
-      return;
-    }
-  }
-  std::error_code error;
-  std::filesystem::remove(report_path, error);
-  error.clear();
-  std::filesystem::rename(temporary_path, report_path, error);
-  if (error) {
-    std::filesystem::remove(temporary_path);
-    DRCLOG.warn(Loc::current(), "Cannot publish C-VIO report: ", report_path.string(), ": ", error.message());
-    return;
-  }
+  writeAtomicJsonReport(report_path, root, "C-VIO report");
   DRCLOG.info(Loc::current(), "Wrote C-VIO JSON (", total, " violations) → ", report_path.string());
 }
 
 void DRCInterface::outputRuleCoverageJson()
 {
   const std::filesystem::path report_path = std::filesystem::path(DRCDM.getConfig().temp_directory_path) / "drc_summary.json";
-  const std::filesystem::path temporary_path = report_path.string() + ".tmp";
-  {
-    std::ofstream output(temporary_path, std::ios::trunc);
-    if (!output.is_open()) {
-      DRCLOG.error(Loc::current(), "Cannot open DRC coverage report: ", temporary_path.string());
-    }
-    output << _last_rule_coverage.toJson().dump(2) << '\n';
-    output.flush();
-    if (!output) {
-      DRCLOG.error(Loc::current(), "Cannot write DRC coverage report: ", temporary_path.string());
-    }
-  }
-
-  std::error_code error;
-  std::filesystem::remove(report_path, error);
-  error.clear();
-  std::filesystem::rename(temporary_path, report_path, error);
-  if (error) {
-    std::filesystem::remove(temporary_path);
-    DRCLOG.error(Loc::current(), "Cannot publish DRC coverage report: ", report_path.string(), ": ", error.message());
-  }
+  writeAtomicJsonReport(report_path, _last_rule_coverage.toJson(), "DRC coverage report");
 }
 
 void DRCInterface::outputViolationFile(std::map<std::string, std::vector<ids::Violation>>& type_violation_map)
@@ -1592,7 +1595,12 @@ void DRCInterface::outputViolationFile(std::map<std::string, std::vector<ids::Vi
     return obs_name;
   };
   for (auto& [type, violation_list] : type_violation_map) {
-    std::ofstream* violation_file = DRCUTIL.getOutputFileStream(DRCUTIL.getString(temp_directory_path, type, ".txt"));
+    const std::filesystem::path report_path = std::filesystem::path(temp_directory_path) / DRCUTIL.getString(type, ".txt");
+    const std::filesystem::path temporary_path = report_path.string() + ".tmp";
+    std::ofstream violation_file(temporary_path, std::ios::trunc);
+    if (!violation_file.is_open()) {
+      throw std::runtime_error("Cannot open violation text report: " + temporary_path.string());
+    }
     for (ids::Violation& violation : violation_list) {
       DRCUTIL.pushStream(violation_file, violation.ll_x, " ", violation.ll_y, " ", violation.ur_x, " ", violation.ur_y, " ");
       if (violation.is_routing) {
@@ -1611,7 +1619,19 @@ void DRCInterface::outputViolationFile(std::map<std::string, std::vector<ids::Vi
       DRCUTIL.pushStream(violation_file, violation.required_size, " ");
       DRCUTIL.pushStream(violation_file, "\n");
     }
-    DRCUTIL.closeFileStream(violation_file);
+    violation_file.flush();
+    if (!violation_file) {
+      throw std::runtime_error("Cannot write violation text report: " + temporary_path.string());
+    }
+    violation_file.close();
+    std::error_code error;
+    std::filesystem::remove(report_path, error);
+    error.clear();
+    std::filesystem::rename(temporary_path, report_path, error);
+    if (error) {
+      std::filesystem::remove(temporary_path);
+      throw std::runtime_error("Cannot publish violation text report: " + report_path.string() + ": " + error.message());
+    }
   }
 
   DRCLOG.info(Loc::current(), "Completed", monitor ? monitor->getStatsInfo() : "");

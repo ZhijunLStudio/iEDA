@@ -16,6 +16,8 @@
 
 namespace idrc {
 
+auto getFastCheckRuleNames() -> const std::set<std::string>&;
+
 struct RefusedRule
 {
   std::string name;
@@ -64,6 +66,7 @@ class RuleCoverageReport
 
   auto canRun() const -> bool { return _refused.empty() && _manifest_errors.empty(); }
   auto status() const -> std::string;
+  auto profile() const -> std::string;
   auto toJson() const -> nlohmann::ordered_json;
   auto refusalSummary() const -> std::string;
 

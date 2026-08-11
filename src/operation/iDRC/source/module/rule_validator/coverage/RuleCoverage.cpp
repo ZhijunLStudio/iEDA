@@ -33,6 +33,12 @@ auto vectorToJson(const std::vector<std::string>& values) -> nlohmann::ordered_j
   return json;
 }
 
+auto buildFastCheckRuleNames() -> std::set<std::string>
+{
+  return {"cut_short", "maximum_width", "metal_short", "minimum_area", "minimum_width", "nonsufficient_metal_overlap",
+          "off_grid_or_wrong_way", "out_of_die"};
+}
+
 auto isSha256(const std::string& value) -> bool
 {
   return value.size() == 64 && std::all_of(value.begin(), value.end(), [](unsigned char character) { return std::isxdigit(character); });
@@ -47,6 +53,12 @@ auto nonEmptyString(const nlohmann::json& json, const char* key) -> std::string
 }
 
 }  // namespace
+
+auto getFastCheckRuleNames() -> const std::set<std::string>&
+{
+  static const std::set<std::string> kFastCheckRuleNames = buildFastCheckRuleNames();
+  return kFastCheckRuleNames;
+}
 
 auto FoundryCoverageManifest::load(const std::string& path, const std::set<std::string>& known_engine_rules)
     -> FoundryCoverageManifest
@@ -226,6 +238,17 @@ auto RuleCoverageReport::status() const -> std::string
   return "partial_clean";
 }
 
+auto RuleCoverageReport::profile() const -> std::string
+{
+  if (_requested.empty()) {
+    return "all_loaded_rules";
+  }
+  if (_requested == getFastCheckRuleNames()) {
+    return "idrc_fast_check_v1";
+  }
+  return "custom_subset";
+}
+
 auto RuleCoverageReport::toJson() const -> nlohmann::ordered_json
 {
   nlohmann::ordered_json refused = nlohmann::ordered_json::array();
@@ -236,6 +259,7 @@ auto RuleCoverageReport::toJson() const -> nlohmann::ordered_json
   nlohmann::ordered_json json;
   json["schema_version"] = "ieda.drc.coverage.v1";
   json["status"] = status();
+  json["check_profile"] = profile();
   json["signoff_clean"] = false;
   json["execution_started"] = canRun();
   json["violation_count"] = _violation_count;
