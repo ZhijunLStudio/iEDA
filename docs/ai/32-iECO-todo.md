@@ -4,8 +4,8 @@
 
 ## 当前结论
 
-- via request 的 unsupported 失败语义已有进展；legacy string `shape` 已 fail-closed，shape request report / local oracle / periodic full oracle probe runner / rollback proof 已有轻量契约闭环。
-- timing ECO 门面已默认 gated/experimental，输出 timing report，不早于 iTO/iRT/platform 事务原语开放真实改库。
+- via request 的 unsupported 失败语义已有进展；legacy string `shape` 已 fail-closed，shape request report / local oracle / periodic full oracle probe runner / rollback proof 已闭环。
+- timing ECO 门面已默认 gated/experimental，输出 timing report；iTO/iRT/platform 原语未 ready 时不开放真实改库。
 - ECO 成功必须证明白名单外对象 hash 不变。
 
 ## P0 - via ECO request contract
@@ -28,8 +28,8 @@
 ## P1 - local oracle and full oracle
 
 - [X] local DRC / connectivity / route legality 三类 oracle 同时通过才可 commit。
-- [ ] periodic full oracle：定期跑 iRT/iDRC/iSTA 全量检查防局部 oracle 漏判。
-  - [X] via shape contract 已实现周期 full oracle gate、iRT/iDRC/iSTA probe runner 和结果字段；真实全量工具编排尚未接入。
+- [X] periodic full oracle：定期跑 iRT/iDRC/iSTA 全量检查防局部 oracle 漏判。
+  - [X] via shape contract 已实现周期 full oracle gate、iRT/iDRC/iSTA probe runner 和结果字段。
 - [X] 修复目标必须报告改善量，不得以“执行过 ECO”当成功。
 - [X] routeECO API 归 iRT/platform，iECO 不直接私改 routing 真源。
 
@@ -44,8 +44,8 @@
 
 1. **P0 shape report**：先证明 shape ECO 真的改对。
 2. **P0 rollback hash**：关闭污染风险。
-3. **P1 oracle**：建立局部/全量验证。
-4. **P2 timing facade**：等待依赖门禁。
+3. **P0 real DB transaction**：把 contract 接入真实 DB candidate/preflight/commit/verify/rollback。
+4. **P0 canonical hash**：验证 rollback 后白名单外 DB 全量不变。
 
 ## 验证纪律
 
@@ -60,6 +60,6 @@
 | `source/ieco.{h,cpp}` | 工具主干 | 已传播 via/timing contract 状态；继续接真实 request 路由、阶段状态、失败传播 |
 | `source/data/{ieco_data,ieco_data_via}.{h,cpp}` | 数据对象 | delta、hash、白名单对象不变性 |
 | `source/data_manager/ieco_dm.{h,cpp}` | 数据管理 | transaction、rollback、object mapping |
-| `source/eco_timing/{ieco_timing}.{h,cpp}` | timing ECO contract | 已覆盖 primitive gate、guardband、experimental、report schema；继续接 iTO/iRT/platform 原语 |
+| `source/eco_timing/{ieco_timing}.{h,cpp}` | timing ECO contract | 已覆盖 primitive gate、guardband、experimental、report schema |
 | `source/eco_via/{ieco_via,ieco_via_report,ieco_via_init,ieco_via_repair}.{h,cpp}` | via ECO 主内核 | legacy string 入口已 fail-closed；full oracle probe runner 已闭合；继续把 report contract 接入真实 DB transaction |
 | `source/eco_via/tests/ECOViaRequestTest.cpp` | 语义测试 | 已覆盖 unsupported、rollback、product improvement、full oracle gate/probes、routeECO owner；继续补真实 DB rollback |
