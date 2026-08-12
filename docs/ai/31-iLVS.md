@@ -5,8 +5,8 @@ iEDA is licensed under Mulan PSL v2.
 -->
 # 31 · iLVS 版图原理图对照 · greenfield 实施方案 · draft/D0
 
-> 日期：2026-07-23
-> 现状：`src/operation/iLVS/` 不存在；此前 `rv2.0` 正文全为 placeholder，不能视为已设计或已实现。
+> 日期：2026-07-23；M1 状态更新：2026-08-12
+> 现状：`src/operation/iLVS/` 已进入 M0/M1 skeleton；此前 `rv2.0` 正文全为 placeholder，不能视为已设计或已实现。
 > 首个切片：标准单元数字设计的 connectivity LVS；暂不承诺 analog device recognition、参数化器件、复杂层次 reduction 和 full-chip signoff。
 > 金标：Calibre nmLVS；门禁：G12，辅 G14/G15；技术路线见 `04 §4.9`。
 
@@ -18,12 +18,13 @@ iEDA is licensed under Mulan PSL v2.
 |---|---|---|
 | rv2.0 placeholder | 2026-07-22 | 只有章节占位符，错误地形成高成熟度外观 |
 | draft/D0 | 2026-07-23 | 降级为真实成熟度；给出标准单元 connectivity LVS 的最小纵向切片、算法和验收 |
+| draft/D1 | 2026-08-12 | 落地 M0/M1 skeleton、Verilog canonical loader、snapshot/iDB layout adapter、WL refinement + bounded backtracking microcases |
 
 ## 1. 症结与边界
 
 | 项 | 现状 | 首阶段目标 | 非目标 |
 |---|---|---|---|
-| 代码 | 无目录 | 新建最小 library/API/CLI | 不追求一次覆盖完整 Calibre |
+| 代码 | M0/M1 skeleton 已建 | 新建最小 library/API/CLI | 不追求一次覆盖完整 Calibre |
 | 参考输入 | 无 | 独立 gate-level Verilog/SPICE-like canonical netlist loader | 不从 layout extraction 结果反生 reference |
 | 版图输入 | iDB/GDS 能力待 round-trip 门禁 | 从已检查的 iDB shapes/pins/nets 构造 extracted connectivity | 未覆盖层/器件不静默忽略 |
 | 匹配 | 无 | 标准单元 instance/pin/net 的分区细化 + 局部回溯 | MOS 参数、analog subcircuit 后置 |
@@ -162,14 +163,14 @@ UNINITIALIZED → INPUTS_VERIFIED → EXTRACTED → MATCHED → CLEAN|MISMATCH
 | 阶段 | 交付 | 退出 |
 |---|---|---|
 | M0 | 10 个 hand-written graph microcases | open/short/swap/rename/对称图结果正确 |
-| M1 | iDB connectivity extraction + manifest | 小标准单元设计与 canonical netlist 对拍 |
+| M1 | Verilog loader + iDB snapshot/adapter + bounded backtracking | 小标准单元设计与 canonical netlist 对拍 |
 | M2 | matcher + JSON diff | 四类注入 100% 检出；无差异 clean |
 | M3 | hierarchy/blackbox + Calibre harness | 同一支持子集差异分类一致 |
 | M4 | 评估纯 GDS device extraction | 单独立项，不自动继承 G12 |
 
 ## 11. Exhibit
 
-`lvs_summary.json` 必填：input hashes、coverage、graph counts、status、diffs、search budget、binary SHA-256。另输出人读的最小不匹配子图。
+`lvs_summary.json` 必填：input hashes、coverage、graph counts、status、diffs、search budget、binary SHA-256。M1 已输出机器可消费 summary；人读的最小不匹配子图仍待补。
 
 ## 12. 测试
 

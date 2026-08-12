@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
+#include <set>
 #include <tuple>
 
 namespace ilvs {
@@ -149,6 +151,7 @@ struct GraphIndex
   std::map<std::string, std::vector<std::string>> pin_ids_by_net;
   std::map<std::string, std::string> instance_id_by_pin;
   std::map<std::string, std::string> net_id_by_pin;
+  std::set<std::pair<std::string, std::string>> undirected_edges;
 };
 
 auto buildIndex(const LvsGraph& graph) -> GraphIndex
@@ -165,6 +168,7 @@ auto buildIndex(const LvsGraph& graph) -> GraphIndex
     if (a_iter == index.vertices_by_id.end() || b_iter == index.vertices_by_id.end()) {
       throw std::runtime_error("edge references missing vertex: " + edge.a + " " + edge.b);
     }
+    index.undirected_edges.insert(std::minmax(edge.a, edge.b));
     const LvsVertex& a = a_iter->second;
     const LvsVertex& b = b_iter->second;
     if (edge.kind == EdgeKind::kPinOfInstance) {
@@ -286,16 +290,200 @@ auto incidentSignature(const std::string& vertex_id, const GraphIndex& index, co
   return stream.str();
 }
 
-auto partitionBySignature(const LvsGraph& graph, const GraphIndex& index, const LvsOptions& options) -> std::map<std::string, std::vector<std::string>>
+auto adjacencyColorSignature(const std::string& vertex_id, const GraphIndex& index, const std::map<std::string, std::string>& colors) -> std::string
 {
-  std::map<std::string, std::vector<std::string>> partitions;
+  std::vector<std::string> neighbor_colors;
+  for (const auto& [lhs, rhs] : index.undirected_edges) {
+    if (lhs == vertex_id) {
+      neighbor_colors.push_back(colors.at(rhs));
+    } else if (rhs == vertex_id) {
+      neighbor_colors.push_back(colors.at(lhs));
+    }
+  }
+  std::sort(neighbor_colors.begin(), neighbor_colors.end());
+  std::ostringstream stream;
+  stream << colors.at(vertex_id);
+  for (const auto& color : neighbor_colors) {
+    stream << "|" << color;
+  }
+  return stream.str();
+}
+
+auto refinedPartitionBySignature(const LvsGraph& graph, const GraphIndex& index, const LvsOptions& options)
+    -> std::map<std::string, std::vector<std::string>>
+{
+  std::map<std::string, std::string> colors;
   for (const auto& vertex : graph.vertices) {
-    partitions[incidentSignature(vertex.id, index, options)].push_back(vertex.id);
+    colors[vertex.id] = incidentSignature(vertex.id, index, options);
+  }
+  for (int iteration = 0; iteration < 8; ++iteration) {
+    std::map<std::string, std::string> next_colors;
+    bool changed = false;
+    for (const auto& vertex : graph.vertices) {
+      next_colors[vertex.id] = adjacencyColorSignature(vertex.id, index, colors);
+      changed = changed || next_colors[vertex.id] != colors[vertex.id];
+    }
+    colors = std::move(next_colors);
+    if (!changed) {
+      break;
+    }
+  }
+
+  std::map<std::string, std::vector<std::string>> partitions;
+  for (const auto& [id, color] : colors) {
+    partitions[color].push_back(id);
   }
   for (auto& [_, ids] : partitions) {
     ids = sortedVector(ids);
   }
   return partitions;
+}
+
+auto sameVertexClass(const LvsVertex& lhs, const LvsVertex& rhs, const GraphIndex& lhs_index, const GraphIndex& rhs_index,
+                     const LvsOptions& options) -> bool
+{
+  if (lhs.kind != rhs.kind) {
+    return false;
+  }
+  if (lhs.kind == VertexKind::kInstance) {
+    return lhs.type == rhs.type;
+  }
+  if (lhs.kind == VertexKind::kPin) {
+    return pinVertexKey(lhs, lhs_index, options) == pinVertexKey(rhs, rhs_index, options);
+  }
+  return true;
+}
+
+auto edgeConsistentWithMappedNeighbors(const std::string& ref_id, const std::string& ext_id, const GraphIndex& ref_index,
+                                       const GraphIndex& ext_index, const std::map<std::string, std::string>& mapping) -> bool
+{
+  for (const auto& [ref_lhs, ref_rhs] : ref_index.undirected_edges) {
+    std::string ref_neighbor;
+    if (ref_lhs == ref_id) {
+      ref_neighbor = ref_rhs;
+    } else if (ref_rhs == ref_id) {
+      ref_neighbor = ref_lhs;
+    } else {
+      continue;
+    }
+    const auto mapped_iter = mapping.find(ref_neighbor);
+    if (mapped_iter == mapping.end()) {
+      continue;
+    }
+    if (!ext_index.undirected_edges.contains(std::minmax(ext_id, mapped_iter->second))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto verifyCompleteMapping(const GraphIndex& ref_index, const GraphIndex& ext_index, const std::map<std::string, std::string>& mapping) -> bool
+{
+  std::map<std::string, std::string> reverse_mapping;
+  for (const auto& [ref_id, ext_id] : mapping) {
+    reverse_mapping[ext_id] = ref_id;
+  }
+  for (const auto& [ref_lhs, ref_rhs] : ref_index.undirected_edges) {
+    const auto ext_lhs = mapping.find(ref_lhs);
+    const auto ext_rhs = mapping.find(ref_rhs);
+    if (ext_lhs == mapping.end() || ext_rhs == mapping.end()) {
+      return false;
+    }
+    if (!ext_index.undirected_edges.contains(std::minmax(ext_lhs->second, ext_rhs->second))) {
+      return false;
+    }
+  }
+  for (const auto& [ext_lhs, ext_rhs] : ext_index.undirected_edges) {
+    const auto ref_lhs = reverse_mapping.find(ext_lhs);
+    const auto ref_rhs = reverse_mapping.find(ext_rhs);
+    if (ref_lhs == reverse_mapping.end() || ref_rhs == reverse_mapping.end()) {
+      return false;
+    }
+    if (!ref_index.undirected_edges.contains(std::minmax(ref_lhs->second, ref_rhs->second))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto backtrackMapping(const std::vector<std::string>& ref_ids, const std::vector<std::string>& ext_ids, const GraphIndex& ref_index,
+                      const GraphIndex& ext_index, const LvsOptions& options, int64_t& explored_states, int64_t budget,
+                      std::map<std::string, std::string>& mapping, std::set<std::string>& used_ext_ids) -> bool
+{
+  if (explored_states > budget) {
+    return false;
+  }
+  std::string next_ref_id;
+  std::vector<std::string> candidates;
+  for (const auto& ref_id : ref_ids) {
+    if (mapping.contains(ref_id)) {
+      continue;
+    }
+    std::vector<std::string> local_candidates;
+    for (const auto& ext_id : ext_ids) {
+      if (used_ext_ids.contains(ext_id)) {
+        continue;
+      }
+      if (!sameVertexClass(ref_index.vertices_by_id.at(ref_id), ext_index.vertices_by_id.at(ext_id), ref_index, ext_index, options)) {
+        continue;
+      }
+      if (!edgeConsistentWithMappedNeighbors(ref_id, ext_id, ref_index, ext_index, mapping)) {
+        continue;
+      }
+      local_candidates.push_back(ext_id);
+    }
+    if (next_ref_id.empty() || local_candidates.size() < candidates.size()) {
+      next_ref_id = ref_id;
+      candidates = std::move(local_candidates);
+    }
+  }
+  if (next_ref_id.empty()) {
+    return true;
+  }
+  for (const auto& ext_id : candidates) {
+    ++explored_states;
+    if (explored_states > budget) {
+      return false;
+    }
+    mapping[next_ref_id] = ext_id;
+    used_ext_ids.insert(ext_id);
+    if (backtrackMapping(ref_ids, ext_ids, ref_index, ext_index, options, explored_states, budget, mapping, used_ext_ids)) {
+      return true;
+    }
+    used_ext_ids.erase(ext_id);
+    mapping.erase(next_ref_id);
+  }
+  return false;
+}
+
+auto ambiguousPartitionsMatch(const std::map<std::string, std::vector<std::string>>& ref_partitions,
+                              const std::map<std::string, std::vector<std::string>>& ext_partitions, const GraphIndex& ref_index,
+                              const GraphIndex& ext_index, const LvsOptions& options, int64_t& explored_states) -> bool
+{
+  std::map<std::string, std::string> mapping;
+  std::set<std::string> used_ext_ids;
+  std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> ambiguous_groups;
+  for (const auto& [signature, ref_ids] : ref_partitions) {
+    const auto ext_iter = ext_partitions.find(signature);
+    if (ext_iter == ext_partitions.end() || ext_iter->second.size() != ref_ids.size()) {
+      return false;
+    }
+    if (ref_ids.size() == 1) {
+      mapping[ref_ids.front()] = ext_iter->second.front();
+      used_ext_ids.insert(ext_iter->second.front());
+    } else {
+      ambiguous_groups.push_back({ref_ids, ext_iter->second});
+    }
+  }
+  std::sort(ambiguous_groups.begin(), ambiguous_groups.end(), [](const auto& lhs, const auto& rhs) {
+    return lhs.first.size() < rhs.first.size();
+  });
+  for (const auto& [ref_ids, ext_ids] : ambiguous_groups) {
+    if (!backtrackMapping(ref_ids, ext_ids, ref_index, ext_index, options, explored_states, options.graph_search_budget, mapping, used_ext_ids)) {
+      return false;
+    }
+  }
+  return verifyCompleteMapping(ref_index, ext_index, mapping);
 }
 
 auto cellPinKey(const LvsVertex& pin, const GraphIndex& index, const LvsOptions& options) -> std::string
@@ -618,8 +806,8 @@ auto runConnectivityLvs(const LvsGraph& reference_graph, const LvsGraph& extract
       return result;
     }
 
-    const auto ref_partitions = partitionBySignature(reference_graph, ref_index, options);
-    const auto ext_partitions = partitionBySignature(extracted_graph, ext_index, options);
+    const auto ref_partitions = refinedPartitionBySignature(reference_graph, ref_index, options);
+    const auto ext_partitions = refinedPartitionBySignature(extracted_graph, ext_index, options);
     for (const auto& [signature, ref_ids] : ref_partitions) {
       const auto ext_iter = ext_partitions.find(signature);
       const std::size_t ext_size = ext_iter == ext_partitions.end() ? 0 : ext_iter->second.size();
@@ -643,6 +831,18 @@ auto runConnectivityLvs(const LvsGraph& reference_graph, const LvsGraph& extract
       if (!ref_partitions.contains(signature)) {
         pushDiff(result.diffs, DiffKind::kExtra, {}, ext_ids, "extracted signature absent from reference");
       }
+    }
+
+    if (options.enable_bounded_backtracking && result.diffs.empty()
+        && !ambiguousPartitionsMatch(ref_partitions, ext_partitions, ref_index, ext_index, options, result.explored_states)) {
+      if (result.explored_states > options.graph_search_budget) {
+        pushDiff(result.diffs, DiffKind::kInconclusive, {}, {}, "graph_search_budget_exhausted");
+        result.state = LvsState::kInconclusive;
+        result.exit_code = LvsExitCode::kInconclusive;
+        sortDiffs(result.diffs);
+        return result;
+      }
+      pushDiff(result.diffs, DiffKind::kMissing, {}, {}, "ambiguous partition backtracking failed");
     }
 
     const auto ref_pin_by_key = pinByCellRole(ref_index, options);

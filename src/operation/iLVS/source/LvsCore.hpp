@@ -82,6 +82,7 @@ struct LvsOptions
 {
   int64_t graph_search_budget = 100000;
   bool fail_on_unsupported = true;
+  bool enable_bounded_backtracking = true;
   std::map<std::string, std::vector<std::vector<std::string>>> equivalent_pin_groups;
 };
 

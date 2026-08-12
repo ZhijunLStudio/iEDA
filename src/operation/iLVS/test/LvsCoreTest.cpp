@@ -101,6 +101,22 @@ auto makeSymmetricPair(const std::string& prefix) -> ilvs::LvsGraph
   return graph;
 }
 
+auto makeCrossCoupledPair(const std::string& prefix, bool swap_instance_names) -> ilvs::LvsGraph
+{
+  ilvs::LvsGraph graph;
+  graph.provenance_id = prefix;
+  graph.coverage.checked_layers.insert("M1");
+  addInstance(graph, prefix + "_i1", swap_instance_names ? "U2" : "U1", "INVX1");
+  addInstance(graph, prefix + "_i2", swap_instance_names ? "U1" : "U2", "INVX1");
+  addNet(graph, prefix + "_n_a", "A");
+  addNet(graph, prefix + "_n_b", "B");
+  addPin(graph, prefix + "_i1", prefix + "_p1_a", "A", "A", prefix + "_n_a");
+  addPin(graph, prefix + "_i1", prefix + "_p1_y", "Y", "Y", prefix + "_n_b");
+  addPin(graph, prefix + "_i2", prefix + "_p2_a", "A", "A", prefix + "_n_b");
+  addPin(graph, prefix + "_i2", prefix + "_p2_y", "Y", "Y", prefix + "_n_a");
+  return graph;
+}
+
 auto makeOpenChain(const std::string& prefix) -> ilvs::LvsGraph
 {
   ilvs::LvsGraph graph;
@@ -178,6 +194,15 @@ void cleanSymmetricPartition()
 {
   const ilvs::LvsResult result = run(makeSymmetricPair("ref"), makeSymmetricPair("ext"));
   expect(result.state == ilvs::LvsState::kClean, "symmetric clean graph should be CLEAN");
+}
+
+void boundedBacktrackingAcceptsAmbiguousSwap()
+{
+  ilvs::LvsOptions options;
+  options.graph_search_budget = 100;
+  const ilvs::LvsResult result = run(makeCrossCoupledPair("ref", false), makeCrossCoupledPair("ext", true), options);
+  expect(result.state == ilvs::LvsState::kClean, "bounded backtracking should solve symmetric instance swap");
+  expect(result.explored_states > 0, "bounded backtracking should explore ambiguous states");
 }
 
 void detectsOpen()
@@ -262,11 +287,15 @@ void summaryJsonIsStable()
 
 }  // namespace
 
+void runVerilogReferenceLoaderTests();
+void runLayoutConnectivityExtractorTests();
+
 auto main() -> int
 {
   try {
     cleanRenameIgnoresNames();
     cleanSymmetricPartition();
+    boundedBacktrackingAcceptsAmbiguousSwap();
     detectsOpen();
     detectsShort();
     detectsMissing();
@@ -277,6 +306,8 @@ auto main() -> int
     budgetExhaustionIsInconclusive();
     manifestRejectsSharedReferenceAndLayout();
     summaryJsonIsStable();
+    runVerilogReferenceLoaderTests();
+    runLayoutConnectivityExtractorTests();
   } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
     return 1;

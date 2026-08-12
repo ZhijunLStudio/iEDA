@@ -1,5 +1,7 @@
 add_executable(ilvs_core_test
+    LayoutConnectivityExtractorTest.cpp
     LvsCoreTest.cpp
+    VerilogReferenceLoaderTest.cpp
 )
 
 target_link_libraries(ilvs_core_test

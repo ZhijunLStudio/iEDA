@@ -6,6 +6,7 @@
 // ***************************************************************************************
 
 #include "ILVSAPI.hpp"
+#include "VerilogReferenceLoader.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -20,10 +21,10 @@ namespace {
 auto usage() -> std::string
 {
   return R"(Usage:
-  iLVS --ref_graph <json> --ext_graph <json> --tech <path> --out <json>
+  iLVS (--ref_graph <json> | --ref_verilog <v>) --ext_graph <json> --tech <path> --out <json>
        --ref_hash <sha256> --ext_hash <sha256> --tech_hash <sha256> --binary_hash <sha256>
        [--ref_object <id>] [--ext_object <id>] [--tech_object <id>] [--binary_path <path>] [--binary_object <id>]
-       [--budget <states>] [--allow_unsupported] [--equiv_pin <cell:pin,pin>]
+       [--top_module <name>] [--budget <states>] [--allow_unsupported] [--equiv_pin <cell:pin,pin>]
 )";
 }
 
@@ -83,12 +84,14 @@ auto parseArgs(int argc, char** argv, std::map<std::string, std::string>& args, 
       args[key] = value;
     }
   }
-  const std::vector<std::string> required = {"--ref_graph",   "--ext_graph", "--tech",      "--out",
-                                             "--ref_hash",    "--ext_hash",  "--tech_hash", "--binary_hash"};
+  const std::vector<std::string> required = {"--ext_graph", "--tech", "--out", "--ref_hash", "--ext_hash", "--tech_hash", "--binary_hash"};
   for (const auto& key : required) {
     if (!args.contains(key) || args.at(key).empty()) {
       throw std::runtime_error("missing required argument: " + key);
     }
+  }
+  if (args.contains("--ref_graph") == args.contains("--ref_verilog")) {
+    throw std::runtime_error("provide exactly one of --ref_graph or --ref_verilog");
   }
   if (args.contains("--budget")) {
     options.graph_search_budget = std::stoll(args.at("--budget"));
@@ -119,14 +122,24 @@ auto main(int argc, char** argv) -> int
     }
 
     ilvs::LvsManifest manifest;
-    manifest.reference = {args.at("--ref_graph"), args.at("--ref_hash"), argOrDefault(args, "--ref_object", args.at("--ref_graph"))};
+    const std::string reference_path = args.contains("--ref_graph") ? args.at("--ref_graph") : args.at("--ref_verilog");
+    manifest.reference = {reference_path, args.at("--ref_hash"), argOrDefault(args, "--ref_object", reference_path)};
     manifest.layout = {args.at("--ext_graph"), args.at("--ext_hash"), argOrDefault(args, "--ext_object", args.at("--ext_graph"))};
     manifest.tech_mapping = {args.at("--tech"), args.at("--tech_hash"), argOrDefault(args, "--tech_object", args.at("--tech"))};
     manifest.binary = {argOrDefault(args, "--binary_path", argv[0]), args.at("--binary_hash"),
                        argOrDefault(args, "--binary_object", argv[0])};
 
     const ilvs::ILVSAPI api;
-    const ilvs::LvsResult result = api.runFromJsonFiles(args.at("--ref_graph"), args.at("--ext_graph"), manifest, options);
+    ilvs::LvsResult result;
+    if (args.contains("--ref_graph")) {
+      result = api.runFromJsonFiles(args.at("--ref_graph"), args.at("--ext_graph"), manifest, options);
+    } else {
+      ilvs::VerilogReferenceOptions verilog_options;
+      verilog_options.top_module = argOrDefault(args, "--top_module", "");
+      const ilvs::LvsGraph reference_graph = ilvs::loadVerilogReferenceGraphFile(args.at("--ref_verilog"), verilog_options);
+      const ilvs::LvsGraph extracted_graph = ilvs::loadGraphJsonFile(args.at("--ext_graph"), "layout");
+      result = api.run(reference_graph, extracted_graph, manifest, options);
+    }
     if (!ilvs::writeResultJson(result, args.at("--out"))) {
       std::cerr << "failed to write LVS summary: " << args.at("--out") << '\n';
       return static_cast<int>(ilvs::LvsExitCode::kToolError);
