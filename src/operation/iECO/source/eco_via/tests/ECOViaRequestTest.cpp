@@ -101,6 +101,42 @@ int main()
     const auto full_oracle_accepted = ieco::evaluateShapeRequest(request, full_config, {2, 1, true, true}, "baseline_hash");
     require(full_oracle_accepted.state == ieco::ECORequestState::kAccepted, "passed full oracle should accept");
 
+    ieco::ECOViaConfig runner_config = config;
+    runner_config.request_index = 6;
+    runner_config.full_oracle_period = 3;
+    bool ran_irt = false;
+    bool ran_idrc = false;
+    bool ran_ista = false;
+    ieco::ECOFullOracleProbes probes;
+    probes.run_irt = [&ran_irt] {
+      ran_irt = true;
+      return ieco::ECOFullOracleResult::Probe{true, true, "iRT", ""};
+    };
+    probes.run_idrc = [&ran_idrc] {
+      ran_idrc = true;
+      return ieco::ECOFullOracleResult::Probe{true, true, "iDRC", ""};
+    };
+    probes.run_ista = [&ran_ista] {
+      ran_ista = true;
+      return ieco::ECOFullOracleResult::Probe{true, true, "iSTA", ""};
+    };
+    const auto runner_accepted
+        = ieco::evaluateShapeRequestWithFullOracle(request, runner_config, {2, 1, true, true}, "baseline_hash", probes);
+    require(runner_accepted.state == ieco::ECORequestState::kAccepted, "passed full oracle probes should accept");
+    require(ran_irt && ran_idrc && ran_ista, "periodic full oracle should run iRT/iDRC/iSTA probes");
+    const std::string runner_json = ieco::ecoViaReportJson(runner_accepted);
+    require(runner_json.find("\"source\": \"iRT\"") != std::string::npos, "iRT probe source missing");
+    require(runner_json.find("\"source\": \"iDRC\"") != std::string::npos, "iDRC probe source missing");
+    require(runner_json.find("\"source\": \"iSTA\"") != std::string::npos, "iSTA probe source missing");
+
+    ieco::ECOFullOracleProbes missing_probe;
+    missing_probe.run_irt = probes.run_irt;
+    missing_probe.run_idrc = probes.run_idrc;
+    const auto missing_probe_result
+        = ieco::evaluateShapeRequestWithFullOracle(request, runner_config, {2, 1, true, true}, "baseline_hash", missing_probe);
+    require(missing_probe_result.state == ieco::ECORequestState::kRolledBack, "missing iSTA probe should rollback");
+    require(missing_probe_result.reason.find("iSTA") != std::string::npos, "missing iSTA probe reason missing");
+
     ieco::ECOViaConfig direct_write_config = config;
     direct_write_config.route_edit_owner = ieco::ECORouteEditOwner::kIECO;
     direct_write_config.direct_db_route_write_requested = true;

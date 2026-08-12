@@ -57,5 +57,7 @@ struct ECOTimingResult
 [[nodiscard]] std::string toString(ECOTimingState state);
 [[nodiscard]] ECOTimingResult evaluateTimingFacade(const ECOTimingCapability& capability, const ECOTimingGuardband& guardband,
                                                    bool commercial_correlation_required = true);
+[[nodiscard]] std::string ecoTimingReportJson(const ECOTimingResult& result);
+[[nodiscard]] bool writeEcoTimingReportJson(const ECOTimingResult& result, const std::string& path);
 
 }  // namespace ieco

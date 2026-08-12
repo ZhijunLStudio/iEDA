@@ -16,6 +16,7 @@
 // ***************************************************************************************
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <set>
 #include <string>
@@ -95,8 +96,27 @@ struct ECOFullOracleResult
   bool idrc_ok = false;
   bool ista_ok = false;
   std::string reason;
+  struct Probe
+  {
+    bool ran = false;
+    bool ok = false;
+    std::string source;
+    std::string reason;
+  };
+  Probe irt;
+  Probe idrc;
+  Probe ista;
 
   [[nodiscard]] bool ok() const { return ran && irt_ok && idrc_ok && ista_ok; }
+};
+
+using ECOFullOracleProbe = std::function<ECOFullOracleResult::Probe()>;
+
+struct ECOFullOracleProbes
+{
+  ECOFullOracleProbe run_irt;
+  ECOFullOracleProbe run_idrc;
+  ECOFullOracleProbe run_ista;
 };
 
 struct ECOViaRequest
@@ -172,9 +192,13 @@ struct ECOViaConfig
 [[nodiscard]] std::string toString(ECORequestState state);
 [[nodiscard]] std::string toString(ECORouteEditOwner owner);
 [[nodiscard]] bool requiresFullOracle(const ECOViaConfig& config);
+[[nodiscard]] std::optional<ECOFullOracleResult> runPeriodicFullOracle(const ECOViaConfig& config, const ECOFullOracleProbes& probes);
 [[nodiscard]] ECOViaResult evaluateLegacyViaRequest(std::string_view type);
 [[nodiscard]] ECOViaResult evaluateShapeRequest(const std::optional<ECOViaShapeRequest>& request, const ECOViaConfig& config,
                                                 const ECOOracleResult& oracle, std::string baseline_hash);
+[[nodiscard]] ECOViaResult evaluateShapeRequestWithFullOracle(const std::optional<ECOViaShapeRequest>& request, ECOViaConfig config,
+                                                              const ECOOracleResult& oracle, std::string baseline_hash,
+                                                              const ECOFullOracleProbes& probes);
 [[nodiscard]] std::string ecoViaReportJson(const ECOViaResult& result);
 [[nodiscard]] bool writeEcoViaReportJson(const ECOViaResult& result, const std::string& path);
 

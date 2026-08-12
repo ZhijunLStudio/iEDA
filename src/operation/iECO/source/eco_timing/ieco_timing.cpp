@@ -7,7 +7,36 @@
 // ***************************************************************************************
 #include "ieco_timing.h"
 
+#include <fstream>
+
+#include "json/json.hpp"
+
 namespace ieco {
+namespace {
+
+auto capabilityToJson(const ECOTimingCapability& capability) -> nlohmann::ordered_json
+{
+  return {{"ito_primitive_ready", capability.ito_primitive_ready},
+          {"route_eco_primitive_ready", capability.route_eco_primitive_ready},
+          {"platform_transaction_ready", capability.platform_transaction_ready},
+          {"local_oracle_ready", capability.local_oracle_ready},
+          {"full_oracle_ready", capability.full_oracle_ready},
+          {"prime_time_correlation_ready", capability.prime_time_correlation_ready}};
+}
+
+auto guardbandToJson(const ECOTimingGuardband& guardband) -> nlohmann::ordered_json
+{
+  return {{"setup_slack_ps", guardband.setup_slack_ps},
+          {"hold_slack_ps", guardband.hold_slack_ps},
+          {"drv_margin", guardband.drv_margin},
+          {"area_delta_ratio", guardband.area_delta_ratio},
+          {"power_delta_ratio", guardband.power_delta_ratio},
+          {"congestion_delta_ratio", guardband.congestion_delta_ratio},
+          {"legality_ok", guardband.legality_ok},
+          {"ok", guardband.ok()}};
+}
+
+}  // namespace
 
 bool ECOTimingGuardband::ok() const
 {
@@ -67,6 +96,29 @@ ECOTimingResult evaluateTimingFacade(const ECOTimingCapability& capability, cons
   result.experimental = false;
   result.reason = "timing ECO facade accepted";
   return result;
+}
+
+std::string ecoTimingReportJson(const ECOTimingResult& result)
+{
+  const nlohmann::ordered_json json = {{"schema_version", "ieda.eco.timing_report.v1"},
+                                      {"state", toString(result.state)},
+                                      {"ok", result.ok()},
+                                      {"experimental", result.experimental},
+                                      {"would_modify_db", result.would_modify_db},
+                                      {"reason", result.reason},
+                                      {"capability", capabilityToJson(result.capability)},
+                                      {"guardband", guardbandToJson(result.guardband)}};
+  return json.dump(2);
+}
+
+bool writeEcoTimingReportJson(const ECOTimingResult& result, const std::string& path)
+{
+  std::ofstream output(path, std::ios::trunc);
+  if (!output.is_open()) {
+    return false;
+  }
+  output << ecoTimingReportJson(result) << '\n';
+  return static_cast<bool>(output);
 }
 
 }  // namespace ieco

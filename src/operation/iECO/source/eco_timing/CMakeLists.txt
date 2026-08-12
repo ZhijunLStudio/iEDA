@@ -5,6 +5,7 @@ add_library(ieco_timing
 target_include_directories(ieco_timing
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${HOME_THIRDPARTY}/json
 )
 
 add_executable(ieco_timing_contract_test EXCLUDE_FROM_ALL

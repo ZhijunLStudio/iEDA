@@ -44,6 +44,11 @@ auto vectorToJson(const std::vector<ECOViaShapeRequest>& values) -> nlohmann::or
   return json;
 }
 
+auto probeToJson(const ECOFullOracleResult::Probe& probe) -> nlohmann::ordered_json
+{
+  return {{"ran", probe.ran}, {"ok", probe.ok}, {"source", probe.source}, {"reason", probe.reason}};
+}
+
 auto stableHash(const std::string& input) -> std::string
 {
   uint64_t hash = 1469598103934665603ULL;
@@ -112,6 +117,46 @@ std::string toString(ECORouteEditOwner owner)
 bool requiresFullOracle(const ECOViaConfig& config)
 {
   return config.full_oracle_period > 0 && config.request_index > 0 && config.request_index % config.full_oracle_period == 0;
+}
+
+std::optional<ECOFullOracleResult> runPeriodicFullOracle(const ECOViaConfig& config, const ECOFullOracleProbes& probes)
+{
+  if (!requiresFullOracle(config)) {
+    return std::nullopt;
+  }
+
+  ECOFullOracleResult result;
+  result.ran = true;
+  if (probes.run_irt) {
+    result.irt = probes.run_irt();
+  } else {
+    result.irt = {false, false, "iRT", "iRT full oracle probe missing"};
+  }
+  if (probes.run_idrc) {
+    result.idrc = probes.run_idrc();
+  } else {
+    result.idrc = {false, false, "iDRC", "iDRC full oracle probe missing"};
+  }
+  if (probes.run_ista) {
+    result.ista = probes.run_ista();
+  } else {
+    result.ista = {false, false, "iSTA", "iSTA full oracle probe missing"};
+  }
+
+  result.irt_ok = result.irt.ran && result.irt.ok;
+  result.idrc_ok = result.idrc.ran && result.idrc.ok;
+  result.ista_ok = result.ista.ran && result.ista.ok;
+  if (!result.ok()) {
+    if (!result.irt_ok) {
+      result.reason = result.irt.reason.empty() ? "iRT full oracle failed" : result.irt.reason;
+    } else if (!result.idrc_ok) {
+      result.reason = result.idrc.reason.empty() ? "iDRC full oracle failed" : result.idrc.reason;
+    } else {
+      result.reason = result.ista.reason.empty() ? "iSTA full oracle failed" : result.ista.reason;
+    }
+  }
+
+  return result;
 }
 
 ECOViaResult evaluateLegacyViaRequest(std::string_view type)
@@ -216,6 +261,16 @@ ECOViaResult evaluateShapeRequest(const std::optional<ECOViaShapeRequest>& reque
   return result;
 }
 
+ECOViaResult evaluateShapeRequestWithFullOracle(const std::optional<ECOViaShapeRequest>& request, ECOViaConfig config,
+                                                const ECOOracleResult& oracle, std::string baseline_hash,
+                                                const ECOFullOracleProbes& probes)
+{
+  if (auto full_oracle = runPeriodicFullOracle(config, probes); full_oracle.has_value()) {
+    config.full_oracle = std::move(full_oracle);
+  }
+  return evaluateShapeRequest(request, config, oracle, std::move(baseline_hash));
+}
+
 std::string ecoViaReportJson(const ECOViaResult& result)
 {
   const nlohmann::ordered_json json
@@ -245,7 +300,11 @@ std::string ecoViaReportJson(const ECOViaResult& result)
            {"idrc_ok", result.full_oracle.has_value() && result.full_oracle->idrc_ok},
            {"ista_ok", result.full_oracle.has_value() && result.full_oracle->ista_ok},
            {"ok", result.full_oracle.has_value() && result.full_oracle->ok()},
-           {"reason", result.full_oracle.has_value() ? result.full_oracle->reason : ""}}},
+           {"reason", result.full_oracle.has_value() ? result.full_oracle->reason : ""},
+           {"probes",
+            {{"irt", result.full_oracle.has_value() ? probeToJson(result.full_oracle->irt) : probeToJson({})},
+             {"idrc", result.full_oracle.has_value() ? probeToJson(result.full_oracle->idrc) : probeToJson({})},
+             {"ista", result.full_oracle.has_value() ? probeToJson(result.full_oracle->ista) : probeToJson({})}}}}},
          {"route_eco",
           {{"owner", toString(result.route_edit_owner)},
            {"direct_db_route_write_requested", result.direct_db_route_write_requested},
