@@ -26,10 +26,10 @@
 
 ## P1 - Calibre harness
 
-- [ ] 同 GDS/DEF/tech/deck hash 与 Calibre 对拍。
-- [ ] 输出 true positive、false positive、false negative、unsupported 分桶。
+- [x] 同 GDS/DEF/tech/deck hash 与 Calibre 对拍。
+- [x] 输出 true positive、false positive、false negative、unsupported 分桶。
 - [ ] 每个 PDK 选最小支持 deck，先闭合 MetalShort/Spacing/Width 等核心规则。
-- [ ] 不能用 iDRC clean 替代 Calibre clean；只能报告支持子集一致性。
+- [x] 不能用 iDRC clean 替代 Calibre clean；只能报告支持子集一致性。
 
 ## P1 - thread safety and performance
 

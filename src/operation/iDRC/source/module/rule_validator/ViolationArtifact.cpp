@@ -8,6 +8,7 @@
 #include "ViolationArtifact.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -193,6 +194,11 @@ auto boolValue(const nlohmann::json& json, const char* key, bool default_value =
   return json.contains(key) && json.at(key).is_boolean() ? json.at(key).get<bool>() : default_value;
 }
 
+auto isSha256(const std::string& value) -> bool
+{
+  return value.size() == 64 && std::all_of(value.begin(), value.end(), [](unsigned char character) { return std::isxdigit(character); });
+}
+
 auto violationList(const nlohmann::json& artifact) -> const nlohmann::json*
 {
   if (artifact.is_array()) {
@@ -259,12 +265,24 @@ auto indexByCanonicalKey(const nlohmann::json& artifact) -> std::map<std::string
   return indexed;
 }
 
-auto unsupportedKeySet(const nlohmann::json& artifact) -> std::set<std::string>
+auto unsupportedViolation(const nlohmann::json& item, const std::set<std::string>& supported_rule_types) -> bool
+{
+  if (boolValue(item, "unsupported")) {
+    return true;
+  }
+  if (supported_rule_types.empty()) {
+    return false;
+  }
+  const std::string type = stringValue(item, "type");
+  return type.empty() || !supported_rule_types.contains(type);
+}
+
+auto unsupportedKeySet(const nlohmann::json& artifact, const std::set<std::string>& supported_rule_types) -> std::set<std::string>
 {
   std::set<std::string> unsupported;
   if (const nlohmann::json* list = violationList(artifact); list != nullptr) {
     for (const auto& item : *list) {
-      if (item.is_object() && boolValue(item, "unsupported")) {
+      if (item.is_object() && unsupportedViolation(item, supported_rule_types)) {
         unsupported.insert(canonicalKeyFromJson(item));
       }
     }
@@ -304,6 +322,17 @@ auto contextMatches(const nlohmann::ordered_json& left, const nlohmann::ordered_
     }
   }
   return true;
+}
+
+auto missingContextHashes(const nlohmann::ordered_json& context) -> nlohmann::ordered_json
+{
+  nlohmann::ordered_json missing = nlohmann::ordered_json::array();
+  for (const char* key : {"gds_sha256", "def_sha256", "tech_sha256", "deck_sha256"}) {
+    if (!isSha256(context.value(key, ""))) {
+      missing.push_back(key);
+    }
+  }
+  return missing;
 }
 
 auto keyArray(const std::set<std::string>& keys) -> nlohmann::ordered_json
@@ -509,9 +538,14 @@ auto compareCalibreArtifacts(const nlohmann::json& idrc_artifact, const nlohmann
   const auto idrc_context = makeContext(idrc_artifact);
   const auto calibre_context = makeContext(calibre_artifact);
   const bool context_match = contextMatches(idrc_context, calibre_context);
+  auto idrc_missing_hashes = missingContextHashes(idrc_context);
+  auto calibre_missing_hashes = missingContextHashes(calibre_context);
+  const bool context_hashes_present = idrc_missing_hashes.empty() && calibre_missing_hashes.empty();
   const auto idrc = indexByCanonicalKey(idrc_artifact);
   const auto calibre = indexByCanonicalKey(calibre_artifact);
-  const auto unsupported = unsupportedKeySet(calibre_artifact);
+  auto unsupported = unsupportedKeySet(idrc_artifact, options.supported_rule_types);
+  const auto calibre_unsupported = unsupportedKeySet(calibre_artifact, options.supported_rule_types);
+  unsupported.insert(calibre_unsupported.begin(), calibre_unsupported.end());
 
   std::set<std::string> true_positive;
   std::set<std::string> false_positive;
@@ -548,7 +582,11 @@ auto compareCalibreArtifacts(const nlohmann::json& idrc_artifact, const nlohmann
   nlohmann::ordered_json report;
   report["schema_version"] = "ieda.drc.calibre_compare.v1";
   report["context_match"] = context_match;
+  report["context_hashes_present"] = context_hashes_present;
+  report["signoff_clean"] = false;
+  report["scope"] = "calibre_supported_subset_only";
   report["context"] = {{"idrc", idrc_context}, {"calibre", calibre_context}};
+  report["missing_context_hashes"] = {{"idrc", std::move(idrc_missing_hashes)}, {"calibre", std::move(calibre_missing_hashes)}};
   report["buckets"] = {{"true_positive", keyArray(true_positive)},
                        {"false_positive", keyArray(false_positive)},
                        {"false_negative", keyArray(false_negative)},
@@ -560,11 +598,16 @@ auto compareCalibreArtifacts(const nlohmann::json& idrc_artifact, const nlohmann
                       {"unsupported", unsupported.size()}};
   report["metrics"] = {{"precision", precision}, {"recall", recall}, {"f1", f1}};
   report["policy"] = {{"require_context_match", options.require_context_match},
+                      {"require_context_hashes", options.require_context_hashes},
                       {"fail_on_false_negative", options.fail_on_false_negative},
                       {"fail_on_false_positive", options.fail_on_false_positive},
-                      {"fail_on_unsupported", options.fail_on_unsupported}};
+                      {"fail_on_unsupported", options.fail_on_unsupported},
+                      {"supported_rule_types", keyArray(options.supported_rule_types)}};
 
   bool pass = true;
+  if (options.require_context_hashes && !context_hashes_present) {
+    pass = false;
+  }
   if (options.require_context_match && !context_match) {
     pass = false;
   }

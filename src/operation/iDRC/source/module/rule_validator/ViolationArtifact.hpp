@@ -40,9 +40,11 @@ struct CanonicalViolationContext
 struct CalibreCompareOptions
 {
   bool require_context_match = true;
+  bool require_context_hashes = true;
   bool fail_on_false_negative = true;
   bool fail_on_false_positive = false;
   bool fail_on_unsupported = false;
+  std::set<std::string> supported_rule_types;
 };
 
 struct CalibreCompareResult

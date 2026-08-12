@@ -40,6 +40,39 @@ target_include_directories(idrc_violation_artifact
     ${HOME_DATABASE}/interaction/RT_DRC
 )
 
+add_library(idrc_calibre_compare_tool
+    ${IDRC_MODULE}/rule_validator/CalibreCompareTool.cpp
+)
+
+target_link_libraries(idrc_calibre_compare_tool
+    PUBLIC
+    idrc_violation_artifact
+)
+
+target_include_directories(idrc_calibre_compare_tool
+    PUBLIC
+    ${IDRC_MODULE}/rule_validator
+)
+
+add_executable(idrc_calibre_compare EXCLUDE_FROM_ALL
+    ${IDRC_MODULE}/rule_validator/CalibreCompareMain.cpp
+)
+
+target_link_libraries(idrc_calibre_compare
+    PRIVATE
+    idrc_calibre_compare_tool
+)
+
+add_executable(idrc_calibre_compare_test EXCLUDE_FROM_ALL
+    ${IDRC_MODULE}/rule_validator/tests/CalibreCompareToolTest.cpp
+)
+
+target_link_libraries(idrc_calibre_compare_test
+    PRIVATE
+    idrc_calibre_compare_tool
+)
+add_test(NAME idrc_calibre_compare_test COMMAND idrc_calibre_compare_test)
+
 add_executable(idrc_violation_artifact_test EXCLUDE_FROM_ALL
     ${IDRC_MODULE}/rule_validator/tests/ViolationArtifactTest.cpp
 )
