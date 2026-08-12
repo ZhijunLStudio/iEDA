@@ -10,48 +10,48 @@
 '''
 import logging
 import os
-
-from pathlib import Path
-
-from mcp.server import Server
-from mcp.server.session import ServerSession
-from mcp.server.stdio import stdio_server
-from mcp.types import (
-    TextContent,
-    Tool,
-)
-
-from enum import Enum
-from pydantic import BaseModel
+import json
+import subprocess
 
 from pathlib import Path
 
 current_dir = os.path.split(os.path.abspath(__file__))[0]
 
-class iEDARun(BaseModel):
-    script_path: str 
-    
-class iEDARunExample(BaseModel):
-    example_name: str 
 
-class iEDAMcpTools(str, Enum):
-    """
-    iEDA MCP tools
-    """
-    iEDA_RUN = "iEDA_RUN"
-    iEDA_RUN_EXAMPLE = "iEDA_RUN_EXAMPLE"
-    
+def mcp_write_enabled() -> bool:
+    return os.getenv("MCP_IEDA_WRITE", "0").lower() in {"1", "true", "yes", "on"}
+
+
+def require_mcp_write(tool_name: str) -> None:
+    if not mcp_write_enabled():
+        raise PermissionError(f"{tool_name} requires MCP_IEDA_WRITE=1")
+
+
 def run_ieda(iEDA: Path, script_path: str):
     """Run iEDA with the given script path."""
-    
-    import subprocess  
-    script = f"{iEDA} -script {script_path}"
-    
-    logging.info(f"Run iEDA with script: {script}")
 
-    process = subprocess.run(script, shell=True, check=True)
+    require_mcp_write("iEDA_RUN")
+    ieda_path = Path(iEDA)
+    tcl_path = Path(script_path)
+    if not ieda_path.exists():
+        raise FileNotFoundError(f"iEDA binary not found: {ieda_path}")
+    if not tcl_path.exists():
+        raise FileNotFoundError(f"iEDA script not found: {tcl_path}")
+
+    command = [str(ieda_path), "-script", str(tcl_path)]
+    logging.info("Run iEDA with argv: %s", command)
+    process = subprocess.run(command, check=False)
     if process.returncode != 0:
         raise RuntimeError(f"Subprocess failed with return code {process.returncode}")
+    return {
+        "schema_version": "ieda.mcp.run_result.v1",
+        "ok": True,
+        "rc": process.returncode,
+        "iEDA": str(ieda_path),
+        "script_path": str(tcl_path),
+        "write_authorized": True,
+        "product_assertion": "process_rc_zero",
+    }
     
     
 def get_server_url() -> str:
@@ -67,6 +67,30 @@ def get_server_port() -> int:
     return int(os.getenv("MCP_SERVER_PORT", 3002))
     
 def serve(iEDA: Path, transport="stdio"):
+    from enum import Enum
+
+    from mcp.server import Server
+    from mcp.server.stdio import stdio_server
+    from mcp.types import (
+        TextContent,
+        Tool,
+    )
+    from pydantic import BaseModel
+
+    class iEDARun(BaseModel):
+        script_path: str
+
+    class iEDARunExample(BaseModel):
+        example_name: str
+
+    class iEDAMcpTools(str, Enum):
+        """
+        iEDA MCP tools
+        """
+
+        iEDA_RUN = "iEDA_RUN"
+        iEDA_RUN_EXAMPLE = "iEDA_RUN_EXAMPLE"
+
     logger = logging.getLogger(__name__)
     
     server = Server("mcp-iEDA")
@@ -85,8 +109,8 @@ def serve(iEDA: Path, transport="stdio"):
             if not script_path:
                 raise ValueError("Missing 'script_path' in arguments")
             logger.info(f"Run iEDA with script: {script_path}")
-            run_ieda(iEDA, script_path)
-            return [TextContent(type="text", text=f"Run iEDA with script: {script_path} successfully")]
+            result = run_ieda(iEDA, script_path)
+            return [TextContent(type="text", text=json.dumps(result, sort_keys=True))]
         elif tool == iEDAMcpTools.iEDA_RUN_EXAMPLE:
             example_name = arguments.get("example_name")
             if not example_name:
@@ -94,10 +118,10 @@ def serve(iEDA: Path, transport="stdio"):
             logger.info(f"Run iEDA example: {example_name}")
             example_script_path = f"{current_dir}/./example/{example_name}/run_iEDA.tcl"
             if os.path.exists(example_script_path):
-                run_ieda(iEDA, example_script_path)
-                return [TextContent(type="text", text=f"Run iEDA example: {example_name} successfully")]
-            else:
-                return [TextContent(type="text", text=f"Example: {example_script_path} not found")]
+                result = run_ieda(iEDA, example_script_path)
+                result["example_name"] = example_name
+                return [TextContent(type="text", text=json.dumps(result, sort_keys=True))]
+            raise FileNotFoundError(f"Example script not found: {example_script_path}")
         else:
             raise ValueError(f"Unknown tool: {tool}")
 
@@ -139,5 +163,3 @@ def serve(iEDA: Path, transport="stdio"):
                 await server.run(read_stream, write_stream, options, raise_exceptions=True)
                 
         anyio.run(arun)
-
-
