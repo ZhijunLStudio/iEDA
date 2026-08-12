@@ -9,6 +9,7 @@
 - Python 和 MCP 不能各自分裂出一套语义。
 - 已落地可重复 inventory：`docs/ai/interface-silent-success-inventory.{json,md}` 当前记录 491 个 Tcl/Python open finding、273 个 API candidate，其中 131 个尚未接入 interface。
 - MCP critical shell/write 风险已清零：默认只读，执行 iEDA 需 `MCP_IEDA_WRITE=1`，结果返回 JSON schema/rc/product assertion。
+- 已落地 shared command contract：C++ `CommandContract.hpp` 和 Python `command_contract.py` 统一 allowed/dependency/product、rc/exception、compat opt-in 语义。
 
 ## P0 - silent-success inventory
 
@@ -20,17 +21,18 @@
 
 ## P0 - transactional command base
 
-- [ ] 落地 `TclCmdTransactional` 或等价基类：allowed、dependency、products 三表。
-- [ ] 成功定义为：API success + 产物存在 + schema valid + dep satisfied。
-- [ ] 未知 option/key 必须 ERROR，不得吞掉进入默认路径。
-- [ ] 命令失败必须传播到 Tcl/Python rc 或异常。
-- [ ] 旧命令迁移期间，compat mode 要显式 opt-in。
+- [X] 落地 `TclCmdTransactional` 或等价基类：allowed、dependency、products 三表。
+  - [X] `src/interface/contract/CommandContract.hpp` / `command_contract.py` 已提供 shared contract；旧 Tcl 命令继承迁移仍在 P2。
+- [X] 成功定义为：API success + 产物存在 + schema valid + dep satisfied。
+- [X] 未知 option/key 必须 ERROR，不得吞掉进入默认路径。
+- [X] 命令失败必须传播到 Tcl/Python rc 或异常。
+- [X] 旧命令迁移期间，compat mode 要显式 opt-in。
 
 ## P1 - Python parity
 
-- [ ] Python 绑定的成功/失败语义与 TCL 对齐。
-- [ ] Python 不能悄悄比 TCL 多吞一次错误或返回默认值。
-- [ ] 为关键命令补一组 Python/TCL 一致性测试。
+- [X] Python 绑定的成功/失败语义与 TCL 对齐。
+- [X] Python 不能悄悄比 TCL 多吞一次错误或返回默认值。
+- [X] 为关键命令补一组 Python/TCL 一致性测试。
 - [X] `mcp.write`、`mcp.read`、`mcp.admin` 权限边界写成可审计配置。
   - [X] 当前 MCP write/execute 由 `MCP_IEDA_WRITE=1` 显式授权，默认只读。
 
@@ -48,10 +50,9 @@
 
 ## 下一步执行顺序
 
-1. **P0 base class**。
-2. **P1 Python/TCL parity**。
-3. **P2 hot command migration**。
-4. **P2 remove compat default success**。
+1. **P2 hot command migration**。
+2. **P0 fix owner assignment**。
+3. **P2 remove compat default success**。
 
 ## 验证纪律
 
@@ -62,8 +63,8 @@
 
 | File / module | 当前定位 | 具体待办 |
 |---|---|---|
-| `src/interface/tcl/*` | TCL 命令 | inventory 已覆盖；继续落 transactional base |
-| `src/interface/python/*` | Python 绑定 | inventory 已覆盖；继续做 rc/exception 对齐、产品断言 |
+| `src/interface/tcl/*` | TCL 命令 | inventory 已覆盖；shared contract 已落地；继续迁移热命令继承/调用 contract |
+| `src/interface/python/*` | Python 绑定 | inventory 已覆盖；Python parity contract 已落地；继续迁移热命令 wrapper |
 | `mcp-iEDA/*` | MCP 面 | 已默认只读、write 授权、JSON rc/product assertion |
 | `src/platform/tool_manager/tool_api/*` | 工具协议 | API candidate inventory 已覆盖；继续接 allowed/dependency/product 三表 |
 | `src/platform/flow/*` | 平台消费者 | 命令顺序、abort chain、SUCCESS stamp |
