@@ -21,6 +21,7 @@
 #include "Logger.hpp"
 #include "RVCluster.hpp"
 #include "RVModel.hpp"
+#include "RuleValidatorStats.hpp"
 
 namespace idrc {
 
@@ -35,10 +36,12 @@ class RuleValidator
   // function
   std::vector<Violation> verify(std::vector<DRCShape>& drc_env_shape_list, std::vector<DRCShape>& drc_result_shape_list,
                                 std::set<ViolationType>& drc_check_type_set, std::vector<DRCShape>& drc_check_region_list);
+  const RuleValidatorRunStats& getLastRunStats() const { return _last_run_stats; }
 
  private:
   // self
   static RuleValidator* _rv_instance;
+  RuleValidatorRunStats _last_run_stats;
 
   RuleValidator() = default;
   RuleValidator(const RuleValidator& other) = delete;
@@ -51,12 +54,12 @@ class RuleValidator
                       std::vector<DRCShape>& drc_check_region_list);
   void setRVComParam(RVModel& rv_model);
   void buildRVClusterList(RVModel& rv_model);
-  void verifyRVModel(RVModel& rv_model);
+  void verifyRVModel(RVModel& rv_model, RuleValidatorRunStats& run_stats);
   void buildRVCluster(RVCluster& rv_cluster);
   bool needVerifying(RVCluster& rv_cluster);
-  void buildViolationList(RVCluster& rv_cluster);
+  void buildViolationList(RVCluster& rv_cluster, RuleValidatorRunStats& run_stats);
   void prepareRVCluster(RVCluster& rv_cluster);
-  void verifyRVCluster(RVCluster& rv_cluster);
+  void verifyRVCluster(RVCluster& rv_cluster, RuleValidatorRunStats& run_stats);
   void verifyAdjacentCutSpacing(RVCluster& rv_cluster);
   void verifyCornerFillSpacing(RVCluster& rv_cluster);
   void verifyCornerSpacing(RVCluster& rv_cluster);
@@ -84,6 +87,8 @@ class RuleValidator
   void verifyParallelRunLengthSpacing(RVCluster& rv_cluster);
   void verifySameLayerCutSpacing(RVCluster& rv_cluster);
   bool needVerifying(RVCluster& rv_cluster, ViolationType violation_type);
+  bool getMinAdjacentRoutingLayerByCut(int32_t cut_layer_idx, int32_t& routing_layer_idx) const;
+  const std::vector<int32_t>* findAdjacentCutLayersByRouting(int32_t routing_layer_idx) const;
   void processRVCluster(RVCluster& rv_cluster);
   void buildViolationList(RVModel& rv_model);
 

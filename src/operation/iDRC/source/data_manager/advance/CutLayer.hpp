@@ -36,12 +36,19 @@ class CutLayer
   int32_t get_layer_idx() const { return _layer_idx; }
   int32_t get_layer_order() const { return _layer_order; }
   std::string& get_layer_name() { return _layer_name; }
+  const std::string& get_layer_name() const { return _layer_name; }
   AdjacentCutSpacingRule& get_adjacent_cut_rule() { return _adjacent_cut_rule; }
+  const AdjacentCutSpacingRule& get_adjacent_cut_rule() const { return _adjacent_cut_rule; }
   CutEOLSpacingRule& get_cut_eol_spacing_rule() { return _cut_eol_spacing_rule; }
+  const CutEOLSpacingRule& get_cut_eol_spacing_rule() const { return _cut_eol_spacing_rule; }
   DifferentLayerCutSpacingRule& get_different_layer_cut_spacing_rule() { return _different_layer_cut_spacing_rule; }
+  const DifferentLayerCutSpacingRule& get_different_layer_cut_spacing_rule() const { return _different_layer_cut_spacing_rule; }
   std::vector<EnclosureEdgeRule>& get_enclosure_edge_rule_list() { return _enclosure_edge_rule_list; }
+  const std::vector<EnclosureEdgeRule>& get_enclosure_edge_rule_list() const { return _enclosure_edge_rule_list; }
   SameLayerCutSpacingRule& get_same_layer_cut_spacing_rule() { return _same_layer_cut_spacing_rule; }
+  const SameLayerCutSpacingRule& get_same_layer_cut_spacing_rule() const { return _same_layer_cut_spacing_rule; }
   EnclosureParallelRule& get_enclosure_parallel_rule() { return _enclosure_parallel_rule; }
+  const EnclosureParallelRule& get_enclosure_parallel_rule() const { return _enclosure_parallel_rule; }
   // setter
   void set_layer_idx(const int32_t layer_idx) { _layer_idx = layer_idx; }
   void set_layer_order(const int32_t layer_order) { _layer_order = layer_order; }

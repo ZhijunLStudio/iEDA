@@ -31,7 +31,7 @@ struct Corner
 
 void RuleValidator::verifyCornerSpacing(RVCluster& rv_cluster)
 {
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  const std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   auto collect_exempted_eol_edges = [&](const auto& curr_layer_data, int32_t eol_width, std::set<int32_t>& exempted_eol_boundary_ids) {
@@ -277,12 +277,12 @@ void RuleValidator::verifyCornerSpacing(RVCluster& rv_cluster)
       continue;
     }
     RVLayerData& merged_layer_data = merged_layer_it->second;
-    RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
-    std::vector<CornerSpacingRule>& corner_spacing_rule_list = routing_layer.get_corner_spacing_rule_list();
+    const RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
+    const std::vector<CornerSpacingRule>& corner_spacing_rule_list = routing_layer.get_corner_spacing_rule_list();
     std::vector<Violation> violations;
     std::vector<Corner> check_corners;
 
-    for (auto& corner_spacing_rule : corner_spacing_rule_list) {
+    for (const auto& corner_spacing_rule : corner_spacing_rule_list) {
       if (corner_spacing_rule.has_convex_corner) {
         // build exempted eol
         std::set<int32_t> exempted_eol_boundary_ids;

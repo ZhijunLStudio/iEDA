@@ -64,7 +64,6 @@ int main()
 
     all_loaded.setViolationCount(2);
     require(all_loaded.status() == "dirty", "violations did not make the report dirty");
-
     auto subset = idrc::RuleCoverageReport::build(known, loaded, {"metal_short"});
     require(subset.canRun(), "valid explicit subset was refused");
     require(subset.getChecked() == std::set<std::string>{"metal_short"}, "explicit rule was not checked");

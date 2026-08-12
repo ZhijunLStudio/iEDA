@@ -33,10 +33,10 @@
 
 ## P1 - thread safety and performance
 
-- [ ] 审阅 OpenMP violation 容器写入临界区。
-- [ ] 规则参数只读共享必须 const 或受保护。
-- [ ] cluster 缓存销毁时机无 race，并加 tsan/重复运行测试。
-- [ ] 输出 per-rule runtime、cluster count、thread count、peak RSS。
+- [x] 审阅 OpenMP violation 容器写入临界区。
+- [x] 规则参数只读共享必须 const 或受保护。
+- [x] cluster 缓存销毁时机无 race，并加 tsan/重复运行测试。
+- [x] 输出 per-rule runtime、cluster count、thread count、peak RSS。
 
 ## P2 - route ECO feedback
 

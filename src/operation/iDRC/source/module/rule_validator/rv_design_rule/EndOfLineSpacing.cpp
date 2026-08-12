@@ -362,7 +362,7 @@ void RuleValidator::verifyEndOfLineSpacing(RVCluster& rv_cluster)
   }
 
   //  rules
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  const std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
   const std::map<int32_t, std::vector<int32_t>>& routing_to_adjacent_cut_map = DRCDM.getDatabase().get_routing_to_adjacent_cut_map();
   std::map<int32_t, LayerEolRuleProfile> layer_rule_profile_map;
   std::map<PlanarRect, std::vector<Violation>, CmpPlanarRectByXASC> edge_violation_map;

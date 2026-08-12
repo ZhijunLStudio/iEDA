@@ -5,6 +5,8 @@ message(STATUS "############## DRC: STADRC CMAKE ##############")
 
 set(CMAKE_CXX_STANDARD 20)
 
+option(IDRC_ENABLE_TSAN "Enable ThreadSanitizer for focused iDRC test targets" OFF)
+
 # ADD_COMPILE_OPTIONS("-Wconversion")
 # ADD_COMPILE_OPTIONS("-fsanitize=address")
 # LINK_LIBRARIES("-fsanitize=address")

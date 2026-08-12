@@ -21,8 +21,7 @@ namespace idrc {
 
 void RuleValidator::verifySameLayerCutSpacing(RVCluster& rv_cluster)
 {
-  std::vector<CutLayer>& cut_layer_list = DRCDM.getDatabase().get_cut_layer_list();
-  std::map<int32_t, std::vector<int32_t>>& cut_to_adjacent_routing_map = DRCDM.getDatabase().get_cut_to_adjacent_routing_map();
+  const std::vector<CutLayer>& cut_layer_list = DRCDM.getDatabase().get_cut_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   for (const auto& [cut_layer_idx, cut_layer_data] : layer_data) {
@@ -31,18 +30,17 @@ void RuleValidator::verifySameLayerCutSpacing(RVCluster& rv_cluster)
     }
     std::vector<Violation> layer_violations;
     int32_t routing_layer_idx = -1;
-    {
-      std::vector<int32_t>& routing_layer_idx_list = cut_to_adjacent_routing_map[cut_layer_idx];
-      routing_layer_idx = *std::min_element(routing_layer_idx_list.begin(), routing_layer_idx_list.end());
+    if (!getMinAdjacentRoutingLayerByCut(cut_layer_idx, routing_layer_idx)) {
+      continue;
     }
-    CutLayer& cut_layer = cut_layer_list[cut_layer_idx];
-    SameLayerCutSpacingRule& same_layer_cut_spacing_rule = cut_layer.get_same_layer_cut_spacing_rule();
+    const CutLayer& cut_layer = cut_layer_list[cut_layer_idx];
+    const SameLayerCutSpacingRule& same_layer_cut_spacing_rule = cut_layer.get_same_layer_cut_spacing_rule();
     bool has_same_net = false;
     int32_t curr_same_net_spacing = -1;
     int32_t curr_spacing = -1;
     int32_t curr_prl_spacing = -1;
     int32_t curr_prl = -1;
-    for (auto& spacing_rule : same_layer_cut_spacing_rule.spacings) {
+    for (const auto& spacing_rule : same_layer_cut_spacing_rule.spacings) {
       if (spacing_rule.has_same_net) {
         has_same_net = true;
         curr_same_net_spacing = spacing_rule.curr_spacing;

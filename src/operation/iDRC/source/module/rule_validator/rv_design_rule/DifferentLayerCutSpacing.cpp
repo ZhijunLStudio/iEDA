@@ -20,8 +20,7 @@ namespace idrc {
 
 void RuleValidator::verifyDifferentLayerCutSpacing(RVCluster& rv_cluster)
 {
-  std::vector<CutLayer>& cut_layer_list = DRCDM.getDatabase().get_cut_layer_list();
-  std::map<int32_t, std::vector<int32_t>>& cut_to_adjacent_routing_map = DRCDM.getDatabase().get_cut_to_adjacent_routing_map();
+  const std::vector<CutLayer>& cut_layer_list = DRCDM.getDatabase().get_cut_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   for (const auto& [cut_layer_idx, cut_layer_data] : layer_data) {
@@ -37,12 +36,11 @@ void RuleValidator::verifyDifferentLayerCutSpacing(RVCluster& rv_cluster)
       continue;
     }
     int32_t routing_layer_idx = -1;
-    {
-      std::vector<int32_t>& routing_layer_idx_list = cut_to_adjacent_routing_map[below_cut_layer_idx];
-      routing_layer_idx = *std::min_element(routing_layer_idx_list.begin(), routing_layer_idx_list.end());
+    if (!getMinAdjacentRoutingLayerByCut(below_cut_layer_idx, routing_layer_idx)) {
+      continue;
     }
-    CutLayer& cut_layer = cut_layer_list[cut_layer_idx];
-    DifferentLayerCutSpacingRule& different_layer_cut_spacing_rule = cut_layer.get_different_layer_cut_spacing_rule();
+    const CutLayer& cut_layer = cut_layer_list[cut_layer_idx];
+    const DifferentLayerCutSpacingRule& different_layer_cut_spacing_rule = cut_layer.get_different_layer_cut_spacing_rule();
     int32_t curr_spacing = different_layer_cut_spacing_rule.below_spacing;
     int32_t curr_prl_spacing = different_layer_cut_spacing_rule.below_prl_spacing;
     int32_t curr_prl = different_layer_cut_spacing_rule.below_prl;

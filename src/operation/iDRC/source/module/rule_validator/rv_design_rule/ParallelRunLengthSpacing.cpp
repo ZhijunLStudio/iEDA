@@ -20,12 +20,12 @@ namespace idrc {
 
 void RuleValidator::verifyParallelRunLengthSpacing(RVCluster& rv_cluster)
 {
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  const std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   for (auto& [routing_layer_idx, rv_layer_data] : layer_data) {
-    RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
-    ParallelRunLengthSpacingRule& parallel_run_length_spacing_rule = routing_layer.get_parallel_run_length_spacing_rule();
+    const RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
+    const ParallelRunLengthSpacingRule& parallel_run_length_spacing_rule = routing_layer.get_parallel_run_length_spacing_rule();
     std::map<std::set<int32_t>, std::map<int32_t, std::vector<PlanarRect>>> net_required_violation_rect_map;
     std::map<std::set<int32_t>, std::map<int32_t, std::vector<PlanarRect>>> env_net_required_violation_rect_map;
     for (auto& [net_idx, routing_net] : rv_layer_data.nets) {

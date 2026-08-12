@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "RuleValidatorStats.hpp"
 #include "json/json.hpp"
 
 namespace idrc {
@@ -63,6 +64,7 @@ class RuleCoverageReport
                     const std::set<std::string>& requested_rules) -> RuleCoverageReport;
 
   void attachFoundryCoverage(const FoundryCoverageManifest& manifest, const std::set<std::string>& loaded_rules);
+  void attachRunStats(const RuleValidatorRunStats& stats) { _run_stats = stats; _run_stats_attached = true; }
 
   auto canRun() const -> bool { return _refused.empty() && _manifest_errors.empty(); }
   auto status() const -> std::string;
@@ -93,6 +95,8 @@ class RuleCoverageReport
   std::set<std::string> _foundry_unsupported;
   std::vector<std::string> _manifest_errors;
   std::size_t _violation_count = 0;
+  RuleValidatorRunStats _run_stats;
+  bool _run_stats_attached = false;
 };
 
 }  // namespace idrc

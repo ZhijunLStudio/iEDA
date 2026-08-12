@@ -32,22 +32,37 @@ class Database
   ~Database() = default;
   // getter
   std::string& get_design_name() { return _design_name; }
+  const std::string& get_design_name() const { return _design_name; }
   std::vector<std::string>& get_lef_file_path_list() { return _lef_file_path_list; }
+  const std::vector<std::string>& get_lef_file_path_list() const { return _lef_file_path_list; }
   std::string& get_def_file_path() { return _def_file_path; }
+  const std::string& get_def_file_path() const { return _def_file_path; }
   int32_t get_micron_dbu() const { return _micron_dbu; }
   int32_t get_manufacture_grid() const { return _manufacture_grid; }
   Die& get_die() { return _die; }
+  const Die& get_die() const { return _die; }
   MaxViaStackRule& get_max_via_stack_rule() { return _max_via_stack_rule; }
+  const MaxViaStackRule& get_max_via_stack_rule() const { return _max_via_stack_rule; }
   OffGridOrWrongWayRule& get_off_grid_or_wrong_way_rule() { return _off_grid_or_wrong_way_rule; }
+  const OffGridOrWrongWayRule& get_off_grid_or_wrong_way_rule() const { return _off_grid_or_wrong_way_rule; }
   std::vector<RoutingLayer>& get_routing_layer_list() { return _routing_layer_list; }
+  const std::vector<RoutingLayer>& get_routing_layer_list() const { return _routing_layer_list; }
   std::vector<CutLayer>& get_cut_layer_list() { return _cut_layer_list; }
+  const std::vector<CutLayer>& get_cut_layer_list() const { return _cut_layer_list; }
   std::set<ViolationType>& get_exist_rule_set() { return _exist_rule_set; }
+  const std::set<ViolationType>& get_exist_rule_set() const { return _exist_rule_set; }
   std::map<int32_t, int32_t>& get_routing_idb_layer_id_to_idx_map() { return _routing_idb_layer_id_to_idx_map; }
+  const std::map<int32_t, int32_t>& get_routing_idb_layer_id_to_idx_map() const { return _routing_idb_layer_id_to_idx_map; }
   std::map<int32_t, int32_t>& get_cut_idb_layer_id_to_idx_map() { return _cut_idb_layer_id_to_idx_map; }
+  const std::map<int32_t, int32_t>& get_cut_idb_layer_id_to_idx_map() const { return _cut_idb_layer_id_to_idx_map; }
   std::map<std::string, int32_t>& get_routing_layer_name_to_idx_map() { return _routing_layer_name_to_idx_map; }
+  const std::map<std::string, int32_t>& get_routing_layer_name_to_idx_map() const { return _routing_layer_name_to_idx_map; }
   std::map<int32_t, std::vector<int32_t>>& get_routing_to_adjacent_cut_map() { return _routing_to_adjacent_cut_map; }
+  const std::map<int32_t, std::vector<int32_t>>& get_routing_to_adjacent_cut_map() const { return _routing_to_adjacent_cut_map; }
   std::map<std::string, int32_t>& get_cut_layer_name_to_idx_map() { return _cut_layer_name_to_idx_map; }
+  const std::map<std::string, int32_t>& get_cut_layer_name_to_idx_map() const { return _cut_layer_name_to_idx_map; }
   std::map<int32_t, std::vector<int32_t>>& get_cut_to_adjacent_routing_map() { return _cut_to_adjacent_routing_map; }
+  const std::map<int32_t, std::vector<int32_t>>& get_cut_to_adjacent_routing_map() const { return _cut_to_adjacent_routing_map; }
   // setter
   void set_design_name(const std::string& design_name) { _design_name = design_name; }
   void set_lef_file_path_list(const std::vector<std::string>& lef_file_path_list) { _lef_file_path_list = lef_file_path_list; }

@@ -20,7 +20,7 @@ namespace idrc {
 
 void RuleValidator::verifyMaximumWidth(RVCluster& rv_cluster)
 {
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  const std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   for (const auto& [routing_layer_idx, rv_layer_data] : layer_data) {

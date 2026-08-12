@@ -54,6 +54,24 @@ auto nonEmptyString(const nlohmann::json& json, const char* key) -> std::string
 
 }  // namespace
 
+auto buildRuleValidatorStatsJson(const RuleValidatorRunStats& stats) -> nlohmann::ordered_json
+{
+  nlohmann::ordered_json per_rule = nlohmann::ordered_json::object();
+  for (const auto& [rule, rule_stats] : stats.per_rule) {
+    per_rule[rule] = {{"runtime_seconds", rule_stats.runtime_seconds},
+                      {"cluster_count", rule_stats.cluster_count},
+                      {"violation_count", rule_stats.violation_count}};
+  }
+
+  return {{"runtime_seconds", stats.runtime_seconds},
+          {"thread_count", stats.thread_count},
+          {"cluster_count", stats.cluster_count},
+          {"verified_cluster_count", stats.verified_cluster_count},
+          {"stale_cluster_cache_count", stats.stale_cluster_cache_count},
+          {"peak_rss_mb", stats.peak_rss_mb},
+          {"per_rule", std::move(per_rule)}};
+}
+
 auto getFastCheckRuleNames() -> const std::set<std::string>&
 {
   static const std::set<std::string> kFastCheckRuleNames = buildFastCheckRuleNames();
@@ -271,6 +289,8 @@ auto RuleCoverageReport::toJson() const -> nlohmann::ordered_json
   json["skipped"] = setToJson(_skipped);
   json["unsupported"] = setToJson(_unsupported);
   json["refused"] = std::move(refused);
+  json["runtime"] = buildRuleValidatorStatsJson(_run_stats);
+  json["runtime"]["attached"] = _run_stats_attached;
   nlohmann::ordered_json foundry_coverage = _foundry_manifest.toJson();
   foundry_coverage["checked"] = setToJson(_foundry_checked);
   foundry_coverage["skipped"] = setToJson(_foundry_skipped);

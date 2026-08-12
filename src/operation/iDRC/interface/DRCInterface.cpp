@@ -266,7 +266,9 @@ std::vector<ids::Violation> DRCInterface::getViolationList(const std::vector<ids
     drc_check_region_list.push_back(convertToDRCShape(ids_check_region));
   }
   std::vector<ids::Violation> ids_violation_list;
-  for (Violation& violation : DRCRV.verify(drc_env_shape_list, drc_result_shape_list, drc_check_type_set, drc_check_region_list)) {
+  std::vector<Violation> drc_violation_list = DRCRV.verify(drc_env_shape_list, drc_result_shape_list, drc_check_type_set, drc_check_region_list);
+  _last_rule_coverage.attachRunStats(DRCRV.getLastRunStats());
+  for (Violation& violation : drc_violation_list) {
     ids::Violation ids_violation;
     ids_violation.violation_type = GetViolationTypeName()(violation.get_violation_type());
     ids_violation.ll_x = violation.get_ll_x();

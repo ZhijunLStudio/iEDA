@@ -28,6 +28,8 @@ class MaxViaStackRule
   int32_t max_via_stack_num = -1;
   int32_t bottom_routing_layer_idx = -1;
   int32_t top_routing_layer_idx = -1;
+
+  [[nodiscard]] bool valid() const { return max_via_stack_num >= 0 && bottom_routing_layer_idx >= 0 && top_routing_layer_idx >= 0; }
 };
 
 }  // namespace idrc
