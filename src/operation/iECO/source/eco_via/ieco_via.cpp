@@ -44,11 +44,15 @@ ECOViaResult ECOVia::repair(std::string_view type)
   const ECOViaRequest request = parseECOViaRequest(type);
   if (request.status == ECOViaStatus::kUnsupported) {
     std::cerr << "iECO ERROR: via repair type '" << type << "' is not implemented" << std::endl;
-    return {request.status, 0};
+    ECOViaResult result(request.status, 0);
+    result.reason = request.reason;
+    return result;
   }
   if (request.status == ECOViaStatus::kInvalidType) {
     std::cerr << "iECO ERROR: unknown via repair type '" << type << "' (expected 'shape')" << std::endl;
-    return {request.status, 0};
+    ECOViaResult result(request.status, 0);
+    result.reason = request.reason;
+    return result;
   }
 
   init();
@@ -66,6 +70,12 @@ ECOViaResult ECOVia::repair(ECOViaType type)
     default:
       return {ECOViaStatus::kInvalidType, 0};
   }
+}
+
+ECOViaResult ECOVia::repairShapeRequest(const std::optional<ECOViaShapeRequest>& request, const ECOViaConfig& config,
+                                        const ECOOracleResult& oracle, std::string baseline_hash)
+{
+  return evaluateShapeRequest(request, config, oracle, std::move(baseline_hash));
 }
 
 }  // namespace ieco
