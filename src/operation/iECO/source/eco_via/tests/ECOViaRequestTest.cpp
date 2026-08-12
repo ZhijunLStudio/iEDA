@@ -41,6 +41,10 @@ int main()
 
     require(ieco::ECOViaResult{ieco::ECOViaStatus::kSuccess, 0}.ok(), "zero repairs must remain a successful shape result");
     require(!ieco::ECOViaResult{ieco::ECOViaStatus::kUnsupported, 0}.ok(), "unsupported repair reported success");
+    const auto legacy_shape = ieco::evaluateLegacyViaRequest("shape");
+    require(legacy_shape.status == ieco::ECOViaStatus::kRejected, "legacy shape entry must fail closed without oracle");
+    require(!legacy_shape.ok(), "legacy shape entry must not report success");
+    require(legacy_shape.reason.find("structured") != std::string::npos, "legacy shape rejection reason missing");
 
     ieco::ECOViaConfig config;
     config.eco_layers.insert("M2");
@@ -50,25 +54,59 @@ int main()
     require(accepted.ok(), "accepted shape request should pass");
     require(accepted.changed_shape_count == 1, "accepted request should report one changed shape");
     require(accepted.via_count == 1, "accepted request should report one via");
+    require(accepted.oracle.drcImprovement() == 1, "oracle should report explicit DRC improvement");
     require(accepted.oracle.improved(), "oracle should show improvement");
     const std::string accepted_json = ieco::ecoViaReportJson(accepted);
     require(accepted_json.find("\"schema_version\": \"ieda.eco.via_report.v1\"") != std::string::npos,
             "report schema version missing");
     require(accepted_json.find("\"request_state\": \"accepted\"") != std::string::npos, "report schema missing accepted state");
     require(accepted_json.find("\"changed_shape_count\": 1") != std::string::npos, "report missing changed shape count");
+    require(accepted_json.find("\"drc_improvement\": 1") != std::string::npos, "report missing DRC improvement");
+    require(accepted_json.find("\"delegated_to_platform_or_irt\": true") != std::string::npos, "routeECO delegation proof missing");
     require(accepted_json.find("\"affected_nets\"") != std::string::npos, "report missing affected nets");
     require(ieco::writeEcoViaReportJson(accepted, "/tmp/eco_via_report.json"), "eco_via_report.json write failed");
     require(readFile("/tmp/eco_via_report.json").find("\"schema_version\": \"ieda.eco.via_report.v1\"") != std::string::npos,
             "eco_via_report.json schema missing");
 
-    const auto rolled_back = ieco::evaluateShapeRequest(request, config, {2, 4, false, true}, "baseline_hash");
-    require(rolled_back.state == ieco::ECORequestState::kRolledBack, "failed oracle should rollback");
-    require(rolled_back.rolledBack(), "rollback flag missing");
-    require(rolled_back.rollback_hash == rolled_back.baseline_hash, "rollback hash must match baseline");
-    require(rolled_back.committed_hash.empty(), "rolled back commit hash must be empty");
-    const std::string rolled_back_json = ieco::ecoViaReportJson(rolled_back);
+    const auto drc_rolled_back = ieco::evaluateShapeRequest(request, config, {2, 4, true, true}, "baseline_hash");
+    require(drc_rolled_back.state == ieco::ECORequestState::kRolledBack, "worse DRC should rollback");
+    require(drc_rolled_back.rolledBack(), "rollback flag missing");
+    require(drc_rolled_back.rollback_hash == drc_rolled_back.baseline_hash, "rollback hash must match baseline");
+    require(drc_rolled_back.committed_hash.empty(), "rolled back commit hash must be empty");
+    const std::string rolled_back_json = ieco::ecoViaReportJson(drc_rolled_back);
     require(rolled_back_json.find("\"request_state\": \"rolled_back\"") != std::string::npos, "report schema missing rollback state");
     require(rolled_back_json.find("\"rollback_matches_baseline\": true") != std::string::npos, "rollback proof missing");
+
+    const auto connectivity_rolled_back = ieco::evaluateShapeRequest(request, config, {2, 1, false, true}, "baseline_hash");
+    require(connectivity_rolled_back.state == ieco::ECORequestState::kRolledBack, "bad connectivity should rollback");
+
+    const auto route_rolled_back = ieco::evaluateShapeRequest(request, config, {2, 1, true, false}, "baseline_hash");
+    require(route_rolled_back.state == ieco::ECORequestState::kRolledBack, "illegal route should rollback");
+
+    ieco::ECOViaConfig full_config = config;
+    full_config.request_index = 10;
+    full_config.full_oracle_period = 5;
+    require(ieco::requiresFullOracle(full_config), "periodic full oracle should be required at request index");
+    const auto missing_full_oracle = ieco::evaluateShapeRequest(request, full_config, {2, 1, true, true}, "baseline_hash");
+    require(missing_full_oracle.state == ieco::ECORequestState::kRolledBack, "missing required full oracle should rollback");
+    const std::string missing_full_json = ieco::ecoViaReportJson(missing_full_oracle);
+    require(missing_full_json.find("\"required\": true") != std::string::npos, "full oracle requirement missing");
+
+    full_config.full_oracle = ieco::ECOFullOracleResult{true, true, true, false, "iSTA full oracle failed"};
+    const auto failed_full_oracle = ieco::evaluateShapeRequest(request, full_config, {2, 1, true, true}, "baseline_hash");
+    require(failed_full_oracle.state == ieco::ECORequestState::kRolledBack, "failed full oracle should rollback");
+    require(failed_full_oracle.reason.find("iSTA") != std::string::npos, "full oracle failure reason missing");
+
+    full_config.full_oracle = ieco::ECOFullOracleResult{true, true, true, true, ""};
+    const auto full_oracle_accepted = ieco::evaluateShapeRequest(request, full_config, {2, 1, true, true}, "baseline_hash");
+    require(full_oracle_accepted.state == ieco::ECORequestState::kAccepted, "passed full oracle should accept");
+
+    ieco::ECOViaConfig direct_write_config = config;
+    direct_write_config.route_edit_owner = ieco::ECORouteEditOwner::kIECO;
+    direct_write_config.direct_db_route_write_requested = true;
+    const auto direct_write = ieco::evaluateShapeRequest(request, direct_write_config, {2, 1, true, true}, "baseline_hash");
+    require(direct_write.state == ieco::ECORequestState::kRejected, "iECO direct route DB write should reject");
+    require(direct_write.reason.find("route") != std::string::npos, "routeECO ownership reason missing");
 
     const auto rejected = ieco::evaluateShapeRequest(std::nullopt, config, {1, 0, true, true}, "baseline_hash");
     require(rejected.state == ieco::ECORequestState::kRejected, "missing request should reject");

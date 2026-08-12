@@ -39,4 +39,9 @@ ECOViaResult ECOManager::ecoVia(std::string_view type)
   return eco_via.repair(type);
 }
 
+ECOTimingResult ECOManager::ecoTiming(const ECOTimingCapability& capability, const ECOTimingGuardband& guardband)
+{
+  return evaluateTimingFacade(capability, guardband);
+}
+
 }  // namespace ieco

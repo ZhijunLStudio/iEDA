@@ -18,6 +18,7 @@
 #include <string>
 
 #include "ieco_dm.h"
+#include "ieco_timing.h"
 #include "ieco_via.h"
 
 namespace ieco {
@@ -31,6 +32,8 @@ class ECOManager
   EcoDataManager* get_data_manager() { return _data_manager; }
 
   [[nodiscard]] ECOViaResult ecoVia(std::string_view type = kEcoRepairViaByShape);
+  [[nodiscard]] ECOTimingResult ecoTiming(const ECOTimingCapability& capability = {},
+                                          const ECOTimingGuardband& guardband = {});
 
  private:
   EcoDataManager* _data_manager;

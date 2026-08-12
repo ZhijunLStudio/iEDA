@@ -36,4 +36,10 @@ ECOViaResult ECOApi::ecoVia(std::string_view type)
   return eco_manager.ecoVia(type);
 }
 
+ECOTimingResult ECOApi::ecoTiming(const ECOTimingCapability& capability, const ECOTimingGuardband& guardband)
+{
+  ECOManager eco_manager;
+  return eco_manager.ecoTiming(capability, guardband);
+}
+
 }  // namespace ieco

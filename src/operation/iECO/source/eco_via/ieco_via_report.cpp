@@ -94,6 +94,40 @@ std::string toString(ECORequestState state)
   return "failed";
 }
 
+std::string toString(ECORouteEditOwner owner)
+{
+  switch (owner) {
+    case ECORouteEditOwner::kPlatform:
+      return "platform";
+    case ECORouteEditOwner::kIRT:
+      return "irt";
+    case ECORouteEditOwner::kIECO:
+      return "ieco";
+    case ECORouteEditOwner::kUnknown:
+      return "unknown";
+  }
+  return "unknown";
+}
+
+bool requiresFullOracle(const ECOViaConfig& config)
+{
+  return config.full_oracle_period > 0 && config.request_index > 0 && config.request_index % config.full_oracle_period == 0;
+}
+
+ECOViaResult evaluateLegacyViaRequest(std::string_view type)
+{
+  const ECOViaRequest request = parseECOViaRequest(type);
+  if (request.status == ECOViaStatus::kUnsupported || request.status == ECOViaStatus::kInvalidType) {
+    ECOViaResult result(request.status, 0);
+    result.reason = request.reason;
+    return result;
+  }
+
+  ECOViaResult result(ECOViaStatus::kRejected, 0);
+  result.reason = "legacy shape via ECO requires structured shape request, routeECO owner, and local/full oracle";
+  return result;
+}
+
 ECOViaResult evaluateShapeRequest(const std::optional<ECOViaShapeRequest>& request, const ECOViaConfig& config,
                                   const ECOOracleResult& oracle, std::string baseline_hash)
 {
@@ -101,6 +135,12 @@ ECOViaResult evaluateShapeRequest(const std::optional<ECOViaShapeRequest>& reque
   result.baseline_hash = std::move(baseline_hash);
   result.rollback_hash = result.baseline_hash;
   result.oracle = oracle;
+  result.request_index = config.request_index;
+  result.full_oracle_period = config.full_oracle_period;
+  result.full_oracle_required = requiresFullOracle(config);
+  result.full_oracle = config.full_oracle;
+  result.route_edit_owner = config.route_edit_owner;
+  result.direct_db_route_write_requested = config.direct_db_route_write_requested;
 
   if (!request.has_value()) {
     result.status = ECOViaStatus::kRejected;
@@ -132,6 +172,13 @@ ECOViaResult evaluateShapeRequest(const std::optional<ECOViaShapeRequest>& reque
     result.reason = "shape request layer is outside eco_layers";
     return result;
   }
+  if (config.direct_db_route_write_requested || config.route_edit_owner == ECORouteEditOwner::kIECO
+      || config.route_edit_owner == ECORouteEditOwner::kUnknown) {
+    result.status = ECOViaStatus::kRejected;
+    result.state = ECORequestState::kRejected;
+    result.reason = "route edit must be orchestrated by platform or iRT routeECO";
+    return result;
+  }
 
   result.changed_shapes.push_back(*request);
   result.changed_shape_count = 1;
@@ -150,6 +197,17 @@ ECOViaResult evaluateShapeRequest(const std::optional<ECOViaShapeRequest>& reque
     result.via_count = 0;
     result.committed_hash.clear();
     result.reason = "local oracle rejected shape ECO";
+    return result;
+  }
+  if (result.full_oracle_required && (!result.full_oracle.has_value() || !result.full_oracle->ok())) {
+    result.status = ECOViaStatus::kRolledBack;
+    result.state = ECORequestState::kRolledBack;
+    result.repaired_count = 0;
+    result.changed_shape_count = 0;
+    result.via_count = 0;
+    result.committed_hash.clear();
+    result.reason = result.full_oracle.has_value() && !result.full_oracle->reason.empty() ? result.full_oracle->reason
+                                                                                         : "periodic full oracle did not pass";
     return result;
   }
 
@@ -173,10 +231,27 @@ std::string ecoViaReportJson(const ECOViaResult& result)
          {"local_oracle",
           {{"drc_before", result.oracle.local_drc_before},
            {"drc_after", result.oracle.local_drc_after},
+           {"drc_improvement", result.oracle.drcImprovement()},
            {"connectivity_ok", result.oracle.connectivity_ok},
            {"route_legal", result.oracle.route_legal},
            {"improved", result.oracle.improved()},
            {"ok", result.oracle.ok()}}},
+         {"full_oracle",
+          {{"required", result.full_oracle_required},
+           {"request_index", result.request_index},
+           {"period", result.full_oracle_period},
+           {"ran", result.full_oracle.has_value() && result.full_oracle->ran},
+           {"irt_ok", result.full_oracle.has_value() && result.full_oracle->irt_ok},
+           {"idrc_ok", result.full_oracle.has_value() && result.full_oracle->idrc_ok},
+           {"ista_ok", result.full_oracle.has_value() && result.full_oracle->ista_ok},
+           {"ok", result.full_oracle.has_value() && result.full_oracle->ok()},
+           {"reason", result.full_oracle.has_value() ? result.full_oracle->reason : ""}}},
+         {"route_eco",
+          {{"owner", toString(result.route_edit_owner)},
+           {"direct_db_route_write_requested", result.direct_db_route_write_requested},
+           {"delegated_to_platform_or_irt",
+            !result.direct_db_route_write_requested
+                && (result.route_edit_owner == ECORouteEditOwner::kPlatform || result.route_edit_owner == ECORouteEditOwner::kIRT)}}},
          {"transaction",
           {{"baseline_hash", result.baseline_hash},
            {"committed_hash", result.committed_hash},

@@ -53,6 +53,14 @@ enum class ECORequestState
   kRolledBack
 };
 
+enum class ECORouteEditOwner
+{
+  kPlatform,
+  kIRT,
+  kIECO,
+  kUnknown
+};
+
 struct ECORect
 {
   int32_t lx = 0;
@@ -75,8 +83,20 @@ struct ECOOracleResult
   int local_drc_after = 0;
   bool connectivity_ok = true;
   bool route_legal = true;
+  [[nodiscard]] int drcImprovement() const { return local_drc_before - local_drc_after; }
   [[nodiscard]] bool improved() const { return local_drc_after < local_drc_before; }
   [[nodiscard]] bool ok() const { return improved() && connectivity_ok && route_legal; }
+};
+
+struct ECOFullOracleResult
+{
+  bool ran = false;
+  bool irt_ok = false;
+  bool idrc_ok = false;
+  bool ista_ok = false;
+  std::string reason;
+
+  [[nodiscard]] bool ok() const { return ran && irt_ok && idrc_ok && ista_ok; }
 };
 
 struct ECOViaRequest
@@ -95,6 +115,12 @@ struct ECOViaResult
   int changed_shape_count = 0;
   int via_count = 0;
   ECOOracleResult oracle;
+  bool full_oracle_required = false;
+  uint64_t request_index = 0;
+  uint64_t full_oracle_period = 0;
+  std::optional<ECOFullOracleResult> full_oracle;
+  ECORouteEditOwner route_edit_owner = ECORouteEditOwner::kUnknown;
+  bool direct_db_route_write_requested = false;
   std::vector<ECOViaShapeRequest> changed_shapes;
   std::set<std::string> affected_nets;
   std::string baseline_hash;
@@ -135,10 +161,18 @@ struct ECOViaConfig
 {
   std::set<std::string> freeze_layers;
   std::set<std::string> eco_layers;
+  uint64_t request_index = 0;
+  uint64_t full_oracle_period = 0;
+  std::optional<ECOFullOracleResult> full_oracle;
+  ECORouteEditOwner route_edit_owner = ECORouteEditOwner::kPlatform;
+  bool direct_db_route_write_requested = false;
 };
 
 [[nodiscard]] std::string toString(ECOViaStatus status);
 [[nodiscard]] std::string toString(ECORequestState state);
+[[nodiscard]] std::string toString(ECORouteEditOwner owner);
+[[nodiscard]] bool requiresFullOracle(const ECOViaConfig& config);
+[[nodiscard]] ECOViaResult evaluateLegacyViaRequest(std::string_view type);
 [[nodiscard]] ECOViaResult evaluateShapeRequest(const std::optional<ECOViaShapeRequest>& request, const ECOViaConfig& config,
                                                 const ECOOracleResult& oracle, std::string baseline_hash);
 [[nodiscard]] std::string ecoViaReportJson(const ECOViaResult& result);

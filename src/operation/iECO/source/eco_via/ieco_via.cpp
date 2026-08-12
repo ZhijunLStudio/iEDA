@@ -55,8 +55,8 @@ ECOViaResult ECOVia::repair(std::string_view type)
     return result;
   }
 
-  init();
-  return repair(request.type);
+  std::cerr << "iECO ERROR: legacy via repair entry requires structured shape request and ECO oracle" << std::endl;
+  return evaluateLegacyViaRequest(type);
 }
 
 ECOViaResult ECOVia::repair(ECOViaType type)

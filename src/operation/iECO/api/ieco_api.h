@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "ieco_via.h"
+#include "ieco_timing.h"
 
 namespace idb {
 
@@ -36,6 +37,8 @@ class ECOApi
   ~ECOApi();
 
   [[nodiscard]] ECOViaResult ecoVia(std::string_view type = kEcoRepairViaByShape);
+  [[nodiscard]] ECOTimingResult ecoTiming(const ECOTimingCapability& capability = {},
+                                          const ECOTimingGuardband& guardband = {});
 
  private:
 };
