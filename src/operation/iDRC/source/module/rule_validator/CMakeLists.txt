@@ -25,6 +25,31 @@ target_link_libraries(idrc_rule_coverage_test
 )
 add_test(NAME idrc_rule_coverage_test COMMAND idrc_rule_coverage_test)
 
+add_library(idrc_violation_artifact
+    ${IDRC_MODULE}/rule_validator/ViolationArtifact.cpp
+)
+
+target_link_libraries(idrc_violation_artifact
+    PUBLIC
+    idrc_rule_coverage
+)
+
+target_include_directories(idrc_violation_artifact
+    PUBLIC
+    ${IDRC_MODULE}/rule_validator
+    ${HOME_DATABASE}/interaction/RT_DRC
+)
+
+add_executable(idrc_violation_artifact_test EXCLUDE_FROM_ALL
+    ${IDRC_MODULE}/rule_validator/tests/ViolationArtifactTest.cpp
+)
+
+target_link_libraries(idrc_violation_artifact_test
+    PRIVATE
+    idrc_violation_artifact
+)
+add_test(NAME idrc_violation_artifact_test COMMAND idrc_violation_artifact_test)
+
 add_library(idrc_rule_validator
     ## module rule_validator
     ${IDRC_MODULE}/rule_validator/RuleValidator.cpp
@@ -59,6 +84,7 @@ add_library(idrc_rule_validator
 target_link_libraries(idrc_rule_validator
     PUBLIC
     idrc_rule_coverage
+    idrc_violation_artifact
     idrc_data_manager
     idrc_module
     idrc_toolkit

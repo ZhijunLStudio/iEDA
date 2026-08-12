@@ -18,7 +18,6 @@
 #include "DRCInterface.hpp"
 
 #include <array>
-#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
@@ -32,6 +31,7 @@
 #include "ParallelRunLengthSpacingRule.hpp"
 #include "RuleValidator.hpp"
 #include "SameLayerCutSpacingRule.hpp"
+#include "ViolationArtifact.hpp"
 #include "feature_manager.h"
 #include "idm.h"
 
@@ -73,6 +73,50 @@ auto getLoadedRuleNames() -> std::set<std::string>
     names.insert(GetViolationTypeName()(rule_type));
   }
   return names;
+}
+
+auto buildCanonicalViolationContext() -> CanonicalViolationContext
+{
+  CanonicalViolationContext context;
+  context.design_name = DRCDM.getDatabase().get_design_name();
+  context.def_file_path = DRCDM.getDatabase().get_def_file_path();
+  context.temp_directory_path = DRCDM.getConfig().temp_directory_path;
+  context.dbu_per_micron = DRCDM.getDatabase().get_micron_dbu();
+  context.cut_to_adjacent_routing_map = DRCDM.getDatabase().get_cut_to_adjacent_routing_map();
+
+  for (RoutingLayer& routing_layer : DRCDM.getDatabase().get_routing_layer_list()) {
+    const int32_t layer_idx = routing_layer.get_layer_idx();
+    if (layer_idx >= 0 && layer_idx >= static_cast<int32_t>(context.routing_layer_names.size())) {
+      context.routing_layer_names.resize(layer_idx + 1);
+    }
+    if (layer_idx >= 0) {
+      context.routing_layer_names[layer_idx] = routing_layer.get_layer_name();
+    }
+  }
+  for (CutLayer& cut_layer : DRCDM.getDatabase().get_cut_layer_list()) {
+    const int32_t layer_idx = cut_layer.get_layer_idx();
+    if (layer_idx >= 0 && layer_idx >= static_cast<int32_t>(context.cut_layer_names.size())) {
+      context.cut_layer_names.resize(layer_idx + 1);
+    }
+    if (layer_idx >= 0) {
+      context.cut_layer_names[layer_idx] = cut_layer.get_layer_name();
+    }
+  }
+
+  std::vector<idb::IdbNet*>& idb_net_list = dmInst->get_idb_def_service()->get_design()->get_net_list()->get_net_list();
+  std::vector<idb::IdbSpecialNet*>& idb_special_net_list = dmInst->get_idb_def_service()->get_design()->get_special_net_list()->get_net_list();
+  const int32_t regular_net_num = static_cast<int32_t>(idb_net_list.size());
+  for (int32_t index = 0; index < regular_net_num; ++index) {
+    if (idb_net_list[index] != nullptr) {
+      context.regular_net_names[index] = idb_net_list[index]->get_net_name();
+    }
+  }
+  for (int32_t index = 0; index < static_cast<int32_t>(idb_special_net_list.size()); ++index) {
+    if (idb_special_net_list[index] != nullptr) {
+      context.special_net_names[regular_net_num + index] = idb_special_net_list[index]->get_net_name();
+    }
+  }
+  return context;
 }
 
 }  // namespace
@@ -1377,76 +1421,19 @@ void DRCInterface::printSummary(std::map<std::string, std::vector<ids::Violation
 
 void DRCInterface::outputViolationJson(std::map<std::string, std::vector<ids::Violation>>& type_violation_map)
 {
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
-  std::map<int32_t, std::vector<int32_t>>& cut_to_adjacent_routing_map = DRCDM.getDatabase().get_cut_to_adjacent_routing_map();
-  std::string& temp_directory_path = DRCDM.getConfig().temp_directory_path;
-
-  std::vector<idb::IdbNet*>& idb_net_list = dmInst->get_idb_def_service()->get_design()->get_net_list()->get_net_list();
-  std::vector<idb::IdbSpecialNet*>& idb_special_net_list = dmInst->get_idb_def_service()->get_design()->get_special_net_list()->get_net_list();
-  int32_t regular_net_num = static_cast<int32_t>(idb_net_list.size());
-  auto get_net_name = [&](int32_t net_idx, const std::string& obs_name) {
-    if (0 <= net_idx && net_idx < regular_net_num) {
-      return idb_net_list[net_idx]->get_net_name();
-    }
-    int32_t special_net_idx = net_idx - regular_net_num;
-    if (0 <= special_net_idx && special_net_idx < static_cast<int32_t>(idb_special_net_list.size())) {
-      return idb_special_net_list[special_net_idx]->get_net_name();
-    }
-    return obs_name;
-  };
-  nlohmann::ordered_json violation_json_list = nlohmann::ordered_json::array();
-  for (auto& [type, violation_list] : type_violation_map) {
-    for (ids::Violation& violation : violation_list) {
-      nlohmann::ordered_json violation_json;
-      violation_json["type"] = violation.violation_type;
-
-      int32_t layer_idx = violation.layer_idx;
-      if (!violation.is_routing) {
-        std::vector<int32_t>& routing_layer_idx_list = cut_to_adjacent_routing_map[layer_idx];
-        layer_idx = *std::min_element(routing_layer_idx_list.begin(), routing_layer_idx_list.end());
-      }
-      violation_json["shape"] = {violation.ll_x, violation.ll_y, violation.ur_x, violation.ur_y, routing_layer_list[layer_idx].get_layer_name()};
-      for (int32_t net_idx : violation.violation_net_set) {
-        violation_json["net"].push_back(get_net_name(net_idx, "obs"));
-      }
-      violation_json_list.push_back(violation_json);
-    }
+  const auto context = buildCanonicalViolationContext();
+  const auto violation_artifact = buildViolationsArtifact(type_violation_map, context, _last_rule_coverage);
+  std::string schema_error;
+  if (!validateViolationsArtifact(violation_artifact, &schema_error)) {
+    throw std::runtime_error("Invalid canonical violation JSON report: " + schema_error);
   }
-  const std::filesystem::path violation_json_file_path = std::filesystem::path(temp_directory_path) / "violation_map.json";
-  writeAtomicJsonReport(violation_json_file_path, violation_json_list, "violation JSON report");
+  const std::filesystem::path temp_directory_path = DRCDM.getConfig().temp_directory_path;
+  writeAtomicJsonReport(temp_directory_path / "violations.json", violation_artifact, "canonical violation JSON report");
+  writeAtomicJsonReport(temp_directory_path / "violation_map.json", violation_artifact, "legacy violation JSON report");
   outputRuleCoverageJson();
 }
 
 namespace {
-
-auto cVioCanonicalType(const std::string& type) -> std::string
-{
-  // RFC-20260730-C-VIO: unknown types map to other (never drop).
-  static const std::set<std::string> kKnown = {
-      "metal_short",
-      "parallel_run_length_spacing",
-      "minimum_area",
-      "nonsufficient_metal_overlap",
-  };
-  if (kKnown.count(type) != 0) {
-    return type;
-  }
-  return type.empty() ? "other" : type;
-}
-
-auto cVioSeverity(const std::string& type) -> double
-{
-  if (type == "metal_short") {
-    return 4.0;
-  }
-  if (type == "parallel_run_length_spacing" || type == "minimum_area") {
-    return 3.0;
-  }
-  if (type == "nonsufficient_metal_overlap") {
-    return 2.0;
-  }
-  return 1.0;
-}
 
 template <typename JsonType>
 void writeAtomicJsonReport(const std::filesystem::path& report_path, const JsonType& payload, const char* label)
@@ -1482,80 +1469,8 @@ void DRCInterface::outputCVioJson(std::map<std::string, std::vector<ids::Violati
     return;
   }
 
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
-  std::map<int32_t, std::vector<int32_t>>& cut_to_adjacent_routing_map = DRCDM.getDatabase().get_cut_to_adjacent_routing_map();
-
-  std::vector<idb::IdbNet*>& idb_net_list = dmInst->get_idb_def_service()->get_design()->get_net_list()->get_net_list();
-  std::vector<idb::IdbSpecialNet*>& idb_special_net_list = dmInst->get_idb_def_service()->get_design()->get_special_net_list()->get_net_list();
-  int32_t regular_net_num = static_cast<int32_t>(idb_net_list.size());
-  auto get_net_name = [&](int32_t net_idx, const std::string& obs_name) {
-    if (0 <= net_idx && net_idx < regular_net_num) {
-      return idb_net_list[net_idx]->get_net_name();
-    }
-    int32_t special_net_idx = net_idx - regular_net_num;
-    if (0 <= special_net_idx && special_net_idx < static_cast<int32_t>(idb_special_net_list.size())) {
-      return idb_special_net_list[special_net_idx]->get_net_name();
-    }
-    return obs_name;
-  };
-
-  nlohmann::json root;
-  root["schema"] = "c-vio/v0";
-  root["design"] = DRCDM.getDatabase().get_design_name();
-  root["rule_deck_hash"] = "unknown";
-  root["source"] = "idrc_check_def";
-  root["status"] = _last_rule_coverage.status();
-  root["check_profile"] = _last_rule_coverage.profile();
-
-  nlohmann::json violations = nlohmann::json::array();
-  nlohmann::json by_type = nlohmann::json::object();
-  nlohmann::json by_layer = nlohmann::json::object();
-  int32_t total = 0;
-  int32_t id_counter = 0;
-
-  for (auto& [type, violation_list] : type_violation_map) {
-    const std::string canon = cVioCanonicalType(type);
-    for (ids::Violation& violation : violation_list) {
-      int32_t layer_idx = violation.layer_idx;
-      if (!violation.is_routing) {
-        std::vector<int32_t>& routing_layer_idx_list = cut_to_adjacent_routing_map[layer_idx];
-        if (!routing_layer_idx_list.empty()) {
-          layer_idx = *std::min_element(routing_layer_idx_list.begin(), routing_layer_idx_list.end());
-        }
-      }
-      std::string layer_name = "unknown";
-      if (layer_idx >= 0 && layer_idx < static_cast<int32_t>(routing_layer_list.size())) {
-        layer_name = routing_layer_list[layer_idx].get_layer_name();
-      }
-
-      nlohmann::json item;
-      char id_buf[32];
-      std::snprintf(id_buf, sizeof(id_buf), "v%06d", id_counter++);
-      item["id"] = id_buf;
-      item["type"] = canon;
-      item["layer"] = layer_name;
-      item["bbox"] = {violation.ll_x, violation.ll_y, violation.ur_x, violation.ur_y};
-      item["net_ids"] = nlohmann::json::array();
-      for (int32_t net_idx : violation.violation_net_set) {
-        item["net_ids"].push_back(get_net_name(net_idx, "obs"));
-      }
-      item["severity"] = cVioSeverity(canon);
-      item["source"] = "idrc_in_design";
-      violations.push_back(std::move(item));
-
-      by_type[canon] = by_type.value(canon, 0) + 1;
-      by_layer[layer_name] = by_layer.value(layer_name, 0) + 1;
-      total++;
-    }
-  }
-
-  root["violations"] = std::move(violations);
-  root["summary"] = {{"by_type", by_type}, {"by_layer", by_layer}, {"total", total}};
-  root["coverage"] = {{"checked", nlohmann::json(_last_rule_coverage.getChecked())},
-                      {"skipped", nlohmann::json(_last_rule_coverage.getSkipped())},
-                      {"unsupported", nlohmann::json(_last_rule_coverage.getUnsupported())},
-                      {"status", _last_rule_coverage.status()},
-                      {"check_profile", _last_rule_coverage.profile()}};
+  const auto violation_artifact = buildViolationsArtifact(type_violation_map, buildCanonicalViolationContext(), _last_rule_coverage);
+  const auto root = buildCVioArtifact(violation_artifact, _last_rule_coverage);
 
   std::string out_path = DRCDM.getConfig().c_vio_json_path;
   if (out_path.empty()) {
@@ -1563,7 +1478,7 @@ void DRCInterface::outputCVioJson(std::map<std::string, std::vector<ids::Violati
   }
   const std::filesystem::path report_path(out_path);
   writeAtomicJsonReport(report_path, root, "C-VIO report");
-  DRCLOG.info(Loc::current(), "Wrote C-VIO JSON (", total, " violations) → ", report_path.string());
+  DRCLOG.info(Loc::current(), "Wrote C-VIO JSON (", root.at("summary").at("total").get<std::size_t>(), " violations) → ", report_path.string());
 }
 
 void DRCInterface::outputRuleCoverageJson()

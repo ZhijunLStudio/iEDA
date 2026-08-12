@@ -16,6 +16,8 @@
 // ***************************************************************************************
 #include "idrc_io.h"
 
+#include <filesystem>
+
 #include "DRCInterface.hpp"
 #include "builder.h"
 #include "feature_manager.h"
@@ -29,6 +31,48 @@
 #endif
 
 namespace iplf {
+namespace {
+
+bool publishFile(const std::filesystem::path& source, const std::filesystem::path& destination)
+{
+  std::error_code error;
+  if (!std::filesystem::is_regular_file(source, error) || error) {
+    std::cerr << "iDRC artifact is missing: " << source << std::endl;
+    return false;
+  }
+  if (!destination.parent_path().empty()) {
+    std::filesystem::create_directories(destination.parent_path(), error);
+    if (error) {
+      std::cerr << "Cannot create iDRC report directory: " << destination.parent_path() << ": " << error.message() << std::endl;
+      return false;
+    }
+  }
+
+  const std::filesystem::path temporary_path = destination.string() + ".tmp";
+  std::filesystem::copy_file(source, temporary_path, std::filesystem::copy_options::overwrite_existing, error);
+  if (error) {
+    std::cerr << "Cannot stage iDRC artifact " << source << ": " << error.message() << std::endl;
+    return false;
+  }
+  std::filesystem::rename(temporary_path, destination, error);
+  if (error) {
+    error.clear();
+    std::filesystem::remove(destination, error);
+    error.clear();
+    std::filesystem::rename(temporary_path, destination, error);
+    if (error) {
+      const std::string message = error.message();
+      error.clear();
+      std::filesystem::remove(temporary_path, error);
+      std::cerr << "Cannot publish iDRC artifact " << destination << ": " << message << std::endl;
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
 DrcIO* DrcIO::_instance = nullptr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,17 +82,38 @@ bool DrcIO::runDRC(std::string config, std::string report_path, bool has_init)
   flowConfigInst->set_status_stage("iDRC - Design Rule Check");
   ieda::Stats stats;
 
-  if (!has_init) {
-    std::map<std::string, std::any> config_map;
-    DRCI.initDRC(config_map, false);
+  std::error_code error;
+  if (report_path.empty()) {
+    std::cerr << "iDRC report path is empty." << std::endl;
+    return false;
   }
-  DRCI.checkDef();
+
+  error.clear();
+  const std::filesystem::path report = std::filesystem::absolute(report_path, error);
+  if (error) {
+    std::cerr << "Cannot resolve iDRC report path " << report_path << ": " << error.message() << std::endl;
+    return false;
+  }
+  std::filesystem::path run_directory;
+  if (!has_init) {
+    run_directory = report.string() + ".artifacts";
+    std::map<std::string, std::any> config_map;
+    config_map["-temp_directory_path"] = run_directory.string();
+    DRCI.initDRC(config_map, false);
+  } else {
+    run_directory = DRCI.getTempDirectoryPath();
+  }
+  const bool check_succeeded = DRCI.checkDef();
   DRCI.destroyDRC();
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
 
-  return true;
+  const bool report_published = publishFile(run_directory / "drc.log", report);
+  const bool summary_published = publishFile(run_directory / "drc_summary.json", report.parent_path() / "drc_summary.json");
+  const bool violations_published = publishFile(run_directory / "violations.json", report.parent_path() / "violations.json");
+  const bool legacy_violations_published = publishFile(run_directory / "violation_map.json", report.parent_path() / "violation_map.json");
+  return check_succeeded && report_published && summary_published && violations_published && legacy_violations_published;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

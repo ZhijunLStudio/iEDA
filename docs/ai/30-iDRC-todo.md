@@ -19,9 +19,9 @@
 
 ## P0 - violation schema
 
-- [ ] JSON schema 与 iRT 对齐：type、layer、bbox、net、shape id、severity、source。
-- [ ] 违例坐标单位、layer name、net mapping 必须可被 GUI/eval/routeECO 消费。
-- [ ] 同一违例去重和 stable ordering 固定，便于 hash 回归。
+- [x] JSON schema 与 iRT 对齐：type、layer、bbox、net、shape id、severity、source。
+- [x] 违例坐标单位、layer name、net mapping 必须可被 GUI/eval/routeECO 消费。
+- [x] 同一违例去重和 stable ordering 固定，便于 hash 回归。
 - [x] 产物缺失或 schema invalid 必须非零。
 
 ## P1 - Calibre harness
@@ -55,7 +55,7 @@
 ## 快速检查 v1
 
 - iRT 通过 `-enable_idrc_fast_check` 或 `IEDA_RT_IDRC_FAST_CHECK=1` 启用 `idrc_fast_check_v1`；AES13 flow 对应 `--rt-idrc-fast-check`。
-- `run_drc -path <report>` 在报告同目录发布 `drc_summary.json`，平台与 QoR gate 共同消费该覆盖证明。
+- `run_drc -path <report>` 在报告同目录发布 `drc_summary.json`、`violations.json` 和兼容 `violation_map.json`，平台与 QoR gate 共同消费该覆盖证明。
 - 快速检查零违例只允许报告 `partial_clean`；`signoff_clean` 恒为 `false`，G11 与 GDS signoff 必须失败。
 
 ## 验证纪律
