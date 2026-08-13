@@ -20,11 +20,15 @@ target_include_directories(idrc_logger
     ${IDRC_TOOLKIT}/logger
 )
 
-add_executable(idrc_logger_exit_test EXCLUDE_FROM_ALL
+add_executable(idrc_logger_exit_test
     ${IDRC_TOOLKIT}/logger/tests/LoggerExitTest.cpp
+    ${IDRC_TOOLKIT}/logger/Logger.cpp
 )
 
 target_include_directories(idrc_logger_exit_test
     PRIVATE
     ${IDRC_TOOLKIT}/logger
+    ${IDRC_DATA_MANAGER}/advance
 )
+
+add_test(NAME idrc_logger_exit_test COMMAND idrc_logger_exit_test)

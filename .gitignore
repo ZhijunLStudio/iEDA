@@ -7,6 +7,21 @@ tags
 
 bin
 build
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+build.ninja
+.ninja_deps
+.ninja_log
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+*.a
+*.so
+*.o
+*.d
 catboost_info
 *.rpt
 *.idx
@@ -29,6 +44,7 @@ scripts
 *.patch
 CMakePresets.json
 .venv/
+.env
 __pycache__
 mcp_iEDA.egg-info/
 

@@ -1,7 +1,7 @@
+import subprocess
 import os
 import shutil
 import sys
-import subprocess
 
 # 检查输入参数数量
 if len(sys.argv) < 2:
@@ -33,8 +33,8 @@ def copy_and_rename_tcl(param, current_dir):
         print(f"已更新文件 {destination_file} 中的设计名称")
 
     # 运行 iEDA 脚本
-    iEDA_script = f"/data/yexinyu/iEDA/bin/iSTA {destination_file}"
-    subprocess.run(iEDA_script, shell=True)
+    ista_bin = os.environ.get("IEDA_ISTA_BIN", "iSTA")
+    subprocess.run([ista_bin, destination_file], check=True)
     print("已运行 iEDA 脚本")
 
 # 获取当前脚本所在目录的绝对路径

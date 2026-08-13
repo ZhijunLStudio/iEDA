@@ -4,4 +4,5 @@ icts_add_test_executable(
     ${ICTS_TEST}/module/routing/LocalLegalizationTest.cc
     ${ICTS_TEST}/module/routing/RouterLegalizationTest.cc
     ${ICTS_TEST}/module/routing/RouterClockTreeTest.cc
+    ${ICTS_TEST}/module/routing/BoundSkewTreeTest.cc
 )

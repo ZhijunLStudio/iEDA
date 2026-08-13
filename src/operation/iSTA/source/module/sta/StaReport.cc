@@ -353,6 +353,11 @@ unsigned StaReportPathDetail::operator()(StaSeqPathData* seq_path_data) {
 #endif
 
       auto* own_vertex = path_delay_data->get_own_vertex();
+      if (own_vertex == nullptr) {
+        LOG_WARNING << "skip path detail entry without a timing vertex";
+        path_stack.pop();
+        continue;
+      }
       auto trans_type = path_delay_data->get_trans_type();
       auto delay_type = path_delay_data->get_delay_type();
 
@@ -362,32 +367,42 @@ unsigned StaReportPathDetail::operator()(StaSeqPathData* seq_path_data) {
           ((obj->isPin() && obj->isInput() && !own_vertex->is_assistant()) ||
            (obj->isPort() && obj->isOutput() && own_vertex->is_assistant()))) {
         auto snk_arcs = last_vertex->getSnkArc(own_vertex);
-        LOG_FATAL_IF(snk_arcs.size() != 1)
-            << last_vertex->getName() << " " << own_vertex->getName()
-            << " net arc found " << snk_arcs.size() << " arc.";
-        if (snk_arcs.size() == 1) {
+        if (snk_arcs.size() == 1 && snk_arcs.front() != nullptr) {
           auto* net_arc = dynamic_cast<StaNetArc*>(snk_arcs.front());
-          auto* net = net_arc->get_net();
-          auto crosstalk_delay =
-              net_arc->getCrossTalkDelayNs(delay_type, trans_type);
-          std::string crosstalk_delay_str =
-              crosstalk_delay ? fix_point_str(crosstalk_delay.value()) : "NA";
-
-          std::string net_attribute =
-              net->isClockNet() ? "(clock net)" : "(net)";
-          if (is_derate) {
-            (*report_tbl) << Str::printf("%s %s", net->get_name(),
-                                         net_attribute.c_str())
-                          << net->getLoads().size() << TABLE_SKIP << TABLE_SKIP
-                          << TABLE_SKIP << crosstalk_delay_str << TABLE_SKIP
-                          << TABLE_SKIP << TABLE_SKIP << TABLE_ENDLINE;
+          if (net_arc == nullptr || net_arc->get_net() == nullptr) {
+            LOG_WARNING << "skip path detail non-net arc between "
+                        << last_vertex->getName() << " and "
+                        << own_vertex->getName();
           } else {
-            (*report_tbl) << Str::printf("%s %s", net->get_name(),
-                                         net_attribute.c_str())
-                          << net->getLoads().size() << TABLE_SKIP << TABLE_SKIP
-                          << TABLE_SKIP << crosstalk_delay_str << TABLE_SKIP
-                          << TABLE_SKIP << TABLE_ENDLINE;
+            auto* net = net_arc->get_net();
+            auto crosstalk_delay =
+                net_arc->getCrossTalkDelayNs(delay_type, trans_type);
+            std::string crosstalk_delay_str =
+                crosstalk_delay ? fix_point_str(crosstalk_delay.value()) : "NA";
+
+            std::string net_attribute =
+                net->isClockNet() ? "(clock net)" : "(net)";
+            if (is_derate) {
+              (*report_tbl) << Str::printf("%s %s", net->get_name(),
+                                           net_attribute.c_str())
+                            << net->getLoads().size() << TABLE_SKIP
+                            << TABLE_SKIP << TABLE_SKIP
+                            << crosstalk_delay_str << TABLE_SKIP
+                            << TABLE_SKIP << TABLE_SKIP << TABLE_ENDLINE;
+            } else {
+              (*report_tbl) << Str::printf("%s %s", net->get_name(),
+                                           net_attribute.c_str())
+                            << net->getLoads().size() << TABLE_SKIP
+                            << TABLE_SKIP << TABLE_SKIP
+                            << crosstalk_delay_str << TABLE_SKIP
+                            << TABLE_SKIP << TABLE_ENDLINE;
+            }
           }
+        } else {
+          LOG_WARNING << "skip path detail net arc missing between "
+                      << last_vertex->getName() << " and "
+                      << own_vertex->getName() << ", found "
+                      << snk_arcs.size() << " arcs";
         }
       }
 
@@ -808,6 +823,11 @@ unsigned StaReportPathDetailJson::operator()(StaSeqPathData* seq_path_data) {
       std::string path_delay_index_str;
 
       auto* own_vertex = path_delay_data->get_own_vertex();
+      if (own_vertex == nullptr) {
+        LOG_WARNING << "skip path detail json entry without a timing vertex";
+        path_stack.pop();
+        continue;
+      }
       auto trans_type = path_delay_data->get_trans_type();
 
       auto arrive_time = FS_TO_NS(path_delay_data->get_arrive_time());
@@ -860,7 +880,12 @@ unsigned StaReportPathDetailJson::operator()(StaSeqPathData* seq_path_data) {
       }
     }
 
-    path_json["end_point"] = last_vertex->getNameWithCellName();
+    if (last_vertex != nullptr) {
+      path_json["end_point"] = last_vertex->getNameWithCellName();
+    } else {
+      LOG_WARNING << "skip path detail json end point without a timing vertex";
+      path_json["end_point"] = "NA";
+    }
   };
 
   // The arrive time
@@ -879,14 +904,28 @@ unsigned StaReportPathDetailJson::operator()(StaSeqPathData* seq_path_data) {
   auto slack = seq_path_data->getSlack();
   path_json["slack"] = fix_point_str(FS_TO_NS(slack));
 
+  if (path_stack.empty()) {
+    LOG_WARNING << "skip path detail json with no timing data";
+    path_json["start_point"] = "NA";
+    path_json["end_point"] = "NA";
+    report_json.push_back(path_json);
+    return is_ok;
+  }
+
   // Set the starting point of the timing path
   auto* start_end = path_stack.top();
-  path_json["start_point"] = start_end->get_own_vertex()->getNameWithCellName();
+  auto* start_vertex = start_end != nullptr ? start_end->get_own_vertex() : nullptr;
+  if (start_vertex != nullptr) {
+    path_json["start_point"] = start_vertex->getNameWithCellName();
+  } else {
+    LOG_WARNING << "skip path detail json start point without a timing vertex";
+    path_json["start_point"] = "NA";
+  }
 
   // Calculate the total clock path arrival time
   auto* path_delay_data = path_stack.top();
-  auto* launch_clock_data = path_delay_data->get_launch_clock_data();
-  auto launch_network_time = FS_TO_NS(launch_clock_data->get_arrive_time());
+  auto* launch_clock_data = path_delay_data != nullptr ? path_delay_data->get_launch_clock_data() : nullptr;
+  auto launch_network_time = launch_clock_data != nullptr ? FS_TO_NS(launch_clock_data->get_arrive_time()) : 0.0;
   double launch_edge = FS_TO_NS(seq_path_data->getLaunchEdge());
   double clock_path_arrive_time = launch_edge + launch_network_time;
 
@@ -916,12 +955,22 @@ unsigned StaReportPathDump::operator()(StaSeqPathData* seq_path_data) {
   while (!path_stack.empty()) {
     auto* path_delay_data = path_stack.top();
     auto* own_vertex = path_delay_data->get_own_vertex();
+    if (own_vertex == nullptr) {
+      LOG_WARNING << "skip path dump entry without a timing vertex";
+      path_stack.pop();
+      continue;
+    }
     own_vertex->exec(dump_yaml);
 
     if (last_vertex) {
       auto snk_arcs = last_vertex->getSnkArc(own_vertex);
-      auto* snk_arc = snk_arcs.empty() ? nullptr : snk_arcs.front();
-      snk_arc->exec(dump_yaml);
+      if (!snk_arcs.empty() && snk_arcs.front() != nullptr) {
+        snk_arcs.front()->exec(dump_yaml);
+      } else {
+        LOG_WARNING << "skip path dump arc missing between "
+                    << last_vertex->getName() << " and "
+                    << own_vertex->getName();
+      }
     }
 
     last_vertex = own_vertex;
@@ -963,13 +1012,23 @@ unsigned StaReportPathYaml::operator()(StaSeqPathData* seq_path_data) {
   while (!path_stack.empty()) {
     auto* path_delay_data = path_stack.top();
     auto* own_vertex = path_delay_data->get_own_vertex();
+    if (own_vertex == nullptr) {
+      LOG_WARNING << "skip delay path dump entry without a timing vertex";
+      path_stack.pop();
+      continue;
+    }
     dump_delay_yaml.set_analysis_mode(path_delay_data->get_delay_type());
     dump_delay_yaml.set_trans_type(path_delay_data->get_trans_type());
 
     if (last_vertex) {
       auto snk_arcs = last_vertex->getSnkArc(own_vertex);
-      auto* snk_arc = snk_arcs.empty() ? nullptr : snk_arcs.front();
-      snk_arc->exec(dump_delay_yaml);
+      if (!snk_arcs.empty() && snk_arcs.front() != nullptr) {
+        snk_arcs.front()->exec(dump_delay_yaml);
+      } else {
+        LOG_WARNING << "skip delay path dump arc missing between "
+                    << last_vertex->getName() << " and "
+                    << own_vertex->getName();
+      }
     }
 
     own_vertex->exec(dump_delay_yaml);
@@ -1028,13 +1087,23 @@ unsigned StaReportWirePathYaml::operator()(StaSeqPathData* seq_path_data) {
   while (!path_stack.empty()) {
     auto* path_delay_data = path_stack.top();
     auto* own_vertex = path_delay_data->get_own_vertex();
+    if (own_vertex == nullptr) {
+      LOG_WARNING << "skip wire yaml entry without a timing vertex";
+      path_stack.pop();
+      continue;
+    }
     dump_wire_yaml.set_analysis_mode(path_delay_data->get_delay_type());
     dump_wire_yaml.set_trans_type(path_delay_data->get_trans_type());
 
     if (last_vertex) {
       auto snk_arcs = last_vertex->getSnkArc(own_vertex);
-      auto* snk_arc = snk_arcs.empty() ? nullptr : snk_arcs.front();
-      snk_arc->exec(dump_wire_yaml);
+      if (!snk_arcs.empty() && snk_arcs.front() != nullptr) {
+        snk_arcs.front()->exec(dump_wire_yaml);
+      } else {
+        LOG_WARNING << "skip wire yaml arc missing between "
+                    << last_vertex->getName() << " and "
+                    << own_vertex->getName();
+      }
     }
 
     own_vertex->exec(dump_wire_yaml);
@@ -1084,13 +1153,23 @@ unsigned StaReportWirePathJson::operator()(StaSeqPathData* seq_path_data) {
   while (!path_stack.empty()) {
     auto* path_delay_data = path_stack.top();
     auto* own_vertex = path_delay_data->get_own_vertex();
+    if (own_vertex == nullptr) {
+      LOG_WARNING << "skip wire json entry without a timing vertex";
+      path_stack.pop();
+      continue;
+    }
     dump_wire_json.set_analysis_mode(path_delay_data->get_delay_type());
     dump_wire_json.set_trans_type(path_delay_data->get_trans_type());
 
     if (last_vertex) {
       auto snk_arcs = last_vertex->getSnkArc(own_vertex);
-      auto* snk_arc = snk_arcs.empty() ? nullptr : snk_arcs.front();
-      snk_arc->exec(dump_wire_json);
+      if (!snk_arcs.empty() && snk_arcs.front() != nullptr) {
+        snk_arcs.front()->exec(dump_wire_json);
+      } else {
+        LOG_WARNING << "skip wire json arc missing between "
+                    << last_vertex->getName() << " and "
+                    << own_vertex->getName();
+      }
     }
 
     own_vertex->exec(dump_wire_json);
@@ -1131,13 +1210,23 @@ unsigned StaReportPathTimingData::operator()(StaSeqPathData* seq_path_data) {
   while (!path_stack.empty()) {
     auto* path_delay_data = path_stack.top();
     auto* own_vertex = path_delay_data->get_own_vertex();
+    if (own_vertex == nullptr) {
+      LOG_WARNING << "skip timing-data entry without a timing vertex";
+      path_stack.pop();
+      continue;
+    }
     dump_timing_data.set_analysis_mode(path_delay_data->get_delay_type());
     dump_timing_data.set_trans_type(path_delay_data->get_trans_type());
 
     if (last_vertex) {
       auto snk_arcs = last_vertex->getSnkArc(own_vertex);
-      auto* snk_arc = snk_arcs.empty() ? nullptr : snk_arcs.front();
-      snk_arc->exec(dump_timing_data);
+      if (!snk_arcs.empty() && snk_arcs.front() != nullptr) {
+        snk_arcs.front()->exec(dump_timing_data);
+      } else {
+        LOG_WARNING << "skip timing-data arc missing between "
+                    << last_vertex->getName() << " and "
+                    << own_vertex->getName();
+      }
     }
 
     last_vertex = own_vertex;
@@ -1745,10 +1834,17 @@ unsigned StaReportSkewSummary::operator()(StaSeqPathGroup* seq_path_group) {
   AnalysisMode analysis_mode = _analysis_mode;
   FOREACH_PATH_GROUP_END(seq_path_group, path_end)
   FOREACH_PATH_END_DATA(path_end, analysis_mode, path_data) {
+    auto* launch_clock_data = path_data->get_launch_clock_data();
+    auto* launch_clock_vertex =
+        launch_clock_data != nullptr ? launch_clock_data->get_own_vertex()
+                                     : nullptr;
+    if (launch_clock_vertex == nullptr) {
+      LOG_WARNING << "skip skew summary path without a launch clock vertex";
+      continue;
+    }
     auto launch_capture_pair =
-        std::make_pair(path_data->get_launch_clock_data(),
-                       path_data->get_capture_clock_data());
-    if (path_data->get_launch_clock_data()->get_own_vertex()->is_port() == 1) {
+        std::make_pair(launch_clock_data, path_data->get_capture_clock_data());
+    if (launch_clock_vertex->is_port() == 1) {
       continue;
     }
     if (!lanuch_capture_pairs.contains(launch_capture_pair)) {
@@ -1854,6 +1950,11 @@ unsigned StaReportSkewDetail::operator()(StaSeqPathData* seq_path_data) {
     while (!path_stack.empty()) {
       auto* path_delay_data = path_stack.top();
       auto* own_vertex = path_delay_data->get_own_vertex();
+      if (own_vertex == nullptr) {
+        LOG_WARNING << "skip skew detail entry without a timing vertex";
+        path_stack.pop();
+        continue;
+      }
 
       // print net
       if (auto* obj = own_vertex->get_design_obj();
@@ -1861,16 +1962,24 @@ unsigned StaReportSkewDetail::operator()(StaSeqPathData* seq_path_data) {
           ((obj->isPin() && obj->isInput() && !own_vertex->is_assistant()) ||
            (obj->isPort() && obj->isOutput() && own_vertex->is_assistant()))) {
         auto snk_arcs = last_vertex->getSnkArc(own_vertex);
-        LOG_FATAL_IF(snk_arcs.size() != 1)
-            << last_vertex->getName() << " " << own_vertex->getName()
-            << " net arc found " << snk_arcs.size() << " arc.";
-        if (snk_arcs.size() == 1) {
+        if (snk_arcs.size() == 1 && snk_arcs.front() != nullptr) {
           auto* net_arc = dynamic_cast<StaNetArc*>(snk_arcs.front());
-          auto* net = net_arc->get_net();
+          if (net_arc == nullptr || net_arc->get_net() == nullptr) {
+            LOG_WARNING << "skip skew detail non-net arc between "
+                        << last_vertex->getName() << " and "
+                        << own_vertex->getName();
+          } else {
+            auto* net = net_arc->get_net();
 
-          (*report_tbl) << Str::printf("%s (net)", net->get_name())
-                        << net->getLoads().size() << TABLE_SKIP << TABLE_SKIP
-                        << TABLE_SKIP << TABLE_SKIP << TABLE_ENDLINE;
+            (*report_tbl) << Str::printf("%s (net)", net->get_name())
+                          << net->getLoads().size() << TABLE_SKIP << TABLE_SKIP
+                          << TABLE_SKIP << TABLE_SKIP << TABLE_ENDLINE;
+          }
+        } else {
+          LOG_WARNING << "skip skew detail net arc missing between "
+                      << last_vertex->getName() << " and "
+                      << own_vertex->getName() << ", found "
+                      << snk_arcs.size() << " arcs";
         }
       }
 
@@ -2030,9 +2139,24 @@ unsigned StaReportSpecifyPath::operator()(StaSeqPathGroup* seq_path_group) {
   FOREACH_PATH_GROUP_END(seq_path_group, path_end)
   FOREACH_PATH_END_DATA(path_end, _analysis_mode, path_data) {
     auto path_delay_data_vec = path_data->getPathDelayData();
+    if (path_delay_data_vec.empty()) {
+      LOG_WARNING << "skip specified path with no timing data";
+      continue;
+    }
+    auto get_vertex_name = [](StaPathDelayData* path_delay_data) -> std::optional<std::string> {
+      if (path_delay_data == nullptr || path_delay_data->get_own_vertex() == nullptr) {
+        return std::nullopt;
+      }
+      return path_delay_data->get_own_vertex()->getName();
+    };
     auto* path_delay_data = path_delay_data_vec.top();
+    auto vertex_name = get_vertex_name(path_delay_data);
+    if (!vertex_name.has_value()) {
+      LOG_WARNING << "skip specified path entry without a timing vertex";
+      continue;
+    }
     if (_from) {
-      if (path_delay_data->get_own_vertex()->getName() != _from) {
+      if (*vertex_name != _from) {
         continue;
       }
     }
@@ -2041,8 +2165,14 @@ unsigned StaReportSpecifyPath::operator()(StaSeqPathGroup* seq_path_group) {
     path_delay_data_vec.pop();
     while (!path_delay_data_vec.empty()) {
       path_delay_data = path_delay_data_vec.top();
+      vertex_name = get_vertex_name(path_delay_data);
+      if (!vertex_name.has_value()) {
+        LOG_WARNING << "skip specified path entry without a timing vertex";
+        is_match = false;
+        break;
+      }
       if (_through) {
-        if (path_delay_data->get_own_vertex()->getName() == _through) {
+        if (*vertex_name == _through) {
           is_match = true;
         }
       }
@@ -2051,7 +2181,12 @@ unsigned StaReportSpecifyPath::operator()(StaSeqPathGroup* seq_path_group) {
     }
 
     if (_to) {
-      if (path_delay_data->get_own_vertex()->getName() != _to) {
+      vertex_name = get_vertex_name(path_delay_data);
+      if (!vertex_name.has_value()) {
+        LOG_WARNING << "skip specified path end without a timing vertex";
+        continue;
+      }
+      if (*vertex_name != _to) {
         continue;
       }
     }

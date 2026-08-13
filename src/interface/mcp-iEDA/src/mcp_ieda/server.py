@@ -14,12 +14,23 @@ import json
 import subprocess
 
 from pathlib import Path
+from typing import Any
 
 current_dir = os.path.split(os.path.abspath(__file__))[0]
 
+_TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
+DEFAULT_TIMEOUT_SEC = 3600
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in _TRUE_ENV_VALUES
+
 
 def mcp_write_enabled() -> bool:
-    return os.getenv("MCP_IEDA_WRITE", "0").lower() in {"1", "true", "yes", "on"}
+    return env_flag("MCP_IEDA_WRITE", False)
 
 
 def require_mcp_write(tool_name: str) -> None:
@@ -27,44 +38,153 @@ def require_mcp_write(tool_name: str) -> None:
         raise PermissionError(f"{tool_name} requires MCP_IEDA_WRITE=1")
 
 
-def run_ieda(iEDA: Path, script_path: str):
+def get_workspace_root() -> Path:
+    workspace = os.getenv("MCP_IEDA_WORKSPACE")
+    if not workspace:
+        raise PermissionError("MCP_IEDA_WORKSPACE must name the approved workspace")
+
+    try:
+        root = Path(workspace).expanduser().resolve(strict=True)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(
+            f"MCP_IEDA_WORKSPACE does not exist: {workspace}"
+        ) from error
+    if not root.is_dir():
+        raise NotADirectoryError(f"MCP_IEDA_WORKSPACE is not a directory: {root}")
+    return root
+
+
+def resolve_workspace_script(script_path: str | Path, workspace_root: Path) -> Path:
+    raw_path = Path(script_path).expanduser()
+    if ".." in raw_path.parts:
+        raise PermissionError("iEDA script path must not contain '..'")
+    candidate = raw_path if raw_path.is_absolute() else workspace_root / raw_path
+    try:
+        candidate = candidate.resolve(strict=True)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(f"iEDA script not found: {script_path}") from error
+    if not candidate.is_file():
+        raise IsADirectoryError(f"iEDA script is not a file: {candidate}")
+    if candidate.suffix.lower() != ".tcl":
+        raise ValueError("iEDA script must use the .tcl extension")
+    try:
+        candidate.relative_to(workspace_root)
+    except ValueError as error:
+        raise PermissionError(
+            f"iEDA script must be inside MCP_IEDA_WORKSPACE: {workspace_root}"
+        ) from error
+    return candidate
+
+
+def get_run_timeout_sec() -> int:
+    try:
+        timeout_sec = int(os.getenv("MCP_IEDA_TIMEOUT_SECONDS", str(DEFAULT_TIMEOUT_SEC)))
+    except ValueError as error:
+        raise ValueError("MCP_IEDA_TIMEOUT_SECONDS must be a positive integer") from error
+    if timeout_sec <= 0:
+        raise ValueError("MCP_IEDA_TIMEOUT_SECONDS must be a positive integer")
+    return timeout_sec
+
+
+def _run_result(
+    *,
+    status: str,
+    reason: str,
+    returncode: int | None,
+    ieda_path: Path,
+    script_path: Path,
+    workspace_root: Path,
+    timeout_sec: int,
+) -> dict[str, Any]:
+    return {
+        "schema_version": "ieda.mcp.run_result.v1",
+        "status": status,
+        "reason": reason,
+        "returncode": returncode,
+        "product_assertion": "not_asserted",
+        "rankable": False,
+        "comparable": False,
+        "iEDA": str(ieda_path),
+        "workspace_root": str(workspace_root),
+        "script_path": str(script_path.relative_to(workspace_root)),
+        "write_authorized": True,
+        "timeout_sec": timeout_sec,
+        "ok": status == "process_completed" and returncode == 0,
+        "rc": returncode,
+    }
+
+
+def run_ieda(iEDA: Path, script_path: str | Path):
     """Run iEDA with the given script path."""
 
     require_mcp_write("iEDA_RUN")
-    ieda_path = Path(iEDA)
-    tcl_path = Path(script_path)
-    if not ieda_path.exists():
+    try:
+        ieda_path = Path(iEDA).expanduser().resolve(strict=True)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(f"iEDA binary not found: {iEDA}") from error
+    if not ieda_path.is_file():
         raise FileNotFoundError(f"iEDA binary not found: {ieda_path}")
-    if not tcl_path.exists():
-        raise FileNotFoundError(f"iEDA script not found: {tcl_path}")
+    if not os.access(ieda_path, os.X_OK):
+        raise PermissionError(f"iEDA binary is not executable: {ieda_path}")
+    workspace_root = get_workspace_root()
+    tcl_path = resolve_workspace_script(script_path, workspace_root)
+    timeout_sec = get_run_timeout_sec()
 
     command = [str(ieda_path), "-script", str(tcl_path)]
     logging.info("Run iEDA with argv: %s", command)
-    process = subprocess.run(command, check=False)
+    try:
+        process = subprocess.run(
+            command,
+            check=False,
+            cwd=workspace_root,
+            timeout=timeout_sec,
+        )
+    except subprocess.TimeoutExpired:
+        return _run_result(
+            status="timeout",
+            reason="process_timeout",
+            returncode=None,
+            ieda_path=ieda_path,
+            script_path=tcl_path,
+            workspace_root=workspace_root,
+            timeout_sec=timeout_sec,
+        )
     if process.returncode != 0:
-        raise RuntimeError(f"Subprocess failed with return code {process.returncode}")
-    return {
-        "schema_version": "ieda.mcp.run_result.v1",
-        "ok": True,
-        "rc": process.returncode,
-        "iEDA": str(ieda_path),
-        "script_path": str(tcl_path),
-        "write_authorized": True,
-        "product_assertion": "process_rc_zero",
-    }
+        return _run_result(
+            status="process_failed",
+            reason="nonzero_returncode",
+            returncode=process.returncode,
+            ieda_path=ieda_path,
+            script_path=tcl_path,
+            workspace_root=workspace_root,
+            timeout_sec=timeout_sec,
+        )
+    return _run_result(
+        status="process_completed",
+        reason="process_rc_zero_product_not_asserted",
+        returncode=process.returncode,
+        ieda_path=ieda_path,
+        script_path=tcl_path,
+        workspace_root=workspace_root,
+        timeout_sec=timeout_sec,
+    )
     
     
 def get_server_url() -> str:
     """
-    Get the server URL from environment variable or default to 'http://localhost'.
+    Get the server bind address from environment variable or default to localhost.
     """
-    return os.getenv("MCP_SERVER_URL", "localhost")
+    return os.getenv("MCP_SERVER_URL", "127.0.0.1")
 
 def get_server_port() -> int:
     """
     Get the server port from environment variable or default to 3002.
     """
     return int(os.getenv("MCP_SERVER_PORT", 3002))
+
+
+def get_server_debug() -> bool:
+    return env_flag("MCP_SERVER_DEBUG", False)
     
 def serve(iEDA: Path, transport="stdio"):
     from enum import Enum
@@ -143,7 +263,7 @@ def serve(iEDA: Path, transport="stdio"):
                 )
 
         starlette_app = Starlette(
-            debug=True,
+            debug=get_server_debug(),
             routes=[
                 Route("/sse", endpoint=handle_sse),
                 Mount("/messages/", app=sse.handle_post_message),
