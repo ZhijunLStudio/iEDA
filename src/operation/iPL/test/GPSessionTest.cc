@@ -898,6 +898,37 @@ int runLocalSweep()
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+// Seed plumbing: same seed reproduces the same placement; a different seed
+// produces a different one (candidate-branching requirement).
+int runSeedVary()
+{
+  bool ok = true;
+  const auto run_start = [&](int32_t seed) {
+    ipl::GPRunRequest request;
+    request.mode = ipl::GPRunMode::kStart;
+    request.accepted_iterations = 10;
+    request.random_init = true;
+    request.seed = seed;
+    const auto result = iPLAPIInst.gpRun(request);
+    return result.ok;
+  };
+
+  ok &= require(run_start(42), "seed: start with seed 42 must succeed");
+  ok &= require(dumpCoordinates("seed42a"), "seed: must dump seed-42 run A");
+  iPLAPIInst.gpCloseSession();
+
+  ok &= require(run_start(42), "seed: second start with seed 42 must succeed");
+  ok &= require(dumpCoordinates("seed42b"), "seed: must dump seed-42 run B");
+  iPLAPIInst.gpCloseSession();
+
+  ok &= require(run_start(43), "seed: start with seed 43 must succeed");
+  ok &= require(dumpCoordinates("seed43"), "seed: must dump seed-43 run");
+  iPLAPIInst.gpCloseSession();
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 int runValidate()
 {
   bool ok = true;
@@ -1054,6 +1085,9 @@ int main(int argc, char** argv)
   }
   if (scenario == "local_sweep") {
     return runLocalSweep();
+  }
+  if (scenario == "seed_vary") {
+    return runSeedVary();
   }
   if (scenario == "resume_inproc") {
     return runResumeInProc();

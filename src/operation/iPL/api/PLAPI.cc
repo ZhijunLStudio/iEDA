@@ -983,7 +983,7 @@ GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
   }
 
   if (request.random_init) {
-    RandomPlace(&PlacerDBInst).runRandomPlace();
+    RandomPlace(&PlacerDBInst).runRandomPlace(request.seed);
   }
   _gp_session_state->session
       = std::make_unique<NesterovPlace>(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());

@@ -271,7 +271,7 @@ C++ API：`iPLAPIInst.gpRun(GPRunRequest{mode, accepted_iterations, random_init,
 
 ### 15.5 测试矩阵现状
 
-`ipl_gp_session_test` 19 场景全部 PASS；`ipl_run_gp_result_test` 1276 PASS 无回归。测试配置位于 `src/operation/iPL/test/configs/`（gp_congestion / gp_divergence / gp_modified / gp_multithread）。
+`ipl_gp_session_test` 27 场景全部 PASS（截至第三轮）；`ipl_run_gp_result_test` 1276 PASS 无回归。测试配置位于 `src/operation/iPL/test/configs/`（gp_congestion / gp_divergence / gp_modified / gp_multithread）。
 
 ## 16. M3：会话失效与 relinearize（2026-08-14 第三轮）
 
@@ -302,5 +302,10 @@ C++ API：`iPLAPIInst.gpRun(GPRunRequest{mode, accepted_iterations, random_init,
 - 比例扫描（0.05/0.2/0.5）与第二个随机种子结果一致。
 - **结论**：① 热点 bin 图选择不比同规模随机范围好 → "怎么找局部"的图工程在当前 GP 粒度上**不产生价值**；② 局部与全局的优劣随求解状态翻转 → 收益不稳健。按 70 号文档 §13.3 的证伪框架，"graph-scoped intervention 有效"假设**未被支持**。局部细化应放在离散阶段（LG/DP），GP 层面默认不做局部。
 - **因此不对外暴露** `-scope local`；范围机制保留为已验证的实验工具（`buildHotOverflowScope`/`buildRandomScope` + 移动系数），供未来按设计重新评估。
+
+## 18. --seed 管线（2026-08-14 第三轮收尾）
+
+- `GPRunRequest.seed`（默认 1000，遗留路径行为不变）→ `RandomPlace::runRandomPlace(seed)`；Tcl `placer_run_gp -seed N`。
+- 验证 `seed_vary`：同 seed 两次运行坐标逐位一致；seed 42 vs 43 布局不同（候选分支实验的前提）。
 
 **测试基建修正（重要）**：早期 coords.txt 从 idb 层 dump，而 GP 的写回只到 iPL PlacerDB 层（idb 仅流程结束时同步）→ 早前的坐标比对是空转的（恒等于初始 DEF）。已改为 dump PlacerDB 真实坐标；修复后全部等价对（分段/观察/legacy/跨进程/多线程/退化等价）在**真实坐标**上重新验证仍逐位一致（records 一直是求解器真值，此前的数值验证不受影响）。

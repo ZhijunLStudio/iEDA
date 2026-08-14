@@ -245,6 +245,9 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
   auto* random_init_option = new TclIntOption("-random_init", 1, 1);
   addOption(random_init_option);
 
+  auto* seed_option = new TclIntOption("-seed", 1, 1000);
+  addOption(seed_option);
+
   auto* checkpoint_option = new TclStringOption("-checkpoint", 1, nullptr);
   addOption(checkpoint_option);
 }
@@ -303,13 +306,17 @@ unsigned CmdPlacerRunGP::exec()
   if (random_init_option->is_set_val()) {
     request.random_init = (random_init_option->getIntVal() != 0);
   }
+  TclOption* seed_option = getOptionOrArg("-seed");
+  if (seed_option->is_set_val()) {
+    request.seed = seed_option->getIntVal();
+  }
   TclOption* checkpoint_option = getOptionOrArg("-checkpoint");
   std::string checkpoint;
   if (checkpoint_option->is_set_val()) {
     checkpoint = checkpoint_option->getStringVal();
   }
 
-  if (!inst->runGlobalPlacementSession(mode, request.accepted_iterations, request.random_init, checkpoint)) {
+  if (!inst->runGlobalPlacementSession(mode, request.accepted_iterations, request.random_init, checkpoint, request.seed)) {
     std::cerr << "iPL gp.run failed." << std::endl;
     return ipl::placementTclResult(false);
   }

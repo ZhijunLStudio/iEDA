@@ -63,6 +63,7 @@ struct GPRunRequest
   GPRunMode mode = GPRunMode::kStart;
   int32_t accepted_iterations = 20;
   bool random_init = true;          // kStart only: run RandomPlace before building the session
+  int32_t seed = 1000;              // kStart only: RandomPlace seed (default preserves legacy determinism)
   std::string checkpoint_path;      // kResume only: checkpoint JSON to restore from
 };
 
