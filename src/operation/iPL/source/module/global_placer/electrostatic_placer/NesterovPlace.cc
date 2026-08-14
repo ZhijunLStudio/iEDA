@@ -2122,6 +2122,60 @@ void NesterovPlace::applyNetHaloClosure(const std::vector<bool>& active, std::ve
   }
 }
 
+void NesterovPlace::setRegionDensityTargets(const std::vector<Rectangle<int32_t>>& regions, float target)
+{
+  auto* grid_manager = _nes_database->_grid_manager;
+  for (const auto& region : regions) {
+    Rectangle<int32_t> rect = region;
+    std::vector<Grid*> overlap_grid_list;
+    grid_manager->obtainOverlapGridList(overlap_grid_list, rect);
+    for (auto* grid : overlap_grid_list) {
+      grid->density_target = target;
+    }
+  }
+}
+
+void NesterovPlace::clearRegionDensityTargets()
+{
+  auto& grid_2d = _nes_database->_grid_manager->get_grid_2d_list();
+  for (auto& grid_row : grid_2d) {
+    for (auto& grid : grid_row) {
+      grid.density_target = 1.0F;
+    }
+  }
+}
+
+void NesterovPlace::buildHotOverflowDensityTargets(float top_ratio, float target)
+{
+  auto* grid_manager = _nes_database->_grid_manager;
+  _nes_database->_bin_grid->updateBinGrid(_placable_inst_list, _nes_config.get_thread_num());
+  auto& grid_2d = grid_manager->get_grid_2d_list();
+  const int32_t cnt_x = grid_manager->get_grid_cnt_x();
+  const int32_t cnt_y = grid_manager->get_grid_cnt_y();
+
+  struct HotBin
+  {
+    int32_t idx;
+    int64_t overflow;
+  };
+  std::vector<HotBin> hot;
+  for (int32_t y = 0; y < cnt_y; y++) {
+    for (int32_t x = 0; x < cnt_x; x++) {
+      const int64_t overflow = grid_2d[y][x].obtainGridOverflowArea();
+      if (overflow > 0) {
+        hot.push_back({y * cnt_x + x, overflow});
+      }
+    }
+  }
+  std::sort(hot.begin(), hot.end(), [](const HotBin& lhs, const HotBin& rhs) { return lhs.overflow > rhs.overflow; });
+
+  const size_t take = std::max<size_t>(1, std::min<size_t>(hot.size(), static_cast<size_t>(hot.size() * top_ratio)));
+  for (size_t k = 0; k < take; k++) {
+    const int32_t idx = hot[k].idx;
+    grid_2d[idx / cnt_x][idx % cnt_x].density_target = target;
+  }
+}
+
 void NesterovPlace::buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed)
 {
   const size_t n = _placable_inst_list.size();

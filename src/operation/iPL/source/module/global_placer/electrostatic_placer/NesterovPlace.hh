@@ -121,6 +121,17 @@ class NesterovPlace
   // Used by the experiment suite to test whether hot-bin selection matters.
   void buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed);
 
+  // ---- region density screens (L1) ----
+  // Set the density target factor (effective capacity multiplier) on every grid
+  // overlapping any region: factor < 1 makes the region feel overfull and the
+  // global density field pushes cells out (soft steering, nothing frozen).
+  // clearRegionDensityTargets() restores the global (1.0) path, which is
+  // bit-identical to never having set a screen.
+  void setRegionDensityTargets(const std::vector<Rectangle<int32_t>>& regions, float target);
+  void clearRegionDensityTargets();
+  // Screen the hottest overflowing bins (top_ratio fraction) with `target`.
+  void buildHotOverflowDensityTargets(float top_ratio, float target);
+
  private:
   void applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff);
 

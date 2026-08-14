@@ -142,6 +142,8 @@ target_compile_definitions(
     IPL_TEST_CONFIG_PATH_MULTITHREAD="${CMAKE_SOURCE_DIR}/src/operation/iPL/test/configs/gp_multithread_config.json"
     IPL_TEST_TECH_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd.tlef"
     IPL_TEST_CELLS_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef"
+    IPL_TEST_TECH_LEF_PATH_HS="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hs.tlef"
+    IPL_TEST_CELLS_LEF_PATH_HS="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hs_merged.lef"
     IPL_TEST_DEF_PATH="${CMAKE_SOURCE_DIR}/benchmarks/results/flow_20260814_gcd/gcd_sky130_a/workspace/result/iFP_result.def"
 )
 add_test(NAME ipl_gp_session_seg20 COMMAND ipl_gp_session_test --scenario seg20)
@@ -168,6 +170,8 @@ add_test(NAME ipl_gp_session_local_control COMMAND ipl_gp_session_test --scenari
 add_test(NAME ipl_gp_session_local_ablate COMMAND ipl_gp_session_test --scenario local_ablate)
 add_test(NAME ipl_gp_session_local_sweep COMMAND ipl_gp_session_test --scenario local_sweep)
 add_test(NAME ipl_gp_session_seed_vary COMMAND ipl_gp_session_test --scenario seed_vary)
+add_test(NAME ipl_gp_session_screen_degenerate COMMAND ipl_gp_session_test --scenario screen_degenerate)
+add_test(NAME ipl_gp_session_screen_trial COMMAND ipl_gp_session_test --scenario screen_trial)
 add_test(NAME ipl_gp_session_legacy COMMAND ipl_gp_session_test --scenario legacy)
 add_test(NAME ipl_gp_session_full COMMAND ipl_gp_session_test --scenario full)
 add_test(NAME ipl_gp_session_validate COMMAND ipl_gp_session_test --scenario validate)

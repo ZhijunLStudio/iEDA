@@ -303,6 +303,27 @@ C++ API：`iPLAPIInst.gpRun(GPRunRequest{mode, accepted_iterations, random_init,
 - **结论**：① 热点 bin 图选择不比同规模随机范围好 → "怎么找局部"的图工程在当前 GP 粒度上**不产生价值**；② 局部与全局的优劣随求解状态翻转 → 收益不稳健。按 70 号文档 §13.3 的证伪框架，"graph-scoped intervention 有效"假设**未被支持**。局部细化应放在离散阶段（LG/DP），GP 层面默认不做局部。
 - **因此不对外暴露** `-scope local`；范围机制保留为已验证的实验工具（`buildHotOverflowScope`/`buildRandomScope` + 移动系数），供未来按设计重新评估。
 
+## 19. L1 密度屏 + L4 多设计规模实验（2026-08-14 第四轮，实验裁决）
+
+**L1 实现（density screen）**：`Grid::density_target`（默认 1.0，逐位不变）；`setRegionDensityTargets(regions, factor)` / `clearRegionDensityTargets()` / `buildHotOverflowDensityTargets(top_ratio, factor)`（最热溢出 bin 打屏）。有效容量 = available_ratio × density_target × grid_area，factor<1 让区域"感觉"过满、密度场把 cell 推出去——软引导，不冻结任何东西。退化等价已验证（全 1 屏 ≡ 全局逐位一致）。
+
+**L4 数据**：本机 `~/work/pl_vis/cases/`（Innovus 2000-units DEF，已用 `test/configs/def2placement_1000.py` 转为 1000-units 布局 DEF）。小/中/大：s1238(829) / apb4_timer(3.5k) / picorv32(29k) / aes(64k 可移动)，均为 sky130 HD。
+
+| 设计(检查点) | global | hot-freeze | hot-screen(0.05,0.3) | random-freeze |
+|---|---|---|---|---|
+| gcd(iter20) | 5.666M/0.700 | 5.617M/0.694 | 5.692-5.763M/0.706-0.717 | 5.618M/0.690 |
+| s1238(iter60) | 2.974M/0.893 | 2.964M/0.894 | 2.976M/0.895 | 2.964M/0.894 |
+| apb4_timer(iter60) | 8.571M/0.889 | 8.561M/0.889 | 8.586M/0.894 | 8.594M/0.890 |
+| picorv32(iter60) | 96.8M/0.926 | 97.7M/0.922 | 124.4M/0.842 | 97.2M/0.924 |
+| picorv32(iter300) | 184.0M/0.485 | 179.6M/0.490 | 232.9M/0.485 | 174.7M/0.512 |
+| aes(iter60) | 172.0M/0.974 | 180.8M/0.977 | 209.4M/0.967 | 161.7M/0.979 |
+
+**实验结论（5 设计 × 2 阶段，每分支 20 次迭代、同 checkpoint 分叉）**：
+1. **热点 bin 定位 ≈ 同规模随机**（全部设计/阶段一致）——"怎么找局部"的图工程不产生价值，与 gcd 小实验结论一致并外推成立。
+2. **密度屏作为定向热点干预被数据否决**：≥11k cell 的设计上 hpwl 代价 +22%~+28%，只在 picorv32(iter60) 换到 -9% 溢出；作为"溢出换线长"的杠杆可用性存疑，不作为默认局部机制。
+3. **冻结式局部更新是唯一有真实收益的机制**：后期阶段大设计上 hpwl -2.4%~-6%（picorv32@300 的 random-freeze -5.1%、aes -6%），但符号随设计/阶段翻转、溢出有小幅代价。
+4. **结论落点**：局部 GP 的正确形态是 L3 试验循环（checkpoint 分叉 → 候选 vs 全局对照 → 全芯片验收 → 只留胜者），而不是可信的默认模式；冻结机制 + 简单范围（随机/用户指定/廉价启发式均可）即可，不投资热点图算法。
+
 ## 18. --seed 管线（2026-08-14 第三轮收尾）
 
 - `GPRunRequest.seed`（默认 1000，遗留路径行为不变）→ `RandomPlace::runRandomPlace(seed)`；Tcl `placer_run_gp -seed N`。

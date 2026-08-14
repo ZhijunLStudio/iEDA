@@ -24,17 +24,21 @@ namespace ipl {
 
 int64_t Grid::obtainAvailableArea()
 {
-  return static_cast<int64_t>(this->grid_area * this->available_ratio) - this->occupied_area - this->fixed_area;
+  return static_cast<int64_t>(this->grid_area * this->available_ratio * this->density_target) - this->occupied_area
+         - this->fixed_area;
 }
 
 int64_t Grid::obtainGridOverflowArea()
 {
-  return std::max(int64_t(0), static_cast<int64_t>(this->occupied_area + this->fixed_area - (this->available_ratio * this->grid_area)));
+  return std::max(int64_t(0), static_cast<int64_t>(this->occupied_area + this->fixed_area
+                                                  - (this->available_ratio * this->density_target * this->grid_area)));
 }
 
 float Grid::obtainGridDensity()
 {
-  return static_cast<float>(this->occupied_area + this->fixed_area) / this->grid_area;
+  // The caller normalizes by available_ratio; density_target is the region
+  // density screen factor (1.0 = global, unchanged default path).
+  return static_cast<float>(this->occupied_area + this->fixed_area) / (this->grid_area * this->density_target);
 }
 
 void GridManager::obtainOverlapGridList(std::vector<Grid*>& grid_list, Rectangle<int32_t>& rect)

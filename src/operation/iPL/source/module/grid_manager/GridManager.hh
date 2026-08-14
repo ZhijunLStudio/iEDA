@@ -32,7 +32,7 @@ class Grid
 public:
   Grid() = default;
   Grid(int32_t r_id, int32_t g_id, int32_t w, int32_t h)
-      : row_idx(r_id), grid_idx(g_id), width(w), height(h), available_ratio(1.0), occupied_area(0), fixed_area(0)
+      : row_idx(r_id), grid_idx(g_id), width(w), height(h), available_ratio(1.0), occupied_area(0), fixed_area(0), density_target(1.0F)
   {
     grid_area = static_cast<int64_t>(w) * static_cast<int64_t>(h);
   }
@@ -48,6 +48,7 @@ public:
     available_ratio = other.available_ratio;
     occupied_area = other.occupied_area;
     fixed_area = other.fixed_area;
+    density_target = other.density_target;
   }
 
   ~Grid() = default;
@@ -65,6 +66,7 @@ public:
       available_ratio = other.available_ratio;
       occupied_area = other.occupied_area;
       fixed_area = other.fixed_area;
+      density_target = other.density_target;
     }
     return (*this);
   }
@@ -86,6 +88,7 @@ public:
   Rectangle<int32_t> shape;
 
   float available_ratio;
+  float density_target;  // region density screen (L1): effective capacity factor, 1.0 = global
   int64_t occupied_area;
   int64_t fixed_area;
   int64_t placeable_area = 0;

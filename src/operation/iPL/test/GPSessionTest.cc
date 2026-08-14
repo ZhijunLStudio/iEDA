@@ -91,6 +91,48 @@ bool initDesign(const std::string& scenario, const std::string& config_path = IP
   return true;
 }
 
+bool initDesignCase(const std::string& scenario, const std::string& case_dir, const std::string& def_path)
+{
+  const std::string output_dir = scenarioRoot(scenario);
+  dmInst->get_config().set_output_path(output_dir);
+  dmInst->get_config().set_tech_lef_path(IPL_TEST_TECH_LEF_PATH);
+  dmInst->get_config().set_lef_paths({IPL_TEST_TECH_LEF_PATH, IPL_TEST_CELLS_LEF_PATH});
+  dmInst->get_config().set_def_path(def_path);
+  std::filesystem::remove_all(output_dir);
+  std::filesystem::create_directories(output_dir);
+
+  if (!dmInst->readLef({IPL_TEST_TECH_LEF_PATH}, true)) {
+    std::cerr << "[FAIL] iDB must load the technology LEF\n";
+    return false;
+  }
+  if (!dmInst->readLef(std::vector<std::string>{IPL_TEST_CELLS_LEF_PATH})) {
+    std::cerr << "[FAIL] iDB must load the standard-cell LEF\n";
+    return false;
+  }
+  if (!dmInst->readDef(def_path)) {
+    std::cerr << "[FAIL] iDB must load the case DEF\n";
+    return false;
+  }
+
+  // The pl_vis case configs carry a stray root-level "info_iter_num" that the
+  // Configurator rejects; strip root keys outside "PL" and load a cleaned copy.
+  {
+    std::ifstream in(case_dir + "/iEDA_config/pl_default_config.json");
+    nlohmann::json config;
+    in >> config;
+    nlohmann::json cleaned = nlohmann::json::object();
+    if (config.contains("PL")) {
+      cleaned["PL"] = config.at("PL");
+    }
+    std::ofstream out(output_dir + "/pl_cleaned_config.json");
+    out << cleaned.dump(2);
+  }
+
+  auto* idb_builder = dmInst->get_idb_builder();
+  iPLAPIInst.initAPI(output_dir + "/pl_cleaned_config.json", idb_builder);
+  return true;
+}
+
 bool dumpCoordinates(const std::string& scenario, const std::string& file_name = "coords.txt")
 {
   // Real solver-published coordinates live on the iPL PlacerDB layer
@@ -929,6 +971,169 @@ int runSeedVary()
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+// L1 degeneration invariant: a screen with target=1.0 (or a cleared screen)
+// must reproduce the plain global path bitwise.
+int runScreenDegenerate()
+{
+  bool ok = true;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save/pl/gp_session_checkpoint.json";
+  auto session = restoreSolverFromCheckpoint(checkpoint_path);
+  ok &= require(session != nullptr, "screen-degenerate: must restore the checkpoint");
+
+  // screen with factor 1.0 = no-op; then a real region screen cleared back to 1.0
+  ipl::GPStateCheckpoint checkpoint;
+  ipl::loadGPCheckpointFile(checkpoint_path, checkpoint);
+  std::vector<ipl::Rectangle<int32_t>> regions;
+  auto core = PlacerDBInst.get_layout()->get_core_shape();
+  regions.push_back(core);
+  session->setRegionDensityTargets(regions, 1.0F);
+  session->buildHotOverflowDensityTargets(0.2F, 0.5F);
+  session->clearRegionDensityTargets();
+
+  const auto advance = session->advanceAcceptedIterations(20);
+  ok &= require(advance == ipl::GPAdvanceOutcome::kBudgetReached, "screen-degenerate: batch must finish");
+  session->publishPlacement();
+  PlacerDBInst.updateTopoManager();
+  PlacerDBInst.updateGridManager();
+  ok &= require(dumpCoordinates("screen_degenerate"), "must dump coordinates");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// L1 trial: density screen vs global vs freeze-mask vs random-freeze, from the
+// same iter-20 checkpoint, 20 iterations each.
+int runScreenTrial()
+{
+  bool ok = true;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save/pl/gp_session_checkpoint.json";
+  ipl::GPStateCheckpoint checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(checkpoint_path, checkpoint), "screen-trial: must load the checkpoint");
+  const size_t record_offset = checkpoint.iteration_records.size();
+
+  const auto run_branch = [&](const std::string& tag, int kind) {
+    auto session = restoreSolverFromCheckpoint(checkpoint_path);
+    if (session == nullptr) {
+      return false;
+    }
+    if (kind == 1) {
+      session->buildHotOverflowDensityTargets(0.2F, 0.5F);  // hot screen, aggressive
+    } else if (kind == 4) {
+      session->buildHotOverflowDensityTargets(0.05F, 0.3F);  // hot screen, focused+mild
+    } else if (kind == 5) {
+      session->buildHotOverflowDensityTargets(0.2F, 0.3F);  // hot screen, broad+mild
+    } else if (kind == 2) {
+      session->buildHotOverflowScope(0.2F, 0.5F);  // hot freeze (mask)
+    } else if (kind == 3) {
+      session->buildRandomScope(134, 0.5F, 42);  // random freeze, same active count as hot-0.2
+    }
+    if (session->advanceAcceptedIterations(20) != ipl::GPAdvanceOutcome::kBudgetReached) {
+      return false;
+    }
+    session->publishPlacement();
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+
+    const auto& all_records = session->iterationRecords();
+    std::filesystem::create_directories(scenarioRoot(tag));
+    std::ofstream out(scenarioRoot(tag) + "/records.txt");
+    for (auto it = all_records.begin() + record_offset; it != all_records.end(); ++it) {
+      out << it->iter << ' ' << it->hpwl << ' ' << it->overflow << ' ' << it->step_length << ' ' << it->gradient_norm << '\n';
+    }
+    return dumpCoordinates(tag);
+  };
+
+  ok &= require(run_branch("screen_trial_global", 0), "screen-trial: global branch");
+  ok &= require(run_branch("screen_trial_hot", 1), "screen-trial: hot screen branch");
+  ok &= require(run_branch("screen_trial_freeze", 2), "screen-trial: hot freeze branch");
+  ok &= require(run_branch("screen_trial_random", 3), "screen-trial: random freeze branch");
+  ok &= require(run_branch("screen_trial_hot05_03", 4), "screen-trial: hot screen 0.05/0.3 branch");
+  ok &= require(run_branch("screen_trial_hot02_03", 5), "screen-trial: hot screen 0.2/0.3 branch");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// Scale experiment (L4): on a real design (pl_vis case), from a fresh
+// iter-60 checkpoint, run: global / hot-freeze / random-freeze / hot-screen.
+int runLocalScale(const std::string& case_dir, int32_t start_iters)
+{
+  bool ok = true;
+  std::cout << "[PROBE] scale case: " << case_dir << std::endl;
+  {
+    auto* design = PlacerDBInst.get_design();
+    std::cout << "[PROBE] placer instances=" << (design ? design->get_instance_list().size() : 0) << std::endl;
+    auto* idb_design = dmInst->get_idb_builder()->get_def_service()->get_design();
+    std::cout << "[PROBE] idb instances=" << (idb_design ? idb_design->get_instance_list()->get_instance_list().size() : 0) << std::endl;
+  }
+
+  {
+    ipl::GPRunRequest start_request;
+    start_request.mode = ipl::GPRunMode::kStart;
+    start_request.accepted_iterations = start_iters;
+    start_request.random_init = true;
+    const auto first = iPLAPIInst.gpRun(start_request);
+    ok &= require(first.ok, "scale: start(N) must succeed");
+    ok &= require(std::filesystem::exists(first.checkpoint_path), "scale: start(N) must auto-save a checkpoint");
+    iPLAPIInst.gpCloseSession();
+  }
+  const std::string checkpoint_path = scenarioRoot("local_scale") + "/pl/gp_session_checkpoint.json";
+  ipl::GPStateCheckpoint checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(checkpoint_path, checkpoint), "scale: must load the iter-60 checkpoint");
+  const size_t record_offset = checkpoint.iteration_records.size();
+
+  const auto run_branch = [&](const std::string& tag, int kind) {
+    auto session = restoreSolverFromCheckpoint(checkpoint_path);
+    if (session == nullptr) {
+      return false;
+    }
+    size_t active_count = 0;
+    if (kind == 1) {
+      session->buildHotOverflowScope(0.2F, 0.5F);
+      for (float coeff : session->movementCoeffs()) {
+        active_count += (coeff >= 1.0F) ? 1 : 0;
+      }
+    } else if (kind == 2) {
+      session->buildHotOverflowDensityTargets(0.05F, 0.3F);
+    } else if (kind == 3) {
+      auto probe = restoreSolverFromCheckpoint(checkpoint_path);
+      if (probe == nullptr) {
+        return false;
+      }
+      probe->buildHotOverflowScope(0.2F, 0.5F);
+      for (float coeff : probe->movementCoeffs()) {
+        active_count += (coeff >= 1.0F) ? 1 : 0;
+      }
+      session->buildRandomScope(active_count, 0.5F, 42);
+    }
+    if (kind == 1 || kind == 3) {
+      dumpScopeStats(session->movementCoeffs(), tag);
+    }
+    if (session->advanceAcceptedIterations(20) != ipl::GPAdvanceOutcome::kBudgetReached) {
+      return false;
+    }
+    session->publishPlacement();
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+
+    const auto& all_records = session->iterationRecords();
+    std::filesystem::create_directories(scenarioRoot(tag));
+    std::ofstream out(scenarioRoot(tag) + "/records.txt");
+    for (auto it = all_records.begin() + record_offset; it != all_records.end(); ++it) {
+      out << it->iter << ' ' << it->hpwl << ' ' << it->overflow << ' ' << it->step_length << ' ' << it->gradient_norm << '\n';
+    }
+    return dumpCoordinates(tag);
+  };
+
+  ok &= require(run_branch("scale_global", 0), "scale: global branch");
+  ok &= require(run_branch("scale_freeze", 1), "scale: hot-freeze branch");
+  ok &= require(run_branch("scale_screen", 2), "scale: hot-screen branch");
+  ok &= require(run_branch("scale_random", 3), "scale: random-freeze branch");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 int runValidate()
 {
   bool ok = true;
@@ -1016,6 +1221,8 @@ int main(int argc, char** argv)
     if (!initDesign(scenario, IPL_TEST_CONFIG_PATH_MODIFIED)) {
       return EXIT_FAILURE;
     }
+  } else if (scenario == "local_scale") {
+    // init is handled in the dispatch below (needs --case-dir first)
   } else if (!initDesign(scenario)) {
     return EXIT_FAILURE;
   }
@@ -1088,6 +1295,40 @@ int main(int argc, char** argv)
   }
   if (scenario == "seed_vary") {
     return runSeedVary();
+  }
+  if (scenario == "local_scale") {
+    std::string case_dir;
+    for (int i = 2; i < argc; i++) {
+      if (std::string(argv[i]) == "--case-dir" && i + 1 < argc) {
+        case_dir = argv[i + 1];
+      }
+    }
+    if (case_dir.empty()) {
+      std::cerr << "local_scale requires --case-dir <path>\n";
+      return EXIT_FAILURE;
+    }
+    std::string def_path = case_dir + "/iPL_in.def";
+    for (int i = 2; i < argc; i++) {
+      if (std::string(argv[i]) == "--def-path" && i + 1 < argc) {
+        def_path = argv[i + 1];
+      }
+    }
+    int32_t start_iters = 60;
+    for (int i = 2; i < argc; i++) {
+      if (std::string(argv[i]) == "--start-iters" && i + 1 < argc) {
+        start_iters = std::atoi(argv[i + 1]);
+      }
+    }
+    if (!initDesignCase("local_scale", case_dir, def_path)) {
+      return EXIT_FAILURE;
+    }
+    return runLocalScale(case_dir, start_iters);
+  }
+  if (scenario == "screen_degenerate") {
+    return runScreenDegenerate();
+  }
+  if (scenario == "screen_trial") {
+    return runScreenTrial();
   }
   if (scenario == "resume_inproc") {
     return runResumeInProc();
