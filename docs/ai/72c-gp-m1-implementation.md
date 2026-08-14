@@ -240,3 +240,35 @@ C++ API：`iPLAPIInst.gpRun(GPRunRequest{mode, accepted_iterations, random_init,
 - M3：`relinearize`（外部坐标修改后的重建）；依赖 DesignRevision 语义，与 70 号文档阶段一同步。
 - M4：局部 GP（Active/Halo/Context）。
 - 72b CLI 的 sessions/ lineage 目录布局、`--seed` 管线、原子 `latest.json` 别名。
+
+## 15. 完整性补强（2026-08-14 第二轮：缺口 1+2）
+
+针对自审出的 resume 缺口补强，全部通过验收：
+
+### 15.1 配置指纹
+
+- checkpoint 新增 `config_fingerprint`：NesterovPlaceConfig 全部数值路径相关字段的规范化 JSON（max_phi_coef 除外——它是会话态，单独持久化）。
+- `restoreCheckpoint` 在**触碰任何求解状态之前**校验指纹，不匹配直接拒绝。
+- 测试 `mismatch`：修改版配置（target_overflow 0.1→0.15）resume 标准配置的 checkpoint → `kRejected`，reason 含 "fingerprint"，无残留会话。
+
+### 15.2 可变状态持久化补全
+
+- 新增 per-net `weight` + `delta_weight`（_nNet_list 顺序），恢复时逐网写回。
+- **拥塞模式**：`gp_congestion_config.json`（is_congestion_effort=1）下 `seg40_cg` ≡ `ckpt_save_cg + ckpt_resume_cg` **逐位一致**（含 evalRouteCap/密度膨胀路径）。
+- **timing/max-wirelength 权重**：`opt_overflow_list` 无 JSON 配置键（仅 C++ `add_opt_target_overflow` 可达）→ 经配置可达的路径中权重恒为 1.0；net 权重持久化已覆盖该可变状态，但 timing 开启时的数值等价在列表可配置前**无法端到端验证**（如实记录，未声称已验证）。
+
+### 15.3 多线程容差回归（超出预期：逐位一致）
+
+- `gp_multithread_config.json`（num_threads=4）：`seg40_mt` 重复运行**逐位一致**（固定线程数下 OpenMP 归约确定性）；`seg40_mt` ≡ `ckpt_save_mt + ckpt_resume_mt` **逐位一致**。
+- 结论比 72 号文档 §12 预期的"固定线程数容差回归"更强：本设计+固定线程数下可直接逐位判定。
+
+### 15.4 两条终止路径测试（72 号文档 M1 验收项）
+
+| 场景 | 构造 | 断言结果 |
+|---|---|---|
+| `conv_mid`（批次内自然收敛） | start(20) + advance(1980)，收敛发生在批次中段 | `stop_reason=kTargetReached`、`executed < requested`、会话终结、最终坐标与 legacy 收敛布局**逐位一致** |
+| `diverge`（发散/非法度量不杀进程） | `min_phi=1e38/max_phi=3e38` → 密度惩罚第 3 次迭代溢出 | `ok=false`、`stop_reason=kInvalidMetric`（reason "iteration density penalty must be finite…"）、无残留会话、同配置重跑结果可复现、随后 advance 被干净拒绝（Worker 存活） |
+
+### 15.5 测试矩阵现状
+
+`ipl_gp_session_test` 19 场景全部 PASS；`ipl_run_gp_result_test` 1276 PASS 无回归。测试配置位于 `src/operation/iPL/test/configs/`（gp_congestion / gp_divergence / gp_modified / gp_multithread）。

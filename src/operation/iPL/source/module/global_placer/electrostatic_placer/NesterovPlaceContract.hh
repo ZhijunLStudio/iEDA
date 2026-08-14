@@ -92,6 +92,17 @@ struct GPStateCheckpoint
   float density_penalty = 0.0F;
   bool is_diverged = false;
 
+  // Per-net weights (in _nNet_list order). Only mutated by max-wirelength /
+  // timing net-weight updates (opt_overflow_list), which is empty in the default
+  // config surface; persisted regardless so any weight state resumes exactly.
+  std::vector<float> net_weights;
+  std::vector<float> net_delta_weights;
+
+  // Effective GP config fingerprint: canonical serialization of every
+  // NesterovPlaceConfig value that affects the numerical path. Mismatch on
+  // restore is rejected before any solver state is touched.
+  std::string config_fingerprint;
+
   // Runtime config mutation (the only NesterovPlaceConfig field mutated mid-run).
   float max_phi_coef = 1.05F;
 

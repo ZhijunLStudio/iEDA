@@ -53,8 +53,12 @@ TODO: ics55 power/DRC report scripts; sky130 IR-drop PDN; nangate45 gcd DRC clos
 - GP session tool (docs/ai/72-72c, M1+M2 done 2026-08-14): `placer_run_gp -mode {start|advance|resume|close}
   -iterations N -random_init 0|1 [-checkpoint <file>]` segments Nesterov GP into accepted-iteration batches;
   every budget-limited batch auto-saves `<output>/pl/gp_session_checkpoint.json` (atomic), resume works
-  cross-process. Legacy `placer_run_gp` (no args) unchanged. Equivalence tests:
-  `build/bin/ipl_gp_session_test --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|legacy|full|validate}`
-  (compare /tmp/ipl_gp_session_test/<scenario>/coords.txt + records.txt; 40 ≡ 20+resume 20 bitwise).
-  iPL test inputs point at benchmarks/results/flow_20260814_gcd/gcd_sky130_a/workspace/result/iFP_result.def
+  cross-process (validates a config fingerprint + instance-name topology fingerprint). Legacy
+  `placer_run_gp` (no args) unchanged. Equivalence tests (19 scenarios, incl. congestion-enabled and
+  4-thread variants, all bitwise-identical vs continuous runs):
+  `build/bin/ipl_gp_session_test --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|
+  seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|legacy|full|validate}`
+  (compare /tmp/ipl_gp_session_test/<scenario>/coords.txt + records.txt). Test configs live in
+  src/operation/iPL/test/configs/. iPL test inputs point at
+  benchmarks/results/flow_20260814_gcd/gcd_sky130_a/workspace/result/iFP_result.def
   (the benchmarks/designs/gcd_sky130_a/def/gcd_place.def fixture only exists on lxq's machine).

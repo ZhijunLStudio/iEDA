@@ -99,6 +99,7 @@ class NesterovPlace
   // ---- checkpoint persistence (M2) ----
   GPStateCheckpoint captureCheckpoint() const;
   bool restoreCheckpoint(const GPStateCheckpoint& checkpoint);
+  std::string computeConfigFingerprint() const;
 
  private:
   NesterovPlaceConfig _nes_config;

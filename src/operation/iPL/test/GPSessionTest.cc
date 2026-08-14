@@ -61,7 +61,7 @@ auto scenarioRoot(const std::string& scenario) -> std::string
   return "/tmp/ipl_gp_session_test/" + scenario;
 }
 
-bool initDesign(const std::string& scenario)
+bool initDesign(const std::string& scenario, const std::string& config_path = IPL_TEST_CONFIG_PATH)
 {
   const std::string output_dir = scenarioRoot(scenario);
   dmInst->get_config().set_output_path(output_dir);
@@ -85,7 +85,7 @@ bool initDesign(const std::string& scenario)
   }
 
   auto* idb_builder = dmInst->get_idb_builder();
-  iPLAPIInst.initAPI(IPL_TEST_CONFIG_PATH, idb_builder);
+  iPLAPIInst.initAPI(config_path, idb_builder);
   return true;
 }
 
@@ -305,6 +305,192 @@ int runResumeInProc()
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+// ---- gap-1 / gap-2 scenarios ----
+
+int runSeg40Congestion()
+{
+  bool ok = true;
+  ipl::GPRunRequest request;
+  request.mode = ipl::GPRunMode::kStart;
+  request.accepted_iterations = 40;
+  request.random_init = true;
+  const auto result = iPLAPIInst.gpRun(request);
+  ok &= require(result.ok, "congestion-enabled single batch (start, 40) must succeed");
+  ok &= require(result.start_iteration == 1 && result.end_iteration == 40 && result.executed_iterations == 40,
+                "congestion-enabled batch must execute iterations 1-40");
+  ok &= require(dumpCoordinates("seg40_cg"), "must dump final coordinates");
+  ok &= require(dumpRecords(result.iteration_records, "seg40_cg"), "must dump iteration records");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runCheckpointSaveCongestion()
+{
+  bool ok = true;
+  ipl::GPRunRequest request;
+  request.mode = ipl::GPRunMode::kStart;
+  request.accepted_iterations = 20;
+  request.random_init = true;
+  const auto result = iPLAPIInst.gpRun(request);
+  ok &= require(result.ok, "congestion-enabled checkpoint-save batch must succeed");
+  ok &= require(result.session_active && std::filesystem::exists(result.checkpoint_path),
+                "congestion-enabled batch must auto-save a checkpoint");
+  ok &= require(dumpCoordinates("ckpt_save_cg"), "must dump mid-run coordinates");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runCheckpointResumeCongestion()
+{
+  bool ok = true;
+  ipl::GPRunRequest request;
+  request.mode = ipl::GPRunMode::kResume;
+  request.accepted_iterations = 20;
+  request.checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save_cg/pl/gp_session_checkpoint.json";
+  const auto result = iPLAPIInst.gpRun(request);
+  ok &= require(result.ok, "congestion-enabled cross-process resume must succeed");
+  ok &= require(result.start_iteration == 21 && result.end_iteration == 40, "resumed batch must run iterations 21-40");
+  ok &= require(dumpCoordinates("ckpt_resume_cg"), "must dump final coordinates");
+  ok &= require(dumpRecords(result.iteration_records, "ckpt_resume_cg"), "must dump resumed batch records");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runConvergeMid()
+{
+  bool ok = true;
+  ipl::GPRunRequest start_request;
+  start_request.mode = ipl::GPRunMode::kStart;
+  start_request.accepted_iterations = 20;
+  start_request.random_init = true;
+  const auto first = iPLAPIInst.gpRun(start_request);
+  ok &= require(first.ok, "first batch (start, 20) must succeed");
+
+  ipl::GPRunRequest advance_request;
+  advance_request.mode = ipl::GPRunMode::kAdvance;
+  advance_request.accepted_iterations = 1980;  // max_iter - 20; convergence fires mid-batch
+  const auto second = iPLAPIInst.gpRun(advance_request);
+  ok &= require(second.ok, "advance batch must succeed");
+  ok &= require(!second.session_active, "natural convergence must terminate the session");
+  ok &= require(second.stop_reason == ipl::GPStopReason::kTargetReached,
+                "mid-batch natural convergence must report kTargetReached");
+  ok &= require(second.executed_iterations < second.requested_iterations,
+                "converged batch must execute fewer iterations than requested");
+  ok &= require(second.start_iteration == 21 && second.end_iteration == 20 + second.executed_iterations,
+                "iteration range must reflect the early stop");
+  ok &= require(dumpCoordinates("conv_mid"), "must dump converged coordinates");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runDiverge()
+{
+  bool ok = true;
+
+  ipl::GPRunRequest request;
+  request.mode = ipl::GPRunMode::kStart;
+  request.accepted_iterations = 50;
+  request.random_init = true;
+  const auto result = iPLAPIInst.gpRun(request);
+  std::cout << "[PROBE] divergent run: ok=" << result.ok << " stop_reason=" << static_cast<int>(result.stop_reason)
+            << " reason='" << result.reason << "'" << std::endl;
+  ok &= require(!result.ok, "divergent config must fail the run");
+  ok &= require(!result.session_active, "divergent run must not leave a session behind");
+  ok &= require(result.stop_reason == ipl::GPStopReason::kDiverged || result.stop_reason == ipl::GPStopReason::kInvalidMetric,
+                "divergent run must report kDiverged or kInvalidMetric");
+  ok &= require(!iPLAPIInst.gpSessionActive(), "worker must stay alive with no active session after divergence");
+
+  // Determinism + liveness: the same run fails again the same way, and the API
+  // still answers subsequent requests instead of terminating the process.
+  const auto again = iPLAPIInst.gpRun(request);
+  ok &= require(!again.ok && again.stop_reason == result.stop_reason, "divergent run must be reproducible");
+
+  ipl::GPRunRequest advance_request;
+  advance_request.mode = ipl::GPRunMode::kAdvance;
+  const auto advance = iPLAPIInst.gpRun(advance_request);
+  ok &= require(!advance.ok && advance.stop_reason == ipl::GPStopReason::kRejected,
+                "advance after divergence must be cleanly rejected");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runMismatch()
+{
+  bool ok = true;
+  // This process loads a MODIFIED placer config (different target_overflow);
+  // resuming the checkpoint saved under the standard config must be rejected by
+  // the config fingerprint before any solver state is touched.
+  ipl::GPRunRequest request;
+  request.mode = ipl::GPRunMode::kResume;
+  request.accepted_iterations = 20;
+  request.checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save/pl/gp_session_checkpoint.json";
+  const auto result = iPLAPIInst.gpRun(request);
+  ok &= require(!result.ok && result.stop_reason == ipl::GPStopReason::kRejected,
+                "resume under a modified config must be rejected");
+  ok &= require(!iPLAPIInst.gpSessionActive(), "rejected mismatch resume must not leave a session behind");
+  ok &= require(result.reason.find("fingerprint") != std::string::npos, "rejection reason must mention the config fingerprint");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runSeg40MultiThread()
+{
+  bool ok = true;
+  ipl::GPRunRequest request;
+  request.mode = ipl::GPRunMode::kStart;
+  request.accepted_iterations = 40;
+  request.random_init = true;
+  const auto result = iPLAPIInst.gpRun(request);
+  ok &= require(result.ok, "multithread single batch (start, 40) must succeed");
+  ok &= require(result.start_iteration == 1 && result.end_iteration == 40 && result.executed_iterations == 40,
+                "multithread batch must execute iterations 1-40");
+  ok &= require(dumpCoordinates("seg40_mt"), "must dump final coordinates");
+  ok &= require(dumpRecords(result.iteration_records, "seg40_mt"), "must dump iteration records");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runCheckpointSaveMultiThread()
+{
+  bool ok = true;
+  ipl::GPRunRequest request;
+  request.mode = ipl::GPRunMode::kStart;
+  request.accepted_iterations = 20;
+  request.random_init = true;
+  const auto result = iPLAPIInst.gpRun(request);
+  ok &= require(result.ok, "multithread checkpoint-save batch must succeed");
+  ok &= require(result.session_active && std::filesystem::exists(result.checkpoint_path),
+                "multithread batch must auto-save a checkpoint");
+  ok &= require(dumpCoordinates("ckpt_save_mt"), "must dump mid-run coordinates");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runCheckpointResumeMultiThread()
+{
+  bool ok = true;
+  ipl::GPRunRequest request;
+  request.mode = ipl::GPRunMode::kResume;
+  request.accepted_iterations = 20;
+  request.checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save_mt/pl/gp_session_checkpoint.json";
+  const auto result = iPLAPIInst.gpRun(request);
+  ok &= require(result.ok, "multithread cross-process resume must succeed");
+  ok &= require(result.start_iteration == 21 && result.end_iteration == 40, "resumed batch must run iterations 21-40");
+  ok &= require(dumpCoordinates("ckpt_resume_mt"), "must dump final coordinates");
+  ok &= require(dumpRecords(result.iteration_records, "ckpt_resume_mt"), "must dump resumed batch records");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 int runValidate()
 {
   bool ok = true;
@@ -369,14 +555,30 @@ int runValidate()
 int main(int argc, char** argv)
 {
   if (argc < 2) {
-    std::cerr << "usage: " << argv[0]
-              << " --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|legacy|full|validate}\n";
+    std::cerr << "usage: " << argv[0] << " --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|"
+              << "seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|legacy|full|validate}\n";
     return EXIT_FAILURE;
   }
   const std::string arg = argv[1];
   const std::string scenario = (arg.rfind("--scenario=", 0) == 0) ? arg.substr(11) : argv[2];
 
-  if (!initDesign(scenario)) {
+  if (scenario == "seg40_cg" || scenario == "ckpt_save_cg" || scenario == "ckpt_resume_cg") {
+    if (!initDesign(scenario, IPL_TEST_CONFIG_PATH_CONGESTION)) {
+      return EXIT_FAILURE;
+    }
+  } else if (scenario == "seg40_mt" || scenario == "ckpt_save_mt" || scenario == "ckpt_resume_mt") {
+    if (!initDesign(scenario, IPL_TEST_CONFIG_PATH_MULTITHREAD)) {
+      return EXIT_FAILURE;
+    }
+  } else if (scenario == "diverge") {
+    if (!initDesign(scenario, IPL_TEST_CONFIG_PATH_DIVERGENCE)) {
+      return EXIT_FAILURE;
+    }
+  } else if (scenario == "mismatch") {
+    if (!initDesign(scenario, IPL_TEST_CONFIG_PATH_MODIFIED)) {
+      return EXIT_FAILURE;
+    }
+  } else if (!initDesign(scenario)) {
     return EXIT_FAILURE;
   }
 
@@ -397,6 +599,33 @@ int main(int argc, char** argv)
   }
   if (scenario == "ckpt_resume") {
     return runCheckpointResume();
+  }
+  if (scenario == "seg40_cg") {
+    return runSeg40Congestion();
+  }
+  if (scenario == "ckpt_save_cg") {
+    return runCheckpointSaveCongestion();
+  }
+  if (scenario == "ckpt_resume_cg") {
+    return runCheckpointResumeCongestion();
+  }
+  if (scenario == "seg40_mt") {
+    return runSeg40MultiThread();
+  }
+  if (scenario == "ckpt_save_mt") {
+    return runCheckpointSaveMultiThread();
+  }
+  if (scenario == "ckpt_resume_mt") {
+    return runCheckpointResumeMultiThread();
+  }
+  if (scenario == "conv_mid") {
+    return runConvergeMid();
+  }
+  if (scenario == "diverge") {
+    return runDiverge();
+  }
+  if (scenario == "mismatch") {
+    return runMismatch();
   }
   if (scenario == "resume_inproc") {
     return runResumeInProc();

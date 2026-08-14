@@ -1038,7 +1038,7 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
     PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction);
     _gp_session_state.reset();
     result.stop_reason = GPStopReason::kRejected;
-    result.reason = "gp checkpoint does not match the current design";
+    result.reason = "gp checkpoint rejected: config fingerprint or design topology mismatch";
     return result;
   }
   // Batch record slicing continues after the restored records.

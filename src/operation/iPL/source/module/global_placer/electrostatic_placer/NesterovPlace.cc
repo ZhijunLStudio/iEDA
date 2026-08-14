@@ -1832,6 +1832,14 @@ GPStateCheckpoint NesterovPlace::captureCheckpoint() const
   checkpoint.is_diverged = _nes_database->_is_diverged;
   checkpoint.max_phi_coef = _nes_config.get_max_phi_coef();
 
+  checkpoint.net_weights.reserve(_nes_database->_nNet_list.size());
+  checkpoint.net_delta_weights.reserve(_nes_database->_nNet_list.size());
+  for (auto* n_net : _nes_database->_nNet_list) {
+    checkpoint.net_weights.push_back(n_net->get_weight());
+    checkpoint.net_delta_weights.push_back(n_net->get_delta_weight());
+  }
+  checkpoint.config_fingerprint = computeConfigFingerprint();
+
   checkpoint.best_position_list = _best_position_list;
   checkpoint.cur_position_list = _cur_position_list;
   checkpoint.best_density_scale_list = _best_density_scale_list;
@@ -1850,8 +1858,50 @@ GPStateCheckpoint NesterovPlace::captureCheckpoint() const
   return checkpoint;
 }
 
+std::string NesterovPlace::computeConfigFingerprint() const
+{
+  // Canonical serialization of every NesterovPlaceConfig value that can affect
+  // the numerical path. Keys are sorted by nlohmann::json (std::map backing) so
+  // the string is order-independent. bin_cnt_x/bin_cnt_y are the EFFECTIVE
+  // (post-adaptive-recalc) values, which is what the solver actually uses.
+  // max_phi_coef is EXCLUDED: it is runtime-mutated session state, persisted
+  // separately in GPStateCheckpoint::max_phi_coef.
+  const nlohmann::json fingerprint = nlohmann::json{
+      {"thread_num", _nes_config.get_thread_num()},
+      {"info_iter_num", _nes_config.get_info_iter_num()},
+      {"init_wirelength_coef", _nes_config.get_init_wirelength_coef()},
+      {"reference_hpwl", _nes_config.get_reference_hpwl()},
+      {"min_wirelength_force_bar", _nes_config.get_min_wirelength_force_bar()},
+      {"is_adaptive_bin", _nes_config.isAdaptiveBin()},
+      {"target_density", _nes_config.get_target_density()},
+      {"bin_cnt_x", _nes_config.get_bin_cnt_x()},
+      {"bin_cnt_y", _nes_config.get_bin_cnt_y()},
+      {"min_phi_coef", _nes_config.get_min_phi_coef()},
+      {"max_iter", _nes_config.get_max_iter()},
+      {"max_back_track", _nes_config.get_max_back_track()},
+      {"target_overflow", _nes_config.get_target_overflow()},
+      {"initial_prev_coordi_update_coef", _nes_config.get_initial_prev_coordi_update_coef()},
+      {"min_precondition", _nes_config.get_min_precondition()},
+      {"init_density_penalty", _nes_config.get_init_density_penalty()},
+      {"is_opt_max_wirelength", _nes_config.isOptMaxWirelength()},
+      {"is_opt_timing", _nes_config.isOptTiming()},
+      {"is_opt_congestion", _nes_config.isOptCongestion()},
+      {"max_net_wirelength", _nes_config.get_max_net_wirelength()},
+      {"global_padding", _nes_config.get_global_padding()},
+      {"opt_overflow_list", _nes_config.get_opt_overflow_list()},
+  };
+  return fingerprint.dump();
+}
+
 bool NesterovPlace::restoreCheckpoint(const GPStateCheckpoint& checkpoint)
 {
+  // Config fingerprint first: resuming under a different placer config silently
+  // produces a meaningless numerical path, so reject before touching state.
+  if (checkpoint.config_fingerprint != computeConfigFingerprint()) {
+    LOG_ERROR << "[GP checkpoint] config fingerprint mismatch; resume requires the same placer config that saved the checkpoint";
+    return false;
+  }
+
   // Topology fingerprint: the placable list must match the checkpoint exactly.
   _placable_inst_list = this->obtianPlacableNesInstanceList();
   if (_placable_inst_list.size() != checkpoint.instance_names.size()
@@ -1901,6 +1951,19 @@ bool NesterovPlace::restoreCheckpoint(const GPStateCheckpoint& checkpoint)
   _nes_database->_is_diverged = checkpoint.is_diverged;
   initBaseWirelengthCoef();  // deterministic rebuild (config + grid shape)
   _nes_config.set_max_phi_coef(checkpoint.max_phi_coef);
+
+  // Per-net weights (max-wirelength / timing net-weight updates; empty
+  // opt_overflow_list in the default config surface means these are usually 1.0,
+  // but any mutated state must resume exactly).
+  if (checkpoint.net_weights.size() != _nes_database->_nNet_list.size()) {
+    LOG_ERROR << "[GP checkpoint] net weight count mismatch: design has " << _nes_database->_nNet_list.size()
+              << " nets, checkpoint has " << checkpoint.net_weights.size();
+    return false;
+  }
+  for (size_t i = 0; i < _nes_database->_nNet_list.size(); ++i) {
+    _nes_database->_nNet_list[i]->set_weight(checkpoint.net_weights[i]);
+    _nes_database->_nNet_list[i]->set_delta_weight(checkpoint.net_delta_weights[i]);
+  }
 
   // Grid.fixed_area is written once by initGridFixedArea() during the normal
   // start path and is NOT cleared by clearAllOccupiedArea(); both the overflow
@@ -2036,6 +2099,9 @@ void to_json(nlohmann::json& json_obj, const GPStateCheckpoint& checkpoint)
       {"wirelength_coef", checkpoint.wirelength_coef},
       {"density_penalty", checkpoint.density_penalty},
       {"is_diverged", checkpoint.is_diverged},
+      {"net_weights", checkpoint.net_weights},
+      {"net_delta_weights", checkpoint.net_delta_weights},
+      {"config_fingerprint", checkpoint.config_fingerprint},
       {"max_phi_coef", checkpoint.max_phi_coef},
       {"instance_names", checkpoint.instance_names},
       {"instance_density_coords", checkpoint.instance_density_coords},
@@ -2076,6 +2142,9 @@ void from_json(const nlohmann::json& json_obj, GPStateCheckpoint& checkpoint)
   checkpoint.wirelength_coef = json_obj.at("wirelength_coef").get<float>();
   checkpoint.density_penalty = json_obj.at("density_penalty").get<float>();
   checkpoint.is_diverged = json_obj.at("is_diverged").get<bool>();
+  checkpoint.net_weights = json_obj.at("net_weights").get<std::vector<float>>();
+  checkpoint.net_delta_weights = json_obj.at("net_delta_weights").get<std::vector<float>>();
+  checkpoint.config_fingerprint = json_obj.at("config_fingerprint").get<std::string>();
   checkpoint.max_phi_coef = json_obj.at("max_phi_coef").get<float>();
   checkpoint.instance_names = json_obj.at("instance_names").get<std::vector<std::string>>();
   checkpoint.instance_density_coords = json_obj.at("instance_density_coords").get<std::vector<Point<int32_t>>>();

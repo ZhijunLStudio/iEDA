@@ -67,7 +67,7 @@ class NesterovPlaceConfig
   bool isOptCongestion() const { return _is_opt_congestion;}
   int32_t get_max_net_wirelength() const { return _max_net_wirelength;}
   int32_t get_global_padding() const { return _global_padding; }
-  const std::vector<float>& get_opt_overflow_list() { return _opt_overflow_list; }
+  const std::vector<float>& get_opt_overflow_list() const { return _opt_overflow_list; }
 
   bool validate(std::string* reason = nullptr) const
   {

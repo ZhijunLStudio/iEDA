@@ -136,6 +136,10 @@ target_compile_definitions(
   ipl_gp_session_test
   PRIVATE
     IPL_TEST_CONFIG_PATH="${CMAKE_SOURCE_DIR}/benchmarks/designs/aes_sky130_a/workspace/iEDA_config/pl_default_config.json"
+    IPL_TEST_CONFIG_PATH_CONGESTION="${CMAKE_SOURCE_DIR}/src/operation/iPL/test/configs/gp_congestion_config.json"
+    IPL_TEST_CONFIG_PATH_DIVERGENCE="${CMAKE_SOURCE_DIR}/src/operation/iPL/test/configs/gp_divergence_config.json"
+    IPL_TEST_CONFIG_PATH_MODIFIED="${CMAKE_SOURCE_DIR}/src/operation/iPL/test/configs/gp_modified_config.json"
+    IPL_TEST_CONFIG_PATH_MULTITHREAD="${CMAKE_SOURCE_DIR}/src/operation/iPL/test/configs/gp_multithread_config.json"
     IPL_TEST_TECH_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd.tlef"
     IPL_TEST_CELLS_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef"
     IPL_TEST_DEF_PATH="${CMAKE_SOURCE_DIR}/benchmarks/results/flow_20260814_gcd/gcd_sky130_a/workspace/result/iFP_result.def"
@@ -147,6 +151,15 @@ add_test(NAME ipl_gp_session_observe COMMAND ipl_gp_session_test --scenario obse
 add_test(NAME ipl_gp_session_ckpt_save COMMAND ipl_gp_session_test --scenario ckpt_save)
 add_test(NAME ipl_gp_session_ckpt_resume COMMAND ipl_gp_session_test --scenario ckpt_resume)
 add_test(NAME ipl_gp_session_resume_inproc COMMAND ipl_gp_session_test --scenario resume_inproc)
+add_test(NAME ipl_gp_session_seg40_cg COMMAND ipl_gp_session_test --scenario seg40_cg)
+add_test(NAME ipl_gp_session_ckpt_save_cg COMMAND ipl_gp_session_test --scenario ckpt_save_cg)
+add_test(NAME ipl_gp_session_ckpt_resume_cg COMMAND ipl_gp_session_test --scenario ckpt_resume_cg)
+add_test(NAME ipl_gp_session_seg40_mt COMMAND ipl_gp_session_test --scenario seg40_mt)
+add_test(NAME ipl_gp_session_ckpt_save_mt COMMAND ipl_gp_session_test --scenario ckpt_save_mt)
+add_test(NAME ipl_gp_session_ckpt_resume_mt COMMAND ipl_gp_session_test --scenario ckpt_resume_mt)
+add_test(NAME ipl_gp_session_conv_mid COMMAND ipl_gp_session_test --scenario conv_mid)
+add_test(NAME ipl_gp_session_diverge COMMAND ipl_gp_session_test --scenario diverge)
+add_test(NAME ipl_gp_session_mismatch COMMAND ipl_gp_session_test --scenario mismatch)
 add_test(NAME ipl_gp_session_legacy COMMAND ipl_gp_session_test --scenario legacy)
 add_test(NAME ipl_gp_session_full COMMAND ipl_gp_session_test --scenario full)
 add_test(NAME ipl_gp_session_validate COMMAND ipl_gp_session_test --scenario validate)
