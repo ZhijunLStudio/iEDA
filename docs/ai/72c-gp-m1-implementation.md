@@ -303,6 +303,22 @@ C++ API：`iPLAPIInst.gpRun(GPRunRequest{mode, accepted_iterations, random_init,
 - **结论**：① 热点 bin 图选择不比同规模随机范围好 → "怎么找局部"的图工程在当前 GP 粒度上**不产生价值**；② 局部与全局的优劣随求解状态翻转 → 收益不稳健。按 70 号文档 §13.3 的证伪框架，"graph-scoped intervention 有效"假设**未被支持**。局部细化应放在离散阶段（LG/DP），GP 层面默认不做局部。
 - **因此不对外暴露** `-scope local`；范围机制保留为已验证的实验工具（`buildHotOverflowScope`/`buildRandomScope` + 移动系数），供未来按设计重新评估。
 
+## 20. 多 PDK 规模验证（2026-08-14 第五轮）
+
+数据源：`/mnt/usb20t/PCL-155/`（本机没有 iDATA；有完整 T28 与 superblue16 用例）。大 DEF 用 `test/configs/def2placement_1000.py` 的 strip 模式去除布线段（T28 的 SPECIALNETS 电源网格在 iDB 解析时单线程 >10 分钟，strip 后 12 秒）。
+
+| 设计(单元数, PDK) | global | hot-freeze | hot-screen | random-freeze |
+|---|---|---|---|---|
+| gcd 273 (sky130 HD) | 5.666M/0.700 | 5.617M/0.694 | 5.69M/0.71 | 5.618M/0.690 |
+| s1238 829 / apb4_timer 3.5k / picorv32 29k / aes 64k (sky130 HD) | 见 §19 | 微好/持平 | 差(大设计 +22~28% hpwl) | ≈hot |
+| **asic_top 321k (tsmc 28nm, iter60)** | 3405.8M/0.9625 | 3335.8M(-2.0%)/0.9625 | 3513.6M(+3.2%)/0.9829 | 3292.5M(-3.3%)/0.9661 |
+| **superblue16 981k (45nm, iter30)** | 173.7G/0.8832 | 183.8G(+5.8%)/0.9200 | 174.1G/0.8888 | 182.4G(+5.0%)/0.9188 |
+
+**跨 PDK 结论**：
+1. **四种 GP 模式在三个 PDK（sky130/tsmc28/superblue45）上全部机械可用**：start/checkpoint 落盘/恢复/global/local 分支都正常跑通（"是否奏效"的答案：机制可用）。
+2. **冻结式局部更新的收益在 28nm 321k 设计上复现**（-2%~-3.3% hpwl），但 981k superblue16 上为负——原因明确：iter30 时 89% 的单元都落在"最热 20% bin"里（整个芯片还在铺开期），"局部"退化成"冻结 10% 的全局"，自然劣于全局。**局部 GP 只在热点真正局部化的阶段有意义**（picorv32@300、t28@60），早期铺开期不该用。
+3. hot ≈ random、screen 差，跨 PDK 一致。
+
 ## 19. L1 密度屏 + L4 多设计规模实验（2026-08-14 第四轮，实验裁决）
 
 **L1 实现（density screen）**：`Grid::density_target`（默认 1.0，逐位不变）；`setRegionDensityTargets(regions, factor)` / `clearRegionDensityTargets()` / `buildHotOverflowDensityTargets(top_ratio, factor)`（最热溢出 bin 打屏）。有效容量 = available_ratio × density_target × grid_area，factor<1 让区域"感觉"过满、密度场把 cell 推出去——软引导，不冻结任何东西。退化等价已验证（全 1 屏 ≡ 全局逐位一致）。

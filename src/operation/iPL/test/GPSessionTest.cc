@@ -39,6 +39,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -91,21 +92,23 @@ bool initDesign(const std::string& scenario, const std::string& config_path = IP
   return true;
 }
 
-bool initDesignCase(const std::string& scenario, const std::string& case_dir, const std::string& def_path)
+bool initDesignCase(const std::string& scenario, const std::string& case_dir, const std::string& def_path,
+                      const std::string& tlef_path, const std::vector<std::string>& lef_paths,
+                      const std::string& config_path)
 {
   const std::string output_dir = scenarioRoot(scenario);
   dmInst->get_config().set_output_path(output_dir);
-  dmInst->get_config().set_tech_lef_path(IPL_TEST_TECH_LEF_PATH);
-  dmInst->get_config().set_lef_paths({IPL_TEST_TECH_LEF_PATH, IPL_TEST_CELLS_LEF_PATH});
+  dmInst->get_config().set_tech_lef_path(tlef_path);
+  dmInst->get_config().set_lef_paths(lef_paths);
   dmInst->get_config().set_def_path(def_path);
   std::filesystem::remove_all(output_dir);
   std::filesystem::create_directories(output_dir);
 
-  if (!dmInst->readLef({IPL_TEST_TECH_LEF_PATH}, true)) {
+  if (!dmInst->readLef({tlef_path}, true)) {
     std::cerr << "[FAIL] iDB must load the technology LEF\n";
     return false;
   }
-  if (!dmInst->readLef(std::vector<std::string>{IPL_TEST_CELLS_LEF_PATH})) {
+  if (!dmInst->readLef(lef_paths)) {
     std::cerr << "[FAIL] iDB must load the standard-cell LEF\n";
     return false;
   }
@@ -117,7 +120,7 @@ bool initDesignCase(const std::string& scenario, const std::string& case_dir, co
   // The pl_vis case configs carry a stray root-level "info_iter_num" that the
   // Configurator rejects; strip root keys outside "PL" and load a cleaned copy.
   {
-    std::ifstream in(case_dir + "/iEDA_config/pl_default_config.json");
+    std::ifstream in(config_path);
     nlohmann::json config;
     in >> config;
     nlohmann::json cleaned = nlohmann::json::object();
@@ -1308,18 +1311,33 @@ int main(int argc, char** argv)
       return EXIT_FAILURE;
     }
     std::string def_path = case_dir + "/iPL_in.def";
-    for (int i = 2; i < argc; i++) {
-      if (std::string(argv[i]) == "--def-path" && i + 1 < argc) {
-        def_path = argv[i + 1];
-      }
-    }
+    std::string tlef_path = IPL_TEST_TECH_LEF_PATH;
+    std::vector<std::string> lef_paths{IPL_TEST_TECH_LEF_PATH, IPL_TEST_CELLS_LEF_PATH};
+    std::string config_path = case_dir + "/iEDA_config/pl_default_config.json";
     int32_t start_iters = 60;
     for (int i = 2; i < argc; i++) {
-      if (std::string(argv[i]) == "--start-iters" && i + 1 < argc) {
-        start_iters = std::atoi(argv[i + 1]);
+      const std::string arg = argv[i];
+      if (arg == "--def-path" && i + 1 < argc) {
+        def_path = argv[++i];
+      } else if (arg == "--start-iters" && i + 1 < argc) {
+        start_iters = std::atoi(argv[++i]);
+      } else if (arg == "--tlef" && i + 1 < argc) {
+        tlef_path = argv[++i];
+      } else if (arg == "--lef" && i + 1 < argc) {
+        lef_paths.clear();
+        std::stringstream ss(argv[++i]);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+          if (!item.empty()) {
+            lef_paths.push_back(item);
+          }
+        }
+        lef_paths.insert(lef_paths.begin(), tlef_path);
+      } else if (arg == "--config" && i + 1 < argc) {
+        config_path = argv[++i];
       }
     }
-    if (!initDesignCase("local_scale", case_dir, def_path)) {
+    if (!initDesignCase("local_scale", case_dir, def_path, tlef_path, lef_paths, config_path)) {
       return EXIT_FAILURE;
     }
     return runLocalScale(case_dir, start_iters);

@@ -59,7 +59,9 @@ TODO: ics55 power/DRC report scripts; sky130 IR-drop PDN; nangate45 gcd DRC clos
   scoping ≈ random scoping and no robust win over global GP (72c §17/19). Multi-design scale
   experiments (s1238/apb4_timer/picorv32/aes from ~/work/pl_vis/cases, converted with
   src/operation/iPL/test/configs/def2placement_1000.py) confirm: freeze gives real hpwl wins at
-  late stages on big designs, density screens cost +22-28% hpwl. Legacy
+  late stages on big designs, density screens cost +22-28% hpwl. Multi-PDK (tsmc28 asic_top 321k,
+  superblue16 981k from /mnt/usb20t/PCL-155) confirms modes work on 3 PDKs; freeze helps only when
+  hotspots are localized (72c §20). Legacy
   `placer_run_gp` (no args) unchanged. Equivalence tests (19 scenarios, incl. congestion-enabled and
   4-thread variants, all bitwise-identical vs continuous runs):
   `build/bin/ipl_gp_session_test --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|
