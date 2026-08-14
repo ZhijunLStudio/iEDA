@@ -81,7 +81,7 @@ target_compile_definitions(
     IPL_TEST_CONFIG_PATH="${CMAKE_SOURCE_DIR}/benchmarks/designs/aes_sky130_a/workspace/iEDA_config/pl_default_config.json"
     IPL_TEST_TECH_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd.tlef"
     IPL_TEST_CELLS_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef"
-    IPL_TEST_DEF_PATH="${CMAKE_SOURCE_DIR}/benchmarks/designs/gcd_sky130_a/def/gcd_place.def"
+    IPL_TEST_DEF_PATH="${CMAKE_SOURCE_DIR}/benchmarks/results/flow_20260814_gcd/gcd_sky130_a/workspace/result/iFP_result.def"
 )
 add_test(NAME ipl_api_failure_injection_test COMMAND ipl_api_failure_injection_test)
 
@@ -109,9 +109,47 @@ target_compile_definitions(
     IPL_TEST_CONFIG_PATH="${CMAKE_SOURCE_DIR}/benchmarks/designs/aes_sky130_a/workspace/iEDA_config/pl_default_config.json"
     IPL_TEST_TECH_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd.tlef"
     IPL_TEST_CELLS_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef"
-    IPL_TEST_DEF_PATH="${CMAKE_SOURCE_DIR}/benchmarks/designs/gcd_sky130_a/def/gcd_place.def"
+    IPL_TEST_DEF_PATH="${CMAKE_SOURCE_DIR}/benchmarks/results/flow_20260814_gcd/gcd_sky130_a/workspace/result/iFP_result.def"
 )
 add_test(NAME ipl_run_gp_result_test COMMAND ipl_run_gp_result_test)
+
+add_executable(ipl_gp_session_test GPSessionTest.cc)
+target_link_libraries(ipl_gp_session_test PRIVATE ipl-api ipl-source icts_api)
+target_include_directories(
+  ipl_gp_session_test
+  PRIVATE
+    ${iPL_API}
+    ${iPL_SOURCE}
+    ${CMAKE_SOURCE_DIR}/src/platform/data_manager
+    ${CMAKE_SOURCE_DIR}/src/database/data/design
+    ${CMAKE_SOURCE_DIR}/src/database/data/design/db_design
+    ${CMAKE_SOURCE_DIR}/src/database/data/design/db_layout
+    ${CMAKE_SOURCE_DIR}/src/database/basic/geometry
+    ${CMAKE_SOURCE_DIR}/src/database/manager/builder
+    ${CMAKE_SOURCE_DIR}/src/database/manager/builder/def_builder
+    ${CMAKE_SOURCE_DIR}/src/database/manager/builder/lef_builder
+    ${CMAKE_SOURCE_DIR}/src/database/manager/builder/verilog_builder
+    ${CMAKE_SOURCE_DIR}/src/database/manager/builder/json_builder
+    ${CMAKE_SOURCE_DIR}/src/database/manager/builder/gds_builder
+)
+target_compile_definitions(
+  ipl_gp_session_test
+  PRIVATE
+    IPL_TEST_CONFIG_PATH="${CMAKE_SOURCE_DIR}/benchmarks/designs/aes_sky130_a/workspace/iEDA_config/pl_default_config.json"
+    IPL_TEST_TECH_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd.tlef"
+    IPL_TEST_CELLS_LEF_PATH="${CMAKE_SOURCE_DIR}/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef"
+    IPL_TEST_DEF_PATH="${CMAKE_SOURCE_DIR}/benchmarks/results/flow_20260814_gcd/gcd_sky130_a/workspace/result/iFP_result.def"
+)
+add_test(NAME ipl_gp_session_seg20 COMMAND ipl_gp_session_test --scenario seg20)
+add_test(NAME ipl_gp_session_seg40 COMMAND ipl_gp_session_test --scenario seg40)
+add_test(NAME ipl_gp_session_seg10x2 COMMAND ipl_gp_session_test --scenario seg10x2)
+add_test(NAME ipl_gp_session_observe COMMAND ipl_gp_session_test --scenario observe)
+add_test(NAME ipl_gp_session_ckpt_save COMMAND ipl_gp_session_test --scenario ckpt_save)
+add_test(NAME ipl_gp_session_ckpt_resume COMMAND ipl_gp_session_test --scenario ckpt_resume)
+add_test(NAME ipl_gp_session_resume_inproc COMMAND ipl_gp_session_test --scenario resume_inproc)
+add_test(NAME ipl_gp_session_legacy COMMAND ipl_gp_session_test --scenario legacy)
+add_test(NAME ipl_gp_session_full COMMAND ipl_gp_session_test --scenario full)
+add_test(NAME ipl_gp_session_validate COMMAND ipl_gp_session_test --scenario validate)
 
 add_executable(ipl_nesterov_place_config_test NesterovPlaceConfigTest.cc)
 target_include_directories(

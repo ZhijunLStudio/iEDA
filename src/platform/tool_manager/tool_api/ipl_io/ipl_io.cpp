@@ -201,6 +201,38 @@ bool PlacerIO::runGlobalPlacement()
   return success && iPLAPIInst.writeBackSourceDataBase();
 }
 
+bool PlacerIO::runGlobalPlacementSession(std::string mode, int32_t iterations, bool random_init, std::string checkpoint)
+{
+  // Mirror runGlobalPlacement()'s DB bootstrap for the session entry. For
+  // advance/resume the PlacerDB is already started by the start call (or by
+  // init_pl) and the solver keeps its own state, so no re-init/update happens.
+  if (!iPLAPIInst.isPlacerDBStarted()) {
+    this->initPlacer("");
+  } else if (mode == "start") {
+    iPLAPIInst.updatePlacerDB();
+  }
+  if (mode == "start") {
+    iPLAPIInst.resetFlowStatus();
+  }
+
+  ipl::GPRunRequest request;
+  if (mode == "start") {
+    request.mode = ipl::GPRunMode::kStart;
+  } else if (mode == "resume") {
+    request.mode = ipl::GPRunMode::kResume;
+  } else {
+    request.mode = ipl::GPRunMode::kAdvance;
+  }
+  request.accepted_iterations = iterations;
+  request.random_init = random_init;
+  request.checkpoint_path = checkpoint;
+  const auto result = iPLAPIInst.gpRun(request);
+  if (!result.ok) {
+    return false;
+  }
+  return result.session_active || iPLAPIInst.writeBackSourceDataBase();
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

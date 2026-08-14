@@ -28,7 +28,9 @@ auto require(bool condition, const char* message) -> bool
 int main()
 {
   bool ok = true;
-  const std::string output_dir = "/tmp/ipl_run_gp_result_test";
+  // LZJ: previous runs (other users) can leave an undeletable directory behind;
+  // use a per-user suffix so the test remains re-runnable on shared machines.
+  const std::string output_dir = "/tmp/ipl_run_gp_result_test_lzj";
   const std::string pl_json_file = IPL_TEST_CONFIG_PATH;
   dmInst->get_config().set_output_path(output_dir);
   dmInst->get_config().set_tech_lef_path(IPL_TEST_TECH_LEF_PATH);

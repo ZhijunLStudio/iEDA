@@ -18,6 +18,7 @@ Output: bin/iEDA (run with LD_LIBRARY_PATH=$CONDA_PREFIX/lib).
 - sky130:    scripts/integration/run_sky130.sh   -> result/final_design.gds2
 - ics55:     PDK_DIR=/home/lxq/AiEDA/ics55-pdk scripts/integration/run_ics55.sh
 - nangate45: scripts/design/nangate45_gcd/run_iEDA.sh  (foundry: Foundary/nangate45)
+- benchmarks flow (this machine): see "Local environment (lizhijun machine)" below.
 
 ## Metrics
 - STA:     result/to/{drv,hold}/sta/gcd.rpt (slack / TNS / freq)
@@ -28,3 +29,32 @@ Output: bin/iEDA (run with LD_LIBRARY_PATH=$CONDA_PREFIX/lib).
 ## Status
 sky130 gcd netlist->GDS + STA/power/DRC: DONE. ics55 gcd netlist->GDS: DONE (DRC 0).
 TODO: ics55 power/DRC report scripts; sky130 IR-drop PDN; nangate45 gcd DRC closure.
+
+## Local environment (lizhijun machine) — 2026-08-14
+- `/home/lxq/*` paths in docs/scripts are NOT usable here (EACCES on /home/lxq). Real PDK is at
+  `/home/lizhijun/work/oscc-ieda/scripts/foundry/{sky130,...}`; flow templates at
+  `/home/lizhijun/work/oscc-ieda/scripts/design/{sky130_gcd,...}`. `iEDA.ai/scripts` is a symlink to
+  `../oscc-ieda/scripts` (untracked, needed by benchmarks/flows template lookup).
+- Build: system toolchain, `cmake --build build --target iEDA -j$(nproc)` (g++-11.4). Output lands in
+  `build/bin/iEDA` — copy to `bin/iEDA` (the root bin/ is what the flow picks up). Do NOT use the
+  micromamba `ieda-build` env from the upstream notes; it is unreachable here.
+- Fixed in this tree (needed to compile HEAD): commit 61bf067 changed
+  `ieda::getInput/OutputFileStream` to return streams by value; updated bindings in
+  src/platform/flow/config/flow_config.cpp, src/platform/data_manager/config/dm_{,cts_}config.cpp,
+  src/feature/parser/feature_parser{,_drc}.cpp, src/operation/iRT/test/process_guide/process_guide.cpp.
+- benchmarks flow quirks: `aes13_flow.py --design` only accepts the 13 AES names; for other designs use
+  `benchmarks/run_gcd_design.py` (imports the module, calls run_design directly). Must export
+  IEDA_FOUNDRY_ROOT/IEDA_BIN/IEDA_BUILD_LIB/YOSYS_BIN/IEDA_AES_RTL_ROOT before running — see that script.
+  Use `/usr/bin/python3` (3.10); anaconda python is 3.7 and breaks on `copytree(dirs_exist_ok=)`.
+- gcd_sky130_a full flow result (results/flow_20260814_gcd, 2026-08-14): all 18 stages success
+  (floorplan..gds). Timing MET (worst slack 1.067 ns @ 2.5 ns clock), power 1.51 mW (vectorless 0.02
+  toggle), HPWL 6.52 mm, iRT DRC 361 violations (not signoff-clean). Report + stage PNGs:
+  benchmarks/reports/gcd_flow.{md,html} + gcd_flow_assets/gcd_sky130_a/*.png.
+- GP session tool (docs/ai/72-72c, M1+M2 done 2026-08-14): `placer_run_gp -mode {start|advance|resume|close}
+  -iterations N -random_init 0|1 [-checkpoint <file>]` segments Nesterov GP into accepted-iteration batches;
+  every budget-limited batch auto-saves `<output>/pl/gp_session_checkpoint.json` (atomic), resume works
+  cross-process. Legacy `placer_run_gp` (no args) unchanged. Equivalence tests:
+  `build/bin/ipl_gp_session_test --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|legacy|full|validate}`
+  (compare /tmp/ipl_gp_session_test/<scenario>/coords.txt + records.txt; 40 ≡ 20+resume 20 bitwise).
+  iPL test inputs point at benchmarks/results/flow_20260814_gcd/gcd_sky130_a/workspace/result/iFP_result.def
+  (the benchmarks/designs/gcd_sky130_a/def/gcd_place.def fixture only exists on lxq's machine).

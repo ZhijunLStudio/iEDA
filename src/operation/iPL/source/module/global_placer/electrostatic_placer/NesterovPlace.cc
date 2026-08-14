@@ -32,6 +32,7 @@
 #include <boost/polygon/polygon.hpp>
 #include <cfloat>
 #include <cmath>
+#include <filesystem>
 #include <random>
 
 #include "Log.hh"
@@ -1370,6 +1371,19 @@ float NesterovPlace::obtainPhiCoef(float scaled_diff_hpwl, int32_t iteration_num
 
 void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
 {
+  // Legacy driver: run the session from setup to terminal in one shot.
+  // Behavior is bit-equivalent to the pre-session implementation.
+  _placable_inst_list = inst_list;
+  setupNesterovSolve();
+  if (_last_result.outcome != NesterovPlaceOutcome::kNotRun) {
+    return;
+  }
+  advanceAcceptedIterations(INT32_MAX);
+  finishSession();
+}
+
+void NesterovPlace::setupNesterovSolve()
+{
   if (_last_result.outcome != NesterovPlaceOutcome::kNotRun) {
     return;
   }
@@ -1381,74 +1395,88 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
     return;
   }
 
-  auto* solver = _nes_database->_nesterov_solver;
-  size_t inst_size = inst_list.size();
+  const size_t inst_size = _placable_inst_list.size();
 
-  float sum_overflow;
-  int64_t prev_hpwl, hpwl;
-  prev_hpwl = _nes_database->_wirelength->obtainTotalWirelength();
+  _prev_hpwl = _nes_database->_wirelength->obtainTotalWirelength();
 
-  std::vector<Point<float>> next_slp_wirelength_grad_list(inst_size, Point<float>());
-  std::vector<Point<float>> next_slp_density_grad_list(inst_size, Point<float>());
-  std::vector<Point<float>> next_slp_sum_grad_list(inst_size, Point<float>());
+  _next_slp_wirelength_grad_list.assign(inst_size, Point<float>());
+  _next_slp_density_grad_list.assign(inst_size, Point<float>());
+  _next_slp_sum_grad_list.assign(inst_size, Point<float>());
 
-  float sum_overflow_threshold = 1e25;
-  float hpwl_attach_sum_overflow = 1e25;
-  bool max_phi_coef_record = false;
-
-  Rectangle<int32_t> core_shape = _nes_database->_placer_db->get_layout()->get_core_shape();
+  _sum_overflow_threshold = 1e25;
+  _hpwl_attach_sum_overflow = 1e25;
+  _max_phi_coef_record = false;
 
   // opt setting
   const std::vector<float>& opt_overflow_list = _nes_config.get_opt_overflow_list();
-  int32_t cur_opt_overflow_step = opt_overflow_list.size() - 1;
+  _cur_opt_overflow_step = opt_overflow_list.size() - 1;
 
   // prepare for long net opt.
-  int32_t long_width, long_height;
-  std::ofstream long_net_stream;
   if (PRINT_LONG_NET) {
     float layout_ratio = 0.5;
-    long_width = core_shape.get_width() * layout_ratio;
-    long_height = core_shape.get_height() * layout_ratio;
-    long_net_stream.open(iPLAPIInst.obtainTargetDir() + "/pl/AcrossLongNet_process.txt");
-    if (!long_net_stream.good()) {
+    auto core_shape = _nes_database->_placer_db->get_layout()->get_core_shape();
+    _long_width = core_shape.get_width() * layout_ratio;
+    _long_height = core_shape.get_height() * layout_ratio;
+    _long_net_stream.open(iPLAPIInst.obtainTargetDir() + "/pl/AcrossLongNet_process.txt");
+    if (!_long_net_stream.good()) {
       LOG_WARNING << "Cannot open file for recording across long net !";
     }
   }
 
   // prepare for iter info record
-  std::ofstream info_stream;
   if (RECORD_ITER_INFO) {
-    info_stream.open(iPLAPIInst.obtainTargetDir() + "/pl/plIterInfo.csv");
-    if (!info_stream.good()) {
+    _info_stream.open(iPLAPIInst.obtainTargetDir() + "/pl/plIterInfo.csv");
+    if (!_info_stream.good()) {
       LOG_WARNING << "Cannot open file for iter info record !";
     }
   }
 
   // prepare for convergence acceleration and non-convergence treatment
-  int32_t min_perturb_interval = 50;
-  int32_t last_perturb_iter = -min_perturb_interval;
-  bool is_add_quad_penalty = false;
-  bool is_cal_phi = false;
-  bool stop_placement = false;
-  std::vector<Point<int32_t>> best_position_list;
-  std::vector<Point<int32_t>> cur_position_list;
-  best_position_list.resize(inst_size);
-  cur_position_list.resize(inst_size);
+  _last_perturb_iter = -50;
+  _is_add_quad_penalty = false;
+  _is_cal_phi = false;
+  _stop_placement = false;
+  _best_position_list.resize(inst_size);
+  _cur_position_list.resize(inst_size);
   // WP-PL-01: snapshot density_scale with best placement so diverge rollback restores inflation.
-  std::vector<float> best_density_scale_list(inst_size, 1.0f);
-  std::vector<float> cur_density_scale_list(inst_size, 1.0f);
-  int32_t finished_iter = 0;
-  float final_step_length = 0.0f;
-  float final_gradient_norm = 0.0f;
-  float final_route_util = 0.0f;
+  _best_density_scale_list.assign(inst_size, 1.0f);
+  _cur_density_scale_list.assign(inst_size, 1.0f);
+  _finished_iter = 0;
+  _final_step_length = 0.0f;
+  _final_gradient_norm = 0.0f;
+  _final_route_util = 0.0f;
 
   if (_nes_config.isOptCongestion()) {
     _nes_database->_bin_grid->evalRouteCap(_nes_config.get_thread_num());
     // _nes_database->_bin_grid->plotRouteCap();
   }
 
+  _solve_setup_done = true;
+}
+
+GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
+{
+  if (!_solve_setup_done) {
+    return GPAdvanceOutcome::kNotInitialized;
+  }
+  if (_last_result.outcome != NesterovPlaceOutcome::kNotRun) {
+    return GPAdvanceOutcome::kAlreadyFinished;
+  }
+  if (budget <= 0) {
+    return GPAdvanceOutcome::kBudgetReached;
+  }
+
+  auto* solver = _nes_database->_nesterov_solver;
+  const size_t inst_size = _placable_inst_list.size();
+
+  Rectangle<int32_t> core_shape = _nes_database->_placer_db->get_layout()->get_core_shape();
+
+  // opt setting
+  const std::vector<float>& opt_overflow_list = _nes_config.get_opt_overflow_list();
+
   // algorithm core loop.
-  for (int32_t iter_num = 1; iter_num <= _nes_config.get_max_iter(); iter_num++) {
+  const int64_t last_iter = std::min<int64_t>(_nes_config.get_max_iter(), static_cast<int64_t>(_current_iter) + budget);
+  for (int32_t iter_num = _current_iter + 1; iter_num <= last_iter; iter_num++) {
     bool iter_entropy_injected = false;
     solver->runNextIter(iter_num, _nes_config.get_thread_num());
     int32_t num_backtrack = 0;
@@ -1461,52 +1489,52 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
         Point<int32_t> next_coordi(next_coordi_list[i].get_x(), next_coordi_list[i].get_y());
         Point<int32_t> next_slp_coordi(next_slp_coordi_list[i].get_x(), next_slp_coordi_list[i].get_y());
 
-        updateDensityCenterCoordiLayoutInside(inst_list[i], next_coordi, core_shape);
+        updateDensityCenterCoordiLayoutInside(_placable_inst_list[i], next_coordi, core_shape);
         solver->correctNextCoordi(i, next_coordi);
-        cur_position_list[i] = next_coordi;
-        cur_density_scale_list[i] = inst_list[i]->get_density_scale();
+        _cur_position_list[i] = next_coordi;
+        _cur_density_scale_list[i] = _placable_inst_list[i]->get_density_scale();
 
-        updateDensityCenterCoordiLayoutInside(inst_list[i], next_slp_coordi, core_shape);
+        updateDensityCenterCoordiLayoutInside(_placable_inst_list[i], next_slp_coordi, core_shape);
         solver->correctNextSLPCoordi(i, next_slp_coordi);
-        inst_list[i]->updateDensityCenterLocation(next_slp_coordi);
+        _placable_inst_list[i]->updateDensityCenterLocation(next_slp_coordi);
       }
 
-      _nes_database->_bin_grid->updateBinGrid(inst_list, _nes_config.get_thread_num());
+      _nes_database->_bin_grid->updateBinGrid(_placable_inst_list, _nes_config.get_thread_num());
 
       // print density map for debug
       if (iter_num == 60 && PRINT_DENSITY_MAP) {
         printDensityMapToCsv("density_map_" + std::to_string(iter_num));
       }
 
-      _nes_database->_density_gradient->updateDensityForce(_nes_config.get_thread_num(), is_cal_phi);
+      _nes_database->_density_gradient->updateDensityForce(_nes_config.get_thread_num(), _is_cal_phi);
 
       updateTopologyManager();
 
-      sum_overflow = static_cast<float>(_nes_database->_bin_grid->get_overflow_area_without_filler()) / _total_inst_area;
-      hpwl = _nes_database->_wirelength->obtainTotalWirelength();
+      _sum_overflow = static_cast<float>(_nes_database->_bin_grid->get_overflow_area_without_filler()) / _total_inst_area;
+      _cur_hpwl = _nes_database->_wirelength->obtainTotalWirelength();
       const float gradient_norm = _nes_database->_wirelength_grad_sum + _nes_database->_density_grad_sum;
       const float step_length = solver->get_next_steplength();
       const float route_util = _nes_config.isOptCongestion()
                                    ? std::max(_nes_database->_grid_manager->get_h_util_max(),
                                               _nes_database->_grid_manager->get_v_util_max())
                                    : 0.0F;
-      if (!isFiniteMetric(sum_overflow) || sum_overflow < 0.0f || hpwl < 0 || !isFiniteMetric(gradient_norm)
+      if (!isFiniteMetric(_sum_overflow) || _sum_overflow < 0.0f || _cur_hpwl < 0 || !isFiniteMetric(gradient_norm)
           || gradient_norm < 0.0F || !isFiniteMetric(step_length) || step_length < 0.0F
           || !isFiniteMetric(_nes_database->_density_penalty) || _nes_database->_density_penalty < 0.0F
           || !isFiniteMetric(route_util) || route_util < 0.0F) {
         _nes_database->_is_diverged = true;
-        finalizeResult(NesterovPlaceOutcome::kInvalidMetric, iter_num, hpwl, sum_overflow,
+        finalizeResult(NesterovPlaceOutcome::kInvalidMetric, iter_num, _cur_hpwl, _sum_overflow,
                        gradient_norm, step_length, _nes_database->_density_penalty, route_util,
                        "global placement produced an invalid metric");
         break;
       }
-      // The following parameters threshold "iter_num" and "sum_overflow" for congestion optimization can be adjusted
+      // The following parameters threshold "iter_num" and "_sum_overflow" for congestion optimization can be adjusted
       // Start earlier (iter>=100) so route-util inflation has room to reshape density before legalization.
       if (_nes_config.isOptCongestion() && iter_num >= 100 && iter_num % 10 == 0) {
         _nes_database->_bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num());
         _nes_database->_bin_grid->fastGaussianBlur();
         _nes_database->_bin_grid->evalRouteUtil();
-        inflateInstancesByRouteUtil(inst_list);
+        inflateInstancesByRouteUtil(_placable_inst_list);
         // _nes_database->_bin_grid->plotRouteUtil(iter_num);
       }
 
@@ -1516,7 +1544,7 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
                                                                    _nes_config.get_thread_num());
       } else {
         // Enter congestion-aware wirelength earlier: overflow<=0.75 (was 0.5).
-        if (sum_overflow > 0.75f) {
+        if (_sum_overflow > 0.75f) {
           _nes_database->_wirelength_gradient->updateWirelengthForce(_nes_database->_wirelength_coef, _nes_database->_wirelength_coef,
                                                                      _nes_config.get_min_wirelength_force_bar(),
                                                                      _nes_config.get_thread_num());
@@ -1525,9 +1553,9 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
           _nes_database->_bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num());
           _nes_database->_bin_grid->fastGaussianBlur();
           _nes_database->_bin_grid->evalRouteUtil();
-          inflateInstancesByRouteUtil(inst_list);
+          inflateInstancesByRouteUtil(_placable_inst_list);
           iter_entropy_injected = true;
-          // _nes_database->_bin_grid->plotOverflowUtil(sum_overflow, iter_num);
+          // _nes_database->_bin_grid->plotOverflowUtil(_sum_overflow, iter_num);
 
           // TODO: GR based congestion-driven optimization.
           // writeBackPlacerDB();
@@ -1543,17 +1571,17 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
       }
 
   // update next target penalty object.
-  updatePenaltyGradient(inst_list, next_slp_sum_grad_list, next_slp_wirelength_grad_list, next_slp_density_grad_list, is_add_quad_penalty);
+  updatePenaltyGradient(_placable_inst_list, _next_slp_sum_grad_list, _next_slp_wirelength_grad_list, _next_slp_density_grad_list, _is_add_quad_penalty);
 
   if (_nes_database->_is_diverged) {
-    finalizeResult(NesterovPlaceOutcome::kInvalidMetric, iter_num, hpwl, sum_overflow,
+    finalizeResult(NesterovPlaceOutcome::kInvalidMetric, iter_num, _cur_hpwl, _sum_overflow,
                    _nes_database->_wirelength_grad_sum + _nes_database->_density_grad_sum, solver->get_next_steplength(),
-                   _nes_database->_density_penalty, final_route_util, "global placement produced an invalid gradient");
+                   _nes_database->_density_penalty, _final_route_util, "global placement produced an invalid gradient");
     break;
   }
 
   float current_steplength = solver->get_next_steplength();
-  solver->calculateNextSteplength(next_slp_sum_grad_list);
+  solver->calculateNextSteplength(_next_slp_sum_grad_list);
   float next_steplength = solver->get_next_steplength();
 
   if (next_steplength > current_steplength * 0.95) {
@@ -1570,72 +1598,72 @@ void NesterovPlace::NesterovSolve(std::vector<NesInstance*>& inst_list)
   }
 
   if (_nes_database->_is_diverged && _last_result.outcome == NesterovPlaceOutcome::kNotRun) {
-    finalizeResult(NesterovPlaceOutcome::kDiverged, iter_num, prev_hpwl, sum_overflow,
+    finalizeResult(NesterovPlaceOutcome::kDiverged, iter_num, _prev_hpwl, _sum_overflow,
                    _nes_database->_wirelength_grad_sum + _nes_database->_density_grad_sum, solver->get_next_steplength(),
-                   _nes_database->_density_penalty, final_route_util, "nesterov diverged during iteration");
+                   _nes_database->_density_penalty, _final_route_util, "nesterov diverged during iteration");
     break;
   }
 
   if (RECORD_ITER_INFO) {
     if (iter_num == 1) {
-      info_stream << "WireLength Grad Sum,Density Grad Sum,Density Weight,StepLength" << std::endl;
+      _info_stream << "WireLength Grad Sum,Density Grad Sum,Density Weight,StepLength" << std::endl;
     }
-    printIterInfoToCsv(info_stream, iter_num);
+    printIterInfoToCsv(_info_stream, iter_num);
   }
 
-  final_step_length = solver->get_next_steplength();
-  final_gradient_norm = _nes_database->_wirelength_grad_sum + _nes_database->_density_grad_sum;
+  _final_step_length = solver->get_next_steplength();
+  _final_gradient_norm = _nes_database->_wirelength_grad_sum + _nes_database->_density_grad_sum;
   if (_nes_config.isOptCongestion()) {
-    final_route_util = std::max(_nes_database->_grid_manager->get_h_util_max(), _nes_database->_grid_manager->get_v_util_max());
+    _final_route_util = std::max(_nes_database->_grid_manager->get_h_util_max(), _nes_database->_grid_manager->get_v_util_max());
   }
-  recordIteration(iter_num, sum_overflow, prev_hpwl, final_step_length, final_gradient_norm, final_route_util, is_add_quad_penalty,
+  recordIteration(iter_num, _sum_overflow, _prev_hpwl, _final_step_length, _final_gradient_norm, _final_route_util, _is_add_quad_penalty,
                   iter_entropy_injected);
   if (_last_result.outcome == NesterovPlaceOutcome::kInvalidMetric) {
     break;
   }
 
 if (_nes_config.isOptMaxWirelength()) {
-  if (cur_opt_overflow_step >= 0 && sum_overflow < opt_overflow_list[cur_opt_overflow_step]) {
+  if (_cur_opt_overflow_step >= 0 && _sum_overflow < opt_overflow_list[_cur_opt_overflow_step]) {
     // update net weight.
     updateMaxLengthNetWeight();
-    --cur_opt_overflow_step;
+    --_cur_opt_overflow_step;
     LOG_INFO << "[NesterovSolve] Begin update netweight for max wirelength constraint.";
   }
 }
 
 if (_nes_config.isOptTiming()) {
-  if (cur_opt_overflow_step >= 0 && sum_overflow < opt_overflow_list[cur_opt_overflow_step]) {
+  if (_cur_opt_overflow_step >= 0 && _sum_overflow < opt_overflow_list[_cur_opt_overflow_step]) {
     // update net weight.
     updateTimingNetWeight();
-    --cur_opt_overflow_step;
+    --_cur_opt_overflow_step;
     LOG_INFO << "[NesterovSolve] Update netweight for timing improvement.";
   }
 }
 
-updateWirelengthCoef(sum_overflow);
-if (!max_phi_coef_record && sum_overflow < 0.35f) {
-  max_phi_coef_record = true;
+updateWirelengthCoef(_sum_overflow);
+if (!_max_phi_coef_record && _sum_overflow < 0.35f) {
+  _max_phi_coef_record = true;
   _nes_config.set_max_phi_coef(0.985 * _nes_config.get_max_phi_coef());
 }
 
-hpwl = _nes_database->_wirelength->obtainTotalWirelength();
+_cur_hpwl = _nes_database->_wirelength->obtainTotalWirelength();
 
-float phi_coef = obtainPhiCoef(static_cast<float>(hpwl - prev_hpwl) / _nes_config.get_reference_hpwl(), iter_num);
-prev_hpwl = hpwl;
+float phi_coef = obtainPhiCoef(static_cast<float>(_cur_hpwl - _prev_hpwl) / _nes_config.get_reference_hpwl(), iter_num);
+_prev_hpwl = _cur_hpwl;
 _nes_database->_density_penalty *= phi_coef;
 
 // print info.
 if (iter_num == 1 || iter_num % _nes_config.get_info_iter_num() == 0) {
-  LOG_INFO << "[NesterovSolve] Iter: " << iter_num << " overflow: " << sum_overflow << " HPWL: " << prev_hpwl;
+  LOG_INFO << "[NesterovSolve] Iter: " << iter_num << " overflow: " << _sum_overflow << " HPWL: " << _prev_hpwl;
 
   if (PRINT_LONG_NET) {
-    long_net_stream << "CURRENT ITERATION: " << iter_num << std::endl;
-    long_net_stream << std::endl;
-    printAcrossLongNet(long_net_stream, long_width, long_height);
+    _long_net_stream << "CURRENT ITERATION: " << iter_num << std::endl;
+    _long_net_stream << std::endl;
+    printAcrossLongNet(_long_net_stream, _long_width, _long_height);
   }
 
   if (isJsonOutputEnabled()) {
-    plotInstJson("inst_" + std::to_string(iter_num), iter_num, sum_overflow);
+    plotInstJson("inst_" + std::to_string(iter_num), iter_num, _sum_overflow);
 
     printDensityMapToCsv("density/density_map_" + std::to_string(iter_num));
   }
@@ -1647,105 +1675,455 @@ if (iter_num == 1 || iter_num % 5 == 0) {
   }
 }
 
-if (sum_overflow_threshold > sum_overflow) {
-  sum_overflow_threshold = sum_overflow;
-  hpwl_attach_sum_overflow = prev_hpwl;
+if (_sum_overflow_threshold > _sum_overflow) {
+  _sum_overflow_threshold = _sum_overflow;
+  _hpwl_attach_sum_overflow = _prev_hpwl;
 }
 
-  if (sum_overflow < 0.32f && sum_overflow - sum_overflow_threshold >= 0.05f && hpwl_attach_sum_overflow * 1.25f < prev_hpwl) {
+  if (_sum_overflow < 0.32f && _sum_overflow - _sum_overflow_threshold >= 0.05f && _hpwl_attach_sum_overflow * 1.25f < _prev_hpwl) {
     LOG_ERROR << "Detect divergence. \n"
               << "    The reason may be max_phi_cof value: try to decrease max_phi_cof";
     _nes_database->_is_diverged = true;
-    finalizeResult(NesterovPlaceOutcome::kDiverged, iter_num, prev_hpwl, sum_overflow, final_gradient_norm, final_step_length,
-                   _nes_database->_density_penalty, final_route_util, "overflow and HPWL diverged");
+    finalizeResult(NesterovPlaceOutcome::kDiverged, iter_num, _prev_hpwl, _sum_overflow, _final_gradient_norm, _final_step_length,
+                   _nes_database->_density_penalty, _final_route_util, "overflow and HPWL diverged");
     break;
   }
 
-_overflow_record_list.push_back(sum_overflow);
-_hpwl_record_list.push_back(hpwl);
+_overflow_record_list.push_back(_sum_overflow);
+_hpwl_record_list.push_back(_cur_hpwl);
 
-if (sum_overflow < _best_overflow) {
-  _best_hpwl = hpwl;
-  _best_overflow = sum_overflow;
-  best_position_list.swap(cur_position_list);
-  best_density_scale_list.swap(cur_density_scale_list);
+if (_sum_overflow < _best_overflow) {
+  _best_hpwl = _cur_hpwl;
+  _best_overflow = _sum_overflow;
+  _best_position_list.swap(_cur_position_list);
+  _best_density_scale_list.swap(_cur_density_scale_list);
 }
 
-if (sum_overflow < _nes_config.get_target_overflow() * 4 && sum_overflow > _nes_config.get_target_overflow() * 1.1) {
-  if (checkDivergence(3, 0.03 * sum_overflow) || checkLongTimeOverflowUnchanged(100, 0.03 * sum_overflow)) {
+if (_sum_overflow < _nes_config.get_target_overflow() * 4 && _sum_overflow > _nes_config.get_target_overflow() * 1.1) {
+  if (checkDivergence(3, 0.03 * _sum_overflow) || checkLongTimeOverflowUnchanged(100, 0.03 * _sum_overflow)) {
     // rollback to best pos (+ density_scale when congestion inflation was active).
     for (size_t i = 0; i < inst_size; i++) {
-      updateDensityCenterCoordiLayoutInside(inst_list[i], best_position_list[i], core_shape);
+      updateDensityCenterCoordiLayoutInside(_placable_inst_list[i], _best_position_list[i], core_shape);
       if (_nes_config.isOptCongestion()) {
-        inst_list[i]->set_density_scale(best_density_scale_list[i]);
+        _placable_inst_list[i]->set_density_scale(_best_density_scale_list[i]);
       }
     }
-    sum_overflow = _best_overflow;
-    prev_hpwl = _best_hpwl;
+    _sum_overflow = _best_overflow;
+    _prev_hpwl = _best_hpwl;
 
-    stop_placement = true;
+    _stop_placement = true;
   }
 }
 
-if (iter_num - last_perturb_iter > min_perturb_interval && checkPlateau(50, 0.01)) {
-  if (sum_overflow > 0.9) {
+if (iter_num - _last_perturb_iter > 50 && checkPlateau(50, 0.01)) {
+  if (_sum_overflow > 0.9) {
     // quad mode
-    is_add_quad_penalty = true;
-    is_cal_phi = true;
+    _is_add_quad_penalty = true;
+    _is_cal_phi = true;
     LOG_INFO << "Try to enable quadratic penalty for density to accelerate convergence";
-    if (sum_overflow > 0.95) {
-      float noise_intensity = std::min(std::max(40 + (120 - 40) * (sum_overflow - 0.95) * 10, 40.0), 90.0)
+    if (_sum_overflow > 0.95) {
+      float noise_intensity = std::min(std::max(40 + (120 - 40) * (_sum_overflow - 0.95) * 10, 40.0), 90.0)
                               * _nes_database->_placer_db->get_layout()->get_site_width();
       entropyInjection(0.996, noise_intensity);
       LOG_INFO << "Try to entropy injection with noise intensity = " << noise_intensity << " to help convergence";
     }
-    last_perturb_iter = iter_num;
+    _last_perturb_iter = iter_num;
   }
 }
 
 // minimun iteration is 30
-  if ((iter_num > 30 && sum_overflow <= _nes_config.get_target_overflow()) || stop_placement) {
+  if ((iter_num > 30 && _sum_overflow <= _nes_config.get_target_overflow()) || _stop_placement) {
   if (PRINT_LONG_NET) {
-    long_net_stream << "CURRENT ITERATION: " << iter_num << std::endl;
-    long_net_stream << std::endl;
-    printAcrossLongNet(long_net_stream, long_width, long_height);
-    long_net_stream.close();
+    _long_net_stream << "CURRENT ITERATION: " << iter_num << std::endl;
+    _long_net_stream << std::endl;
+    printAcrossLongNet(_long_net_stream, _long_width, _long_height);
+    _long_net_stream.close();
   }
 
   if (RECORD_ITER_INFO) {
-    info_stream.close();
+    _info_stream.close();
   }
 
   if (PRINT_COORDI) {
     saveNesterovPlaceData(iter_num);
     }
 
-    LOG_INFO << "[NesterovSolve] Finished with Overflow:" << sum_overflow << " HPWL : " << prev_hpwl;
-    const bool converged = (iter_num > 30 && sum_overflow <= _nes_config.get_target_overflow());
-    finalizeResult(converged ? NesterovPlaceOutcome::kConverged : NesterovPlaceOutcome::kOverflowTargetMiss, iter_num, prev_hpwl,
-                   sum_overflow, final_gradient_norm, final_step_length, _nes_database->_density_penalty, final_route_util,
+    LOG_INFO << "[NesterovSolve] Finished with Overflow:" << _sum_overflow << " HPWL : " << _prev_hpwl;
+    const bool converged = (iter_num > 30 && _sum_overflow <= _nes_config.get_target_overflow());
+    finalizeResult(converged ? NesterovPlaceOutcome::kConverged : NesterovPlaceOutcome::kOverflowTargetMiss, iter_num, _prev_hpwl,
+                   _sum_overflow, _final_gradient_norm, _final_step_length, _nes_database->_density_penalty, _final_route_util,
                    converged ? "global placement converged" : "global placement stopped before reaching target overflow");
     break;
   }
 
-  finished_iter = iter_num;
+  _finished_iter = iter_num;
+  }
+
+  _current_iter = _finished_iter;
+  return (_last_result.outcome != NesterovPlaceOutcome::kNotRun) ? GPAdvanceOutcome::kFinished : GPAdvanceOutcome::kBudgetReached;
 }
 
+void NesterovPlace::finishSession()
+{
   if (_nes_database->_is_diverged) {
     LOG_ERROR << "Detect divergence, The reason may be parameters setting.";
     return;
   }
 
   if (_last_result.outcome == NesterovPlaceOutcome::kNotRun) {
-    finalizeResult(NesterovPlaceOutcome::kMaxIter, finished_iter, prev_hpwl, sum_overflow, final_gradient_norm, final_step_length,
-                   _nes_database->_density_penalty, final_route_util, "global placement reached max_iter");
+    finalizeResult(NesterovPlaceOutcome::kMaxIter, _finished_iter, _prev_hpwl, _sum_overflow, _final_gradient_norm, _final_step_length,
+                   _nes_database->_density_penalty, _final_route_util, "global placement reached max_iter");
   }
 
-notifyPLOverflowInfo(sum_overflow);
-notifyPLPlaceDensity();
+  publishPlacement();
+}
 
-// update PlacerDB.
-writeBackPlacerDB();
+void NesterovPlace::publishPlacement()
+{
+  notifyPLOverflowInfo(_sum_overflow);
+  notifyPLPlaceDensity();
+
+  // update PlacerDB.
+  writeBackPlacerDB();
+}
+
+bool NesterovPlace::initializeSession()
+{
+  resetRunState();
+  _placable_inst_list = this->obtianPlacableNesInstanceList();
+  if (_placable_inst_list.empty()) {
+    finalizeResult(NesterovPlaceOutcome::kInvalidMetric, 0, 0, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
+                   "global placement requires at least one movable instance");
+    return false;
+  }
+  initNesterovPlace(_placable_inst_list);
+  setupNesterovSolve();
+  return _last_result.outcome == NesterovPlaceOutcome::kNotRun;
+}
+
+GPStateCheckpoint NesterovPlace::captureCheckpoint() const
+{
+  GPStateCheckpoint checkpoint;
+  checkpoint.current_iter = _current_iter;
+  checkpoint.sum_overflow = _sum_overflow;
+  checkpoint.prev_hpwl = _prev_hpwl;
+  checkpoint.cur_hpwl = _cur_hpwl;
+  checkpoint.sum_overflow_threshold = _sum_overflow_threshold;
+  checkpoint.hpwl_attach_sum_overflow = _hpwl_attach_sum_overflow;
+  checkpoint.max_phi_coef_record = _max_phi_coef_record;
+  checkpoint.cur_opt_overflow_step = _cur_opt_overflow_step;
+  checkpoint.last_perturb_iter = _last_perturb_iter;
+  checkpoint.is_add_quad_penalty = _is_add_quad_penalty;
+  checkpoint.is_cal_phi = _is_cal_phi;
+  checkpoint.stop_placement = _stop_placement;
+  checkpoint.best_hpwl = _best_hpwl;
+  checkpoint.best_overflow = _best_overflow;
+  checkpoint.quad_penalty_coeff = _quad_penalty_coeff;
+  checkpoint.total_inst_area = _total_inst_area;
+  checkpoint.finished_iter = _finished_iter;
+  checkpoint.final_step_length = _final_step_length;
+  checkpoint.final_gradient_norm = _final_gradient_norm;
+  checkpoint.final_route_util = _final_route_util;
+  checkpoint.overflow_record_list = _overflow_record_list;
+  checkpoint.hpwl_record_list = _hpwl_record_list;
+  checkpoint.iteration_records = _iteration_records;
+  checkpoint.wirelength_coef = _nes_database->_wirelength_coef;
+  checkpoint.density_penalty = _nes_database->_density_penalty;
+  checkpoint.is_diverged = _nes_database->_is_diverged;
+  checkpoint.max_phi_coef = _nes_config.get_max_phi_coef();
+
+  checkpoint.best_position_list = _best_position_list;
+  checkpoint.cur_position_list = _cur_position_list;
+  checkpoint.best_density_scale_list = _best_density_scale_list;
+  checkpoint.cur_density_scale_list = _cur_density_scale_list;
+
+  checkpoint.instance_names.reserve(_placable_inst_list.size());
+  checkpoint.instance_density_coords.reserve(_placable_inst_list.size());
+  checkpoint.instance_density_scales.reserve(_placable_inst_list.size());
+  for (auto* n_inst : _placable_inst_list) {
+    checkpoint.instance_names.push_back(n_inst->get_name());
+    checkpoint.instance_density_coords.push_back(n_inst->get_density_center_coordi());
+    checkpoint.instance_density_scales.push_back(n_inst->get_density_scale());
+  }
+
+  checkpoint.solver = _nes_database->_nesterov_solver->captureState();
+  return checkpoint;
+}
+
+bool NesterovPlace::restoreCheckpoint(const GPStateCheckpoint& checkpoint)
+{
+  // Topology fingerprint: the placable list must match the checkpoint exactly.
+  _placable_inst_list = this->obtianPlacableNesInstanceList();
+  if (_placable_inst_list.size() != checkpoint.instance_names.size()
+      || _placable_inst_list.size() != checkpoint.instance_density_coords.size()) {
+    LOG_ERROR << "[GP checkpoint] placable instance count mismatch: design has " << _placable_inst_list.size()
+              << ", checkpoint has " << checkpoint.instance_names.size();
+    return false;
+  }
+  for (size_t i = 0; i < _placable_inst_list.size(); ++i) {
+    if (_placable_inst_list[i]->get_name() != checkpoint.instance_names[i]) {
+      LOG_ERROR << "[GP checkpoint] placable instance mismatch at index " << i << ": design has '"
+                << _placable_inst_list[i]->get_name() << "', checkpoint has '" << checkpoint.instance_names[i] << "'";
+      return false;
+    }
+  }
+
+  _current_iter = checkpoint.current_iter;
+  _sum_overflow = checkpoint.sum_overflow;
+  _prev_hpwl = checkpoint.prev_hpwl;
+  _cur_hpwl = checkpoint.cur_hpwl;
+  _sum_overflow_threshold = checkpoint.sum_overflow_threshold;
+  _hpwl_attach_sum_overflow = checkpoint.hpwl_attach_sum_overflow;
+  _max_phi_coef_record = checkpoint.max_phi_coef_record;
+  _cur_opt_overflow_step = checkpoint.cur_opt_overflow_step;
+  _last_perturb_iter = checkpoint.last_perturb_iter;
+  _is_add_quad_penalty = checkpoint.is_add_quad_penalty;
+  _is_cal_phi = checkpoint.is_cal_phi;
+  _stop_placement = checkpoint.stop_placement;
+  _best_hpwl = checkpoint.best_hpwl;
+  _best_overflow = checkpoint.best_overflow;
+  _quad_penalty_coeff = checkpoint.quad_penalty_coeff;
+  _total_inst_area = checkpoint.total_inst_area;
+  _finished_iter = checkpoint.finished_iter;
+  _final_step_length = checkpoint.final_step_length;
+  _final_gradient_norm = checkpoint.final_gradient_norm;
+  _final_route_util = checkpoint.final_route_util;
+  _overflow_record_list = checkpoint.overflow_record_list;
+  _hpwl_record_list = checkpoint.hpwl_record_list;
+  _iteration_records = checkpoint.iteration_records;
+  _best_position_list = checkpoint.best_position_list;
+  _cur_position_list = checkpoint.cur_position_list;
+  _best_density_scale_list = checkpoint.best_density_scale_list;
+  _cur_density_scale_list = checkpoint.cur_density_scale_list;
+
+  _nes_database->_wirelength_coef = checkpoint.wirelength_coef;
+  _nes_database->_density_penalty = checkpoint.density_penalty;
+  _nes_database->_is_diverged = checkpoint.is_diverged;
+  initBaseWirelengthCoef();  // deterministic rebuild (config + grid shape)
+  _nes_config.set_max_phi_coef(checkpoint.max_phi_coef);
+
+  // Grid.fixed_area is written once by initGridFixedArea() during the normal
+  // start path and is NOT cleared by clearAllOccupiedArea(); both the overflow
+  // (obtainGridOverflowArea) and the density (obtainGridDensity) depend on it,
+  // so a restored session must rebuild it or every downstream metric drifts.
+  initGridFixedArea();
+
+  // Scratch vectors and congestion prep normally created by setupNesterovSolve()
+  // (skipped on the restore path): size them so the advance loop writes in-bounds.
+  _next_slp_wirelength_grad_list.assign(_placable_inst_list.size(), Point<float>());
+  _next_slp_density_grad_list.assign(_placable_inst_list.size(), Point<float>());
+  _next_slp_sum_grad_list.assign(_placable_inst_list.size(), Point<float>());
+  if (_nes_config.isOptCongestion()) {
+    _nes_database->_bin_grid->evalRouteCap(_nes_config.get_thread_num());
+  }
+
+  _nes_database->_nesterov_solver->restoreState(checkpoint.solver);
+
+  for (size_t i = 0; i < _placable_inst_list.size(); ++i) {
+    Point<int32_t> density_coord = checkpoint.instance_density_coords[i];
+    _placable_inst_list[i]->updateDensityCenterLocation(density_coord);
+    _placable_inst_list[i]->set_density_scale(checkpoint.instance_density_scales[i]);
+  }
+
+  _solve_setup_done = true;
+  return true;
+}
+
+void to_json(nlohmann::json& json_obj, const Point<int32_t>& point)
+{
+  json_obj = nlohmann::json::array({point.get_x(), point.get_y()});
+}
+
+void from_json(const nlohmann::json& json_obj, Point<int32_t>& point)
+{
+  point.set_x(json_obj.at(0).get<int32_t>());
+  point.set_y(json_obj.at(1).get<int32_t>());
+}
+
+void to_json(nlohmann::json& json_obj, const Point<float>& point)
+{
+  json_obj = nlohmann::json::array({point.get_x(), point.get_y()});
+}
+
+void from_json(const nlohmann::json& json_obj, Point<float>& point)
+{
+  point.set_x(json_obj.at(0).get<float>());
+  point.set_y(json_obj.at(1).get<float>());
+}
+
+void to_json(nlohmann::json& json_obj, const NesterovIterationRecord& record)
+{
+  json_obj = nlohmann::json{{"iter", record.iter},
+                            {"hpwl", record.hpwl},
+                            {"overflow", record.overflow},
+                            {"step_length", record.step_length},
+                            {"gradient_norm", record.gradient_norm},
+                            {"density_penalty", record.density_penalty},
+                            {"route_util", record.route_util},
+                            {"quad_penalty_enabled", record.quad_penalty_enabled},
+                            {"entropy_injected", record.entropy_injected}};
+}
+
+void from_json(const nlohmann::json& json_obj, NesterovIterationRecord& record)
+{
+  record.iter = json_obj.at("iter").get<int32_t>();
+  record.hpwl = json_obj.at("hpwl").get<int64_t>();
+  record.overflow = json_obj.at("overflow").get<float>();
+  record.step_length = json_obj.at("step_length").get<float>();
+  record.gradient_norm = json_obj.at("gradient_norm").get<float>();
+  record.density_penalty = json_obj.at("density_penalty").get<float>();
+  record.route_util = json_obj.at("route_util").get<float>();
+  record.quad_penalty_enabled = json_obj.at("quad_penalty_enabled").get<bool>();
+  record.entropy_injected = json_obj.at("entropy_injected").get<bool>();
+}
+
+void to_json(nlohmann::json& json_obj, const Nesterov::State& state)
+{
+  json_obj = nlohmann::json{{"current_iter", state.current_iter},
+                            {"current_parameter", state.current_parameter},
+                            {"next_parameter", state.next_parameter},
+                            {"current_steplength", state.current_steplength},
+                            {"next_steplength", state.next_steplength},
+                            {"current_coordis", state.current_coordis},
+                            {"next_coordis", state.next_coordis},
+                            {"current_slp_coordis", state.current_slp_coordis},
+                            {"next_slp_coordis", state.next_slp_coordis},
+                            {"current_gradients", state.current_gradients},
+                            {"next_gradients", state.next_gradients}};
+}
+
+void from_json(const nlohmann::json& json_obj, Nesterov::State& state)
+{
+  state.current_iter = json_obj.at("current_iter").get<int32_t>();
+  state.current_parameter = json_obj.at("current_parameter").get<float>();
+  state.next_parameter = json_obj.at("next_parameter").get<float>();
+  state.current_steplength = json_obj.at("current_steplength").get<float>();
+  state.next_steplength = json_obj.at("next_steplength").get<float>();
+  state.current_coordis = json_obj.at("current_coordis").get<std::vector<Point<int32_t>>>();
+  state.next_coordis = json_obj.at("next_coordis").get<std::vector<Point<int32_t>>>();
+  state.current_slp_coordis = json_obj.at("current_slp_coordis").get<std::vector<Point<int32_t>>>();
+  state.next_slp_coordis = json_obj.at("next_slp_coordis").get<std::vector<Point<int32_t>>>();
+  state.current_gradients = json_obj.at("current_gradients").get<std::vector<Point<float>>>();
+  state.next_gradients = json_obj.at("next_gradients").get<std::vector<Point<float>>>();
+}
+
+void to_json(nlohmann::json& json_obj, const GPStateCheckpoint& checkpoint)
+{
+  json_obj = nlohmann::json{
+      {"current_iter", checkpoint.current_iter},
+      {"sum_overflow", checkpoint.sum_overflow},
+      {"prev_hpwl", checkpoint.prev_hpwl},
+      {"cur_hpwl", checkpoint.cur_hpwl},
+      {"sum_overflow_threshold", checkpoint.sum_overflow_threshold},
+      {"hpwl_attach_sum_overflow", checkpoint.hpwl_attach_sum_overflow},
+      {"max_phi_coef_record", checkpoint.max_phi_coef_record},
+      {"cur_opt_overflow_step", checkpoint.cur_opt_overflow_step},
+      {"last_perturb_iter", checkpoint.last_perturb_iter},
+      {"is_add_quad_penalty", checkpoint.is_add_quad_penalty},
+      {"is_cal_phi", checkpoint.is_cal_phi},
+      {"stop_placement", checkpoint.stop_placement},
+      {"best_hpwl", checkpoint.best_hpwl},
+      {"best_overflow", checkpoint.best_overflow},
+      {"quad_penalty_coeff", checkpoint.quad_penalty_coeff},
+      {"total_inst_area", checkpoint.total_inst_area},
+      {"finished_iter", checkpoint.finished_iter},
+      {"final_step_length", checkpoint.final_step_length},
+      {"final_gradient_norm", checkpoint.final_gradient_norm},
+      {"final_route_util", checkpoint.final_route_util},
+      {"overflow_record_list", checkpoint.overflow_record_list},
+      {"hpwl_record_list", checkpoint.hpwl_record_list},
+      {"iteration_records", checkpoint.iteration_records},
+      {"wirelength_coef", checkpoint.wirelength_coef},
+      {"density_penalty", checkpoint.density_penalty},
+      {"is_diverged", checkpoint.is_diverged},
+      {"max_phi_coef", checkpoint.max_phi_coef},
+      {"instance_names", checkpoint.instance_names},
+      {"instance_density_coords", checkpoint.instance_density_coords},
+      {"instance_density_scales", checkpoint.instance_density_scales},
+      {"best_position_list", checkpoint.best_position_list},
+      {"cur_position_list", checkpoint.cur_position_list},
+      {"best_density_scale_list", checkpoint.best_density_scale_list},
+      {"cur_density_scale_list", checkpoint.cur_density_scale_list},
+      {"solver", checkpoint.solver},
+  };
+}
+
+void from_json(const nlohmann::json& json_obj, GPStateCheckpoint& checkpoint)
+{
+  checkpoint.current_iter = json_obj.at("current_iter").get<int32_t>();
+  checkpoint.sum_overflow = json_obj.at("sum_overflow").get<float>();
+  checkpoint.prev_hpwl = json_obj.at("prev_hpwl").get<int64_t>();
+  checkpoint.cur_hpwl = json_obj.at("cur_hpwl").get<int64_t>();
+  checkpoint.sum_overflow_threshold = json_obj.at("sum_overflow_threshold").get<float>();
+  checkpoint.hpwl_attach_sum_overflow = json_obj.at("hpwl_attach_sum_overflow").get<float>();
+  checkpoint.max_phi_coef_record = json_obj.at("max_phi_coef_record").get<bool>();
+  checkpoint.cur_opt_overflow_step = json_obj.at("cur_opt_overflow_step").get<int32_t>();
+  checkpoint.last_perturb_iter = json_obj.at("last_perturb_iter").get<int32_t>();
+  checkpoint.is_add_quad_penalty = json_obj.at("is_add_quad_penalty").get<bool>();
+  checkpoint.is_cal_phi = json_obj.at("is_cal_phi").get<bool>();
+  checkpoint.stop_placement = json_obj.at("stop_placement").get<bool>();
+  checkpoint.best_hpwl = json_obj.at("best_hpwl").get<int64_t>();
+  checkpoint.best_overflow = json_obj.at("best_overflow").get<float>();
+  checkpoint.quad_penalty_coeff = json_obj.at("quad_penalty_coeff").get<float>();
+  checkpoint.total_inst_area = json_obj.at("total_inst_area").get<int64_t>();
+  checkpoint.finished_iter = json_obj.at("finished_iter").get<int32_t>();
+  checkpoint.final_step_length = json_obj.at("final_step_length").get<float>();
+  checkpoint.final_gradient_norm = json_obj.at("final_gradient_norm").get<float>();
+  checkpoint.final_route_util = json_obj.at("final_route_util").get<float>();
+  checkpoint.overflow_record_list = json_obj.at("overflow_record_list").get<std::vector<float>>();
+  checkpoint.hpwl_record_list = json_obj.at("hpwl_record_list").get<std::vector<float>>();
+  checkpoint.iteration_records = json_obj.at("iteration_records").get<std::vector<NesterovIterationRecord>>();
+  checkpoint.wirelength_coef = json_obj.at("wirelength_coef").get<float>();
+  checkpoint.density_penalty = json_obj.at("density_penalty").get<float>();
+  checkpoint.is_diverged = json_obj.at("is_diverged").get<bool>();
+  checkpoint.max_phi_coef = json_obj.at("max_phi_coef").get<float>();
+  checkpoint.instance_names = json_obj.at("instance_names").get<std::vector<std::string>>();
+  checkpoint.instance_density_coords = json_obj.at("instance_density_coords").get<std::vector<Point<int32_t>>>();
+  checkpoint.instance_density_scales = json_obj.at("instance_density_scales").get<std::vector<float>>();
+  checkpoint.best_position_list = json_obj.at("best_position_list").get<std::vector<Point<int32_t>>>();
+  checkpoint.cur_position_list = json_obj.at("cur_position_list").get<std::vector<Point<int32_t>>>();
+  checkpoint.best_density_scale_list = json_obj.at("best_density_scale_list").get<std::vector<float>>();
+  checkpoint.cur_density_scale_list = json_obj.at("cur_density_scale_list").get<std::vector<float>>();
+  checkpoint.solver = json_obj.at("solver").get<Nesterov::State>();
+}
+
+bool saveGPCheckpointFile(const std::string& path, const GPStateCheckpoint& checkpoint)
+{
+  try {
+    const std::filesystem::path target(path);
+    if (target.has_parent_path()) {
+      std::filesystem::create_directories(target.parent_path());
+    }
+    const std::filesystem::path tmp = target.string() + ".tmp";
+    std::ofstream stream(tmp);
+    if (!stream.good()) {
+      return false;
+    }
+    stream << nlohmann::json(checkpoint).dump(2);
+    stream.close();
+    std::filesystem::rename(tmp, target);  // atomic replace: a killed writer never corrupts the previous checkpoint
+    return true;
+  } catch (const std::exception& e) {
+    LOG_ERROR << "[GP checkpoint] save failed: " << e.what();
+    return false;
+  }
+}
+
+bool loadGPCheckpointFile(const std::string& path, GPStateCheckpoint& checkpoint)
+{
+  try {
+    std::ifstream stream(path);
+    if (!stream.good()) {
+      LOG_ERROR << "[GP checkpoint] cannot open file: " << path;
+      return false;
+    }
+    nlohmann::json json_obj = nlohmann::json::parse(stream);
+    checkpoint = json_obj.get<GPStateCheckpoint>();
+    return true;
+  } catch (const std::exception& e) {
+    LOG_ERROR << "[GP checkpoint] load failed: " << e.what();
+    return false;
+  }
 }
 
 void NesterovPlace::notifyPLOverflowInfo(float final_overflow)

@@ -76,6 +76,7 @@ class PlacerIO
   bool runFillerInsertion(std::string config);
   bool runMacroPlacement();
   bool runGlobalPlacement();
+  bool runGlobalPlacementSession(std::string mode, int32_t iterations, bool random_init, std::string checkpoint = "");
   bool runLegalization();
   bool runDetailPlacement();
 

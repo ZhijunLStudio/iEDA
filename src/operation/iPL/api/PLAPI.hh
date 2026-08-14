@@ -28,6 +28,7 @@
 
 #include "PlacementStatus.hh"
 #include "PlacementResult.hh"
+#include "GPContract.hh"
 #include "external_api/ExternalAPI.hh"
 #include "report/PLReporter.hh"
 
@@ -38,6 +39,14 @@ class PlaceSummary;
 namespace ipl {
 
 #define iPLAPIInst ipl::PLAPI::getInst()
+
+class NesterovPlace;
+class PlacerDB;
+
+// Opaque GP session state (solver object + stage transaction + per-batch record
+// offset). Defined in PLAPI.cc so the api header stays independent of module
+// internals.
+struct GPSessionState;
 
 class PLAPI
 {
@@ -57,6 +66,14 @@ class PLAPI
   PlacementFlowResult runGPResult();
   bool runMP();
   bool runNetworkFlowSpread();
+
+  // ---- persistent GP session API (M1: in-memory session; M2 adds checkpoint persistence) ----
+  // Segmented global placement: gpRun(kStart, N) builds a session and runs N accepted
+  // iterations; gpRun(kAdvance, N) continues the same session. The legacy runGPResult()
+  // path is unchanged and drives the same session primitives internally.
+  GPRunResult gpRun(const GPRunRequest& request);
+  bool gpSessionActive() const { return _gp_session_state != nullptr; }
+  void gpCloseSession();
 
   bool runLG();
   bool runIncrLG();
@@ -178,6 +195,16 @@ class PLAPI
   bool _enable_json_output = false;
   std::string _failure_injection_stage;
   PlacementFlowStatus _flow_status;
+
+  // GP session (M1). The NesterovPlace object is kept alive across gpRun calls;
+  // the stage transaction and the per-batch iteration-record offset belong to the
+  // same session lifetime.
+  std::unique_ptr<GPSessionState> _gp_session_state;
+
+  GPRunResult gpRunStart(const GPRunRequest& request);
+  GPRunResult gpRunAdvance(const GPRunRequest& request);
+  GPRunResult gpRunResume(const GPRunRequest& request);
+  GPRunResult gpFinalizeTerminal(GPRunResult result);
 
   PLAPI() = default;
   PLAPI(const PLAPI&) = delete;

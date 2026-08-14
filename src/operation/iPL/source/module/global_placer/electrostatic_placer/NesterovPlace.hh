@@ -43,6 +43,12 @@
 #include "database/NesterovDatabase.hh"
 namespace ipl {
 
+// JSON (de)serialization of GPStateCheckpoint for cross-process resume (72c M2).
+// Float values round-trip exactly through nlohmann::json (double represents
+// every float; the reverse cast is lossless).
+bool saveGPCheckpointFile(const std::string& path, const GPStateCheckpoint& checkpoint);
+bool loadGPCheckpointFile(const std::string& path, GPStateCheckpoint& checkpoint);
+
 struct NesterovPlaceResult
 {
   bool success = false;
@@ -77,6 +83,23 @@ class NesterovPlace
 
   bool isJsonOutputEnabled() { return _enable_json_output; }
 
+  // ---- persistent session API (GP tool-ification, M1) ----
+  // The same NesterovPlace object is kept alive across calls so that the
+  // Nesterov solver state (coordinates, gradients, steplength, momentum)
+  // survives batch boundaries. Accepted-iteration budget semantics:
+  // internal backtracking does not count; a batch only stops at a complete
+  // accepted-iteration boundary or at a terminal condition.
+  bool initializeSession();                              // placable list + initial gradients + pre-loop setup
+  GPAdvanceOutcome advanceAcceptedIterations(int32_t budget);
+  void finishSession();                                  // terminal tail: kMaxIter finalize + notify + write back
+  void publishPlacement();                               // per-batch: notify + write back (does not touch solver state)
+  bool isSessionFinished() const { return _last_result.outcome != NesterovPlaceOutcome::kNotRun; }
+  int32_t currentIteration() const { return _current_iter; }
+
+  // ---- checkpoint persistence (M2) ----
+  GPStateCheckpoint captureCheckpoint() const;
+  bool restoreCheckpoint(const GPStateCheckpoint& checkpoint);
+
  private:
   NesterovPlaceConfig _nes_config;
   NesterovDatabase* _nes_database;
@@ -90,6 +113,38 @@ class NesterovPlace
   int64_t _total_inst_area = 0;
   bool _enable_json_output = false;
   int32_t _global_right_padding = 0;
+
+  // Persistent solve-loop state (hoisted from NesterovSolve() locals so the
+  // session survives across advanceAcceptedIterations() calls).
+  std::vector<NesInstance*> _placable_inst_list;
+  std::vector<Point<float>> _next_slp_wirelength_grad_list;
+  std::vector<Point<float>> _next_slp_density_grad_list;
+  std::vector<Point<float>> _next_slp_sum_grad_list;
+  std::ofstream _long_net_stream;
+  std::ofstream _info_stream;
+  int32_t _long_width = 0;
+  int32_t _long_height = 0;
+  bool _solve_setup_done = false;
+  int32_t _current_iter = 0;
+  float _sum_overflow = 0.0F;
+  int64_t _prev_hpwl = 0;
+  int64_t _cur_hpwl = 0;
+  float _sum_overflow_threshold = 1e25F;
+  float _hpwl_attach_sum_overflow = 1e25F;
+  bool _max_phi_coef_record = false;
+  int32_t _cur_opt_overflow_step = 0;
+  int32_t _last_perturb_iter = -50;
+  bool _is_add_quad_penalty = false;
+  bool _is_cal_phi = false;
+  bool _stop_placement = false;
+  std::vector<Point<int32_t>> _best_position_list;
+  std::vector<Point<int32_t>> _cur_position_list;
+  std::vector<float> _best_density_scale_list;
+  std::vector<float> _cur_density_scale_list;
+  int32_t _finished_iter = 0;
+  float _final_step_length = 0.0F;
+  float _final_gradient_norm = 0.0F;
+  float _final_route_util = 0.0F;
 
   void resetOverflowRecordList();
   void resetHPWLRecordList();
@@ -121,6 +176,7 @@ class NesterovPlace
 
   void initNesterovPlace(std::vector<NesInstance*>& inst_list);
   void NesterovSolve(std::vector<NesInstance*>& inst_list);
+  void setupNesterovSolve();
 
   std::vector<NesInstance*> obtianPlacableNesInstanceList();
 

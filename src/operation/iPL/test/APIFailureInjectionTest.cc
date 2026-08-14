@@ -41,7 +41,9 @@ struct Fixture
 {
   explicit Fixture(const std::string& name)
   {
-    output_dir = std::filesystem::path("/tmp/ipl_api_failure_injection_test") / name;
+    // LZJ: per-user suffix keeps the fixture re-runnable on shared machines where
+    // earlier runs (other users) left undeletable directories behind.
+    output_dir = std::filesystem::path("/tmp/ipl_api_failure_injection_test_lzj") / name;
     std::filesystem::remove_all(output_dir);
     std::filesystem::create_directories(output_dir);
     dmInst->get_config().set_output_path(output_dir.string());

@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "solver/nesterov/Nesterov.hh"
+
 namespace ipl {
 
 enum class NesterovPlaceOutcome
@@ -18,6 +20,17 @@ enum class NesterovPlaceOutcome
   kMaxIter,
   kInvalidMetric,
   kOverflowTargetMiss,
+};
+
+// Per-batch advance result of a persistent GP session.
+// The underlying solve outcome (when the session reaches a terminal condition)
+// is reported through NesterovPlaceOutcome via NesterovPlace::lastResult().
+enum class GPAdvanceOutcome
+{
+  kBudgetReached,   // requested iterations consumed, session remains Ready
+  kFinished,        // a terminal condition fired during this batch (see lastResult().outcome)
+  kAlreadyFinished, // the session had already reached a terminal condition; no iterations ran
+  kNotInitialized,  // advance called before session initialization
 };
 
 inline bool isNesterovHardFailure(NesterovPlaceOutcome outcome)
@@ -41,6 +54,59 @@ struct NesterovIterationRecord
   float route_util = 0.0f;
   bool quad_penalty_enabled = false;
   bool entropy_injected = false;
+};
+
+// Persistent GP session state (72c M2). Captured at accepted-iteration
+// boundaries; restoring it into a fresh NesterovPlace + Nesterov must reproduce
+// the exact numerical path of the next advance batch.
+struct GPStateCheckpoint
+{
+  // NesterovPlace session scalars.
+  int32_t current_iter = 0;
+  float sum_overflow = 0.0F;
+  int64_t prev_hpwl = 0;
+  int64_t cur_hpwl = 0;
+  float sum_overflow_threshold = 1e25F;
+  float hpwl_attach_sum_overflow = 1e25F;
+  bool max_phi_coef_record = false;
+  int32_t cur_opt_overflow_step = 0;
+  int32_t last_perturb_iter = -50;
+  bool is_add_quad_penalty = false;
+  bool is_cal_phi = false;
+  bool stop_placement = false;
+  int64_t best_hpwl = INT64_MAX;
+  float best_overflow = FLT_MAX;
+  float quad_penalty_coeff = 0.005F;
+  int64_t total_inst_area = 0;
+  int32_t finished_iter = 0;
+  float final_step_length = 0.0F;
+  float final_gradient_norm = 0.0F;
+  float final_route_util = 0.0F;
+  std::vector<float> overflow_record_list;
+  std::vector<float> hpwl_record_list;
+  std::vector<NesterovIterationRecord> iteration_records;
+
+  // NesterovDatabase scalars (gradient sums are recomputed at the start of each
+  // updatePenaltyGradient and _base_wirelength_coef is rebuilt deterministically).
+  float wirelength_coef = 0.0F;
+  float density_penalty = 0.0F;
+  bool is_diverged = false;
+
+  // Runtime config mutation (the only NesterovPlaceConfig field mutated mid-run).
+  float max_phi_coef = 1.05F;
+
+  // Per-placable-instance state, in placable-list order. instance_names doubles
+  // as the topology fingerprint validated on restore.
+  std::vector<std::string> instance_names;
+  std::vector<Point<int32_t>> instance_density_coords;
+  std::vector<float> instance_density_scales;
+  std::vector<Point<int32_t>> best_position_list;
+  std::vector<Point<int32_t>> cur_position_list;
+  std::vector<float> best_density_scale_list;
+  std::vector<float> cur_density_scale_list;
+
+  // Nesterov solver state.
+  Nesterov::State solver;
 };
 
 inline bool validateNesterovIterationRecord(const NesterovIterationRecord& record, int32_t previous_iter = 0,

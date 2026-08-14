@@ -43,6 +43,27 @@ class Nesterov
   Nesterov(Nesterov&& other) = delete;
   ~Nesterov() = default;
 
+  // Full solver state, captured/restored for GP session checkpointing (72c M2).
+  // Capturing between accepted iterations and restoring it must reproduce the
+  // exact numerical path of the next iteration.
+  struct State
+  {
+    int32_t current_iter = 0;
+    float current_parameter = 1.0F;
+    float next_parameter = 1.0F;
+    float current_steplength = 0.0F;
+    float next_steplength = 0.0F;
+    std::vector<Point<int32_t>> current_coordis;
+    std::vector<Point<int32_t>> next_coordis;
+    std::vector<Point<int32_t>> current_slp_coordis;
+    std::vector<Point<int32_t>> next_slp_coordis;
+    std::vector<Point<float>> current_gradients;
+    std::vector<Point<float>> next_gradients;
+  };
+
+  State captureState() const;
+  void restoreState(const State& state);
+
   // getter.
   int get_current_iter() const { return _current_iter; }
   const std::vector<Point<int32_t>>& get_current_coordis() const { return _current_coordis; }

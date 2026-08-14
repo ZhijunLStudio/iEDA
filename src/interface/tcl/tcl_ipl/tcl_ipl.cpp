@@ -19,6 +19,7 @@
 #include <glog/logging.h>
 
 #include "IdbInstance.h"
+#include "PLAPI.hh"
 #include "PlacementResult.hh"
 #include "idm.h"
 #include "ipl_io.h"
@@ -235,10 +236,36 @@ unsigned CmdPlacerDestroy::exec()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
 {
+  auto* mode_option = new TclStringOption("-mode", 1, nullptr);
+  addOption(mode_option);
+
+  auto* iterations_option = new TclIntOption("-iterations", 1, 20);
+  addOption(iterations_option);
+
+  auto* random_init_option = new TclIntOption("-random_init", 1, 1);
+  addOption(random_init_option);
+
+  auto* checkpoint_option = new TclStringOption("-checkpoint", 1, nullptr);
+  addOption(checkpoint_option);
 }
 
 unsigned CmdPlacerRunGP::check()
 {
+  TclOption* mode_option = getOptionOrArg("-mode");
+  if (mode_option->is_set_val()) {
+    const std::string mode = mode_option->getStringVal();
+    if (mode != "start" && mode != "advance" && mode != "resume" && mode != "close") {
+      LOG_ERROR << "placer_run_gp: unknown -mode value '" << mode << "' (expected start|advance|resume|close)";
+      return 0;
+    }
+    if (mode == "resume") {
+      TclOption* checkpoint_option = getOptionOrArg("-checkpoint");
+      if (!checkpoint_option->is_set_val()) {
+        LOG_ERROR << "placer_run_gp: -mode resume requires -checkpoint <path>";
+        return 0;
+      }
+    }
+  }
   return 1;
 }
 
@@ -248,7 +275,49 @@ unsigned CmdPlacerRunGP::exec()
     return 0;
   }
   auto* inst = iplf::PlacerIO::getInstance();
-  return ipl::placementTclResult(inst->runGlobalPlacement());
+
+  TclOption* mode_option = getOptionOrArg("-mode");
+  if (!mode_option->is_set_val()) {
+    // legacy full run
+    return ipl::placementTclResult(inst->runGlobalPlacement());
+  }
+
+  const std::string mode = mode_option->getStringVal();
+  if (mode == "close") {
+    iPLAPIInst.gpCloseSession();
+    std::cout << "iPL gp session closed." << std::endl;
+    return ipl::placementTclResult(true);
+  }
+
+  ipl::GPRunRequest request;
+  if (mode == "start") {
+    request.mode = ipl::GPRunMode::kStart;
+  } else if (mode == "resume") {
+    request.mode = ipl::GPRunMode::kResume;
+  } else {
+    request.mode = ipl::GPRunMode::kAdvance;
+  }
+  TclOption* iterations_option = getOptionOrArg("-iterations");
+  request.accepted_iterations = iterations_option->is_set_val() ? iterations_option->getIntVal() : 20;
+  TclOption* random_init_option = getOptionOrArg("-random_init");
+  if (random_init_option->is_set_val()) {
+    request.random_init = (random_init_option->getIntVal() != 0);
+  }
+  TclOption* checkpoint_option = getOptionOrArg("-checkpoint");
+  std::string checkpoint;
+  if (checkpoint_option->is_set_val()) {
+    checkpoint = checkpoint_option->getStringVal();
+  }
+
+  if (!inst->runGlobalPlacementSession(mode, request.accepted_iterations, request.random_init, checkpoint)) {
+    std::cerr << "iPL gp.run failed." << std::endl;
+    return ipl::placementTclResult(false);
+  }
+
+  // Surface the batch summary: the session API is the source of truth for the
+  // accepted-iteration budget semantics.
+  std::cout << "iPL gp.run (" << mode << ", " << request.accepted_iterations << " iterations) finished." << std::endl;
+  return ipl::placementTclResult(true);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

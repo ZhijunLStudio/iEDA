@@ -901,6 +901,324 @@ PlacementFlowResult PLAPI::runGPResult()
   return PlacementFlowResult::fromStage(_flow_status.global_placement);
 }
 
+namespace {
+GPStopReason mapGpStopReason(NesterovPlaceOutcome outcome)
+{
+  switch (outcome) {
+    case NesterovPlaceOutcome::kConverged:
+      return GPStopReason::kTargetReached;
+    case NesterovPlaceOutcome::kMaxIter:
+      return GPStopReason::kMaxIter;
+    case NesterovPlaceOutcome::kOverflowTargetMiss:
+      return GPStopReason::kOverflowTargetMiss;
+    case NesterovPlaceOutcome::kDiverged:
+      return GPStopReason::kDiverged;
+    case NesterovPlaceOutcome::kInvalidMetric:
+      return GPStopReason::kInvalidMetric;
+    case NesterovPlaceOutcome::kNotRun:
+      return GPStopReason::kNotRun;
+  }
+  return GPStopReason::kNotRun;
+}
+}  // namespace
+
+struct GPSessionState
+{
+  std::unique_ptr<NesterovPlace> session;
+  PlacerDB::StageTransaction transaction;
+  size_t record_offset = 0;
+};
+
+GPRunResult PLAPI::gpRun(const GPRunRequest& request)
+{
+  if (request.mode == GPRunMode::kStart) {
+    return gpRunStart(request);
+  }
+  if (request.mode == GPRunMode::kResume) {
+    return gpRunResume(request);
+  }
+  return gpRunAdvance(request);
+}
+
+GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
+{
+  GPRunResult result;
+  result.requested_iterations = request.accepted_iterations;
+
+  if (_gp_session_state != nullptr) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "gp session already active; close it before starting a new one";
+    return result;
+  }
+  if (request.accepted_iterations <= 0) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "accepted_iterations must be positive";
+    return result;
+  }
+
+  _gp_session_state = std::make_unique<GPSessionState>();
+  _gp_session_state->transaction = PlacerDBInst.beginStageTransaction("global_placement");
+  if (!_gp_session_state->transaction.active) {
+    _flow_status.global_placement = PlacementStatusEvaluator::stage(
+        "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false,
+        "global placement could not start a PlacerDB transaction");
+    _flow_status.gp_ran = true;
+    _flow_status.setFailure(_flow_status.global_placement);
+    writePlacementStatus();
+    _gp_session_state.reset();
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "global placement could not start a PlacerDB transaction";
+    return result;
+  }
+
+  if (request.random_init) {
+    RandomPlace(&PlacerDBInst).runRandomPlace();
+  }
+  _gp_session_state->session
+      = std::make_unique<NesterovPlace>(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());
+  _gp_session_state->session->printNesterovDatabase();
+  _gp_session_state->record_offset = 0;
+
+  if (!_gp_session_state->session->initializeSession()) {
+    // Initialization already finalized a terminal outcome (empty design,
+    // invalid initial gradient, ...); close out through the same terminal path.
+    return gpFinalizeTerminal(result);
+  }
+
+  return gpRunAdvance(request);
+}
+
+GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
+{
+  GPRunResult result;
+  result.requested_iterations = request.accepted_iterations;
+
+  if (_gp_session_state != nullptr) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "gp session already active; close it before resuming from a checkpoint";
+    return result;
+  }
+  if (request.accepted_iterations <= 0) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "accepted_iterations must be positive";
+    return result;
+  }
+  if (request.checkpoint_path.empty()) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "kResume requires checkpoint_path";
+    return result;
+  }
+
+  ipl::GPStateCheckpoint checkpoint;
+  if (!ipl::loadGPCheckpointFile(request.checkpoint_path, checkpoint)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "cannot load gp checkpoint: " + request.checkpoint_path;
+    return result;
+  }
+
+  _gp_session_state = std::make_unique<GPSessionState>();
+  _gp_session_state->transaction = PlacerDBInst.beginStageTransaction("global_placement");
+  if (!_gp_session_state->transaction.active) {
+    _flow_status.global_placement = PlacementStatusEvaluator::stage(
+        "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false,
+        "global placement could not start a PlacerDB transaction");
+    _flow_status.gp_ran = true;
+    _flow_status.setFailure(_flow_status.global_placement);
+    writePlacementStatus();
+    _gp_session_state.reset();
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "global placement could not start a PlacerDB transaction";
+    return result;
+  }
+
+  _gp_session_state->session
+      = std::make_unique<NesterovPlace>(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());
+  _gp_session_state->session->printNesterovDatabase();
+  if (!_gp_session_state->session->restoreCheckpoint(checkpoint)) {
+    PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction);
+    _gp_session_state.reset();
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "gp checkpoint does not match the current design";
+    return result;
+  }
+  // Batch record slicing continues after the restored records.
+  _gp_session_state->record_offset = checkpoint.iteration_records.size();
+
+  return gpRunAdvance(request);
+}
+
+GPRunResult PLAPI::gpRunAdvance(const GPRunRequest& request)
+{
+  GPRunResult result;
+  result.requested_iterations = request.accepted_iterations;
+
+  if (_gp_session_state == nullptr) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "no active gp session; call gpRun with mode=kStart first";
+    return result;
+  }
+  if (request.accepted_iterations <= 0) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "accepted_iterations must be positive";
+    return result;
+  }
+
+  const int32_t iter_before = _gp_session_state->session->currentIteration();
+  const auto advance = _gp_session_state->session->advanceAcceptedIterations(request.accepted_iterations);
+  const int32_t iter_after = _gp_session_state->session->currentIteration();
+
+  result.start_iteration = iter_before + 1;
+  result.end_iteration = iter_after;
+  result.executed_iterations = iter_after - iter_before;
+
+  // Slice this batch's iteration records out of the cumulative session records.
+  const auto& all_records = _gp_session_state->session->iterationRecords();
+  if (_gp_session_state->record_offset <= all_records.size()) {
+    for (auto it = all_records.begin() + _gp_session_state->record_offset; it != all_records.end(); ++it) {
+      GPIterationRecord record;
+      record.iter = it->iter;
+      record.hpwl = it->hpwl;
+      record.overflow = it->overflow;
+      record.step_length = it->step_length;
+      record.gradient_norm = it->gradient_norm;
+      record.density_penalty = it->density_penalty;
+      record.route_util = it->route_util;
+      record.quad_penalty_enabled = it->quad_penalty_enabled;
+      record.entropy_injected = it->entropy_injected;
+      result.iteration_records.push_back(record);
+    }
+  }
+  _gp_session_state->record_offset = all_records.size();
+
+  const auto& last = _gp_session_state->session->lastResult();
+  result.hpwl = last.hpwl;
+  result.overflow = last.overflow;
+  result.step_length = last.step_length;
+  result.density_penalty = last.density_penalty;
+
+  switch (advance) {
+    case GPAdvanceOutcome::kBudgetReached:
+      result.ok = true;
+      result.session_active = true;
+      result.stop_reason = GPStopReason::kBudgetReached;
+      // Per-batch publish: make this batch's placement observable without
+      // touching solver state (writeBackPlacerDB only reads solver coordinates).
+      _gp_session_state->session->publishPlacement();
+      PlacerDBInst.updateTopoManager();
+      PlacerDBInst.updateGridManager();
+      // Checkpoint-per-call (72b): every batch boundary persists the session so
+      // a later process can resume it. Save failure keeps the in-memory session
+      // usable but must surface as an error to the caller.
+      result.checkpoint_path = obtainTargetDir() + "/pl/gp_session_checkpoint.json";
+      if (!ipl::saveGPCheckpointFile(result.checkpoint_path, _gp_session_state->session->captureCheckpoint())) {
+        result.ok = false;
+        result.reason = "batch finished but checkpoint save failed: " + result.checkpoint_path;
+      }
+      break;
+    case GPAdvanceOutcome::kFinished:
+      result.ok = true;
+      _gp_session_state->session->finishSession();
+      PlacerDBInst.updateTopoManager();
+      PlacerDBInst.updateGridManager();
+      return gpFinalizeTerminal(result);
+    case GPAdvanceOutcome::kAlreadyFinished:
+      result.reason = "gp session has already reached a terminal condition";
+      result.stop_reason = mapGpStopReason(last.outcome);
+      return gpFinalizeTerminal(result);
+    case GPAdvanceOutcome::kNotInitialized:
+      result.ok = false;
+      result.reason = "gp session was not initialized";
+      result.stop_reason = GPStopReason::kRejected;
+      break;
+  }
+  return result;
+}
+
+GPRunResult PLAPI::gpFinalizeTerminal(GPRunResult result)
+{
+  const auto& gp_run = _gp_session_state->session->lastResult();
+  const int64_t changed_instance_count = _gp_session_state->transaction.changedInstanceCount();
+
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  switch (gp_run.outcome) {
+    case NesterovPlaceOutcome::kConverged:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kOk, true, true, true, gp_run.reason, gp_run.hpwl, gp_run.hpwl,
+          changed_instance_count, {});
+      break;
+    case NesterovPlaceOutcome::kOverflowTargetMiss:
+    case NesterovPlaceOutcome::kMaxIter:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPOverflowTargetMiss, true, false, true, gp_run.reason, gp_run.hpwl,
+          gp_run.hpwl, changed_instance_count, {});
+      break;
+    case NesterovPlaceOutcome::kInvalidMetric:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false, gp_run.reason, gp_run.hpwl, gp_run.hpwl,
+          changed_instance_count, {});
+      break;
+    case NesterovPlaceOutcome::kDiverged:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPDiverged, false, false, false, gp_run.reason, gp_run.hpwl, gp_run.hpwl,
+          changed_instance_count, {});
+      break;
+    case NesterovPlaceOutcome::kNotRun:
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false, "global placement did not run", 0, 0, 0,
+          {});
+      break;
+  }
+  _flow_status.global_placement.overflow = gp_run.overflow;
+  _flow_status.global_placement.target_overflow = PlacerDBInst.get_placer_config()->get_nes_config().get_target_overflow();
+  _flow_status.global_placement.hpwl = gp_run.hpwl;
+  _flow_status.global_placement.metric_after = gp_run.hpwl;
+  _flow_status.global_placement.exhibit = nesterovIterationExhibit(gp_run.iteration_records);
+  _flow_status.gp_ran = true;
+
+  const bool stage_success = _flow_status.global_placement.execution_success && _flow_status.global_placement.quality_success;
+  if (stage_success) {
+    if (!PlacerDBInst.commitStageTransaction(_gp_session_state->transaction)) {
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false,
+          "global placement could not commit its PlacerDB transaction", gp_run.hpwl, gp_run.hpwl, changed_instance_count);
+      _flow_status.global_placement.changed_count = changed_instance_count;
+    }
+  } else if (!PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction)) {
+    _flow_status.global_placement.message += "; failed to rollback global placement transaction";
+  }
+
+  _flow_status.setFailure(_flow_status.global_placement);
+  writePlacementStatus();
+  LOG_ERROR_IF(!_flow_status.global_placement.execution_success) << _flow_status.global_placement.message;
+
+  result.ok = !isNesterovHardFailure(gp_run.outcome);
+  result.session_active = false;
+  result.stop_reason = mapGpStopReason(gp_run.outcome);
+  result.hpwl = gp_run.hpwl;
+  result.overflow = gp_run.overflow;
+  result.step_length = gp_run.step_length;
+  result.density_penalty = gp_run.density_penalty;
+  result.reason = gp_run.reason;
+
+  _gp_session_state->transaction = PlacerDB::StageTransaction{};
+  _gp_session_state->record_offset = 0;
+  _gp_session_state.reset();
+  return result;
+}
+
+void PLAPI::gpCloseSession()
+{
+  if (_gp_session_state == nullptr) {
+    return;
+  }
+  // Discarding an unfinished session rolls back its stage transaction so the
+  // design returns to the pre-session state (72b lineage semantics: close = discard).
+  if (_gp_session_state->transaction.active) {
+    PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction);
+  }
+  _gp_session_state.reset();
+}
+
 bool PLAPI::runLG()
 {
   if (failInjectedStage("legalization", PlacementStatusCode::kLGSolverFailed,
