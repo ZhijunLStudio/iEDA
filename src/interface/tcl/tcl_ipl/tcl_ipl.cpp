@@ -254,8 +254,8 @@ unsigned CmdPlacerRunGP::check()
   TclOption* mode_option = getOptionOrArg("-mode");
   if (mode_option->is_set_val()) {
     const std::string mode = mode_option->getStringVal();
-    if (mode != "start" && mode != "advance" && mode != "resume" && mode != "close") {
-      LOG_ERROR << "placer_run_gp: unknown -mode value '" << mode << "' (expected start|advance|resume|close)";
+    if (mode != "start" && mode != "advance" && mode != "resume" && mode != "relinearize" && mode != "close") {
+      LOG_ERROR << "placer_run_gp: unknown -mode value '" << mode << "' (expected start|advance|resume|relinearize|close)";
       return 0;
     }
     if (mode == "resume") {

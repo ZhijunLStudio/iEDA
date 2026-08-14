@@ -33,7 +33,10 @@
 #include <cfloat>
 #include <cmath>
 #include <filesystem>
+#include <map>
+#include <numeric>
 #include <random>
+#include <set>
 
 #include "Log.hh"
 #include "PLAPI.hh"
@@ -1334,6 +1337,13 @@ void NesterovPlace::updatePenaltyGradient(std::vector<NesInstance*>& nInst_list,
 
     sum_grads[i].set_x(sum_grads[i].get_x() / sum_precondition.get_x());
     sum_grads[i].set_y(sum_grads[i].get_y() / sum_precondition.get_y());
+
+    // Local scope (M4): scale the preconditioned gradient by the movement
+    // coefficient. Empty scope = global GP, bit-identical to no masking.
+    if (!_move_coeff_list.empty()) {
+      sum_grads[i].set_x(sum_grads[i].get_x() * _move_coeff_list[i]);
+      sum_grads[i].set_y(sum_grads[i].get_y() * _move_coeff_list[i]);
+    }
   }
 
   if (std::isnan(_nes_database->_wirelength_grad_sum) || std::isinf(_nes_database->_wirelength_grad_sum)
@@ -1469,6 +1479,15 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
   auto* solver = _nes_database->_nesterov_solver;
   const size_t inst_size = _placable_inst_list.size();
 
+  // Local scope (M4): snapshot the batch-start coordinates; context instances
+  // (coefficient 0) are pinned to them for the whole batch.
+  if (!_move_coeff_list.empty()) {
+    _frozen_coord_list.resize(inst_size);
+    for (size_t i = 0; i < inst_size; i++) {
+      _frozen_coord_list[i] = _placable_inst_list[i]->get_density_center_coordi();
+    }
+  }
+
   Rectangle<int32_t> core_shape = _nes_database->_placer_db->get_layout()->get_core_shape();
 
   // opt setting
@@ -1488,6 +1507,25 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
       for (size_t i = 0; i < inst_size; i++) {
         Point<int32_t> next_coordi(next_coordi_list[i].get_x(), next_coordi_list[i].get_y());
         Point<int32_t> next_slp_coordi(next_slp_coordi_list[i].get_x(), next_slp_coordi_list[i].get_y());
+
+        // Local scope (M4): freeze context (coeff 0) at the batch-start position
+        // and scale halo (0<coeff<1) movement; active (coeff 1) passes through.
+        if (!_move_coeff_list.empty()) {
+          const float coeff = _move_coeff_list[i];
+          if (coeff <= 0.0F) {
+            next_coordi = _frozen_coord_list[i];
+            next_slp_coordi = _frozen_coord_list[i];
+          } else if (coeff < 1.0F) {
+            next_coordi.set_x(_frozen_coord_list[i].get_x()
+                              + static_cast<int32_t>(coeff * (next_coordi.get_x() - _frozen_coord_list[i].get_x())));
+            next_coordi.set_y(_frozen_coord_list[i].get_y()
+                              + static_cast<int32_t>(coeff * (next_coordi.get_y() - _frozen_coord_list[i].get_y())));
+            next_slp_coordi.set_x(_frozen_coord_list[i].get_x()
+                                  + static_cast<int32_t>(coeff * (next_slp_coordi.get_x() - _frozen_coord_list[i].get_x())));
+            next_slp_coordi.set_y(_frozen_coord_list[i].get_y()
+                                  + static_cast<int32_t>(coeff * (next_slp_coordi.get_y() - _frozen_coord_list[i].get_y())));
+          }
+        }
 
         updateDensityCenterCoordiLayoutInside(_placable_inst_list[i], next_coordi, core_shape);
         solver->correctNextCoordi(i, next_coordi);
@@ -1990,6 +2028,122 @@ bool NesterovPlace::restoreCheckpoint(const GPStateCheckpoint& checkpoint)
 
   _solve_setup_done = true;
   return true;
+}
+
+void NesterovPlace::setMovementCoeffs(const std::vector<float>& move_coeff_list)
+{
+  _move_coeff_list = move_coeff_list;
+}
+
+void NesterovPlace::buildHotOverflowScope(float active_ratio, float halo_coeff)
+{
+  auto* grid_manager = _nes_database->_grid_manager;
+  // Refresh the bin grid from the current instance coordinates: after a
+  // checkpoint restore (or an external coordinate change) the grid occupancy is
+  // stale, and the scope must reflect where the hotspots actually are.
+  _nes_database->_bin_grid->updateBinGrid(_placable_inst_list, _nes_config.get_thread_num());
+  auto& grid_2d = grid_manager->get_grid_2d_list();
+  const int32_t cnt_x = grid_manager->get_grid_cnt_x();
+  const int32_t cnt_y = grid_manager->get_grid_cnt_y();
+
+  struct HotBin
+  {
+    int32_t idx;
+    int64_t overflow;
+  };
+  std::vector<HotBin> hot;
+  for (int32_t y = 0; y < cnt_y; y++) {
+    for (int32_t x = 0; x < cnt_x; x++) {
+      const int64_t overflow = grid_2d[y][x].obtainGridOverflowArea();
+      if (overflow > 0) {
+        hot.push_back({y * cnt_x + x, overflow});
+      }
+    }
+  }
+  std::sort(hot.begin(), hot.end(), [](const HotBin& lhs, const HotBin& rhs) { return lhs.overflow > rhs.overflow; });
+
+  const size_t n = _placable_inst_list.size();
+  std::vector<float> coeffs(n, 0.0F);
+  if (hot.empty() || n == 0) {
+    _move_coeff_list = coeffs;
+    return;
+  }
+
+  // Active: instances whose density center falls in the hottest overflowing bins.
+  const size_t take = std::max<size_t>(1, std::min<size_t>(hot.size(), static_cast<size_t>(hot.size() * active_ratio)));
+  std::set<int32_t> hot_bins;
+  for (size_t k = 0; k < take; k++) {
+    hot_bins.insert(hot[k].idx);
+  }
+
+  const auto region = grid_manager->get_shape();
+  const int32_t bin_w = grid_manager->get_grid_size_x();
+  const int32_t bin_h = grid_manager->get_grid_size_y();
+
+  std::vector<bool> active(n, false);
+  for (size_t i = 0; i < n; i++) {
+    const auto center = _placable_inst_list[i]->get_density_center_coordi();
+    int32_t gx = (center.get_x() - region.get_ll_x()) / bin_w;
+    int32_t gy = (center.get_y() - region.get_ll_y()) / bin_h;
+    gx = std::clamp(gx, 0, cnt_x - 1);
+    gy = std::clamp(gy, 0, cnt_y - 1);
+    if (hot_bins.count(gy * cnt_x + gx) != 0) {
+      active[i] = true;
+      coeffs[i] = 1.0F;
+    }
+  }
+
+  // Halo: net-hop closure around the active set.
+  applyNetHaloClosure(active, coeffs, halo_coeff);
+
+  _move_coeff_list = coeffs;
+}
+
+void NesterovPlace::applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff)
+{
+  const size_t n = _placable_inst_list.size();
+  std::map<int32_t, std::vector<int32_t>> net_to_insts;
+  for (size_t i = 0; i < n; i++) {
+    for (auto* n_pin : _placable_inst_list[i]->get_nPin_list()) {
+      net_to_insts[n_pin->get_nNet()->get_net_id()].push_back(i);
+    }
+  }
+  for (size_t i = 0; i < n; i++) {
+    if (!active[i]) {
+      continue;
+    }
+    for (auto* n_pin : _placable_inst_list[i]->get_nPin_list()) {
+      for (int32_t j : net_to_insts[n_pin->get_nNet()->get_net_id()]) {
+        if (!active[j] && coeffs[j] == 0.0F) {
+          coeffs[j] = halo_coeff;
+        }
+      }
+    }
+  }
+}
+
+void NesterovPlace::buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed)
+{
+  const size_t n = _placable_inst_list.size();
+  std::vector<float> coeffs(n, 0.0F);
+  if (n == 0) {
+    _move_coeff_list = coeffs;
+    return;
+  }
+
+  std::vector<size_t> indices(n);
+  std::iota(indices.begin(), indices.end(), 0);
+  std::mt19937 rng(seed);
+  std::shuffle(indices.begin(), indices.end(), rng);
+
+  std::vector<bool> active(n, false);
+  const size_t take = std::min(active_count, n);
+  for (size_t k = 0; k < take; k++) {
+    active[indices[k]] = true;
+    coeffs[indices[k]] = 1.0F;
+  }
+  applyNetHaloClosure(active, coeffs, halo_coeff);
+  _move_coeff_list = coeffs;
 }
 
 void to_json(nlohmann::json& json_obj, const Point<int32_t>& point)

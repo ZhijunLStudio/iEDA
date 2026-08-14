@@ -101,6 +101,29 @@ class NesterovPlace
   bool restoreCheckpoint(const GPStateCheckpoint& checkpoint);
   std::string computeConfigFingerprint() const;
 
+  // ---- local scope (M4) ----
+  // Movement coefficients indexed by placable-list order: 1 = active (full
+  // update), (0,1) = halo (scaled update), 0 = context (coordinates frozen).
+  // Empty list = global GP (the default path is bit-identical without masking).
+  void setMovementCoeffs(const std::vector<float>& move_coeff_list);
+  void clearMovementScope()
+  {
+    _move_coeff_list.clear();
+    _frozen_coord_list.clear();
+  }
+  const std::vector<float>& movementCoeffs() const { return _move_coeff_list; }
+  // Build a scope from the current overflow bins: the hottest overflowing bins
+  // (top active_ratio fraction) seed active instances; their net neighbors
+  // become halo with halo_coeff; everything else is context.
+  void buildHotOverflowScope(float active_ratio, float halo_coeff);
+  // Ablation control for the scope-finding question: a RANDOM active set of the
+  // same size (fixed seed = reproducible) with the same net-hop halo closure.
+  // Used by the experiment suite to test whether hot-bin selection matters.
+  void buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed);
+
+ private:
+  void applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff);
+
  private:
   NesterovPlaceConfig _nes_config;
   NesterovDatabase* _nes_database;
@@ -127,6 +150,11 @@ class NesterovPlace
   int32_t _long_height = 0;
   bool _solve_setup_done = false;
   int32_t _current_iter = 0;
+
+  // Local scope (M4): per-placable-instance movement coefficients and the
+  // batch-start coordinate snapshot used to freeze context instances.
+  std::vector<float> _move_coeff_list;
+  std::vector<Point<int32_t>> _frozen_coord_list;
   float _sum_overflow = 0.0F;
   int64_t _prev_hpwl = 0;
   int64_t _cur_hpwl = 0;

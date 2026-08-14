@@ -53,11 +53,14 @@ TODO: ics55 power/DRC report scripts; sky130 IR-drop PDN; nangate45 gcd DRC clos
 - GP session tool (docs/ai/72-72c, M1+M2 done 2026-08-14): `placer_run_gp -mode {start|advance|resume|close}
   -iterations N -random_init 0|1 [-checkpoint <file>]` segments Nesterov GP into accepted-iteration batches;
   every budget-limited batch auto-saves `<output>/pl/gp_session_checkpoint.json` (atomic), resume works
-  cross-process (validates a config fingerprint + instance-name topology fingerprint). Legacy
+  cross-process (validates a config fingerprint + instance-name topology fingerprint). `-mode relinearize`
+  restarts a session from externally-legalized coordinates (advance after LG/DP is rejected as
+  invalidated). Local-scope machinery exists but is NOT exposed: control experiments show hot-bin
+  scoping ≈ random scoping and no robust win over global GP (72c §17). Legacy
   `placer_run_gp` (no args) unchanged. Equivalence tests (19 scenarios, incl. congestion-enabled and
   4-thread variants, all bitwise-identical vs continuous runs):
   `build/bin/ipl_gp_session_test --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|
-  seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|legacy|full|validate}`
+  seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|invalidate|relinearize|local_degenerate|local_context_frozen|local_control|local_ablate|local_sweep|legacy|full|validate}`
   (compare /tmp/ipl_gp_session_test/<scenario>/coords.txt + records.txt). Test configs live in
   src/operation/iPL/test/configs/. iPL test inputs point at
   benchmarks/results/flow_20260814_gcd/gcd_sky130_a/workspace/result/iFP_result.def

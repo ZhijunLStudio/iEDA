@@ -927,6 +927,10 @@ struct GPSessionState
   std::unique_ptr<NesterovPlace> session;
   PlacerDB::StageTransaction transaction;
   size_t record_offset = 0;
+  // PlacerDB revision at session start. External tools (LG/DP/...) commit their
+  // own stage transactions and bump the revision; a mismatch means the session's
+  // solver state (momentum/gradients) no longer matches the design coordinates.
+  int64_t base_revision = 0;
 };
 
 GPRunResult PLAPI::gpRun(const GPRunRequest& request)
@@ -946,9 +950,16 @@ GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
   result.requested_iterations = request.accepted_iterations;
 
   if (_gp_session_state != nullptr) {
-    result.stop_reason = GPStopReason::kRejected;
-    result.reason = "gp session already active; close it before starting a new one";
-    return result;
+    // An invalidated session (external LG/DP changed the design) cannot be
+    // advanced and is discarded here: the relinearize flow (GP -> LG -> GP)
+    // starts fresh from the modified coordinates without an explicit close.
+    if (_gp_session_state->base_revision != PlacerDBInst.get_revision()) {
+      gpCloseSession();
+    } else {
+      result.stop_reason = GPStopReason::kRejected;
+      result.reason = "gp session already active; close it before starting a new one";
+      return result;
+    }
   }
   if (request.accepted_iterations <= 0) {
     result.stop_reason = GPStopReason::kRejected;
@@ -978,6 +989,7 @@ GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
       = std::make_unique<NesterovPlace>(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());
   _gp_session_state->session->printNesterovDatabase();
   _gp_session_state->record_offset = 0;
+  _gp_session_state->base_revision = PlacerDBInst.get_revision();
 
   if (!_gp_session_state->session->initializeSession()) {
     // Initialization already finalized a terminal outcome (empty design,
@@ -1043,6 +1055,7 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
   }
   // Batch record slicing continues after the restored records.
   _gp_session_state->record_offset = checkpoint.iteration_records.size();
+  _gp_session_state->base_revision = PlacerDBInst.get_revision();
 
   return gpRunAdvance(request);
 }
@@ -1060,6 +1073,15 @@ GPRunResult PLAPI::gpRunAdvance(const GPRunRequest& request)
   if (request.accepted_iterations <= 0) {
     result.stop_reason = GPStopReason::kRejected;
     result.reason = "accepted_iterations must be positive";
+    return result;
+  }
+
+  // Session invalidation (M3): external tools (LG/DP/manual edits) commit their
+  // own transactions and bump the PlacerDB revision. Advancing a session whose
+  // coordinates were externally changed would silently reuse stale momentum.
+  if (_gp_session_state->base_revision != PlacerDBInst.get_revision()) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "gp session invalidated by external placement changes; close it and start with random_init=0 (relinearize)";
     return result;
   }
 

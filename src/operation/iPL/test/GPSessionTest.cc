@@ -37,6 +37,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -91,19 +93,26 @@ bool initDesign(const std::string& scenario, const std::string& config_path = IP
 
 bool dumpCoordinates(const std::string& scenario, const std::string& file_name = "coords.txt")
 {
-  auto* idb_builder = dmInst->get_idb_builder();
-  auto* design = idb_builder->get_def_service()->get_design();
+  // Real solver-published coordinates live on the iPL PlacerDB layer
+  // (writeBackPlacerDB updates iPL Instance centers; the idb layer only syncs
+  // via writeBackSourceDataBase at flow end). Dump PlacerDB centers so the
+  // equivalence comparisons check actual placement, not the initial DEF.
+  auto* design = PlacerDBInst.get_design();
   if (design == nullptr) {
     return false;
   }
 
   std::vector<std::string> lines;
-  for (auto* inst : design->get_instance_list()->get_instance_list()) {
-    auto* coord = inst->get_coordinate();
-    lines.push_back(inst->get_name() + " " + std::to_string(coord->get_x()) + " " + std::to_string(coord->get_y()));
+  for (auto* inst : design->get_instance_list()) {
+    if (inst == nullptr || inst->isFixed()) {
+      continue;
+    }
+    const auto center = inst->get_center_coordi();
+    lines.push_back(inst->get_name() + " " + std::to_string(center.get_x()) + " " + std::to_string(center.get_y()));
   }
   std::sort(lines.begin(), lines.end());
 
+  std::filesystem::create_directories(scenarioRoot(scenario));
   std::ofstream out(scenarioRoot(scenario) + "/" + file_name);
   if (!out.good()) {
     return false;
@@ -491,6 +500,404 @@ int runCheckpointResumeMultiThread()
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+// ---- M3 scenarios: session invalidation + relinearize ----
+
+int runInvalidate()
+{
+  bool ok = true;
+  ipl::GPRunRequest start_request;
+  start_request.mode = ipl::GPRunMode::kStart;
+  start_request.accepted_iterations = 10;
+  start_request.random_init = true;
+  const auto first = iPLAPIInst.gpRun(start_request);
+  ok &= require(first.ok, "invalidate: first batch must succeed");
+
+  // External tool (legalization) commits its own transaction -> revision bump.
+  ok &= require(iPLAPIInst.runLG(), "invalidate: runLG must succeed on the published placement");
+
+  ipl::GPRunRequest advance_request;
+  advance_request.mode = ipl::GPRunMode::kAdvance;
+  advance_request.accepted_iterations = 10;
+  const auto advance = iPLAPIInst.gpRun(advance_request);
+  ok &= require(!advance.ok && advance.stop_reason == ipl::GPStopReason::kRejected,
+                "invalidate: advance after external placement changes must be rejected");
+  ok &= require(advance.reason.find("invalidated") != std::string::npos,
+                "invalidate: rejection reason must mention invalidation");
+
+  // Relinearize: keep the legalized coordinates, rebuild solver state from them.
+  // The invalidated session is auto-discarded by the start call (no explicit close).
+  ipl::GPRunRequest relinearize_request;
+  relinearize_request.mode = ipl::GPRunMode::kStart;
+  relinearize_request.accepted_iterations = 10;
+  relinearize_request.random_init = false;
+  const auto relinearized = iPLAPIInst.gpRun(relinearize_request);
+  ok &= require(relinearized.ok, "invalidate: keep-init start after close must succeed");
+  ok &= require(relinearized.start_iteration == 1, "invalidate: relinearized session must restart at iteration 1");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runRelinearize()
+{
+  bool ok = true;
+  ipl::GPRunRequest start_request;
+  start_request.mode = ipl::GPRunMode::kStart;
+  start_request.accepted_iterations = 10;
+  start_request.random_init = true;
+  const auto first = iPLAPIInst.gpRun(start_request);
+  ok &= require(first.ok, "relinearize: first batch must succeed");
+
+  ok &= require(iPLAPIInst.runLG(), "relinearize: runLG must succeed");
+  iPLAPIInst.gpCloseSession();
+
+  ipl::GPRunRequest relinearize_request;
+  relinearize_request.mode = ipl::GPRunMode::kStart;
+  relinearize_request.accepted_iterations = 10;
+  relinearize_request.random_init = false;
+  const auto relinearized = iPLAPIInst.gpRun(relinearize_request);
+  ok &= require(relinearized.ok, "relinearize: keep-init start must succeed");
+  ok &= require(relinearized.start_iteration == 1 && relinearized.end_iteration == 10,
+                "relinearize: new session must run iterations 1-10");
+  ok &= require(dumpCoordinates("relinearize"), "must dump relinearized coordinates");
+  ok &= require(dumpRecords(relinearized.iteration_records, "relinearize"), "must dump relinearized records");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// ---- M4 scenarios: local GP invariants + the control experiment ----
+
+std::unique_ptr<ipl::NesterovPlace> restoreSolverFromCheckpoint(const std::string& checkpoint_path)
+{
+  ipl::GPStateCheckpoint checkpoint;
+  if (!ipl::loadGPCheckpointFile(checkpoint_path, checkpoint)) {
+    return nullptr;
+  }
+  auto session = std::make_unique<ipl::NesterovPlace>(PlacerDBInst.get_placer_config(), &PlacerDBInst, false);
+  if (!session->restoreCheckpoint(checkpoint)) {
+    return nullptr;
+  }
+  return session;
+}
+
+void dumpScopeStats(const std::vector<float>& coeffs, const std::string& scenario)
+{
+  int32_t active = 0;
+  int32_t halo = 0;
+  int32_t context = 0;
+  for (float coeff : coeffs) {
+    if (coeff >= 1.0F) {
+      active++;
+    } else if (coeff > 0.0F) {
+      halo++;
+    } else {
+      context++;
+    }
+  }
+  std::filesystem::create_directories(scenarioRoot(scenario));
+  std::ofstream out(scenarioRoot(scenario) + "/scope_stats.txt");
+  out << "active=" << active << " halo=" << halo << " context=" << context << '\n';
+}
+
+// Degeneration invariant: an explicit all-1 movement scope must reproduce the
+// plain global path bitwise.
+int runLocalDegenerate()
+{
+  bool ok = true;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save/pl/gp_session_checkpoint.json";
+  auto session = restoreSolverFromCheckpoint(checkpoint_path);
+  ok &= require(session != nullptr, "degenerate: must restore the ckpt_save checkpoint");
+
+  ipl::GPStateCheckpoint checkpoint;
+  ipl::loadGPCheckpointFile(checkpoint_path, checkpoint);
+  std::vector<float> all_ones(checkpoint.instance_names.size(), 1.0F);
+  session->setMovementCoeffs(all_ones);
+  const auto advance = session->advanceAcceptedIterations(20);
+  ok &= require(advance == ipl::GPAdvanceOutcome::kBudgetReached, "degenerate: 20-iteration batch must finish on budget");
+  session->publishPlacement();
+  PlacerDBInst.updateTopoManager();
+  PlacerDBInst.updateGridManager();
+  ok &= require(dumpCoordinates("local_degenerate"), "must dump coordinates");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// Zero-write invariant: context instances (coefficient 0) must not move at all
+// during a local batch.
+int runLocalContextFrozen()
+{
+  bool ok = true;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save/pl/gp_session_checkpoint.json";
+  ipl::GPStateCheckpoint checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(checkpoint_path, checkpoint), "context-frozen: must load the checkpoint");
+
+  auto session = restoreSolverFromCheckpoint(checkpoint_path);
+  ok &= require(session != nullptr, "context-frozen: must restore the ckpt_save checkpoint");
+
+  // Publish the restored (iter-20) state first: the invariant is "context must
+  // not move DURING the batch", so the baseline is the batch-start placement.
+  session->publishPlacement();
+  PlacerDBInst.updateTopoManager();
+  PlacerDBInst.updateGridManager();
+
+  session->buildHotOverflowScope(0.2F, 0.5F);
+  const auto& coeffs = session->movementCoeffs();
+  int32_t context_count = 0;
+  int32_t active_count = 0;
+  for (float coeff : coeffs) {
+    context_count += (coeff <= 0.0F) ? 1 : 0;
+    active_count += (coeff >= 1.0F) ? 1 : 0;
+  }
+  dumpScopeStats(coeffs, "local_context_frozen");
+  ok &= require(active_count > 0, "context-frozen: scope must contain at least one active instance");
+  ok &= require(context_count > 0, "context-frozen: scope must leave at least one context instance");
+
+  // Snapshot PlacerDB centers (the iter-20 published placement) by name.
+  auto* design = PlacerDBInst.get_design();
+  std::map<std::string, std::string> before;
+  for (auto* inst : design->get_instance_list()) {
+    if (inst == nullptr || inst->isFixed()) {
+      continue;
+    }
+    const auto center = inst->get_center_coordi();
+    before[inst->get_name()] = std::to_string(center.get_x()) + " " + std::to_string(center.get_y());
+  }
+
+  const auto advance = session->advanceAcceptedIterations(20);
+  ok &= require(advance == ipl::GPAdvanceOutcome::kBudgetReached, "context-frozen: batch must finish on budget");
+  session->publishPlacement();
+  PlacerDBInst.updateTopoManager();
+  PlacerDBInst.updateGridManager();
+
+  // Every context instance must be bitwise at its pre-batch position.
+  int32_t context_moved = 0;
+  int32_t context_seen = 0;
+  for (size_t i = 0; i < coeffs.size(); i++) {
+    if (coeffs[i] > 0.0F) {
+      continue;
+    }
+    context_seen++;
+    for (auto* inst : design->get_instance_list()) {
+      if (inst != nullptr && !inst->isFixed() && inst->get_name() == checkpoint.instance_names[i]) {
+        const auto center = inst->get_center_coordi();
+        const std::string after = std::to_string(center.get_x()) + " " + std::to_string(center.get_y());
+        if (before[inst->get_name()] != after) {
+          context_moved++;
+        }
+        break;
+      }
+    }
+  }
+  if (context_moved > 0) {
+    std::cerr << "[DEBUG] context_moved=" << context_moved << " of " << context_seen << " context instances\n";
+  }
+  ok &= require(context_seen > 0, "context-frozen: must have observed context instances");
+  ok &= require(context_moved == 0, "context-frozen: context instances must not move during a local batch");
+  ok &= require(dumpCoordinates("local_context_frozen"), "must dump coordinates");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// Control experiment: from the same iter-20 checkpoint, branch A runs global
+// 20 iterations and branch B runs a hot-overflow local scope for 20 iterations.
+// Artifacts (records + coordinates + scope stats) are compared by the driver.
+int runLocalControl()
+{
+  bool ok = true;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save/pl/gp_session_checkpoint.json";
+  ipl::GPStateCheckpoint checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(checkpoint_path, checkpoint), "control: must load the checkpoint");
+  const size_t record_offset = checkpoint.iteration_records.size();
+
+  // Branch A: global.
+  {
+    auto session = restoreSolverFromCheckpoint(checkpoint_path);
+    ok &= require(session != nullptr, "control: branch A must restore the checkpoint");
+    ok &= require(session->advanceAcceptedIterations(20) == ipl::GPAdvanceOutcome::kBudgetReached, "control: branch A must finish");
+    session->publishPlacement();
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+    ok &= require(dumpCoordinates("local_global_branch"), "control: branch A must dump coordinates");
+
+    const auto& all_records = session->iterationRecords();
+    std::ofstream out(scenarioRoot("local_global_branch") + "/records.txt");
+    for (auto it = all_records.begin() + record_offset; it != all_records.end(); ++it) {
+      out << it->iter << ' ' << it->hpwl << ' ' << it->overflow << ' ' << it->step_length << ' ' << it->gradient_norm << '\n';
+    }
+  }
+
+  // Branch B: local scope on the hottest overflow bins.
+  {
+    auto session = restoreSolverFromCheckpoint(checkpoint_path);
+    ok &= require(session != nullptr, "control: branch B must restore the checkpoint");
+    session->buildHotOverflowScope(0.2F, 0.5F);
+    dumpScopeStats(session->movementCoeffs(), "local_scope_branch");
+    ok &= require(session->advanceAcceptedIterations(20) == ipl::GPAdvanceOutcome::kBudgetReached, "control: branch B must finish");
+    session->publishPlacement();
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+    ok &= require(dumpCoordinates("local_scope_branch"), "control: branch B must dump coordinates");
+
+    const auto& all_records = session->iterationRecords();
+    std::ofstream out(scenarioRoot("local_scope_branch") + "/records.txt");
+    for (auto it = all_records.begin() + record_offset; it != all_records.end(); ++it) {
+      out << it->iter << ' ' << it->hpwl << ' ' << it->overflow << ' ' << it->step_length << ' ' << it->gradient_norm << '\n';
+    }
+  }
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// Ablation: does hot-bin scope selection beat a random scope of the same size?
+// Branches (all from the same iter-20 checkpoint, 20 iterations each):
+//   global / hot-0.2 / random-42 (same active count) / random-43
+int runLocalAblate()
+{
+  bool ok = true;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save/pl/gp_session_checkpoint.json";
+  ipl::GPStateCheckpoint checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(checkpoint_path, checkpoint), "ablate: must load the checkpoint");
+  const size_t record_offset = checkpoint.iteration_records.size();
+
+  const auto run_branch = [&](const std::string& tag, bool hot, bool random_scope, uint32_t seed) {
+    auto session = restoreSolverFromCheckpoint(checkpoint_path);
+    if (session == nullptr) {
+      return false;
+    }
+    if (hot) {
+      session->buildHotOverflowScope(0.2F, 0.5F);
+      dumpScopeStats(session->movementCoeffs(), tag);
+    } else if (random_scope) {
+      // same active count as the hot scope, different seed for variance
+      const size_t active_count = 134;
+      session->buildRandomScope(active_count, 0.5F, seed);
+      dumpScopeStats(session->movementCoeffs(), tag);
+    }
+    if (session->advanceAcceptedIterations(20) != ipl::GPAdvanceOutcome::kBudgetReached) {
+      return false;
+    }
+    session->publishPlacement();
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+
+    const auto& all_records = session->iterationRecords();
+    std::filesystem::create_directories(scenarioRoot(tag));
+    std::ofstream out(scenarioRoot(tag) + "/records.txt");
+    if (!out.good()) {
+      return false;
+    }
+    for (auto it = all_records.begin() + record_offset; it != all_records.end(); ++it) {
+      out << it->iter << ' ' << it->hpwl << ' ' << it->overflow << ' ' << it->step_length << ' ' << it->gradient_norm << '\n';
+    }
+    return dumpCoordinates(tag);
+  };
+
+  ok &= require(run_branch("local_ablate_global", false, false, 0), "ablate: global branch");
+  ok &= require(run_branch("local_ablate_hot", true, false, 0), "ablate: hot branch");
+  ok &= require(run_branch("local_ablate_random42", false, true, 42), "ablate: random-42 branch");
+  ok &= require(run_branch("local_ablate_random43", false, true, 43), "ablate: random-43 branch");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// Sweep: repeat the hot-vs-random ablation from a LATER checkpoint (iter 60)
+// and across several active ratios, to check whether the "random ≈ hot" finding
+// is specific to the iter-20 state.
+int runLocalSweep()
+{
+  bool ok = true;
+
+  // Advance to iteration 60 and save a fresh checkpoint.
+  {
+    ipl::GPRunRequest start_request;
+    start_request.mode = ipl::GPRunMode::kStart;
+    start_request.accepted_iterations = 60;
+    start_request.random_init = true;
+    const auto first = iPLAPIInst.gpRun(start_request);
+    ok &= require(first.ok && first.session_active, "sweep: start(60) must leave an active session");
+    ok &= require(std::filesystem::exists(first.checkpoint_path), "sweep: start(60) must auto-save a checkpoint");
+    iPLAPIInst.gpCloseSession();
+  }
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/local_sweep/pl/gp_session_checkpoint.json";
+  ipl::GPStateCheckpoint checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(checkpoint_path, checkpoint), "sweep: must load the iter-60 checkpoint");
+  const size_t record_offset = checkpoint.iteration_records.size();
+
+  const auto run_branch = [&](const std::string& tag, float ratio, bool random_scope, uint32_t seed) {
+    auto session = restoreSolverFromCheckpoint(checkpoint_path);
+    if (session == nullptr) {
+      return false;
+    }
+    size_t active_count = 0;
+    if (ratio > 0.0F) {
+      session->buildHotOverflowScope(ratio, 0.5F);
+      for (float coeff : session->movementCoeffs()) {
+        active_count += (coeff >= 1.0F) ? 1 : 0;
+      }
+      dumpScopeStats(session->movementCoeffs(), tag);
+    } else if (random_scope) {
+      session->buildRandomScope(active_count, 0.5F, seed);
+      dumpScopeStats(session->movementCoeffs(), tag);
+    }
+    if (session->advanceAcceptedIterations(20) != ipl::GPAdvanceOutcome::kBudgetReached) {
+      return false;
+    }
+    session->publishPlacement();
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+
+    const auto& all_records = session->iterationRecords();
+    std::filesystem::create_directories(scenarioRoot(tag));
+    std::ofstream out(scenarioRoot(tag) + "/records.txt");
+    if (!out.good()) {
+      return false;
+    }
+    for (auto it = all_records.begin() + record_offset; it != all_records.end(); ++it) {
+      out << it->iter << ' ' << it->hpwl << ' ' << it->overflow << ' ' << it->step_length << ' ' << it->gradient_norm << '\n';
+    }
+    return dumpCoordinates(tag);
+  };
+
+  ok &= require(run_branch("sweep60_global", 0.0F, false, 0), "sweep: global branch");
+  ok &= require(run_branch("sweep60_hot02", 0.2F, false, 0), "sweep: hot-0.2 branch");
+  ok &= require(run_branch("sweep60_hot005", 0.05F, false, 0), "sweep: hot-0.05 branch");
+  ok &= require(run_branch("sweep60_hot05", 0.5F, false, 0), "sweep: hot-0.5 branch");
+
+  // random with the SAME active count as hot-0.2
+  {
+    auto session = restoreSolverFromCheckpoint(checkpoint_path);
+    ok &= require(session != nullptr, "sweep: random branch must restore");
+    session->buildHotOverflowScope(0.2F, 0.5F);
+    size_t active_count = 0;
+    for (float coeff : session->movementCoeffs()) {
+      active_count += (coeff >= 1.0F) ? 1 : 0;
+    }
+    auto rnd = restoreSolverFromCheckpoint(checkpoint_path);
+    ok &= require(rnd != nullptr, "sweep: random branch must restore");
+    rnd->buildRandomScope(active_count, 0.5F, 42);
+    dumpScopeStats(rnd->movementCoeffs(), "sweep60_random42");
+    ok &= require(rnd->advanceAcceptedIterations(20) == ipl::GPAdvanceOutcome::kBudgetReached, "sweep: random branch must finish");
+    rnd->publishPlacement();
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+    const auto& all_records = rnd->iterationRecords();
+    std::filesystem::create_directories(scenarioRoot("sweep60_random42"));
+    std::ofstream out(scenarioRoot("sweep60_random42") + "/records.txt");
+    for (auto it = all_records.begin() + record_offset; it != all_records.end(); ++it) {
+      out << it->iter << ' ' << it->hpwl << ' ' << it->overflow << ' ' << it->step_length << ' ' << it->gradient_norm << '\n';
+    }
+    ok &= require(dumpCoordinates("sweep60_random42"), "sweep: random branch must dump");
+  }
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 int runValidate()
 {
   bool ok = true;
@@ -556,7 +963,7 @@ int main(int argc, char** argv)
 {
   if (argc < 2) {
     std::cerr << "usage: " << argv[0] << " --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|"
-              << "seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|legacy|full|validate}\n";
+              << "seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|invalidate|relinearize|legacy|full|validate}\n";
     return EXIT_FAILURE;
   }
   const std::string arg = argv[1];
@@ -626,6 +1033,27 @@ int main(int argc, char** argv)
   }
   if (scenario == "mismatch") {
     return runMismatch();
+  }
+  if (scenario == "invalidate") {
+    return runInvalidate();
+  }
+  if (scenario == "relinearize") {
+    return runRelinearize();
+  }
+  if (scenario == "local_degenerate") {
+    return runLocalDegenerate();
+  }
+  if (scenario == "local_context_frozen") {
+    return runLocalContextFrozen();
+  }
+  if (scenario == "local_control") {
+    return runLocalControl();
+  }
+  if (scenario == "local_ablate") {
+    return runLocalAblate();
+  }
+  if (scenario == "local_sweep") {
+    return runLocalSweep();
   }
   if (scenario == "resume_inproc") {
     return runResumeInProc();

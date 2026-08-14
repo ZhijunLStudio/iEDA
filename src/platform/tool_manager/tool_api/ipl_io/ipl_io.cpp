@@ -208,10 +208,10 @@ bool PlacerIO::runGlobalPlacementSession(std::string mode, int32_t iterations, b
   // init_pl) and the solver keeps its own state, so no re-init/update happens.
   if (!iPLAPIInst.isPlacerDBStarted()) {
     this->initPlacer("");
-  } else if (mode == "start") {
+  } else if (mode == "start" || mode == "relinearize") {
     iPLAPIInst.updatePlacerDB();
   }
-  if (mode == "start") {
+  if (mode == "start" || mode == "relinearize") {
     iPLAPIInst.resetFlowStatus();
   }
 
@@ -220,6 +220,11 @@ bool PlacerIO::runGlobalPlacementSession(std::string mode, int32_t iterations, b
     request.mode = ipl::GPRunMode::kStart;
   } else if (mode == "resume") {
     request.mode = ipl::GPRunMode::kResume;
+  } else if (mode == "relinearize") {
+    // Keep the externally-modified coordinates and rebuild all solver state
+    // (gradients/steplength/momentum) from them: a fresh session, no stale state.
+    request.mode = ipl::GPRunMode::kStart;
+    request.random_init = false;
   } else {
     request.mode = ipl::GPRunMode::kAdvance;
   }

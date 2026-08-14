@@ -272,3 +272,35 @@ C++ API：`iPLAPIInst.gpRun(GPRunRequest{mode, accepted_iterations, random_init,
 ### 15.5 测试矩阵现状
 
 `ipl_gp_session_test` 19 场景全部 PASS；`ipl_run_gp_result_test` 1276 PASS 无回归。测试配置位于 `src/operation/iPL/test/configs/`（gp_congestion / gp_divergence / gp_modified / gp_multithread）。
+
+## 16. M3：会话失效与 relinearize（2026-08-14 第三轮）
+
+- **失效检测（最小实现）**：会话记录 `base_revision`（PlacerDB revision，外部工具 LG/DP 提交自己的事务时 +1）；`advance` 时 revision 不一致 → 拒绝，reason 提示 "invalidated ... relinearize"。零额外状态机。
+- **relinearize = 保留外部改过的坐标重建会话**：实现即 `start + random_init=false`（initNesterovPlace 从当前 PlacerDB 坐标重建梯度/步长/动量，天然无旧状态）；Tcl 提供 `-mode relinearize` 别名。start 遇到**已失效**会话时自动丢弃（GP→LG→GP 流程无需显式 close）；健康会话仍拒绝 start（防误覆盖）。
+- **验证**：
+  - `invalidate`：start(10) → runLG（真实外部工具，提交事务）→ advance 被拒（reason 含 "invalidated"）→ 不显式 close 直接 start(keep) 成功、从第 1 次迭代重启。
+  - `relinearize`：完整序列两进程重跑，坐标/记录逐位一致（确定性）。
+  - Tcl 冒烟：`placer_run_gp -mode start 10` → `placer_run_lg` → `placer_run_gp -mode relinearize 10`：iter 从 1 重启，Iter 1 overflow 0.893394（对比全新随机起点 0.896213，证明保留了合法化后的坐标）。
+
+## 17. M4：局部 GP 的实验结论（重要：不支持默认采用）
+
+**实现（最小内核，不变量已验证）**：
+- 移动系数 `setMovementCoeffs`（placable 顺序：1=Active / (0,1)=Halo / 0=Context）；梯度预条件后乘系数 + 坐标域冻结（Context 钉在批次起点，逐位不变）；空列表 = 全局路径逐位不变。
+- 范围构建：`buildHotOverflowScope`（最热溢出 bin → Active，net 一跳邻居 → Halo）+ `buildRandomScope`（同规模随机对照，固定种子）。
+
+**不变量验证**：
+- 退化等价：全 1 系数 ≡ 全局 GP，**逐位一致**。
+- Context 零写入：29 个 Context 实例跑 20 次迭代后坐标**逐位不变**。
+
+**对照实验（gcd_sky130_a，同一 checkpoint 分叉，各 20 次迭代）**：
+
+| checkpoint | global | hot-0.2 | random(同规模) | 结论 |
+|---|---|---|---|---|
+| iter 20 | ov 0.7002 / hpwl 5.666M | ov 0.6942 / hpwl 5.617M | ov 0.6901 / hpwl 5.618M | 局部好，但**随机 ≈ 热点** |
+| iter 60 | ov 0.6959 / hpwl 5.648M | ov 0.6966 / hpwl 5.650M | ov 0.6961 / hpwl 5.649M | 局部**略差** |
+
+- 比例扫描（0.05/0.2/0.5）与第二个随机种子结果一致。
+- **结论**：① 热点 bin 图选择不比同规模随机范围好 → "怎么找局部"的图工程在当前 GP 粒度上**不产生价值**；② 局部与全局的优劣随求解状态翻转 → 收益不稳健。按 70 号文档 §13.3 的证伪框架，"graph-scoped intervention 有效"假设**未被支持**。局部细化应放在离散阶段（LG/DP），GP 层面默认不做局部。
+- **因此不对外暴露** `-scope local`；范围机制保留为已验证的实验工具（`buildHotOverflowScope`/`buildRandomScope` + 移动系数），供未来按设计重新评估。
+
+**测试基建修正（重要）**：早期 coords.txt 从 idb 层 dump，而 GP 的写回只到 iPL PlacerDB 层（idb 仅流程结束时同步）→ 早前的坐标比对是空转的（恒等于初始 DEF）。已改为 dump PlacerDB 真实坐标；修复后全部等价对（分段/观察/legacy/跨进程/多线程/退化等价）在**真实坐标**上重新验证仍逐位一致（records 一直是求解器真值，此前的数值验证不受影响）。
