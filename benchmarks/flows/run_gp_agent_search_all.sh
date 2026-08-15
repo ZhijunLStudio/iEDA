@@ -6,10 +6,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CASE_ROOT="${CASE_ROOT:-/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases}"
 WORKDIR="${WORKDIR:-/tmp/gp_agent_search}"
-DESIGNS=("${DESIGNS[@]:-s1238 apb4_timer picorv32 aes}")
-PARENTS=("${PARENTS[@]:-20 60 100 200 400}")
-SCOPES=("${SCOPES[@]:-longnet hotspot random region}")
-PENALTIES=("${PENALTIES[@]:-0.0 2.0 5.0}")
+if [[ -z "${DESIGNS[@]:-}" ]]; then DESIGNS=(s1238 apb4_timer picorv32 aes); fi
+if [[ -z "${PARENTS[@]:-}" ]]; then PARENTS=(20 60 100 200 400); fi
+if [[ -z "${SCOPES[@]:-}" ]]; then SCOPES=(longnet hotspot random region); fi
+if [[ -z "${PENALTIES[@]:-}" ]]; then PENALTIES=(0.0 2.0 5.0); fi
 TIMEOUT="${TIMEOUT:-5400}"
 
 cd "$ROOT"
