@@ -118,24 +118,38 @@ class NesterovPlace
   {
     _move_coeff_list.clear();
     _frozen_coord_list.clear();
+    syncLocalFixedFlags();
   }
   const std::vector<float>& movementCoeffs() const { return _move_coeff_list; }
   // Build a scope from the current overflow bins: the hottest overflowing bins
   // (top active_ratio fraction) seed active instances; their net neighbors
   // become halo with halo_coeff; everything else is context.
-  void buildHotOverflowScope(float active_ratio, float halo_coeff);
+  void buildHotOverflowScope(float active_ratio, float halo_coeff, int32_t halo_hops = 1);
   // Ablation control for the scope-finding question: a RANDOM active set of the
   // same size (fixed seed = reproducible) with the same net-hop halo closure.
   // Used by the experiment suite to test whether hot-bin selection matters.
-  void buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed);
+  void buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed, int32_t halo_hops = 1);
   // Agent-facing instance scope: caller supplies seed instance names; net-hop
   // closure adds the halo. Returns false (without changing the current scope)
   // when any name is not a movable instance.
-  bool buildInstanceScope(const std::vector<std::string>& seed_instance_names, float halo_coeff);
+  bool buildInstanceScope(const std::vector<std::string>& seed_instance_names, float halo_coeff, int32_t halo_hops = 1);
+  // Physical rectangle seed: every movable instance whose density shape
+  // overlaps the rectangle is Active; net-hop closure adds the Halo. This is
+  // the direct scope-builder counterpart of the bin-level overflow report.
+  void buildRegionScope(const Rectangle<int32_t>& region, float halo_coeff, int32_t halo_hops = 1);
+  // Wirelength-driven seed: sort every movable pin by its net HPWL, then take
+  // distinct instances until scope_active_count is reached. Cheaper and often
+  // more relevant than hotspot-bin guessing.
+  void buildLongNetScope(size_t active_count, float halo_coeff, int32_t halo_hops = 1);
 
   // Observation / contract helpers for the api layer.
   GPRunScopeEffect computeScopeEffect() const;
   GPOverflowReport buildOverflowReport(int32_t top_n) const;
+  // Recompute bin occupancy from the current solver coordinates without
+  // touching solver vectors. Used by kRestore so the post-restore grid report
+  // reflects the checkpoint placement (the next accepted iteration recomputes
+  // this occupancy again, so the observation cannot perturb the numerical path).
+  void refreshGridOccupation();
 
   // ---- region density screens (L1) ----
   // Set the density target factor (effective capacity multiplier) on every grid
@@ -149,7 +163,8 @@ class NesterovPlace
   void buildHotOverflowDensityTargets(float top_ratio, float target);
 
  private:
-  void applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff);
+  void applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff, int32_t halo_hops);
+  void syncLocalFixedFlags();
 
  private:
   NesterovPlaceConfig _nes_config;

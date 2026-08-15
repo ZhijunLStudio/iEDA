@@ -1210,6 +1210,89 @@ int runDensityKnob()
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+// Multi-hop halo experiment: same parent checkpoint, same Active seed set,
+// one/two/three net-hop halos vs global. This is a quality probe (artifacts
+// are compared by scripts), not an invariant.
+int runLocalHops()
+{
+  bool ok = true;
+  const std::string scenario = "local_hops";
+  std::string parent_path;
+  {
+    ipl::GPRunRequest start_request;
+    start_request.mode = ipl::GPRunMode::kStart;
+    start_request.accepted_iterations = 40;
+    start_request.random_init = true;
+    const auto start_result = iPLAPIInst.gpRun(start_request);
+    ok &= require(start_result.ok && start_result.session_active, "hops: start(40) must succeed");
+    parent_path = start_result.checkpoint_path;
+    iPLAPIInst.gpCloseSession();
+  }
+
+  ipl::GPStateCheckpoint checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(parent_path, checkpoint), "hops: must load iter-40 checkpoint");
+  const size_t record_offset = checkpoint.iteration_records.size();
+  const size_t seed_count = std::min<size_t>(80, checkpoint.instance_names.size());
+
+  const auto run_branch = [&](const std::string& tag, int32_t hops) {
+    auto session = restoreSolverFromCheckpoint(parent_path);
+    if (session == nullptr) {
+      return false;
+    }
+    if (hops > 0) {
+      std::vector<std::string> seeds(checkpoint.instance_names.begin(), checkpoint.instance_names.begin() + seed_count);
+      if (!session->buildInstanceScope(seeds, 0.5F, hops)) {
+        return false;
+      }
+      dumpScopeStats(session->movementCoeffs(), tag);
+    }
+    if (session->advanceAcceptedIterations(20) != ipl::GPAdvanceOutcome::kBudgetReached) {
+      return false;
+    }
+    session->publishPlacement();
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+    const auto& all_records = session->iterationRecords();
+    std::filesystem::create_directories(scenarioRoot(tag));
+    std::ofstream out(scenarioRoot(tag) + "/records.txt");
+    for (auto it = all_records.begin() + record_offset; it != all_records.end(); ++it) {
+      out << it->iter << ' ' << it->hpwl << ' ' << it->overflow << ' ' << it->step_length << ' ' << it->gradient_norm << '\n';
+    }
+    return dumpCoordinates(tag);
+  };
+
+  const auto run_longnet_branch = [&](const std::string& tag) {
+    auto session = restoreSolverFromCheckpoint(parent_path);
+    if (session == nullptr) {
+      return false;
+    }
+    session->buildLongNetScope(seed_count, 0.5F, 2);
+    dumpScopeStats(session->movementCoeffs(), tag);
+    if (session->advanceAcceptedIterations(20) != ipl::GPAdvanceOutcome::kBudgetReached) {
+      return false;
+    }
+    session->publishPlacement();
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+    const auto& all_records = session->iterationRecords();
+    std::filesystem::create_directories(scenarioRoot(tag));
+    std::ofstream out(scenarioRoot(tag) + "/records.txt");
+    for (auto it = all_records.begin() + record_offset; it != all_records.end(); ++it) {
+      out << it->iter << ' ' << it->hpwl << ' ' << it->overflow << ' ' << it->step_length << ' ' << it->gradient_norm << '\n';
+    }
+    return dumpCoordinates(tag);
+  };
+
+  ok &= require(run_branch("hops_global", 0), "hops: global branch");
+  ok &= require(run_branch("hops1", 1), "hops: one-hop halo branch");
+  ok &= require(run_branch("hops2", 2), "hops: two-hop halo branch");
+  ok &= require(run_branch("hops3", 3), "hops: three-hop halo branch");
+  ok &= require(run_longnet_branch("hops_longnet2"), "hops: wirelength-seeded two-hop branch");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 // Agent-facing local GP through the public PLAPI surface: start -> close ->
 // resume the same checkpoint with an instance-seeded scope, and verify the
 // write-boundary contract, parent-checkpoint lineage, and bin-level grid report.
@@ -1258,9 +1341,36 @@ int runAgentScope()
                 "agent-scope: append-only experiment ledger must be written");
   ok &= require(local_result.grid_report.overflowing_bin_count > 0 && local_result.grid_report.total_overflow_area > 0,
                 "agent-scope: grid report must contain real overflow bins");
-  ok &= require(dumpCoordinates("agent_scope"), "agent-scope: must dump coordinates");
+  const bool fixed_set_visible = std::any_of(local_result.grid_report.bins.begin(), local_result.grid_report.bins.end(),
+                                             [](const ipl::GPBinReport& bin) { return bin.local_fixed_area > 0; });
+  ok &= require(fixed_set_visible, "agent-scope: fixed-set local GP must expose context obstacles in the grid report");
 
   iPLAPIInst.gpCloseSession();
+
+  // Region scope: use the hottest bin from the just-written grid report as a
+  // physical rectangle seed. This is the Agent loop: observe bin -> resume
+  // parent -> local action on that rectangle.
+  {
+    const auto& hottest_bin = local_result.grid_report.bins.at(0);
+    ipl::GPRunRequest region_request;
+    region_request.mode = ipl::GPRunMode::kResume;
+    region_request.accepted_iterations = 5;
+    region_request.checkpoint_path = local_result.parent_checkpoint_path;
+    region_request.scope_mode = ipl::GPRunScopeMode::kRegion;
+    region_request.scope_halo_coeff = 0.5F;
+    region_request.scope_region_set = true;
+    region_request.scope_region_ll_x = hottest_bin.ll_x;
+    region_request.scope_region_ll_y = hottest_bin.ll_y;
+    region_request.scope_region_ur_x = hottest_bin.ur_x;
+    region_request.scope_region_ur_y = hottest_bin.ur_y;
+    const auto region_result = iPLAPIInst.gpRun(region_request);
+    ok &= require(region_result.ok && region_result.scope_effect.scope_applied, "agent-scope: region-scoped resume must succeed");
+    ok &= require(region_result.scope_effect.active_written > 0 && region_result.scope_effect.context_moved == 0,
+                  "agent-scope: region scope must move only the Active/Halo boundary");
+    iPLAPIInst.gpCloseSession();
+  }
+
+  ok &= require(dumpCoordinates("agent_scope"), "agent-scope: must dump coordinates");
   iPLAPIInst.destoryInst();
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
@@ -1321,6 +1431,146 @@ int runAgentConfigResume()
   ok &= require(dumpCoordinates("agent_config_resume"), "agent-config: must dump coordinates");
 
   iPLAPIInst.gpCloseSession();
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// Full candidate loop: parent -> local child + global child (same budget, same
+// origin) -> compare checkpoints -> restore winner -> commit accepted design.
+int runAgentCandidate()
+{
+  bool ok = true;
+  const std::string scenario = "agent_candidate";
+  std::filesystem::create_directories(scenarioRoot(scenario));
+  std::string parent_checkpoint_path;
+
+  {
+    ipl::GPRunRequest start_request;
+    start_request.mode = ipl::GPRunMode::kStart;
+    start_request.accepted_iterations = 20;
+    start_request.random_init = true;
+    const auto start_result = iPLAPIInst.gpRun(start_request);
+    ok &= require(start_result.ok && start_result.session_active, "candidate: parent start(20) must succeed");
+    parent_checkpoint_path = start_result.checkpoint_path;
+    iPLAPIInst.gpCloseSession();
+  }
+
+  ipl::GPStateCheckpoint parent_checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(parent_checkpoint_path, parent_checkpoint), "candidate: must load parent checkpoint");
+  ok &= require(!parent_checkpoint.instance_names.empty(), "candidate: parent checkpoint must have movable instances");
+
+  // Local candidate.
+  const std::string local_child_path = scenarioRoot(scenario) + "/candidate_local.json";
+  std::string local_parent_preserved;
+  {
+    ipl::GPRunRequest local_request;
+    local_request.mode = ipl::GPRunMode::kResume;
+    local_request.accepted_iterations = 20;
+    local_request.checkpoint_path = parent_checkpoint_path;
+    local_request.scope_mode = ipl::GPRunScopeMode::kInstances;
+    local_request.scope_halo_coeff = 0.5F;
+    const size_t seed_count = std::min<size_t>(40, parent_checkpoint.instance_names.size());
+    local_request.scope_instance_names.assign(parent_checkpoint.instance_names.begin(),
+                                              parent_checkpoint.instance_names.begin() + seed_count);
+    const auto local_result = iPLAPIInst.gpRun(local_request);
+    ok &= require(local_result.ok && local_result.session_active, "candidate: local child must succeed");
+    ok &= require(local_result.scope_effect.scope_applied && local_result.scope_effect.context_moved == 0,
+                  "candidate: local child must respect the scope boundary");
+    local_parent_preserved = local_result.parent_checkpoint_path;
+    std::filesystem::copy_file(local_result.checkpoint_path, local_child_path, std::filesystem::copy_options::overwrite_existing);
+    iPLAPIInst.gpCloseSession();
+  }
+
+  // Global control candidate from the preserved parent.
+  const std::string global_child_path = scenarioRoot(scenario) + "/candidate_global.json";
+  {
+    ipl::GPRunRequest global_request;
+    global_request.mode = ipl::GPRunMode::kResume;
+    global_request.accepted_iterations = 20;
+    global_request.checkpoint_path = local_parent_preserved;
+    const auto global_result = iPLAPIInst.gpRun(global_request);
+    ok &= require(global_result.ok && global_result.session_active, "candidate: global control child must succeed");
+    std::filesystem::copy_file(global_result.checkpoint_path, global_child_path, std::filesystem::copy_options::overwrite_existing);
+    iPLAPIInst.gpCloseSession();
+  }
+
+  ipl::GPCandidateComparison comparison;
+  ok &= require(iPLAPIInst.gpCompareCheckpoints(local_child_path, global_child_path, comparison),
+                "candidate: compare must load both child checkpoints");
+  ok &= require(comparison.same_origin && comparison.same_budget, "candidate: children must share origin and iteration budget");
+  ok &= require(comparison.verdict != ipl::GPCandidateVerdict::kIncomparable, "candidate: same-stage children must be comparable");
+
+  const std::string winner_path = comparison.verdict == ipl::GPCandidateVerdict::kRightBetter ? global_child_path : local_child_path;
+  ipl::GPRunRequest restore_request;
+  restore_request.mode = ipl::GPRunMode::kRestore;
+  restore_request.checkpoint_path = winner_path;
+  const auto restore_result = iPLAPIInst.gpRun(restore_request);
+  ok &= require(restore_result.ok && restore_result.session_active && restore_result.stop_reason == ipl::GPStopReason::kRestored,
+                "candidate: winner checkpoint must restore exactly");
+  ok &= require(restore_result.start_iteration == 40 && restore_result.end_iteration == 40 && restore_result.executed_iterations == 0,
+                "candidate: restore must not run any solver iteration");
+
+  const auto commit_result = iPLAPIInst.gpCommitSession();
+  ok &= require(commit_result.ok && !iPLAPIInst.gpSessionActive(), "candidate: accepted checkpoint must commit and close cleanly");
+  ok &= require(dumpCoordinates("agent_candidate"), "candidate: must dump accepted coordinates");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// Automatic local-vs-global candidate mode: one call forks the active parent,
+// runs both branches with the same budget, compares them, and leaves the winner
+// restored as the active session.
+int runAgentAutoCandidate()
+{
+  bool ok = true;
+  const std::string scenario = "agent_auto_candidate";
+
+  {
+    ipl::GPRunRequest start_request;
+    start_request.mode = ipl::GPRunMode::kStart;
+    start_request.accepted_iterations = 20;
+    start_request.random_init = true;
+    const auto start_result = iPLAPIInst.gpRun(start_request);
+    ok &= require(start_result.ok && start_result.session_active, "auto-candidate: parent start(20) must succeed");
+  }
+
+
+  ipl::GPRunRequest candidate_request;
+  candidate_request.mode = ipl::GPRunMode::kCandidate;
+  candidate_request.accepted_iterations = 20;
+  candidate_request.scope_mode = ipl::GPRunScopeMode::kInstances;
+  candidate_request.scope_halo_coeff = 0.5F;
+  candidate_request.scope_halo_hops = 2;
+  ipl::GPStateCheckpoint active_parent;
+  // The active session checkpoint is the one saved by start(20).
+  const std::string active_parent_path = "/tmp/ipl_gp_session_test/agent_auto_candidate/pl/gp_session_checkpoint.json";
+  ok &= require(ipl::loadGPCheckpointFile(active_parent_path, active_parent), "auto-candidate: must load active parent for seed names");
+  const size_t seed_count = std::min<size_t>(40, active_parent.instance_names.size());
+  candidate_request.scope_instance_names.assign(active_parent.instance_names.begin(), active_parent.instance_names.begin() + seed_count);
+
+  const auto candidate_result = iPLAPIInst.gpRun(candidate_request);
+  ok &= require(candidate_result.ok && candidate_result.session_active, "auto-candidate: one-call local-vs-global fork must succeed");
+  ok &= require(candidate_result.executed_iterations == 20, "auto-candidate: winner must be evaluated at the requested budget");
+  ok &= require(candidate_result.candidate_comparison.ok && candidate_result.candidate_comparison.same_origin
+                    && candidate_result.candidate_comparison.same_budget,
+                "auto-candidate: comparison must be same-origin/same-budget");
+  ok &= require(std::filesystem::exists(candidate_result.candidate_local_checkpoint_path)
+                    && std::filesystem::exists(candidate_result.candidate_global_checkpoint_path),
+                "auto-candidate: both child checkpoints must be preserved");
+
+  // The active winner must match the chosen child metrics.
+  ipl::GPStateCheckpoint winner;
+  const std::string& winner_path = candidate_result.candidate_comparison.verdict == ipl::GPCandidateVerdict::kLeftBetter
+                                      ? candidate_result.candidate_local_checkpoint_path
+                                      : candidate_result.candidate_global_checkpoint_path;
+  ok &= require(ipl::loadGPCheckpointFile(winner_path, winner), "auto-candidate: must load the chosen winner");
+  ok &= require(winner.prev_hpwl == candidate_result.hpwl, "auto-candidate: active session must be exactly the winner checkpoint");
+
+  const auto commit_result = iPLAPIInst.gpCommitSession();
+  ok &= require(commit_result.ok && !iPLAPIInst.gpSessionActive(), "auto-candidate: winner must commit cleanly");
+  ok &= require(dumpCoordinates(scenario), "auto-candidate: must dump winner coordinates");
+
   iPLAPIInst.destoryInst();
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
@@ -1399,7 +1649,7 @@ int main(int argc, char** argv)
   if (argc < 2) {
     std::cerr << "usage: " << argv[0] << " --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|"
               << "seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|invalidate|relinearize|"
-              << "agent_scope|agent_config_resume|legacy|full|validate}\n";
+              << "local_hops|agent_scope|agent_config_resume|agent_candidate|agent_auto_candidate|legacy|full|validate}\n";
     return EXIT_FAILURE;
   }
   const std::string arg = argv[1];
@@ -1560,11 +1810,20 @@ int main(int argc, char** argv)
   if (scenario == "full") {
     return runSessionFull();
   }
+  if (scenario == "local_hops") {
+    return runLocalHops();
+  }
   if (scenario == "agent_scope") {
     return runAgentScope();
   }
   if (scenario == "agent_config_resume") {
     return runAgentConfigResume();
+  }
+  if (scenario == "agent_candidate") {
+    return runAgentCandidate();
+  }
+  if (scenario == "agent_auto_candidate") {
+    return runAgentAutoCandidate();
   }
   if (scenario == "validate") {
     return runValidate();

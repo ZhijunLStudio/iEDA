@@ -198,14 +198,16 @@ inline void BinGrid::updateBinGrid(std::vector<NesInstance*>& nInst_list, int32_
     std::vector<Grid*> overlap_grid_list;
     _grid_manager->obtainOverlapGridList(overlap_grid_list, nInst_density_shape);
     for (auto* grid : overlap_grid_list) {
-      auto& grid_area_ref = grid->occupied_area;
-
       int64_t overlap_area = _grid_manager->obtainOverlapArea(grid, nInst_density_shape);
-
       int64_t inst_area = static_cast<int64_t>(overlap_area * nInst->get_density_scale());
 
+      if (nInst->isLocallyFixed()) {
 #pragma omp atomic
-      grid_area_ref += inst_area;
+        grid->local_fixed_area += inst_area;
+      } else {
+#pragma omp atomic
+        grid->occupied_area += inst_area;
+      }
     }
   }
 }
@@ -229,8 +231,13 @@ inline void BinGrid::updataOverflowArea(std::vector<NesInstance*>& nInst_list, i
 
       inst_area *= grid->available_ratio;
 
+      if (nInst->isLocallyFixed()) {
 #pragma omp atomic
-      grid_area_ref += inst_area;
+        grid->local_fixed_area += inst_area;
+      } else {
+#pragma omp atomic
+        grid_area_ref += inst_area;
+      }
     }
   }
 
@@ -246,8 +253,13 @@ inline void BinGrid::updataOverflowArea(std::vector<NesInstance*>& nInst_list, i
       int64_t overlap_area = _grid_manager->obtainOverlapArea(grid, nInst_density_shape);
       int64_t inst_area = static_cast<int64_t>(overlap_area * nInst->get_density_scale());
 
+      if (nInst->isLocallyFixed()) {
 #pragma omp atomic
-      grid_area_ref += inst_area;
+        grid->local_fixed_area += inst_area;
+      } else {
+#pragma omp atomic
+        grid_area_ref += inst_area;
+      }
     }
   }
 

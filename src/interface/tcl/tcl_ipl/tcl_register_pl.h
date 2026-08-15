@@ -44,6 +44,7 @@ int registerCmdPlacer()
   registerTclCmd(CmdPlacerDestroy, "destroy_pl");
   registerTclCmd(CmdPlacerRunMP, "placer_run_mp");
   registerTclCmd(CmdPlacerRunGP, "placer_run_gp");
+  registerTclCmd(CmdPlacerCompareGP, "placer_compare_gp");
   registerTclCmd(CmdPlacerRunLG, "placer_run_lg");
   registerTclCmd(CmdPlacerRunDP, "placer_run_dp");
 

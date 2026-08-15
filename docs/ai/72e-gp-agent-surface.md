@@ -141,18 +141,83 @@ placer_run_gp -mode resume -checkpoint <parent_ckpt> -iterations 20
 cmake --build build --target ipl_gp_session_test ipl_run_gp_result_test iEDA -j$(nproc)
 
 # 新增场景
-build/bin/ipl_gp_session_test --scenario agent_scope           # 实例 scope + scope_effect + 观测文件
+build/bin/ipl_gp_session_test --scenario agent_scope           # 实例/region scope + scope_effect + 观测文件
 build/bin/ipl_gp_session_test --scenario agent_config_resume   # start override 跨进程语义（进程内模拟重置配置）
+build/bin/ipl_gp_session_test --scenario agent_candidate       # 父 checkpoint -> 局部/全局候选 -> compare -> restore -> accept
+build/bin/ipl_gp_session_test --scenario agent_auto_candidate  # 单调用 local-vs-global fork，winner 自动恢复
+build/bin/ipl_gp_session_test --scenario local_hops            # 1/2/3-hop halo vs global 质量探针
 build/bin/ipl_gp_session_test --scenario mismatch              # 不同 base config 下 checkpoint 自恢复有效配置
 build/bin/ipl_config_validation_test                            # opt_overflow_list schema
 ```
 
 全量 37 项 GP 相关回归（31 场景 + legacy 1276 + config/contract）当前全部 PASS。
 
-## 4. 仍未做（下一优先）
+## 4. 第二轮迭代：fixed-set 局部 GP + region scope + 候选闭环
+
+### 4.1 Fixed-set 局部 GP
+
+Context（系数 0）实例不再只是“梯度乘 0”：本 batch 中它们会作为 `Grid::local_fixed_area` 固定障碍进入密度势场。该面积与 `occupied_area` 一起在每轮 `updateBinGrid` 时清空重建，不污染 checkpoint、不泄漏到下一 batch。默认全局路径无任何标志，保持位级等价。
+
+### 4.2 Region scope
+
+Agent 可以直接拿 bin 报告的矩形做种子：
+
+```tcl
+placer_run_gp -mode resume -checkpoint <parent_ckpt> -iterations 20 \
+  -scope region -scope_region "63000 57700 65000 59500"
+```
+
+Active = 与该矩形有面积重叠的可移动实例，随后按 `scope_halo_hops` 补 halo。
+
+### 4.3 多跳 Halo
+
+`-scope_halo_hops 1..16`：第 h 跳 halo 移动系数为 `halo_coeff^h`，让局部范围软衰减而不是硬切边。
+
+### 4.4 生产级候选闭环
+
+```tcl
+# 父 checkpoint -> 局部候选
+placer_run_gp -mode resume -checkpoint <parent_ckpt> -iterations 20 -scope instances ...
+# 同父 checkpoint -> 全局对照
+placer_run_gp -mode resume -checkpoint <parent_ckpt> -iterations 20
+
+# 比较两个候选 checkpoint（不触碰求解状态）
+placer_compare_gp -checkpoint_a <candidate_a.json> -checkpoint_b <candidate_b.json>
+
+# 接受 winner：0 迭代恢复，再 commit
+placer_run_gp -mode close
+placer_run_gp -mode restore -checkpoint <winner.json>
+placer_run_gp -mode accept
+```
+
+C++ 侧新增 `gpCompareCheckpoints()`、`GPRunMode::kRestore`、`gpCommitSession()`。`restore` 只发布 checkpoint 坐标，不执行任何求解迭代；`accept` commit 事务并同步 source database；`close` 仍是 discard。
+
+更进一步，`kCandidate` 把整个闭环变成一个调用：
+
+```tcl
+placer_run_gp -mode start -iterations 20 -seed 42
+placer_run_gp -mode candidate -iterations 20 \
+  -scope instances -scope_instances "inst_a, inst_b" \
+  -scope_halo_coeff 0.5 -scope_halo_hops 2
+placer_run_gp -mode accept
+```
+
+`candidate` 自动执行：保存 parent -> 局部候选跑 budget -> 回滚 -> 从 parent 恢复 -> 全局对照跑同 budget -> 比较两个 checkpoint -> 把 winner 恢复为当前 active session。**平局/不可比时保留全局基线**，因此单次 candidate 不会比全局对照差。返回中的 `candidate_verdict`、`candidate_local_checkpoint_path`、`candidate_global_checkpoint_path` 保留完整证据。
+
+### 4.5 本轮质量探针（gcd_sky130_a，同 parent checkpoint 分叉，各 20 次）
+
+| parent | global | local（40 实例种子，hops=1） | hops=2 | hops=3 | 结论 |
+|---|---|---|---|---|---|
+| iter20 | hpwl 5,667,578 / ov 0.7001 | 5,618,731 / 0.6941 | **5,616,250 / 0.6941** | 5,616,398 / 0.6941 | 局部显著更优，2-hop 最好 |
+| iter40 | **5,650,306 / 0.6963** | 5,667,226 / 0.7000 | 5,666,289 / 0.7000 | 5,666,340 / 0.7000 | 局部仍差，hops 不能救阶段错误 |
+
+`kCandidate` 实测：iter20 自动选 local（左胜），iter40 自动选 global（右胜），证明单调用闭环能跟随阶段翻转。
+
+结论与 72d 一致：局部 GP 必须作为“同 checkpoint 候选 + 同预算对照 + 只 accept 严格更优”的 Agent 动作，不能替代全局基线。Region/instances 种子 + 2-hop halo 是当前推荐参数，但最终以验收为准。
+
+## 5. 仍未做（下一优先）
 
 - checkpoint JSON 二进制化 / float 数组直存（72d P0；当前 parent checkpoint 用 hard-link 缓解复制成本，但 dump/parse 仍慢）。
-- 生产级 `candidate.accept/reject` API（现在靠 parent checkpoint + close/resume 组合，语义已够但不够顺）。
 - `scope.build` 的图诊断与密度屏默认仍是实验工具；密度屏继续不作为默认局部策略。
 - `BinGrid::_bin_inst_list` 陈旧映射清理（当前无调用者，保留只增加困惑）。
 - 1M+ 设计上的 hot-vs-random 消融与多线程容差回归。

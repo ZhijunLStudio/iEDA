@@ -75,6 +75,11 @@ class PLAPI
   bool gpSessionActive() const { return _gp_session_state != nullptr; }
   const GPRunResult& lastGPRunResult() const { return _last_gp_run_result; }
   void gpCloseSession();
+  // Candidate governance: compare two persisted checkpoints (pure observation)
+  // and commit the currently active restored/advanced session as the accepted
+  // placement. gpCloseSession remains the discard path.
+  bool gpCompareCheckpoints(const std::string& left_path, const std::string& right_path, GPCandidateComparison& comparison) const;
+  GPRunResult gpCommitSession();
 
   bool runLG();
   bool runIncrLG();
@@ -206,6 +211,8 @@ class PLAPI
   GPRunResult gpRunStart(const GPRunRequest& request);
   GPRunResult gpRunAdvance(const GPRunRequest& request);
   GPRunResult gpRunResume(const GPRunRequest& request);
+  GPRunResult gpRunRestore(const GPRunRequest& request);
+  GPRunResult gpRunCandidate(const GPRunRequest& request);
   GPRunResult gpFinalizeTerminal(GPRunResult result);
 
   PLAPI() = default;

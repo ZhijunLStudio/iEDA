@@ -49,6 +49,7 @@ public:
     available_ratio = other.available_ratio;
     occupied_area = other.occupied_area;
     fixed_area = other.fixed_area;
+    local_fixed_area = other.local_fixed_area;
     density_target = other.density_target;
     placeable_area = other.placeable_area;
     h_cong = other.h_cong;
@@ -76,6 +77,7 @@ public:
       available_ratio = other.available_ratio;
       occupied_area = other.occupied_area;
       fixed_area = other.fixed_area;
+      local_fixed_area = other.local_fixed_area;
       density_target = other.density_target;
       placeable_area = other.placeable_area;
       h_cong = other.h_cong;
@@ -110,6 +112,7 @@ public:
   float density_target = 1.0F;  // region density screen (L1): effective capacity factor, 1.0 = global
   int64_t occupied_area = 0;
   int64_t fixed_area = 0;
+  int64_t local_fixed_area = 0;  // local-GP context instances, cleared with occupied_area
   int64_t placeable_area = 0;
 
   float h_cong = 0.0F;

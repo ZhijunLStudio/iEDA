@@ -1010,6 +1010,10 @@ bool validateGPRunScope(const GPRunRequest& request, std::string* reason)
     *reason = "scope_halo_coeff must be in [0,1]";
     return false;
   }
+  if (request.scope_halo_hops <= 0 || request.scope_halo_hops > 16) {
+    *reason = "scope_halo_hops must be in [1,16]";
+    return false;
+  }
   switch (request.scope_mode) {
     case GPRunScopeMode::kGlobal:
       return true;
@@ -1031,6 +1035,19 @@ bool validateGPRunScope(const GPRunRequest& request, std::string* reason)
         return false;
       }
       return true;
+    case GPRunScopeMode::kRegion:
+      if (!request.scope_region_set || request.scope_region_ll_x >= request.scope_region_ur_x
+          || request.scope_region_ll_y >= request.scope_region_ur_y) {
+        *reason = "region scope requires a valid scope_region rectangle";
+        return false;
+      }
+      return true;
+    case GPRunScopeMode::kLongNet:
+      if (request.scope_active_count <= 0) {
+        *reason = "scope_active_count must be positive for longnet scope";
+        return false;
+      }
+      return true;
   }
   *reason = "unknown gp scope mode";
   return false;
@@ -1043,16 +1060,26 @@ bool applyGPRunScope(NesterovPlace& session, const GPRunRequest& request, std::s
       session.clearMovementScope();
       return true;
     case GPRunScopeMode::kHotspot:
-      session.buildHotOverflowScope(request.scope_active_ratio, request.scope_halo_coeff);
+      session.buildHotOverflowScope(request.scope_active_ratio, request.scope_halo_coeff, request.scope_halo_hops);
       return true;
     case GPRunScopeMode::kRandom:
-      session.buildRandomScope(static_cast<size_t>(request.scope_active_count), request.scope_halo_coeff, request.scope_seed);
+      session.buildRandomScope(static_cast<size_t>(request.scope_active_count), request.scope_halo_coeff, request.scope_seed,
+                               request.scope_halo_hops);
       return true;
     case GPRunScopeMode::kInstances:
-      if (!session.buildInstanceScope(request.scope_instance_names, request.scope_halo_coeff)) {
+      if (!session.buildInstanceScope(request.scope_instance_names, request.scope_halo_coeff, request.scope_halo_hops)) {
         *reason = "scope contains an instance name that is not movable";
         return false;
       }
+      return true;
+    case GPRunScopeMode::kRegion:
+      session.buildRegionScope(
+          Rectangle<int32_t>(request.scope_region_ll_x, request.scope_region_ll_y, request.scope_region_ur_x, request.scope_region_ur_y),
+          request.scope_halo_coeff, request.scope_halo_hops);
+      return true;
+    case GPRunScopeMode::kLongNet:
+      session.buildLongNetScope(static_cast<size_t>(request.scope_active_count), request.scope_halo_coeff,
+                                request.scope_halo_hops);
       return true;
   }
   *reason = "unknown gp scope mode";
@@ -1096,13 +1123,25 @@ void appendExperimentRecord(const GPRunRequest& request, const GPRunResult& resu
 {
   try {
     nlohmann::json record = nlohmann::json{
-        {"mode", request.mode == GPRunMode::kStart ? "start" : (request.mode == GPRunMode::kResume ? "resume" : "advance")},
+        {"mode", request.mode == GPRunMode::kStart
+                     ? "start"
+                     : (request.mode == GPRunMode::kResume
+                            ? "resume"
+                            : (request.mode == GPRunMode::kRestore
+                                   ? "restore"
+                                   : (request.mode == GPRunMode::kCandidate ? "candidate" : "advance")))},
         {"scope", gpScopeModeName(request.scope_mode)},
         {"scope_active_ratio", request.scope_active_ratio},
         {"scope_active_count", request.scope_active_count},
         {"scope_halo_coeff", request.scope_halo_coeff},
+        {"scope_halo_hops", request.scope_halo_hops},
         {"scope_seed", request.scope_seed},
         {"scope_instance_count", request.scope_instance_names.size()},
+        {"scope_region_set", request.scope_region_set},
+        {"scope_region_ll_x", request.scope_region_ll_x},
+        {"scope_region_ll_y", request.scope_region_ll_y},
+        {"scope_region_ur_x", request.scope_region_ur_x},
+        {"scope_region_ur_y", request.scope_region_ur_y},
         {"requested_iterations", request.accepted_iterations},
         {"executed_iterations", result.executed_iterations},
         {"start_iteration", result.start_iteration},
@@ -1172,6 +1211,10 @@ GPRunResult PLAPI::gpRun(const GPRunRequest& request)
     _last_gp_run_result = gpRunStart(request);
   } else if (request.mode == GPRunMode::kResume) {
     _last_gp_run_result = gpRunResume(request);
+  } else if (request.mode == GPRunMode::kRestore) {
+    _last_gp_run_result = gpRunRestore(request);
+  } else if (request.mode == GPRunMode::kCandidate) {
+    _last_gp_run_result = gpRunCandidate(request);
   } else {
     _last_gp_run_result = gpRunAdvance(request);
   }
@@ -1351,6 +1394,236 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
   _gp_session_state->checkpoint_path = request.checkpoint_path;
 
   return gpRunAdvance(request);
+}
+
+GPRunResult PLAPI::gpRunRestore(const GPRunRequest& request)
+{
+  GPRunResult result;
+  result.requested_iterations = 0;
+
+  if (_gp_session_state != nullptr) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "gp session already active; close it before restoring a checkpoint";
+    return result;
+  }
+  if (request.checkpoint_path.empty()) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "kRestore requires checkpoint_path";
+    return result;
+  }
+  if (hasStartConfigOverrides(request)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "start-time config overrides are not accepted on kRestore; the checkpoint restores its saved effective config";
+    return result;
+  }
+
+  ipl::GPStateCheckpoint checkpoint;
+  if (!ipl::loadGPCheckpointFile(request.checkpoint_path, checkpoint)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "cannot load gp checkpoint: " + request.checkpoint_path;
+    return result;
+  }
+
+  auto previous_nes_config_state = PlacerDBInst.get_placer_config()->get_nes_config().captureState();
+  bool config_restored_from_checkpoint = false;
+  if (checkpoint.config_state_valid) {
+    PlacerDBInst.get_placer_config()->get_nes_config().restoreState(checkpoint.config_state);
+    PlacerDBInst.adaptTargetDensity();
+    config_restored_from_checkpoint = true;
+  }
+  const auto restore_previous_config = [&]() {
+    if (config_restored_from_checkpoint) {
+      PlacerDBInst.get_placer_config()->get_nes_config().restoreState(previous_nes_config_state);
+    }
+  };
+
+  _gp_session_state = std::make_unique<GPSessionState>();
+  _gp_session_state->transaction = PlacerDBInst.beginStageTransaction("global_placement");
+  if (!_gp_session_state->transaction.active) {
+    _flow_status.global_placement = PlacementStatusEvaluator::stage(
+        "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false,
+        "global placement could not start a PlacerDB transaction");
+    _flow_status.gp_ran = true;
+    _flow_status.setFailure(_flow_status.global_placement);
+    writePlacementStatus();
+    _gp_session_state.reset();
+    restore_previous_config();
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "global placement could not start a PlacerDB transaction";
+    return result;
+  }
+
+  _gp_session_state->session
+      = std::make_unique<NesterovPlace>(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());
+  _gp_session_state->session->printNesterovDatabase();
+  if (!_gp_session_state->session->restoreCheckpoint(checkpoint)) {
+    PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction);
+    _gp_session_state.reset();
+    restore_previous_config();
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "gp checkpoint rejected: config fingerprint or design topology mismatch";
+    return result;
+  }
+
+  _gp_session_state->record_offset = checkpoint.iteration_records.size();
+  _gp_session_state->base_revision = PlacerDBInst.get_revision();
+  _gp_session_state->checkpoint_path = request.checkpoint_path;
+
+  result.ok = true;
+  result.session_active = true;
+  result.stop_reason = GPStopReason::kRestored;
+  result.start_iteration = _gp_session_state->session->currentIteration();
+  result.end_iteration = result.start_iteration;
+  result.hpwl = _gp_session_state->session->currentHpwl();
+  result.overflow = _gp_session_state->session->currentOverflow();
+  result.step_length = _gp_session_state->session->currentStepLength();
+  result.density_penalty = _gp_session_state->session->currentDensityPenalty();
+  result.checkpoint_path = request.checkpoint_path;
+
+  // Publish exactly the checkpoint placement without advancing the solver.
+  _gp_session_state->session->publishPlacement();
+  PlacerDBInst.updateTopoManager();
+  PlacerDBInst.updateGridManager();
+  _gp_session_state->session->refreshGridOccupation();
+  fillBatchObservation(*_gp_session_state->session, request, result, obtainTargetDir());
+  return result;
+}
+
+GPRunResult PLAPI::gpRunCandidate(const GPRunRequest& request)
+{
+  GPRunResult result;
+  result.requested_iterations = request.accepted_iterations;
+
+  if (_gp_session_state == nullptr || _gp_session_state->session == nullptr) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "kCandidate requires an active gp session (start/advance/restore to the parent checkpoint first)";
+    return result;
+  }
+  if (request.accepted_iterations <= 0) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "accepted_iterations must be positive";
+    return result;
+  }
+  if (request.scope_mode == GPRunScopeMode::kGlobal) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "kCandidate requires a local scope; use kAdvance for the plain global baseline";
+    return result;
+  }
+  if (hasStartConfigOverrides(request)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "start-time config overrides are only valid on kStart";
+    return result;
+  }
+  std::string reason;
+  if (!validateGPRunScope(request, &reason)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = reason;
+    return result;
+  }
+  if (_gp_session_state->base_revision != PlacerDBInst.get_revision()) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "gp session invalidated by external placement changes; close it and start with random_init=0 (relinearize)";
+    return result;
+  }
+
+  const std::string output_dir = obtainTargetDir();
+  const std::string parent_path = output_dir + "/pl/gp_candidate_parent.json";
+  const std::string local_path = output_dir + "/pl/gp_candidate_local.json";
+  const std::string global_path = output_dir + "/pl/gp_candidate_global.json";
+  if (!ipl::saveGPCheckpointFile(parent_path, _gp_session_state->session->captureCheckpoint())) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "cannot save candidate parent checkpoint: " + parent_path;
+    return result;
+  }
+
+  // Branch A: local action in the current session.
+  if (!applyGPRunScope(*_gp_session_state->session, request, &reason)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = reason;
+    return result;
+  }
+  const int32_t parent_iter = _gp_session_state->session->currentIteration();
+  const auto local_advance = _gp_session_state->session->advanceAcceptedIterations(request.accepted_iterations);
+  if (local_advance != GPAdvanceOutcome::kBudgetReached) {
+    // Terminal during the local branch: no global control can be branched from
+    // the same budget, so finalize the local outcome directly.
+    result.start_iteration = parent_iter + 1;
+    result.end_iteration = _gp_session_state->session->currentIteration();
+    result.executed_iterations = result.end_iteration - parent_iter;
+    result.hpwl = _gp_session_state->session->currentHpwl();
+    result.overflow = _gp_session_state->session->currentOverflow();
+    result.step_length = _gp_session_state->session->currentStepLength();
+    result.density_penalty = _gp_session_state->session->currentDensityPenalty();
+    return gpFinalizeTerminal(result);
+  }
+  const GPRunScopeEffect local_scope_effect = _gp_session_state->session->computeScopeEffect();
+  if (!ipl::saveGPCheckpointFile(local_path, _gp_session_state->session->captureCheckpoint())) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "cannot save local candidate checkpoint: " + local_path;
+    return result;
+  }
+  result.candidate_local_checkpoint_path = local_path;
+  gpCloseSession();
+
+  // Restore the parent exactly, then run Branch B: same-budget global control.
+  GPRunRequest restore_request;
+  restore_request.mode = GPRunMode::kRestore;
+  restore_request.checkpoint_path = parent_path;
+  const auto parent_restore = gpRunRestore(restore_request);
+  if (!parent_restore.ok) {
+    return parent_restore;
+  }
+
+  GPRunRequest global_request;
+  global_request.mode = GPRunMode::kAdvance;
+  global_request.accepted_iterations = request.accepted_iterations;
+  global_request.scope_mode = GPRunScopeMode::kGlobal;
+  global_request.grid_report_top_n = request.grid_report_top_n;
+  const auto global_result = gpRunAdvance(global_request);
+  if (!global_result.ok || !global_result.session_active) {
+    return global_result;
+  }
+  if (!ipl::saveGPCheckpointFile(global_path, _gp_session_state->session->captureCheckpoint())) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "cannot save global control checkpoint: " + global_path;
+    return result;
+  }
+  result.candidate_global_checkpoint_path = global_path;
+
+  // Same-origin/same-budget comparison; global wins ties and incomparable pairs
+  // (the baseline is always safe to keep).
+  GPCandidateComparison comparison;
+  if (!gpCompareCheckpoints(local_path, global_path, comparison)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = comparison.reason;
+    return result;
+  }
+  result.candidate_comparison = comparison;
+
+  if (comparison.ok && comparison.same_origin && comparison.same_budget
+      && comparison.verdict == GPCandidateVerdict::kLeftBetter) {
+    gpCloseSession();
+    GPRunRequest winner_request;
+    winner_request.mode = GPRunMode::kRestore;
+    winner_request.checkpoint_path = local_path;
+    result = gpRunRestore(winner_request);
+    result.requested_iterations = request.accepted_iterations;
+    result.executed_iterations = request.accepted_iterations;
+    result.start_iteration = parent_iter + 1;
+    result.end_iteration = parent_iter + request.accepted_iterations;
+    result.stop_reason = GPStopReason::kBudgetReached;
+    result.scope_effect = local_scope_effect;
+    result.reason = "local candidate won; global control rejected, winner checkpoint restored";
+  } else {
+    result = global_result;
+    result.reason = comparison.verdict == GPCandidateVerdict::kRightBetter
+                        ? "global control won; local candidate rejected"
+                        : "global control kept (tie or incomparable local candidate)";
+  }
+  result.candidate_comparison = comparison;
+  result.candidate_local_checkpoint_path = local_path;
+  result.candidate_global_checkpoint_path = global_path;
+  return result;
 }
 
 GPRunResult PLAPI::gpRunAdvance(const GPRunRequest& request)
@@ -1563,6 +1836,123 @@ void PLAPI::gpCloseSession()
     PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction);
   }
   _gp_session_state.reset();
+}
+
+bool PLAPI::gpCompareCheckpoints(const std::string& left_path, const std::string& right_path, GPCandidateComparison& comparison) const
+{
+  comparison = GPCandidateComparison{};
+  GPStateCheckpoint left;
+  GPStateCheckpoint right;
+  if (!ipl::loadGPCheckpointFile(left_path, left)) {
+    comparison.reason = "cannot load left checkpoint: " + left_path;
+    return false;
+  }
+  if (!ipl::loadGPCheckpointFile(right_path, right)) {
+    comparison.reason = "cannot load right checkpoint: " + right_path;
+    return false;
+  }
+
+  comparison.left = GPCandidateMetrics{left.current_iter, left.prev_hpwl, left.sum_overflow, left.final_step_length,
+                                       left.density_penalty};
+  comparison.right = GPCandidateMetrics{right.current_iter, right.prev_hpwl, right.sum_overflow, right.final_step_length,
+                                        right.density_penalty};
+
+  comparison.same_origin = left.config_fingerprint == right.config_fingerprint && left.instance_names == right.instance_names
+                           && left.total_inst_area == right.total_inst_area;
+  comparison.same_budget = left.current_iter == right.current_iter;
+  if (!comparison.same_origin) {
+    comparison.reason = "candidates have different config fingerprint or design topology";
+    return true;
+  }
+  if (!comparison.same_budget) {
+    comparison.reason = "candidates were not evaluated at the same iteration count";
+    return true;
+  }
+
+  const float left_overflow = comparison.left.overflow;
+  const float right_overflow = comparison.right.overflow;
+  const int64_t left_hpwl = comparison.left.hpwl;
+  const int64_t right_hpwl = comparison.right.hpwl;
+  const float target_overflow = left.config_state_valid ? left.config_state.target_overflow : 0.1F;
+  const bool left_feasible = std::isfinite(left_overflow) && left_overflow <= target_overflow + 1.0e-5F;
+  const bool right_feasible = std::isfinite(right_overflow) && right_overflow <= target_overflow + 1.0e-5F;
+
+  if (left_feasible && right_feasible) {
+    const int64_t hpwl_delta = std::llabs(left_hpwl - right_hpwl);
+    if (hpwl_delta <= std::max<int64_t>(1, std::llabs(left_hpwl) / 100000)) {
+      comparison.verdict = GPCandidateVerdict::kEqual;
+    } else {
+      comparison.verdict = left_hpwl < right_hpwl ? GPCandidateVerdict::kLeftBetter : GPCandidateVerdict::kRightBetter;
+    }
+  } else if (left_feasible != right_feasible) {
+    comparison.verdict = left_feasible ? GPCandidateVerdict::kLeftBetter : GPCandidateVerdict::kRightBetter;
+  } else {
+    const float overflow_delta = std::fabs(left_overflow - right_overflow);
+    if (overflow_delta <= std::max(1.0e-4F, std::fabs(left_overflow) * 1.0e-3F)) {
+      if (left_hpwl == right_hpwl) {
+        comparison.verdict = GPCandidateVerdict::kEqual;
+      } else {
+        comparison.verdict = left_hpwl < right_hpwl ? GPCandidateVerdict::kLeftBetter : GPCandidateVerdict::kRightBetter;
+      }
+    } else {
+      comparison.verdict = left_overflow < right_overflow ? GPCandidateVerdict::kLeftBetter : GPCandidateVerdict::kRightBetter;
+    }
+  }
+
+  comparison.ok = true;
+  comparison.reason.clear();
+  return true;
+}
+
+GPRunResult PLAPI::gpCommitSession()
+{
+  GPRunResult result;
+  if (_gp_session_state == nullptr || _gp_session_state->session == nullptr) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "no active gp session to commit";
+    _last_gp_run_result = result;
+    return result;
+  }
+
+  result = _last_gp_run_result;
+  _gp_session_state->session->publishPlacement();
+  PlacerDBInst.updateTopoManager();
+  PlacerDBInst.updateGridManager();
+
+  const int64_t changed_instance_count = _gp_session_state->transaction.changedInstanceCount();
+  const int64_t hpwl = _gp_session_state->session->currentHpwl();
+  const float overflow = _gp_session_state->session->currentOverflow();
+  _flow_status.global_placement = PlacementStatusEvaluator::stage(
+      "global_placement", PlacementStatusCode::kOk, true, true, true, "gp candidate accepted by caller", hpwl, hpwl,
+      changed_instance_count, {});
+  _flow_status.global_placement.overflow = overflow;
+  _flow_status.global_placement.target_overflow = PlacerDBInst.get_placer_config()->get_nes_config().get_target_overflow();
+  _flow_status.global_placement.hpwl = hpwl;
+  _flow_status.global_placement.metric_after = hpwl;
+  _flow_status.global_placement.exhibit = nesterovIterationExhibit(_gp_session_state->session->iterationRecords());
+  _flow_status.gp_ran = true;
+
+  const bool committed = PlacerDBInst.commitStageTransaction(_gp_session_state->transaction);
+  const bool source_synced = committed && writeBackSourceDataBase();
+  if (!committed) {
+    _flow_status.global_placement = PlacementStatusEvaluator::stage(
+        "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false,
+        "global placement could not commit its accepted candidate", hpwl, hpwl, changed_instance_count);
+    _flow_status.global_placement.changed_count = changed_instance_count;
+  }
+  _flow_status.setFailure(_flow_status.global_placement);
+  writePlacementStatus();
+
+  result.ok = committed && source_synced;
+  result.session_active = false;
+  result.reason = !committed ? "gp candidate commit failed" : (!source_synced ? "gp candidate committed but source database sync failed" : "gp candidate committed");
+  result.checkpoint_path = _gp_session_state->checkpoint_path;
+
+  _gp_session_state->transaction = PlacerDB::StageTransaction{};
+  _gp_session_state->record_offset = 0;
+  _gp_session_state.reset();
+  _last_gp_run_result = result;
+  return result;
 }
 
 bool PLAPI::runLG()

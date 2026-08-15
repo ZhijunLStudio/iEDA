@@ -29,6 +29,8 @@ enum class GPRunMode
   kStart,    // build a new session from the current design (random_init controls the initial layout)
   kAdvance,  // advance the active session by accepted_iterations
   kResume,   // rebuild a session from a persisted checkpoint, then advance
+  kRestore,  // rebuild a session from a checkpoint exactly (0 iterations) and publish it
+  kCandidate, // fork the active parent: local scope batch + same-budget global control, restore winner
 };
 
 enum class GPStopReason
@@ -40,6 +42,7 @@ enum class GPStopReason
   kOverflowTargetMiss, // stopped before reaching target overflow
   kDiverged,
   kInvalidMetric,
+  kRestored,  // checkpoint restored exactly; no iterations were run
   kRejected,  // request rejected (invalid mode/ref combination); solver state untouched
 };
 
@@ -58,6 +61,8 @@ inline const char* gpStopReasonName(GPStopReason reason)
       return "diverged";
     case GPStopReason::kInvalidMetric:
       return "invalid_metric";
+    case GPStopReason::kRestored:
+      return "restored";
     case GPStopReason::kRejected:
       return "rejected";
     case GPStopReason::kNotRun:
@@ -75,6 +80,8 @@ enum class GPRunScopeMode
   kHotspot,    // hottest overflowing bins seed Active, net-hop neighbors become Halo
   kRandom,     // random Active set of scope_active_count instances (ablation/candidate control)
   kInstances,  // caller-specified seed instances, net-hop neighbors become Halo
+  kRegion,     // all movable instances overlapping a physical rectangle become Active
+  kLongNet,    // instances on the highest-HPWL nets become Active (wirelength-driven local seed)
 };
 
 inline const char* gpScopeModeName(GPRunScopeMode mode)
@@ -88,6 +95,10 @@ inline const char* gpScopeModeName(GPRunScopeMode mode)
       return "random";
     case GPRunScopeMode::kInstances:
       return "instances";
+    case GPRunScopeMode::kRegion:
+      return "region";
+    case GPRunScopeMode::kLongNet:
+      return "longnet";
   }
   return "unknown";
 }
@@ -132,6 +143,7 @@ struct GPBinReport
   int64_t grid_area = 0;
   int64_t occupied_area = 0;
   int64_t fixed_area = 0;
+  int64_t local_fixed_area = 0;
   int64_t available_area = 0;
   int64_t overflow_area = 0;
   float density = 0.0F;
@@ -158,6 +170,53 @@ struct GPOverflowReport
   std::vector<GPBinReport> bins;  // top-N overflowing bins, sorted by overflow desc
 };
 
+enum class GPCandidateVerdict
+{
+  kIncomparable,
+  kLeftBetter,
+  kRightBetter,
+  kEqual,
+};
+
+inline const char* gpCandidateVerdictName(GPCandidateVerdict verdict)
+{
+  switch (verdict) {
+    case GPCandidateVerdict::kIncomparable:
+      return "incomparable";
+    case GPCandidateVerdict::kLeftBetter:
+      return "left_better";
+    case GPCandidateVerdict::kRightBetter:
+      return "right_better";
+    case GPCandidateVerdict::kEqual:
+      return "equal";
+  }
+  return "unknown";
+}
+
+struct GPCandidateMetrics
+{
+  int32_t current_iter = 0;
+  int64_t hpwl = 0;
+  float overflow = 0.0F;
+  float step_length = 0.0F;
+  float density_penalty = 0.0F;
+};
+
+// Production candidate comparison on persisted checkpoints. It never touches
+// solver state: both checkpoints are loaded, their origin (config fingerprint +
+// placable topology + iteration count) is compared, then the same-stage metrics
+// are compared under the hard rules of the agent loop.
+struct GPCandidateComparison
+{
+  bool ok = false;
+  bool same_origin = false;
+  bool same_budget = false;
+  GPCandidateVerdict verdict = GPCandidateVerdict::kIncomparable;
+  std::string reason;
+  GPCandidateMetrics left;
+  GPCandidateMetrics right;
+};
+
 struct GPRunRequest
 {
   GPRunMode mode = GPRunMode::kStart;
@@ -177,8 +236,14 @@ struct GPRunRequest
   float scope_active_ratio = 0.2F;   // kHotspot: fraction of overflowing bins that seed Active
   int32_t scope_active_count = 0;    // kRandom: number of random Active instances
   float scope_halo_coeff = 0.5F;     // (0,1) movement scale for one-net-hop neighbors
+  int32_t scope_halo_hops = 1;       // net-hop radius of the halo; level h moves at halo_coeff^h
   uint32_t scope_seed = 1000;        // kRandom: reproducible Active-set shuffle seed
   std::vector<std::string> scope_instance_names;  // kInstances: seed instance names
+  bool scope_region_set = false;       // kRegion: physical rectangle seed
+  int32_t scope_region_ll_x = 0;
+  int32_t scope_region_ll_y = 0;
+  int32_t scope_region_ur_x = 0;
+  int32_t scope_region_ur_y = 0;
 
   // Observation: max overflowing bins returned in GPRunResult.grid_report.
   // The full top-N report is also written to <output>/pl/gp_grid_report.json.
@@ -215,6 +280,13 @@ struct GPRunResult
   std::vector<GPIterationRecord> iteration_records;  // records produced by this batch only
   GPRunScopeEffect scope_effect;
   GPOverflowReport grid_report;
+
+  // kCandidate provenance: comparison and child checkpoints of the automatic
+  // local-vs-global fork. The returned session is already restored to the
+  // winner (global on tie / incomparable).
+  GPCandidateComparison candidate_comparison;
+  std::string candidate_local_checkpoint_path;
+  std::string candidate_global_checkpoint_path;
 };
 
 }  // namespace ipl

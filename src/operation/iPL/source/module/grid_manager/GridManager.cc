@@ -25,20 +25,22 @@ namespace ipl {
 int64_t Grid::obtainAvailableArea() const
 {
   return static_cast<int64_t>(this->grid_area * this->available_ratio * this->density_target) - this->occupied_area
-         - this->fixed_area;
+         - this->fixed_area - this->local_fixed_area;
 }
 
 int64_t Grid::obtainGridOverflowArea() const
 {
-  return std::max(int64_t(0), static_cast<int64_t>(this->occupied_area + this->fixed_area
+  return std::max(int64_t(0), static_cast<int64_t>(this->occupied_area + this->fixed_area + this->local_fixed_area
                                                   - (this->available_ratio * this->density_target * this->grid_area)));
 }
 
 float Grid::obtainGridDensity() const
 {
   // The caller normalizes by available_ratio; density_target is the region
-  // density screen factor (1.0 = global, unchanged default path).
-  return static_cast<float>(this->occupied_area + this->fixed_area) / (this->grid_area * this->density_target);
+  // density screen factor (1.0 = global, unchanged default path). Locally fixed
+  // context instances are part of the density charge, exactly like fixed macros.
+  return static_cast<float>(this->occupied_area + this->fixed_area + this->local_fixed_area)
+         / (this->grid_area * this->density_target);
 }
 
 void GridManager::obtainOverlapGridList(std::vector<Grid*>& grid_list, Rectangle<int32_t>& rect)
@@ -134,6 +136,7 @@ void GridManager::clearAllOccupiedArea()
   for (int32_t i = 0; i < _grid_cnt_y; i++) {
     for (int32_t j = 0; j < _grid_cnt_x; j++) {
       _grid_2d_list[i][j].occupied_area = 0;
+      _grid_2d_list[i][j].local_fixed_area = 0;
     }
   }
 }

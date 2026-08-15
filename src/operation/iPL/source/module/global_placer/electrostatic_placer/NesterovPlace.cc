@@ -2085,9 +2085,23 @@ void keepHottestBins(std::vector<HotBin>& hot, size_t take)
 void NesterovPlace::setMovementCoeffs(const std::vector<float>& move_coeff_list)
 {
   _move_coeff_list = move_coeff_list;
+  syncLocalFixedFlags();
 }
 
-void NesterovPlace::buildHotOverflowScope(float active_ratio, float halo_coeff)
+void NesterovPlace::syncLocalFixedFlags()
+{
+  // Fixed-set local GP: Context instances (coefficient 0) are not merely
+  // gradient-masked; they become fixed density obstacles for this batch. Halo
+  // and Active remain movable charge. The BinGrid routes their area into
+  // Grid::local_fixed_area, which is cleared together with occupied_area and
+  // therefore never leaks across batches or checkpoints.
+  for (size_t i = 0; i < _placable_inst_list.size(); i++) {
+    const bool local_fixed = i < _move_coeff_list.size() && _move_coeff_list[i] <= 0.0F;
+    _placable_inst_list[i]->set_local_fixed(local_fixed);
+  }
+}
+
+void NesterovPlace::buildHotOverflowScope(float active_ratio, float halo_coeff, int32_t halo_hops)
 {
   auto* grid_manager = _nes_database->_grid_manager;
   // Refresh the bin grid from the current instance coordinates: after a
@@ -2101,7 +2115,7 @@ void NesterovPlace::buildHotOverflowScope(float active_ratio, float halo_coeff)
   const size_t n = _placable_inst_list.size();
   std::vector<float> coeffs(n, 0.0F);
   if (hot.empty() || n == 0) {
-    _move_coeff_list = coeffs;
+    setMovementCoeffs(coeffs);
     return;
   }
 
@@ -2131,20 +2145,23 @@ void NesterovPlace::buildHotOverflowScope(float active_ratio, float halo_coeff)
   }
 
   // Halo: net-hop closure around the active set.
-  applyNetHaloClosure(active, coeffs, halo_coeff);
+  applyNetHaloClosure(active, coeffs, halo_coeff, halo_hops);
 
-  _move_coeff_list = coeffs;
+  setMovementCoeffs(coeffs);
 }
 
-void NesterovPlace::applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff)
+void NesterovPlace::applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff, int32_t halo_hops)
 {
   const size_t n = _placable_inst_list.size();
+  if (n == 0 || halo_hops <= 0) {
+    return;
+  }
 
   // Sorted (net_id, instance_index) pairs replace the previous
   // std::map<int32_t, std::vector<int32_t>>. For a 10M-instance design the map
   // version costs GBs of overhead and minutes of allocation; a flat sorted
   // array is one allocation of 2*|pin| integers and two binary-search ranges
-  // per active pin.
+  // per frontier pin.
   std::vector<std::pair<int32_t, int32_t>> net_to_insts;
   net_to_insts.reserve(_nes_database->_nPin_list.size());
   for (size_t i = 0; i < n; i++) {
@@ -2154,31 +2171,54 @@ void NesterovPlace::applyNetHaloClosure(const std::vector<bool>& active, std::ve
   }
   std::sort(net_to_insts.begin(), net_to_insts.end());
 
+  // Multi-hop halo with geometric decay: hop 1 moves at halo_coeff, hop 2 at
+  // halo_coeff^2, etc. The frontier advances one net hop per level, so large
+  // scopes relax into the surrounding context instead of ending at a hard
+  // one-hop boundary.
+  std::vector<int32_t> frontier;
+  frontier.reserve(n);
   for (size_t i = 0; i < n; i++) {
-    if (!active[i]) {
-      continue;
+    if (active[i]) {
+      frontier.push_back(static_cast<int32_t>(i));
     }
-    for (auto* n_pin : _placable_inst_list[i]->get_nPin_list()) {
-      const int32_t net_id = n_pin->get_nNet()->get_net_id();
-      const auto range = std::equal_range(net_to_insts.begin(), net_to_insts.end(), std::make_pair(net_id, 0),
-                                          [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
-      for (auto it = range.first; it != range.second; ++it) {
-        const int32_t j = it->second;
-        if (!active[j] && coeffs[j] == 0.0F) {
-          coeffs[j] = halo_coeff;
+  }
+
+  float level_coeff = halo_coeff;
+  for (int32_t hop = 1; hop <= halo_hops; hop++) {
+    if (frontier.empty()) {
+      break;
+    }
+    std::vector<int32_t> next_frontier;
+    next_frontier.reserve(frontier.size());
+    for (const int32_t i : frontier) {
+      for (auto* n_pin : _placable_inst_list[i]->get_nPin_list()) {
+        const int32_t net_id = n_pin->get_nNet()->get_net_id();
+        const auto range = std::equal_range(net_to_insts.begin(), net_to_insts.end(), std::make_pair(net_id, 0),
+                                            [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+        for (auto it = range.first; it != range.second; ++it) {
+          const int32_t j = it->second;
+          if (!active[j] && coeffs[j] == 0.0F) {
+            coeffs[j] = level_coeff;
+            next_frontier.push_back(j);
+          }
         }
       }
+    }
+    frontier.swap(next_frontier);
+    level_coeff *= halo_coeff;
+    if (level_coeff <= 0.0F) {
+      break;
     }
   }
 }
 
-bool NesterovPlace::buildInstanceScope(const std::vector<std::string>& seed_instance_names, float halo_coeff)
+bool NesterovPlace::buildInstanceScope(const std::vector<std::string>& seed_instance_names, float halo_coeff, int32_t halo_hops)
 {
   const size_t n = _placable_inst_list.size();
   std::vector<float> coeffs(n, 0.0F);
   std::vector<bool> active(n, false);
   if (n == 0 || seed_instance_names.empty()) {
-    _move_coeff_list = coeffs;
+    setMovementCoeffs(coeffs);
     return n != 0;
   }
 
@@ -2198,9 +2238,78 @@ bool NesterovPlace::buildInstanceScope(const std::vector<std::string>& seed_inst
     coeffs[it->second] = 1.0F;
   }
 
-  applyNetHaloClosure(active, coeffs, halo_coeff);
-  _move_coeff_list = coeffs;
+  applyNetHaloClosure(active, coeffs, halo_coeff, halo_hops);
+  setMovementCoeffs(coeffs);
   return true;
+}
+
+void NesterovPlace::buildRegionScope(const Rectangle<int32_t>& region, float halo_coeff, int32_t halo_hops)
+{
+  const size_t n = _placable_inst_list.size();
+  std::vector<float> coeffs(n, 0.0F);
+  std::vector<bool> active(n, false);
+  if (n == 0 || region.get_ll_x() >= region.get_ur_x() || region.get_ll_y() >= region.get_ur_y()) {
+    setMovementCoeffs(coeffs);
+    return;
+  }
+
+  for (size_t i = 0; i < n; i++) {
+    const auto shape = _placable_inst_list[i]->get_density_shape();
+    const bool overlaps = shape.get_ll_x() < region.get_ur_x() && shape.get_ur_x() > region.get_ll_x()
+                         && shape.get_ll_y() < region.get_ur_y() && shape.get_ur_y() > region.get_ll_y();
+    if (overlaps) {
+      active[i] = true;
+      coeffs[i] = 1.0F;
+    }
+  }
+
+  applyNetHaloClosure(active, coeffs, halo_coeff, halo_hops);
+  setMovementCoeffs(coeffs);
+}
+
+void NesterovPlace::buildLongNetScope(size_t active_count, float halo_coeff, int32_t halo_hops)
+{
+  const size_t n = _placable_inst_list.size();
+  std::vector<float> coeffs(n, 0.0F);
+  std::vector<bool> active(n, false);
+  if (n == 0 || active_count == 0) {
+    setMovementCoeffs(coeffs);
+    return;
+  }
+
+  std::vector<std::pair<int64_t, int32_t>> pin_scores;
+  pin_scores.reserve(_nes_database->_nPin_list.size());
+  for (size_t i = 0; i < n; i++) {
+    for (auto* n_pin : _placable_inst_list[i]->get_nPin_list()) {
+      const int64_t wirelength = _nes_database->_wirelength->obtainNetWirelength(n_pin->get_nNet()->get_net_id());
+      pin_scores.emplace_back(wirelength, static_cast<int32_t>(i));
+    }
+  }
+  // top-k by wirelength; duplicate instance indices are deduplicated while
+  // scanning, so the selected set has exactly min(active_count, n) cells.
+  std::sort(pin_scores.begin(), pin_scores.end(),
+            [](const auto& lhs, const auto& rhs) { return lhs.first > rhs.first; });
+
+  size_t selected = 0;
+  for (const auto& [wirelength, index] : pin_scores) {
+    (void) wirelength;
+    if (selected >= active_count) {
+      break;
+    }
+    if (!active[index]) {
+      active[index] = true;
+      coeffs[index] = 1.0F;
+      selected++;
+    }
+  }
+
+  applyNetHaloClosure(active, coeffs, halo_coeff, halo_hops);
+  setMovementCoeffs(coeffs);
+}
+
+void NesterovPlace::refreshGridOccupation()
+{
+  _nes_database->_bin_grid->updateBinGrid(_placable_inst_list, _nes_config.get_thread_num());
 }
 
 GPRunScopeEffect NesterovPlace::computeScopeEffect() const
@@ -2294,6 +2403,7 @@ GPOverflowReport NesterovPlace::buildOverflowReport(int32_t top_n) const
       bin_report.grid_area = grid.grid_area;
       bin_report.occupied_area = grid.occupied_area;
       bin_report.fixed_area = grid.fixed_area;
+      bin_report.local_fixed_area = grid.local_fixed_area;
       bin_report.available_area = std::max<int64_t>(0, grid.obtainAvailableArea());
       bin_report.overflow_area = bin.overflow;
       bin_report.density = grid.obtainGridDensity();
@@ -2342,12 +2452,12 @@ void NesterovPlace::buildHotOverflowDensityTargets(float top_ratio, float target
   }
 }
 
-void NesterovPlace::buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed)
+void NesterovPlace::buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed, int32_t halo_hops)
 {
   const size_t n = _placable_inst_list.size();
   std::vector<float> coeffs(n, 0.0F);
   if (n == 0) {
-    _move_coeff_list = coeffs;
+    setMovementCoeffs(coeffs);
     return;
   }
 
@@ -2362,8 +2472,8 @@ void NesterovPlace::buildRandomScope(size_t active_count, float halo_coeff, uint
     active[indices[k]] = true;
     coeffs[indices[k]] = 1.0F;
   }
-  applyNetHaloClosure(active, coeffs, halo_coeff);
-  _move_coeff_list = coeffs;
+  applyNetHaloClosure(active, coeffs, halo_coeff, halo_hops);
+  setMovementCoeffs(coeffs);
 }
 
 void to_json(nlohmann::json& json_obj, const Point<int32_t>& point)
@@ -2640,6 +2750,7 @@ void to_json(nlohmann::json& json_obj, const GPBinReport& report)
                             {"grid_area", report.grid_area},
                             {"occupied_area", report.occupied_area},
                             {"fixed_area", report.fixed_area},
+                            {"local_fixed_area", report.local_fixed_area},
                             {"available_area", report.available_area},
                             {"overflow_area", report.overflow_area},
                             {"density", report.density},

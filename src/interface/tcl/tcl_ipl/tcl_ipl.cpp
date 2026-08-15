@@ -277,11 +277,17 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
   auto* halo_option = new TclDoubleOption("-scope_halo_coeff", 1, 0.5);
   addOption(halo_option);
 
+  auto* halo_hops_option = new TclIntOption("-scope_halo_hops", 1, 1);
+  addOption(halo_hops_option);
+
   auto* scope_seed_option = new TclIntOption("-scope_seed", 1, 1000);
   addOption(scope_seed_option);
 
   auto* scope_instances_option = new TclStringOption("-scope_instances", 1, nullptr);
   addOption(scope_instances_option);
+
+  auto* scope_region_option = new TclStringOption("-scope_region", 1, nullptr);
+  addOption(scope_region_option);
 
   auto* report_top_n_option = new TclIntOption("-report_top_n", 1, 64);
   addOption(report_top_n_option);
@@ -292,14 +298,16 @@ unsigned CmdPlacerRunGP::check()
   TclOption* mode_option = getOptionOrArg("-mode");
   if (mode_option->is_set_val()) {
     const std::string mode = mode_option->getStringVal();
-    if (mode != "start" && mode != "advance" && mode != "resume" && mode != "relinearize" && mode != "close") {
-      LOG_ERROR << "placer_run_gp: unknown -mode value '" << mode << "' (expected start|advance|resume|relinearize|close)";
+    if (mode != "start" && mode != "advance" && mode != "resume" && mode != "relinearize" && mode != "restore"
+        && mode != "candidate" && mode != "accept" && mode != "close") {
+      LOG_ERROR << "placer_run_gp: unknown -mode value '" << mode
+                << "' (expected start|advance|resume|relinearize|restore|candidate|accept|close)";
       return 0;
     }
-    if (mode == "resume") {
+    if (mode == "resume" || mode == "restore") {
       TclOption* checkpoint_option = getOptionOrArg("-checkpoint");
       if (!checkpoint_option->is_set_val()) {
-        LOG_ERROR << "placer_run_gp: -mode resume requires -checkpoint <path>";
+        LOG_ERROR << "placer_run_gp: -mode " << mode << " requires -checkpoint <path>";
         return 0;
       }
     }
@@ -308,8 +316,10 @@ unsigned CmdPlacerRunGP::check()
   TclOption* scope_option = getOptionOrArg("-scope");
   if (scope_option->is_set_val()) {
     const std::string scope = scope_option->getStringVal();
-    if (scope != "global" && scope != "hotspot" && scope != "random" && scope != "instances") {
-      LOG_ERROR << "placer_run_gp: unknown -scope value '" << scope << "' (expected global|hotspot|random|instances)";
+    if (scope != "global" && scope != "hotspot" && scope != "random" && scope != "instances" && scope != "region"
+        && scope != "longnet") {
+      LOG_ERROR << "placer_run_gp: unknown -scope value '" << scope
+                << "' (expected global|hotspot|random|instances|region|longnet)";
       return 0;
     }
     if (scope == "instances") {
@@ -319,10 +329,17 @@ unsigned CmdPlacerRunGP::check()
         return 0;
       }
     }
-    if (scope == "random") {
+    if (scope == "random" || scope == "longnet") {
       TclOption* scope_count_option = getOptionOrArg("-scope_active_count");
       if (!scope_count_option->is_set_val() || scope_count_option->getIntVal() <= 0) {
-        LOG_ERROR << "placer_run_gp: -scope random requires a positive -scope_active_count";
+        LOG_ERROR << "placer_run_gp: -scope " << scope << " requires a positive -scope_active_count";
+        return 0;
+      }
+    }
+    if (scope == "region") {
+      TclOption* scope_region_option = getOptionOrArg("-scope_region");
+      if (!scope_region_option->is_set_val()) {
+        LOG_ERROR << "placer_run_gp: -scope region requires -scope_region 'llx lly urx ury'";
         return 0;
       }
     }
@@ -349,12 +366,22 @@ unsigned CmdPlacerRunGP::exec()
     std::cout << "iPL gp session closed." << std::endl;
     return ipl::placementTclResult(true);
   }
+  if (mode == "accept") {
+    const auto accept_result = iPLAPIInst.gpCommitSession();
+    std::cout << "iPL gp.run (accept) ok=" << accept_result.ok << " reason=" << accept_result.reason << std::endl;
+    return ipl::placementTclResult(accept_result.ok);
+  }
 
   ipl::GPRunRequest request;
   if (mode == "start") {
     request.mode = ipl::GPRunMode::kStart;
   } else if (mode == "resume") {
     request.mode = ipl::GPRunMode::kResume;
+  } else if (mode == "restore") {
+    request.mode = ipl::GPRunMode::kRestore;
+    request.accepted_iterations = 0;
+  } else if (mode == "candidate") {
+    request.mode = ipl::GPRunMode::kCandidate;
   } else if (mode == "relinearize") {
     // Keep the externally-modified coordinates and rebuild all solver state
     // (gradients/steplength/momentum) from them: a fresh session, no stale state.
@@ -365,7 +392,9 @@ unsigned CmdPlacerRunGP::exec()
   }
 
   TclOption* iterations_option = getOptionOrArg("-iterations");
-  request.accepted_iterations = iterations_option->is_set_val() ? iterations_option->getIntVal() : 20;
+  if (request.mode != ipl::GPRunMode::kRestore) {
+    request.accepted_iterations = iterations_option->is_set_val() ? iterations_option->getIntVal() : 20;
+  }
   TclOption* random_init_option = getOptionOrArg("-random_init");
   if (random_init_option->is_set_val()) {
     request.random_init = (random_init_option->getIntVal() != 0);
@@ -403,6 +432,10 @@ unsigned CmdPlacerRunGP::exec()
     request.scope_mode = ipl::GPRunScopeMode::kRandom;
   } else if (scope == "instances") {
     request.scope_mode = ipl::GPRunScopeMode::kInstances;
+  } else if (scope == "region") {
+    request.scope_mode = ipl::GPRunScopeMode::kRegion;
+  } else if (scope == "longnet") {
+    request.scope_mode = ipl::GPRunScopeMode::kLongNet;
   }
   TclOption* scope_ratio_option = getOptionOrArg("-scope_active_ratio");
   if (scope_ratio_option->is_set_val()) {
@@ -415,6 +448,10 @@ unsigned CmdPlacerRunGP::exec()
   TclOption* halo_option = getOptionOrArg("-scope_halo_coeff");
   if (halo_option->is_set_val()) {
     request.scope_halo_coeff = static_cast<float>(halo_option->getDoubleVal());
+  }
+  TclOption* halo_hops_option = getOptionOrArg("-scope_halo_hops");
+  if (halo_hops_option->is_set_val()) {
+    request.scope_halo_hops = halo_hops_option->getIntVal();
   }
   TclOption* scope_seed_option = getOptionOrArg("-scope_seed");
   if (scope_seed_option->is_set_val()) {
@@ -431,6 +468,19 @@ unsigned CmdPlacerRunGP::exec()
         continue;
       }
       request.scope_instance_names.push_back(name.substr(first, last - first + 1));
+    }
+  }
+  TclOption* scope_region_option = getOptionOrArg("-scope_region");
+  if (scope_region_option->is_set_val()) {
+    std::stringstream region_stream(scope_region_option->getStringVal());
+    int32_t region_coords[4] = {0, 0, 0, 0};
+    region_stream >> region_coords[0] >> region_coords[1] >> region_coords[2] >> region_coords[3];
+    if (!region_stream.fail() || region_stream.eof()) {
+      request.scope_region_set = true;
+      request.scope_region_ll_x = region_coords[0];
+      request.scope_region_ll_y = region_coords[1];
+      request.scope_region_ur_x = region_coords[2];
+      request.scope_region_ur_y = region_coords[3];
     }
   }
   TclOption* report_top_n_option = getOptionOrArg("-report_top_n");
@@ -473,6 +523,62 @@ unsigned CmdPlacerRunGP::exec()
   if (!result.experiment_record_path.empty()) {
     std::cout << "  experiment_record=" << result.experiment_record_path << std::endl;
   }
+  if (result.candidate_comparison.ok) {
+    std::cout << "  candidate_verdict=" << ipl::gpCandidateVerdictName(result.candidate_comparison.verdict)
+              << " local=" << result.candidate_local_checkpoint_path << " global=" << result.candidate_global_checkpoint_path << std::endl;
+  }
+  return ipl::placementTclResult(true);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+CmdPlacerCompareGP::CmdPlacerCompareGP(const char* cmd_name) : TclCmd(cmd_name)
+{
+  auto* left_option = new TclStringOption("-checkpoint_a", 1, nullptr);
+  addOption(left_option);
+
+  auto* right_option = new TclStringOption("-checkpoint_b", 1, nullptr);
+  addOption(right_option);
+}
+
+unsigned CmdPlacerCompareGP::check()
+{
+  TclOption* left_option = getOptionOrArg("-checkpoint_a");
+  TclOption* right_option = getOptionOrArg("-checkpoint_b");
+  if (!left_option->is_set_val() || !right_option->is_set_val()) {
+    LOG_ERROR << "placer_compare_gp requires -checkpoint_a and -checkpoint_b";
+    return 0;
+  }
+  return 1;
+}
+
+unsigned CmdPlacerCompareGP::exec()
+{
+  if (not check()) {
+    return 0;
+  }
+
+  ipl::GPCandidateComparison comparison;
+  const bool loaded = iPLAPIInst.gpCompareCheckpoints(getOptionOrArg("-checkpoint_a")->getStringVal(),
+                                                       getOptionOrArg("-checkpoint_b")->getStringVal(), comparison);
+  if (!loaded) {
+    std::cerr << "placer_compare_gp failed: " << comparison.reason << std::endl;
+    return ipl::placementTclResult(false);
+  }
+
+  std::cout << "placer_compare_gp same_origin=" << comparison.same_origin << " same_budget=" << comparison.same_budget
+            << " verdict=" << ipl::gpCandidateVerdictName(comparison.verdict) << "\n"
+            << "  left : iter=" << comparison.left.current_iter << " hpwl=" << comparison.left.hpwl
+            << " overflow=" << comparison.left.overflow << " step=" << comparison.left.step_length << "\n"
+            << "  right: iter=" << comparison.right.current_iter << " hpwl=" << comparison.right.hpwl
+            << " overflow=" << comparison.right.overflow << " step=" << comparison.right.step_length;
+  if (!comparison.reason.empty()) {
+    std::cout << " reason=" << comparison.reason;
+  }
+  std::cout << std::endl;
+  // The command succeeded when both checkpoints could be loaded and compared;
+  // "incomparable" is a valid comparison result, not a command failure.
   return ipl::placementTclResult(true);
 }
 
