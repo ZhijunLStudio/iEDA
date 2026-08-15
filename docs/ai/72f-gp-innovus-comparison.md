@@ -35,53 +35,48 @@ export CDS_LIC_FILE=/home/yangkang/cadence/INNOVUS201/license/cadence.dat
 | Innovus effort | `setPlaceMode -place_global_cong_effort low -place_detail_wire_length_opt_effort none` |
 | 输出 | `defOut -netlist innovus_placed_nets.def` |
 
-## 3. Innovus 实测结果
+## 3. 自动化脚本与结果（GP-only，wirelength-only）
 
-运行脚本 `docs/ipl/pl_vis/cases/innovus_place_notiming.tcl`（已复制到 `/tmp/gp_innovus_s1238` 并修正 lib 路径）。
+脚本：`benchmarks/flows/run_innovus_gp_compare.sh`
 
-```text
-placeDesign ... real=0:00:09.0
-Total net bbox length = 7.457e+03 um
+```bash
+benchmarks/flows/run_innovus_gp_compare.sh s1238
+benchmarks/flows/run_innovus_gp_compare.sh apb4_timer
+benchmarks/flows/run_innovus_gp_compare.sh picorv32
+benchmarks/flows/run_innovus_gp_compare.sh aes
 ```
 
-用 iEDA 共同评价器 `report_wirelength` 读 Innovus DEF：
+公平性处理：
 
-```text
-HPWL  7,452,006 DBU (avg 22,650)
-FLUTE 8,701,992
-EGR   8,567,000
-```
+1. Innovus 和 iEDA 使用同一 verilog netlist。
+2. iEDA 输入 DEF 直接从 Innovus 输出 DEF 生成：只把 movable 组件改回 UNPLACED，保留同一 floorplan/rows/GCell/NETS，因此两边网表、die/core/rows 完全一致。
+3. Innovus 关闭 refinePlace（`setPlaceMode -place_design_refine_place false`），输出的是未合法化的 GP 结果；iEDA 使用 `placer_run_gp` legacy 完整 GP，也不跑 LG/DP。
+4. 共同评价器 `benchmarks/flows/def_hpwl_eval.py`：读同一 cell LEF 的 pin 偏移，对两个 DEF 算同一 HPWL，不跑 EGR。
 
-## 4. iEDA GP 初步结果
+实测（2026-08-15）：
 
-同一物理 floorplan 的 1000-units placement DEF（`/tmp/pl_vis_1000/s1238.def`），
-`placer_run_gp` legacy 完整 GP（配置 target_density=0.8, adaptive_bin）：
+| design | Innovus GP HPWL | iEDA GP HPWL | iEDA/Innovus | iEDA 降低 | iEDA GP overflow |
+|---|---|---|---|---|---|
+| s1238 | 8,053,041 | 5,982,950 | 0.743 | **25.7%** | 0.0991 |
+| apb4_timer | 18,566,747 | 15,689,143 | 0.845 | **15.5%** | 0.0983 |
+| picorv32 | 308,691,343 | 234,083,737 | 0.758 | **24.2%** | 0.0997 |
+| aes | 914,210,691 | 665,233,032 | 0.728 | **27.2%** | 0.0990 |
 
-```text
-Finished with Overflow: 0.099756
-HPWL: 6,009,449 DBU
-```
+## 4. 读数时的注意事项
 
-初步比值：
+- 这是 **GP-only 且 no-timing/no-congestion** 的对比；不含 Innovus refinePlace、LG/DP、CTS/route。
+- 共同 HPWL 评价器使用 cell LEF pin 偏移，不包含 EGR/FLUTE；与 iEDA report 的 EGR 模型不同，但两边用同一实现。
+- iEDA 的 GP solver log HPWL 与共同评价器有 1~2% 差（log 是 cell-center/pin 定义细节差），结论方向一致。
+- Innovus placeDesign 内部仍可能做 pre-place opt/scanReorder；这属于其默认 GP 流程，未额外禁止。下一步若要比纯求解器，需要用 `place_opt -run_global_place` 或 `-noPrePlaceOpt` 进一步收口。
 
-```text
-iEDA GP HPWL / Innovus common-HPWL = 6,009,449 / 7,452,006 = 0.806
-=> 本样例低约 19.4%
-```
+## 5. 结论
 
-## 5. 正式结论前必须补的公平性
-
-1. **网表来源**：当前 iEDA 跑法从转换后的 route DEF 建网（352 nets），Innovus 从 verilog 建网（329 nets）。虽然物理设计相同，但 net 命名/数量不一致，不能直接下结论。必须让 iEDA 从同一 `s1238_a_route.v` 建网，再读同一 floorplan。
-2. **共同评价器**：Innovus DEF 可正常走 iEDA `report_wirelength`；iEDA GP DEF 含 postRoute 几何，直接评价会进 iRT 并在路由几何上失败。需要生成 **placement-only + 同网表 DEF**，或让 reportWL 支持跳过 EGR。
-3. **目标密度**：iEDA 配置 target_density=0.8 后自动 clamp 到 0.8145；Innovus 使用 DEF floorplan 隐含利用率。正式协议要记录两边实际 utilization，确认一致。
-4. **Seed/CPU**：两边固定 seed/threads 后再各跑 3 次，报告 min/median，避免单次噪声。
+本机 Innovus 20.10 可以稳定作为 GP 对照。当前 4 个 sky130 设计上，iEDA 全局布局 HPWL 全面低于 Innovus GP-only，领先 15.5%~27.2%；同时 iEDA overflow 均收敛到目标 0.1 附近。
 
 ## 6. 下一步
 
-- 建立 `benchmarks/flows/run_innovus_gp_compare.sh`，自动：
-  - 准备 Innovus MMMC/lib/LEF
-  - 跑 Innovus wirelength-only GP + `defOut -netlist`
-  - 从同一 verilog + floorplan 生成 iEDA 输入
-  - 跑 iEDA legacy GP
-  - 输出统一 JSON：`{innovus_hpwl, ieda_hpwl, ratio, overflow, runtime}`
-- 在 s1238/apb4_timer/picorv32 上先跑通，再决定是否上 aes。
+- 加入 Innovus `place_opt -noPrePlaceOpt` / `place_design -noPrePlaceOpt` 对照，进一步剥离预放置优化。
+- 在共同评价器中同时输出 STWL/FLUTE 与 bin 密度分布。
+- 把 `local/candidate` 模式也纳入同一 harness：父 checkpoint -> local vs global -> 与 Innovus GP 对照。
+- 固定 seed/threads 各跑 3 次，输出 min/median/max。
+- 扩展到 superblue16（981k）前，先确认 Innovus 8 CPU license 上限与内存。
