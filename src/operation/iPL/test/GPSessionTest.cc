@@ -33,6 +33,7 @@
 #include "PLAPI.hh"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -476,19 +477,32 @@ int runDiverge()
 int runMismatch()
 {
   bool ok = true;
-  // This process loads a MODIFIED placer config (different target_overflow);
-  // resuming the checkpoint saved under the standard config must be rejected by
-  // the config fingerprint before any solver state is touched.
+  // This process loads a MODIFIED placer config (different target_overflow).
+  // Since M2 checkpoints are self-contained (they carry the effective
+  // NesterovPlaceConfig that saved them), resume must restore the saved config
+  // before constructing the solver database and then run the same numerical
+  // path. A config fingerprint mismatch without a saved config state would
+  // still be rejected before any solver state is touched.
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save/pl/gp_session_checkpoint.json";
+  ipl::GPStateCheckpoint checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(checkpoint_path, checkpoint), "mismatch: must load the standard-config checkpoint");
+  const float modified_target_overflow = PlacerDBInst.get_placer_config()->get_nes_config().get_target_overflow();
+  ok &= require(modified_target_overflow > checkpoint.config_state.target_overflow + 0.01F,
+                "mismatch: this process must use a genuinely modified config");
+
   ipl::GPRunRequest request;
   request.mode = ipl::GPRunMode::kResume;
   request.accepted_iterations = 20;
-  request.checkpoint_path = "/tmp/ipl_gp_session_test/ckpt_save/pl/gp_session_checkpoint.json";
+  request.checkpoint_path = checkpoint_path;
   const auto result = iPLAPIInst.gpRun(request);
-  ok &= require(!result.ok && result.stop_reason == ipl::GPStopReason::kRejected,
-                "resume under a modified config must be rejected");
-  ok &= require(!iPLAPIInst.gpSessionActive(), "rejected mismatch resume must not leave a session behind");
-  ok &= require(result.reason.find("fingerprint") != std::string::npos, "rejection reason must mention the config fingerprint");
+  ok &= require(result.ok && result.session_active, "self-contained checkpoint must resume under a different base config");
+  ok &= require(result.start_iteration == 21 && result.end_iteration == 40, "mismatch: resumed batch must run iterations 21-40");
+  ok &= require(std::fabs(PlacerDBInst.get_placer_config()->get_nes_config().get_target_overflow()
+                          - checkpoint.config_state.target_overflow)
+                    < 1e-6F,
+                "mismatch: checkpoint must restore the saved effective solver config");
 
+  iPLAPIInst.gpCloseSession();
   iPLAPIInst.destoryInst();
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
@@ -1196,6 +1210,121 @@ int runDensityKnob()
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+// Agent-facing local GP through the public PLAPI surface: start -> close ->
+// resume the same checkpoint with an instance-seeded scope, and verify the
+// write-boundary contract, parent-checkpoint lineage, and bin-level grid report.
+int runAgentScope()
+{
+  bool ok = true;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/agent_scope/pl/gp_session_checkpoint.json";
+
+  {
+    ipl::GPRunRequest start_request;
+    start_request.mode = ipl::GPRunMode::kStart;
+    start_request.accepted_iterations = 20;
+    start_request.random_init = true;
+    const auto start_result = iPLAPIInst.gpRun(start_request);
+    ok &= require(start_result.ok && start_result.session_active, "agent-scope: start(20) must leave an active session");
+    ok &= require(start_result.parent_checkpoint_path.empty(), "agent-scope: first batch has no parent checkpoint");
+    iPLAPIInst.gpCloseSession();
+  }
+
+  ipl::GPStateCheckpoint checkpoint;
+  ok &= require(ipl::loadGPCheckpointFile(checkpoint_path, checkpoint), "agent-scope: must load the iter-20 checkpoint");
+  ok &= require(!checkpoint.instance_names.empty(), "agent-scope: checkpoint must contain movable instance names");
+
+  ipl::GPRunRequest local_request;
+  local_request.mode = ipl::GPRunMode::kResume;
+  local_request.accepted_iterations = 10;
+  local_request.checkpoint_path = checkpoint_path;
+  local_request.scope_mode = ipl::GPRunScopeMode::kInstances;
+  local_request.scope_halo_coeff = 0.5F;
+  local_request.scope_active_ratio = 0.2F;
+  const size_t seed_count = std::min<size_t>(20, checkpoint.instance_names.size());
+  local_request.scope_instance_names.assign(checkpoint.instance_names.begin(), checkpoint.instance_names.begin() + seed_count);
+
+  const auto local_result = iPLAPIInst.gpRun(local_request);
+  ok &= require(local_result.ok, "agent-scope: instance-scoped resume batch must succeed");
+  ok &= require(local_result.scope_effect.scope_applied, "agent-scope: scope effect must be reported");
+  ok &= require(local_result.scope_effect.in_scope, "agent-scope: every write must stay inside the requested scope");
+  ok &= require(local_result.scope_effect.active_written >= static_cast<int64_t>(seed_count),
+                "agent-scope: all seed instances must be active");
+  ok &= require(local_result.scope_effect.context_moved == 0, "agent-scope: context instances must be bitwise frozen");
+  ok &= require(!local_result.parent_checkpoint_path.empty() && std::filesystem::exists(local_result.parent_checkpoint_path),
+                "agent-scope: parent checkpoint must be preserved for rollback");
+  ok &= require(!local_result.grid_report_path.empty() && std::filesystem::exists(local_result.grid_report_path),
+                "agent-scope: bin-level grid report must be written");
+  ok &= require(!local_result.experiment_record_path.empty() && std::filesystem::exists(local_result.experiment_record_path),
+                "agent-scope: append-only experiment ledger must be written");
+  ok &= require(local_result.grid_report.overflowing_bin_count > 0 && local_result.grid_report.total_overflow_area > 0,
+                "agent-scope: grid report must contain real overflow bins");
+  ok &= require(dumpCoordinates("agent_scope"), "agent-scope: must dump coordinates");
+
+  iPLAPIInst.gpCloseSession();
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+// Checkpoint self-containment: a start-time target_density override must be
+// resumable without re-supplying the override, because the checkpoint carries
+// the effective NesterovPlaceConfig used to build the solver database.
+int runAgentConfigResume()
+{
+  bool ok = true;
+  auto& nes_config = PlacerDBInst.get_placer_config()->get_nes_config();
+  const float default_target_density = nes_config.get_target_density();
+  const float default_init_penalty = nes_config.get_init_density_penalty();
+  const float default_min_phi = nes_config.get_min_phi_coef();
+  const float default_max_phi = nes_config.get_max_phi_coef();
+  const float requested_density = default_target_density > 0.0F && default_target_density < 0.95F ? default_target_density + 0.05F
+                                                                                                  : 0.9F;
+  const float requested_init_penalty = default_init_penalty * 1.1F;
+  const float requested_max_phi = default_max_phi * 0.99F;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/agent_config_resume/pl/gp_session_checkpoint.json";
+
+  {
+    ipl::GPRunRequest start_request;
+    start_request.mode = ipl::GPRunMode::kStart;
+    start_request.accepted_iterations = 10;
+    start_request.target_density = requested_density;
+    start_request.init_density_penalty = requested_init_penalty;
+    start_request.min_phi_coef = default_min_phi;
+    start_request.max_phi_coef = requested_max_phi;
+    const auto start_result = iPLAPIInst.gpRun(start_request);
+    ok &= require(start_result.ok && start_result.session_active, "agent-config: start with config overrides must succeed");
+    ok &= require(std::fabs(nes_config.get_target_density() - requested_density) < 1e-5F
+                      && std::fabs(nes_config.get_init_density_penalty() - requested_init_penalty) < 1e-7F
+                      && std::fabs(nes_config.get_max_phi_coef() - requested_max_phi) < 1e-7F,
+                  "agent-config: effective config must reflect all start-time overrides");
+    iPLAPIInst.gpCloseSession();
+  }
+
+  // Simulate a fresh process that loaded the original JSON config: reset the
+  // in-memory PlacerDB config to the defaults before kResume.
+  nes_config.set_target_density(default_target_density);
+  nes_config.set_init_density_penalty(default_init_penalty);
+  nes_config.set_min_phi_coef(default_min_phi);
+  nes_config.set_max_phi_coef(default_max_phi);
+
+  ipl::GPRunRequest resume_request;
+  resume_request.mode = ipl::GPRunMode::kResume;
+  resume_request.accepted_iterations = 10;
+  resume_request.checkpoint_path = checkpoint_path;
+  const auto resume_result = iPLAPIInst.gpRun(resume_request);
+  ok &= require(resume_result.ok && resume_result.session_active, "agent-config: checkpoint must resume with its saved config (no override re-supplied)");
+  ok &= require(resume_result.start_iteration == 11 && resume_result.end_iteration == 20,
+                "agent-config: resumed batch must continue iterations 11-20");
+  ok &= require(std::fabs(nes_config.get_target_density() - requested_density) < 1e-5F
+                      && std::fabs(nes_config.get_init_density_penalty() - requested_init_penalty) < 1e-7F
+                      && std::fabs(nes_config.get_max_phi_coef() - requested_max_phi) < 1e-7F,
+                "agent-config: resume must restore the complete saved effective config");
+  ok &= require(dumpCoordinates("agent_config_resume"), "agent-config: must dump coordinates");
+
+  iPLAPIInst.gpCloseSession();
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 int runValidate()
 {
   bool ok = true;
@@ -1269,7 +1398,8 @@ int main(int argc, char** argv)
 {
   if (argc < 2) {
     std::cerr << "usage: " << argv[0] << " --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|"
-              << "seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|invalidate|relinearize|legacy|full|validate}\n";
+              << "seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|invalidate|relinearize|"
+              << "agent_scope|agent_config_resume|legacy|full|validate}\n";
     return EXIT_FAILURE;
   }
   const std::string arg = argv[1];
@@ -1429,6 +1559,12 @@ int main(int argc, char** argv)
   }
   if (scenario == "full") {
     return runSessionFull();
+  }
+  if (scenario == "agent_scope") {
+    return runAgentScope();
+  }
+  if (scenario == "agent_config_resume") {
+    return runAgentConfigResume();
   }
   if (scenario == "validate") {
     return runValidate();

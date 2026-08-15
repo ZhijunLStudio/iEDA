@@ -1,6 +1,7 @@
 #ifndef IPL_OPERATOR_GP_NESTEROV_PLACE_CONTRACT_H
 #define IPL_OPERATOR_GP_NESTEROV_PLACE_CONTRACT_H
 
+#include <cfloat>
 #include <cmath>
 #include <cstdint>
 #include <algorithm>
@@ -8,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "config/NesterovPlaceConfig.hh"
 #include "solver/nesterov/Nesterov.hh"
 
 namespace ipl {
@@ -102,6 +104,13 @@ struct GPStateCheckpoint
   // NesterovPlaceConfig value that affects the numerical path. Mismatch on
   // restore is rejected before any solver state is touched.
   std::string config_fingerprint;
+
+  // Full effective NesterovPlaceConfig at save time. kResume applies this to
+  // the PlacerDB config BEFORE constructing the solver database, which makes
+  // checkpoints self-contained across agent-facing start-time overrides
+  // (target_density / init_density_penalty / phi coefficients).
+  NesterovPlaceConfig::State config_state;
+  bool config_state_valid = false;
 
   // Runtime config mutation (the only NesterovPlaceConfig field mutated mid-run).
   float max_phi_coef = 1.05F;

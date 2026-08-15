@@ -30,6 +30,7 @@
 #include <string>
 #include <vector>
 
+#include "../../../../operation/iPL/api/GPContract.hh"
 #include "file_placement.h"
 
 namespace iplf {
@@ -76,8 +77,7 @@ class PlacerIO
   bool runFillerInsertion(std::string config);
   bool runMacroPlacement();
   bool runGlobalPlacement();
-  bool runGlobalPlacementSession(std::string mode, int32_t iterations, bool random_init, std::string checkpoint = "", int32_t seed = 1000,
-                                  float target_density = -1.0F);
+  bool runGlobalPlacementSession(const ipl::GPRunRequest& request, const std::string& mode);
   bool runLegalization();
   bool runDetailPlacement();
 

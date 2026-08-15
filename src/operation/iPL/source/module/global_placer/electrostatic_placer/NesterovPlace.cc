@@ -37,6 +37,8 @@
 #include <numeric>
 #include <random>
 #include <set>
+#include <unordered_map>
+#include <utility>
 
 #include "Log.hh"
 #include "PLAPI.hh"
@@ -65,7 +67,12 @@ void NesterovPlace::initNesConfig(Config* config)
   _nes_config = config->get_nes_config();
   _global_right_padding = _nes_config.get_global_padding();
 
-  if (_nes_config.isOptMaxWirelength() || _nes_config.isOptTiming()) {
+  // Legacy behavior: when max-wirelength/timing optimization is enabled from
+  // the JSON surface, the config has no explicit opt_overflow_list and the
+  // solver appends its historical default thresholds. If a config explicitly
+  // supplied a list (including an empty one), keep it verbatim.
+  if ((_nes_config.isOptMaxWirelength() || _nes_config.isOptTiming()) && !_nes_config.isOptOverflowListConfigured()
+      && _nes_config.get_opt_overflow_list().empty()) {
     _nes_config.add_opt_target_overflow(0.15);
     _nes_config.add_opt_target_overflow(0.20);
     _nes_config.add_opt_target_overflow(0.25);
@@ -1877,6 +1884,8 @@ GPStateCheckpoint NesterovPlace::captureCheckpoint() const
     checkpoint.net_delta_weights.push_back(n_net->get_delta_weight());
   }
   checkpoint.config_fingerprint = computeConfigFingerprint();
+  checkpoint.config_state = _nes_config.captureState();
+  checkpoint.config_state_valid = true;
 
   checkpoint.best_position_list = _best_position_list;
   checkpoint.cur_position_list = _cur_position_list;
@@ -2030,6 +2039,49 @@ bool NesterovPlace::restoreCheckpoint(const GPStateCheckpoint& checkpoint)
   return true;
 }
 
+namespace {
+struct HotBin
+{
+  int32_t idx;
+  int64_t overflow;
+};
+
+std::vector<HotBin> collectHotOverflowBins(GridManager* grid_manager)
+{
+  auto& grid_2d = grid_manager->get_grid_2d_list();
+  const int32_t cnt_x = grid_manager->get_grid_cnt_x();
+  const int32_t cnt_y = grid_manager->get_grid_cnt_y();
+  std::vector<HotBin> hot;
+  for (int32_t y = 0; y < cnt_y; y++) {
+    for (int32_t x = 0; x < cnt_x; x++) {
+      const int64_t overflow = grid_2d[y][x].obtainGridOverflowArea();
+      if (overflow > 0) {
+        hot.push_back({y * cnt_x + x, overflow});
+      }
+    }
+  }
+  return hot;
+}
+
+void keepHottestBins(std::vector<HotBin>& hot, size_t take)
+{
+  if (hot.empty()) {
+    return;
+  }
+  take = std::min(take, hot.size());
+  if (take == 0) {
+    hot.clear();
+    return;
+  }
+  // top-k selection without sorting every overflowing bin (large designs can
+  // have millions of occupied bins; only the first `take` are ever used).
+  std::nth_element(hot.begin(), hot.begin() + take, hot.end(),
+                   [](const HotBin& lhs, const HotBin& rhs) { return lhs.overflow > rhs.overflow; });
+  hot.resize(take);
+  std::sort(hot.begin(), hot.end(), [](const HotBin& lhs, const HotBin& rhs) { return lhs.overflow > rhs.overflow; });
+}
+}  // namespace
+
 void NesterovPlace::setMovementCoeffs(const std::vector<float>& move_coeff_list)
 {
   _move_coeff_list = move_coeff_list;
@@ -2042,26 +2094,10 @@ void NesterovPlace::buildHotOverflowScope(float active_ratio, float halo_coeff)
   // checkpoint restore (or an external coordinate change) the grid occupancy is
   // stale, and the scope must reflect where the hotspots actually are.
   _nes_database->_bin_grid->updateBinGrid(_placable_inst_list, _nes_config.get_thread_num());
-  auto& grid_2d = grid_manager->get_grid_2d_list();
   const int32_t cnt_x = grid_manager->get_grid_cnt_x();
   const int32_t cnt_y = grid_manager->get_grid_cnt_y();
 
-  struct HotBin
-  {
-    int32_t idx;
-    int64_t overflow;
-  };
-  std::vector<HotBin> hot;
-  for (int32_t y = 0; y < cnt_y; y++) {
-    for (int32_t x = 0; x < cnt_x; x++) {
-      const int64_t overflow = grid_2d[y][x].obtainGridOverflowArea();
-      if (overflow > 0) {
-        hot.push_back({y * cnt_x + x, overflow});
-      }
-    }
-  }
-  std::sort(hot.begin(), hot.end(), [](const HotBin& lhs, const HotBin& rhs) { return lhs.overflow > rhs.overflow; });
-
+  auto hot = collectHotOverflowBins(grid_manager);
   const size_t n = _placable_inst_list.size();
   std::vector<float> coeffs(n, 0.0F);
   if (hot.empty() || n == 0) {
@@ -2071,9 +2107,10 @@ void NesterovPlace::buildHotOverflowScope(float active_ratio, float halo_coeff)
 
   // Active: instances whose density center falls in the hottest overflowing bins.
   const size_t take = std::max<size_t>(1, std::min<size_t>(hot.size(), static_cast<size_t>(hot.size() * active_ratio)));
+  keepHottestBins(hot, take);
   std::set<int32_t> hot_bins;
-  for (size_t k = 0; k < take; k++) {
-    hot_bins.insert(hot[k].idx);
+  for (const auto& bin : hot) {
+    hot_bins.insert(bin.idx);
   }
 
   const auto region = grid_manager->get_shape();
@@ -2102,24 +2139,169 @@ void NesterovPlace::buildHotOverflowScope(float active_ratio, float halo_coeff)
 void NesterovPlace::applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff)
 {
   const size_t n = _placable_inst_list.size();
-  std::map<int32_t, std::vector<int32_t>> net_to_insts;
+
+  // Sorted (net_id, instance_index) pairs replace the previous
+  // std::map<int32_t, std::vector<int32_t>>. For a 10M-instance design the map
+  // version costs GBs of overhead and minutes of allocation; a flat sorted
+  // array is one allocation of 2*|pin| integers and two binary-search ranges
+  // per active pin.
+  std::vector<std::pair<int32_t, int32_t>> net_to_insts;
+  net_to_insts.reserve(_nes_database->_nPin_list.size());
   for (size_t i = 0; i < n; i++) {
     for (auto* n_pin : _placable_inst_list[i]->get_nPin_list()) {
-      net_to_insts[n_pin->get_nNet()->get_net_id()].push_back(i);
+      net_to_insts.emplace_back(n_pin->get_nNet()->get_net_id(), static_cast<int32_t>(i));
     }
   }
+  std::sort(net_to_insts.begin(), net_to_insts.end());
+
   for (size_t i = 0; i < n; i++) {
     if (!active[i]) {
       continue;
     }
     for (auto* n_pin : _placable_inst_list[i]->get_nPin_list()) {
-      for (int32_t j : net_to_insts[n_pin->get_nNet()->get_net_id()]) {
+      const int32_t net_id = n_pin->get_nNet()->get_net_id();
+      const auto range = std::equal_range(net_to_insts.begin(), net_to_insts.end(), std::make_pair(net_id, 0),
+                                          [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+      for (auto it = range.first; it != range.second; ++it) {
+        const int32_t j = it->second;
         if (!active[j] && coeffs[j] == 0.0F) {
           coeffs[j] = halo_coeff;
         }
       }
     }
   }
+}
+
+bool NesterovPlace::buildInstanceScope(const std::vector<std::string>& seed_instance_names, float halo_coeff)
+{
+  const size_t n = _placable_inst_list.size();
+  std::vector<float> coeffs(n, 0.0F);
+  std::vector<bool> active(n, false);
+  if (n == 0 || seed_instance_names.empty()) {
+    _move_coeff_list = coeffs;
+    return n != 0;
+  }
+
+  std::unordered_map<std::string, size_t> index_by_name;
+  index_by_name.reserve(n);
+  for (size_t i = 0; i < n; i++) {
+    index_by_name.emplace(_placable_inst_list[i]->get_name(), i);
+  }
+
+  for (const auto& name : seed_instance_names) {
+    const auto it = index_by_name.find(name);
+    if (it == index_by_name.end()) {
+      LOG_ERROR << "[GP local scope] unknown movable instance: " << name;
+      return false;
+    }
+    active[it->second] = true;
+    coeffs[it->second] = 1.0F;
+  }
+
+  applyNetHaloClosure(active, coeffs, halo_coeff);
+  _move_coeff_list = coeffs;
+  return true;
+}
+
+GPRunScopeEffect NesterovPlace::computeScopeEffect() const
+{
+  GPRunScopeEffect effect;
+  if (_move_coeff_list.empty()) {
+    // Global batch: no movement mask, no write-boundary distinction.
+    return effect;
+  }
+
+  effect.scope_applied = true;
+  if (_move_coeff_list.size() != _placable_inst_list.size() || _frozen_coord_list.size() != _placable_inst_list.size()) {
+    effect.in_scope = false;
+    return effect;
+  }
+
+  for (size_t i = 0; i < _placable_inst_list.size(); i++) {
+    const float coeff = _move_coeff_list[i];
+    if (coeff <= 0.0F) {
+      effect.context_written++;
+    } else if (coeff >= 1.0F) {
+      effect.active_written++;
+    } else {
+      effect.halo_written++;
+    }
+
+    if (std::isnan(coeff) || coeff < 0.0F || coeff > 1.0F) {
+      effect.in_scope = false;
+    }
+
+    const auto current = _placable_inst_list[i]->get_density_center_coordi();
+    const auto start = _frozen_coord_list[i];
+    const int64_t dx = static_cast<int64_t>(current.get_x()) - static_cast<int64_t>(start.get_x());
+    const int64_t dy = static_cast<int64_t>(current.get_y()) - static_cast<int64_t>(start.get_y());
+    const float displacement = static_cast<float>(std::llabs(dx) + std::llabs(dy));
+    effect.max_displacement = std::max(effect.max_displacement, displacement);
+    if (coeff <= 0.0F && displacement != 0.0F) {
+      effect.context_moved++;
+    }
+  }
+  return effect;
+}
+
+GPOverflowReport NesterovPlace::buildOverflowReport(int32_t top_n) const
+{
+  GPOverflowReport report;
+  auto* grid_manager = _nes_database->_grid_manager;
+  if (grid_manager == nullptr) {
+    return report;
+  }
+
+  const auto core = grid_manager->get_shape();
+  report.bin_cnt_x = grid_manager->get_grid_cnt_x();
+  report.bin_cnt_y = grid_manager->get_grid_cnt_y();
+  report.bin_size_x = grid_manager->get_grid_size_x();
+  report.bin_size_y = grid_manager->get_grid_size_y();
+  report.core_ll_x = core.get_ll_x();
+  report.core_ll_y = core.get_ll_y();
+  report.core_ur_x = core.get_ur_x();
+  report.core_ur_y = core.get_ur_y();
+
+  auto hot = collectHotOverflowBins(grid_manager);
+  report.overflowing_bin_count = static_cast<int32_t>(hot.size());
+  report.total_overflow_area = 0;
+  report.peak_density = 0.0F;
+
+  auto& grid_2d = grid_manager->get_grid_2d_list();
+  for (int32_t y = 0; y < report.bin_cnt_y; y++) {
+    for (int32_t x = 0; x < report.bin_cnt_x; x++) {
+      const auto& grid = grid_2d[y][x];
+      report.peak_density = std::max(report.peak_density, grid.obtainGridDensity());
+    }
+  }
+  for (const auto& bin : hot) {
+    report.total_overflow_area += bin.overflow;
+  }
+  report.total_overflow_ratio = _total_inst_area > 0 ? static_cast<float>(report.total_overflow_area) / _total_inst_area : 0.0F;
+
+  if (top_n > 0) {
+    keepHottestBins(hot, static_cast<size_t>(top_n));
+    report.bins.reserve(hot.size());
+    for (const auto& bin : hot) {
+      const auto& grid = grid_2d[bin.idx / report.bin_cnt_x][bin.idx % report.bin_cnt_x];
+      GPBinReport bin_report;
+      bin_report.row = bin.idx / report.bin_cnt_x;
+      bin_report.col = bin.idx % report.bin_cnt_x;
+      bin_report.ll_x = grid.shape.get_ll_x();
+      bin_report.ll_y = grid.shape.get_ll_y();
+      bin_report.ur_x = grid.shape.get_ur_x();
+      bin_report.ur_y = grid.shape.get_ur_y();
+      bin_report.grid_area = grid.grid_area;
+      bin_report.occupied_area = grid.occupied_area;
+      bin_report.fixed_area = grid.fixed_area;
+      bin_report.available_area = std::max<int64_t>(0, grid.obtainAvailableArea());
+      bin_report.overflow_area = bin.overflow;
+      bin_report.density = grid.obtainGridDensity();
+      bin_report.density_target = grid.density_target;
+      report.bins.push_back(bin_report);
+    }
+  }
+  return report;
 }
 
 void NesterovPlace::setRegionDensityTargets(const std::vector<Rectangle<int32_t>>& regions, float target)
@@ -2151,28 +2333,12 @@ void NesterovPlace::buildHotOverflowDensityTargets(float top_ratio, float target
   _nes_database->_bin_grid->updateBinGrid(_placable_inst_list, _nes_config.get_thread_num());
   auto& grid_2d = grid_manager->get_grid_2d_list();
   const int32_t cnt_x = grid_manager->get_grid_cnt_x();
-  const int32_t cnt_y = grid_manager->get_grid_cnt_y();
 
-  struct HotBin
-  {
-    int32_t idx;
-    int64_t overflow;
-  };
-  std::vector<HotBin> hot;
-  for (int32_t y = 0; y < cnt_y; y++) {
-    for (int32_t x = 0; x < cnt_x; x++) {
-      const int64_t overflow = grid_2d[y][x].obtainGridOverflowArea();
-      if (overflow > 0) {
-        hot.push_back({y * cnt_x + x, overflow});
-      }
-    }
-  }
-  std::sort(hot.begin(), hot.end(), [](const HotBin& lhs, const HotBin& rhs) { return lhs.overflow > rhs.overflow; });
-
+  auto hot = collectHotOverflowBins(grid_manager);
   const size_t take = std::max<size_t>(1, std::min<size_t>(hot.size(), static_cast<size_t>(hot.size() * top_ratio)));
-  for (size_t k = 0; k < take; k++) {
-    const int32_t idx = hot[k].idx;
-    grid_2d[idx / cnt_x][idx % cnt_x].density_target = target;
+  keepHottestBins(hot, take);
+  for (const auto& bin : hot) {
+    grid_2d[bin.idx / cnt_x][bin.idx % cnt_x].density_target = target;
   }
 }
 
@@ -2248,6 +2414,62 @@ void from_json(const nlohmann::json& json_obj, NesterovIterationRecord& record)
   record.entropy_injected = json_obj.at("entropy_injected").get<bool>();
 }
 
+void to_json(nlohmann::json& json_obj, const NesterovPlaceConfig::State& state)
+{
+  json_obj = nlohmann::json{{"thread_num", state.thread_num},
+                            {"info_iter_num", state.info_iter_num},
+                            {"init_wirelength_coef", state.init_wirelength_coef},
+                            {"reference_hpwl", state.reference_hpwl},
+                            {"min_wirelength_force_bar", state.min_wirelength_force_bar},
+                            {"target_density", state.target_density},
+                            {"is_adaptive_bin", state.is_adaptive_bin},
+                            {"bin_cnt_x", state.bin_cnt_x},
+                            {"bin_cnt_y", state.bin_cnt_y},
+                            {"min_phi_coef", state.min_phi_coef},
+                            {"max_phi_coef", state.max_phi_coef},
+                            {"max_iter", state.max_iter},
+                            {"max_back_track", state.max_back_track},
+                            {"init_density_penalty", state.init_density_penalty},
+                            {"target_overflow", state.target_overflow},
+                            {"initial_prev_coordi_update_coef", state.initial_prev_coordi_update_coef},
+                            {"min_precondition", state.min_precondition},
+                            {"is_opt_max_wirelength", state.is_opt_max_wirelength},
+                            {"is_opt_timing", state.is_opt_timing},
+                            {"is_opt_congestion", state.is_opt_congestion},
+                            {"max_net_wirelength", state.max_net_wirelength},
+                            {"global_padding", state.global_padding},
+                            {"opt_overflow_list", state.opt_overflow_list},
+                            {"opt_overflow_list_configured", state.opt_overflow_list_configured}};
+}
+
+void from_json(const nlohmann::json& json_obj, NesterovPlaceConfig::State& state)
+{
+  state.thread_num = json_obj.at("thread_num").get<int32_t>();
+  state.info_iter_num = json_obj.at("info_iter_num").get<int32_t>();
+  state.init_wirelength_coef = json_obj.at("init_wirelength_coef").get<float>();
+  state.reference_hpwl = json_obj.at("reference_hpwl").get<float>();
+  state.min_wirelength_force_bar = json_obj.at("min_wirelength_force_bar").get<float>();
+  state.target_density = json_obj.at("target_density").get<float>();
+  state.is_adaptive_bin = json_obj.at("is_adaptive_bin").get<bool>();
+  state.bin_cnt_x = json_obj.at("bin_cnt_x").get<int32_t>();
+  state.bin_cnt_y = json_obj.at("bin_cnt_y").get<int32_t>();
+  state.min_phi_coef = json_obj.at("min_phi_coef").get<float>();
+  state.max_phi_coef = json_obj.at("max_phi_coef").get<float>();
+  state.max_iter = json_obj.at("max_iter").get<int32_t>();
+  state.max_back_track = json_obj.at("max_back_track").get<int32_t>();
+  state.init_density_penalty = json_obj.at("init_density_penalty").get<float>();
+  state.target_overflow = json_obj.at("target_overflow").get<float>();
+  state.initial_prev_coordi_update_coef = json_obj.at("initial_prev_coordi_update_coef").get<float>();
+  state.min_precondition = json_obj.at("min_precondition").get<float>();
+  state.is_opt_max_wirelength = json_obj.at("is_opt_max_wirelength").get<bool>();
+  state.is_opt_timing = json_obj.at("is_opt_timing").get<bool>();
+  state.is_opt_congestion = json_obj.at("is_opt_congestion").get<bool>();
+  state.max_net_wirelength = json_obj.at("max_net_wirelength").get<int32_t>();
+  state.global_padding = json_obj.at("global_padding").get<int32_t>();
+  state.opt_overflow_list = json_obj.at("opt_overflow_list").get<std::vector<float>>();
+  state.opt_overflow_list_configured = json_obj.at("opt_overflow_list_configured").get<bool>();
+}
+
 void to_json(nlohmann::json& json_obj, const Nesterov::State& state)
 {
   json_obj = nlohmann::json{{"current_iter", state.current_iter},
@@ -2310,6 +2532,8 @@ void to_json(nlohmann::json& json_obj, const GPStateCheckpoint& checkpoint)
       {"net_weights", checkpoint.net_weights},
       {"net_delta_weights", checkpoint.net_delta_weights},
       {"config_fingerprint", checkpoint.config_fingerprint},
+      {"config_state", checkpoint.config_state},
+      {"config_state_valid", checkpoint.config_state_valid},
       {"max_phi_coef", checkpoint.max_phi_coef},
       {"instance_names", checkpoint.instance_names},
       {"instance_density_coords", checkpoint.instance_density_coords},
@@ -2353,6 +2577,8 @@ void from_json(const nlohmann::json& json_obj, GPStateCheckpoint& checkpoint)
   checkpoint.net_weights = json_obj.at("net_weights").get<std::vector<float>>();
   checkpoint.net_delta_weights = json_obj.at("net_delta_weights").get<std::vector<float>>();
   checkpoint.config_fingerprint = json_obj.at("config_fingerprint").get<std::string>();
+  checkpoint.config_state = json_obj.value("config_state", NesterovPlaceConfig::State{});
+  checkpoint.config_state_valid = json_obj.value("config_state_valid", false);
   checkpoint.max_phi_coef = json_obj.at("max_phi_coef").get<float>();
   checkpoint.instance_names = json_obj.at("instance_names").get<std::vector<std::string>>();
   checkpoint.instance_density_coords = json_obj.at("instance_density_coords").get<std::vector<Point<int32_t>>>();
@@ -2399,6 +2625,62 @@ bool loadGPCheckpointFile(const std::string& path, GPStateCheckpoint& checkpoint
     return true;
   } catch (const std::exception& e) {
     LOG_ERROR << "[GP checkpoint] load failed: " << e.what();
+    return false;
+  }
+}
+
+void to_json(nlohmann::json& json_obj, const GPBinReport& report)
+{
+  json_obj = nlohmann::json{{"row", report.row},
+                            {"col", report.col},
+                            {"ll_x", report.ll_x},
+                            {"ll_y", report.ll_y},
+                            {"ur_x", report.ur_x},
+                            {"ur_y", report.ur_y},
+                            {"grid_area", report.grid_area},
+                            {"occupied_area", report.occupied_area},
+                            {"fixed_area", report.fixed_area},
+                            {"available_area", report.available_area},
+                            {"overflow_area", report.overflow_area},
+                            {"density", report.density},
+                            {"density_target", report.density_target}};
+}
+
+void to_json(nlohmann::json& json_obj, const GPOverflowReport& report)
+{
+  json_obj = nlohmann::json{{"bin_cnt_x", report.bin_cnt_x},
+                            {"bin_cnt_y", report.bin_cnt_y},
+                            {"bin_size_x", report.bin_size_x},
+                            {"bin_size_y", report.bin_size_y},
+                            {"core_ll_x", report.core_ll_x},
+                            {"core_ll_y", report.core_ll_y},
+                            {"core_ur_x", report.core_ur_x},
+                            {"core_ur_y", report.core_ur_y},
+                            {"overflowing_bin_count", report.overflowing_bin_count},
+                            {"total_overflow_area", report.total_overflow_area},
+                            {"total_overflow_ratio", report.total_overflow_ratio},
+                            {"peak_density", report.peak_density},
+                            {"bins", report.bins}};
+}
+
+bool saveGPOverflowReportFile(const std::string& path, const GPOverflowReport& report)
+{
+  try {
+    const std::filesystem::path target(path);
+    if (target.has_parent_path()) {
+      std::filesystem::create_directories(target.parent_path());
+    }
+    const std::filesystem::path tmp = target.string() + ".tmp";
+    std::ofstream stream(tmp);
+    if (!stream.good()) {
+      return false;
+    }
+    stream << nlohmann::json(report).dump(2);
+    stream.close();
+    std::filesystem::rename(tmp, target);
+    return true;
+  } catch (const std::exception& e) {
+    LOG_ERROR << "[GP grid report] save failed: " << e.what();
     return false;
   }
 }

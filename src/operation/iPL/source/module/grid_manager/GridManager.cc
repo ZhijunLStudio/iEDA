@@ -22,19 +22,19 @@
 
 namespace ipl {
 
-int64_t Grid::obtainAvailableArea()
+int64_t Grid::obtainAvailableArea() const
 {
   return static_cast<int64_t>(this->grid_area * this->available_ratio * this->density_target) - this->occupied_area
          - this->fixed_area;
 }
 
-int64_t Grid::obtainGridOverflowArea()
+int64_t Grid::obtainGridOverflowArea() const
 {
   return std::max(int64_t(0), static_cast<int64_t>(this->occupied_area + this->fixed_area
                                                   - (this->available_ratio * this->density_target * this->grid_area)));
 }
 
-float Grid::obtainGridDensity()
+float Grid::obtainGridDensity() const
 {
   // The caller normalizes by available_ratio; density_target is the region
   // density screen factor (1.0 = global, unchanged default path).

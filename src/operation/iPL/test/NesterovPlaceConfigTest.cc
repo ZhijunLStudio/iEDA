@@ -62,5 +62,16 @@ int main()
   ok &= require(!cfg.validate(&reason) && reason == "min_wirelength_force_bar must be finite",
                 "non-finite wirelength force barrier must fail validation");
 
+  cfg.set_min_wirelength_force_bar(-300.0f);
+  cfg.set_opt_overflow_list({0.15F, 0.2F, 0.25F, 0.3F});
+  ok &= require(cfg.isOptOverflowListConfigured() && cfg.get_opt_overflow_list().size() == 4,
+                "explicit opt_overflow_list must be tracked as configured");
+  const auto saved_state = cfg.captureState();
+  cfg.set_max_phi_coef(2.0F);
+  cfg.set_opt_overflow_list({0.9F});
+  cfg.restoreState(saved_state);
+  ok &= require(cfg.get_max_phi_coef() == 1.05F && cfg.isOptOverflowListConfigured() && cfg.get_opt_overflow_list().size() == 4,
+                "NesterovPlaceConfig::State must round-trip the full effective config");
+
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

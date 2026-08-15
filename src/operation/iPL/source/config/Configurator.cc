@@ -24,6 +24,7 @@
  * Contact : https://github.com/sjchanson
  */
 
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -163,7 +164,7 @@ ConfigValidationResult validateConfigSchema(const Json& json)
   result = validateObject(nesterov, "$.PL.GP.Nesterov",
                           {{"max_iter", true}, {"max_backtrack", true}, {"init_density_penalty", true},
                            {"target_overflow", true}, {"initial_prev_coordi_update_coef", true}, {"min_precondition", true},
-                           {"min_phi_coef", true}, {"max_phi_coef", true}});
+                           {"min_phi_coef", true}, {"max_phi_coef", true}, {"opt_overflow_list", false}});
   if (!result.valid) {
     return result;
   }
@@ -178,6 +179,25 @@ ConfigValidationResult validateConfigSchema(const Json& json)
     result = requireType(nesterov, "$.PL.GP.Nesterov", key, false);
     if (!result.valid) {
       return result;
+    }
+  }
+  if (nesterov.contains("opt_overflow_list")) {
+    const auto& overflow_list = nesterov.at("opt_overflow_list");
+    if (!overflow_list.is_array()) {
+      return invalidConfig("$.PL.GP.Nesterov.opt_overflow_list", "expected array of numbers");
+    }
+    for (std::size_t i = 0; i < overflow_list.size(); ++i) {
+      const auto& value = overflow_list.at(i);
+      if (!value.is_number()) {
+        return invalidConfig("$.PL.GP.Nesterov.opt_overflow_list[" + std::to_string(i) + "]", "expected number");
+      }
+      const float threshold = value.get<float>();
+      if (!std::isfinite(threshold) || threshold <= 0.0F || threshold >= 1.0F) {
+        return invalidConfig("$.PL.GP.Nesterov.opt_overflow_list[" + std::to_string(i) + "]", "must be in (0,1)");
+      }
+      if (i > 0 && threshold <= overflow_list.at(i - 1).get<float>()) {
+        return invalidConfig("$.PL.GP.Nesterov.opt_overflow_list", "thresholds must be strictly increasing (smallest first)");
+      }
     }
   }
 
@@ -319,6 +339,13 @@ ConfigValidationResult Config::validateJson(const nlohmann::json& json)
   nesterov_config.set_min_precondition(gp.at("Nesterov").at("min_precondition").get<float>());
   nesterov_config.set_min_phi_coef(gp.at("Nesterov").at("min_phi_coef").get<float>());
   nesterov_config.set_max_phi_coef(gp.at("Nesterov").at("max_phi_coef").get<float>());
+  if (gp.at("Nesterov").contains("opt_overflow_list")) {
+    std::vector<float> opt_overflow_list;
+    for (const auto& value : gp.at("Nesterov").at("opt_overflow_list")) {
+      opt_overflow_list.push_back(value.get<float>());
+    }
+    nesterov_config.set_opt_overflow_list(opt_overflow_list);
+  }
   nesterov_config.set_global_padding(gp.value("global_right_padding", 0));
   nesterov_config.set_is_opt_max_wirelength(pl.at("is_max_length_opt").get<int32_t>() == 1);
   nesterov_config.set_max_net_wirelength(pl.at("max_length_constraint").get<int32_t>());
@@ -437,6 +464,12 @@ void Config::initConfigByJson(nlohmann::json json)
   float min_precondition = getDataByJson(json, {"PL", "GP", "Nesterov", "min_precondition"});
   float min_phi_coef = getDataByJson(json, {"PL", "GP", "Nesterov", "min_phi_coef"});
   float max_phi_coef = getDataByJson(json, {"PL", "GP", "Nesterov", "max_phi_coef"});
+  std::vector<float> opt_overflow_list;
+  if (json.at("PL").at("GP").at("Nesterov").contains("opt_overflow_list")) {
+    for (const auto& value : json.at("PL").at("GP").at("Nesterov").at("opt_overflow_list")) {
+      opt_overflow_list.push_back(value.get<float>());
+    }
+  }
   int32_t gp_global_padding = 0;
   if (json.contains("PL") && json["PL"].contains("GP") && json["PL"]["GP"].contains("global_right_padding")) {
     gp_global_padding = getDataByJson(json, {"PL", "GP", "global_right_padding"});
@@ -531,6 +564,9 @@ void Config::initConfigByJson(nlohmann::json json)
   _nes_config.set_min_precondition(min_precondition);
   _nes_config.set_min_phi_coef(min_phi_coef);
   _nes_config.set_max_phi_coef(max_phi_coef);
+  if (json.at("PL").at("GP").at("Nesterov").contains("opt_overflow_list")) {
+    _nes_config.set_opt_overflow_list(opt_overflow_list);
+  }
   _nes_config.set_global_padding(gp_global_padding);
   if (is_max_length_opt) {
     _nes_config.set_is_opt_max_wirelength(true);

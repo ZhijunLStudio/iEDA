@@ -32,7 +32,8 @@ class Grid
 public:
   Grid() = default;
   Grid(int32_t r_id, int32_t g_id, int32_t w, int32_t h)
-      : row_idx(r_id), grid_idx(g_id), width(w), height(h), available_ratio(1.0), occupied_area(0), fixed_area(0), density_target(1.0F)
+      : row_idx(r_id), grid_idx(g_id), width(w), height(h), available_ratio(1.0), density_target(1.0F), occupied_area(0),
+        fixed_area(0)
   {
     grid_area = static_cast<int64_t>(w) * static_cast<int64_t>(h);
   }
@@ -49,6 +50,15 @@ public:
     occupied_area = other.occupied_area;
     fixed_area = other.fixed_area;
     density_target = other.density_target;
+    placeable_area = other.placeable_area;
+    h_cong = other.h_cong;
+    v_cong = other.v_cong;
+    h_cap = other.h_cap;
+    v_cap = other.v_cap;
+    h_util = other.h_util;
+    v_util = other.v_util;
+    num_node = other.num_node;
+    neighbors = std::move(other.neighbors);
   }
 
   ~Grid() = default;
@@ -67,39 +77,48 @@ public:
       occupied_area = other.occupied_area;
       fixed_area = other.fixed_area;
       density_target = other.density_target;
+      placeable_area = other.placeable_area;
+      h_cong = other.h_cong;
+      v_cong = other.v_cong;
+      h_cap = other.h_cap;
+      v_cap = other.v_cap;
+      h_util = other.h_util;
+      v_util = other.v_util;
+      num_node = other.num_node;
+      neighbors = std::move(other.neighbors);
     }
     return (*this);
   }
 
   // function.
-  int64_t obtainAvailableArea();
-  int64_t obtainGridOverflowArea();
-  float obtainGridDensity();
+  int64_t obtainAvailableArea() const;
+  int64_t obtainGridOverflowArea() const;
+  float obtainGridDensity() const;
   std::vector<Grid*> &allNeighbors() {return neighbors;}
   void addNeighbor(Grid* grid) {neighbors.push_back(grid);}
   int getNumNodes() const { return num_node; }
 
-  int32_t row_idx;
-  int32_t grid_idx;
+  int32_t row_idx = 0;
+  int32_t grid_idx = 0;
 
-  int32_t width;
-  int32_t height;
-  int32_t grid_area;
+  int32_t width = 0;
+  int32_t height = 0;
+  int32_t grid_area = 0;
   Rectangle<int32_t> shape;
 
-  float available_ratio;
-  float density_target;  // region density screen (L1): effective capacity factor, 1.0 = global
-  int64_t occupied_area;
-  int64_t fixed_area;
+  float available_ratio = 1.0F;
+  float density_target = 1.0F;  // region density screen (L1): effective capacity factor, 1.0 = global
+  int64_t occupied_area = 0;
+  int64_t fixed_area = 0;
   int64_t placeable_area = 0;
 
-  float h_cong;
-  float v_cong;
-  int32_t h_cap;
-  int32_t v_cap;
-  float h_util;
-  float v_util;
-  int num_node;
+  float h_cong = 0.0F;
+  float v_cong = 0.0F;
+  int32_t h_cap = 0;
+  int32_t v_cap = 0;
+  float h_util = 0.0F;
+  float v_util = 0.0F;
+  int num_node = 0;
 
   std::vector<Grid*> neighbors;
 };

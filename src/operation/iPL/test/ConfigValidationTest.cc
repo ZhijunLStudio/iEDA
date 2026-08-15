@@ -64,6 +64,17 @@ int main()
   validation = ipl::Config::validateJson(optional_padding);
   ok &= require(validation.valid, "legacy config may omit optional GP global padding");
 
+  auto opt_overflow = valid_json;
+  opt_overflow["PL"]["GP"]["Nesterov"]["opt_overflow_list"] = {0.15F, 0.2F, 0.25F, 0.3F};
+  validation = ipl::Config::validateJson(opt_overflow);
+  ok &= require(validation.valid, "Nesterov opt_overflow_list must be accepted as an optional numeric array");
+
+  auto bad_overflow_order = valid_json;
+  bad_overflow_order["PL"]["GP"]["Nesterov"]["opt_overflow_list"] = {0.3F, 0.2F};
+  validation = ipl::Config::validateJson(bad_overflow_order);
+  ok &= require(!validation.valid && validation.path == "$.PL.GP.Nesterov.opt_overflow_list",
+                "non-increasing opt_overflow_list must be rejected");
+
   const std::filesystem::path malformed_path = "/tmp/ipl_config_validation_malformed.json";
   {
     std::ofstream stream(malformed_path);

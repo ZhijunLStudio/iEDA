@@ -73,6 +73,7 @@ class PLAPI
   // path is unchanged and drives the same session primitives internally.
   GPRunResult gpRun(const GPRunRequest& request);
   bool gpSessionActive() const { return _gp_session_state != nullptr; }
+  const GPRunResult& lastGPRunResult() const { return _last_gp_run_result; }
   void gpCloseSession();
 
   bool runLG();
@@ -200,6 +201,7 @@ class PLAPI
   // the stage transaction and the per-batch iteration-record offset belong to the
   // same session lifetime.
   std::unique_ptr<GPSessionState> _gp_session_state;
+  GPRunResult _last_gp_run_result;
 
   GPRunResult gpRunStart(const GPRunRequest& request);
   GPRunResult gpRunAdvance(const GPRunRequest& request);

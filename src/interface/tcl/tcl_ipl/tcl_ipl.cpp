@@ -18,6 +18,8 @@
 
 #include <glog/logging.h>
 
+#include <sstream>
+
 #include "IdbInstance.h"
 #include "PLAPI.hh"
 #include "PlacementResult.hh"
@@ -251,8 +253,38 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
   auto* target_density_option = new TclDoubleOption("-target_density", 1, -1.0);
   addOption(target_density_option);
 
+  auto* init_density_penalty_option = new TclDoubleOption("-init_density_penalty", 1, -1.0);
+  addOption(init_density_penalty_option);
+
+  auto* min_phi_option = new TclDoubleOption("-min_phi_coef", 1, -1.0);
+  addOption(min_phi_option);
+
+  auto* max_phi_option = new TclDoubleOption("-max_phi_coef", 1, -1.0);
+  addOption(max_phi_option);
+
   auto* checkpoint_option = new TclStringOption("-checkpoint", 1, nullptr);
   addOption(checkpoint_option);
+
+  auto* scope_option = new TclStringOption("-scope", 1, "global");
+  addOption(scope_option);
+
+  auto* scope_ratio_option = new TclDoubleOption("-scope_active_ratio", 1, 0.2);
+  addOption(scope_ratio_option);
+
+  auto* scope_count_option = new TclIntOption("-scope_active_count", 1, 0);
+  addOption(scope_count_option);
+
+  auto* halo_option = new TclDoubleOption("-scope_halo_coeff", 1, 0.5);
+  addOption(halo_option);
+
+  auto* scope_seed_option = new TclIntOption("-scope_seed", 1, 1000);
+  addOption(scope_seed_option);
+
+  auto* scope_instances_option = new TclStringOption("-scope_instances", 1, nullptr);
+  addOption(scope_instances_option);
+
+  auto* report_top_n_option = new TclIntOption("-report_top_n", 1, 64);
+  addOption(report_top_n_option);
 }
 
 unsigned CmdPlacerRunGP::check()
@@ -268,6 +300,29 @@ unsigned CmdPlacerRunGP::check()
       TclOption* checkpoint_option = getOptionOrArg("-checkpoint");
       if (!checkpoint_option->is_set_val()) {
         LOG_ERROR << "placer_run_gp: -mode resume requires -checkpoint <path>";
+        return 0;
+      }
+    }
+  }
+
+  TclOption* scope_option = getOptionOrArg("-scope");
+  if (scope_option->is_set_val()) {
+    const std::string scope = scope_option->getStringVal();
+    if (scope != "global" && scope != "hotspot" && scope != "random" && scope != "instances") {
+      LOG_ERROR << "placer_run_gp: unknown -scope value '" << scope << "' (expected global|hotspot|random|instances)";
+      return 0;
+    }
+    if (scope == "instances") {
+      TclOption* scope_instances_option = getOptionOrArg("-scope_instances");
+      if (!scope_instances_option->is_set_val()) {
+        LOG_ERROR << "placer_run_gp: -scope instances requires -scope_instances <name[,name...]>";
+        return 0;
+      }
+    }
+    if (scope == "random") {
+      TclOption* scope_count_option = getOptionOrArg("-scope_active_count");
+      if (!scope_count_option->is_set_val() || scope_count_option->getIntVal() <= 0) {
+        LOG_ERROR << "placer_run_gp: -scope random requires a positive -scope_active_count";
         return 0;
       }
     }
@@ -300,9 +355,15 @@ unsigned CmdPlacerRunGP::exec()
     request.mode = ipl::GPRunMode::kStart;
   } else if (mode == "resume") {
     request.mode = ipl::GPRunMode::kResume;
+  } else if (mode == "relinearize") {
+    // Keep the externally-modified coordinates and rebuild all solver state
+    // (gradients/steplength/momentum) from them: a fresh session, no stale state.
+    request.mode = ipl::GPRunMode::kStart;
+    request.random_init = false;
   } else {
     request.mode = ipl::GPRunMode::kAdvance;
   }
+
   TclOption* iterations_option = getOptionOrArg("-iterations");
   request.accepted_iterations = iterations_option->is_set_val() ? iterations_option->getIntVal() : 20;
   TclOption* random_init_option = getOptionOrArg("-random_init");
@@ -317,21 +378,101 @@ unsigned CmdPlacerRunGP::exec()
   if (target_density_option->is_set_val()) {
     request.target_density = static_cast<float>(target_density_option->getDoubleVal());
   }
+  TclOption* init_density_penalty_option = getOptionOrArg("-init_density_penalty");
+  if (init_density_penalty_option->is_set_val()) {
+    request.init_density_penalty = static_cast<float>(init_density_penalty_option->getDoubleVal());
+  }
+  TclOption* min_phi_option = getOptionOrArg("-min_phi_coef");
+  if (min_phi_option->is_set_val()) {
+    request.min_phi_coef = static_cast<float>(min_phi_option->getDoubleVal());
+  }
+  TclOption* max_phi_option = getOptionOrArg("-max_phi_coef");
+  if (max_phi_option->is_set_val()) {
+    request.max_phi_coef = static_cast<float>(max_phi_option->getDoubleVal());
+  }
   TclOption* checkpoint_option = getOptionOrArg("-checkpoint");
-  std::string checkpoint;
   if (checkpoint_option->is_set_val()) {
-    checkpoint = checkpoint_option->getStringVal();
+    request.checkpoint_path = checkpoint_option->getStringVal();
   }
 
-  if (!inst->runGlobalPlacementSession(mode, request.accepted_iterations, request.random_init, checkpoint, request.seed,
-                                      request.target_density)) {
-    std::cerr << "iPL gp.run failed." << std::endl;
+  TclOption* scope_option = getOptionOrArg("-scope");
+  const std::string scope = scope_option->is_set_val() ? scope_option->getStringVal() : "global";
+  if (scope == "hotspot") {
+    request.scope_mode = ipl::GPRunScopeMode::kHotspot;
+  } else if (scope == "random") {
+    request.scope_mode = ipl::GPRunScopeMode::kRandom;
+  } else if (scope == "instances") {
+    request.scope_mode = ipl::GPRunScopeMode::kInstances;
+  }
+  TclOption* scope_ratio_option = getOptionOrArg("-scope_active_ratio");
+  if (scope_ratio_option->is_set_val()) {
+    request.scope_active_ratio = static_cast<float>(scope_ratio_option->getDoubleVal());
+  }
+  TclOption* scope_count_option = getOptionOrArg("-scope_active_count");
+  if (scope_count_option->is_set_val()) {
+    request.scope_active_count = scope_count_option->getIntVal();
+  }
+  TclOption* halo_option = getOptionOrArg("-scope_halo_coeff");
+  if (halo_option->is_set_val()) {
+    request.scope_halo_coeff = static_cast<float>(halo_option->getDoubleVal());
+  }
+  TclOption* scope_seed_option = getOptionOrArg("-scope_seed");
+  if (scope_seed_option->is_set_val()) {
+    request.scope_seed = static_cast<uint32_t>(scope_seed_option->getIntVal());
+  }
+  TclOption* scope_instances_option = getOptionOrArg("-scope_instances");
+  if (scope_instances_option->is_set_val()) {
+    std::stringstream stream(scope_instances_option->getStringVal());
+    std::string name;
+    while (std::getline(stream, name, ',')) {
+      const auto first = name.find_first_not_of(" \t\r\n");
+      const auto last = name.find_last_not_of(" \t\r\n");
+      if (first == std::string::npos) {
+        continue;
+      }
+      request.scope_instance_names.push_back(name.substr(first, last - first + 1));
+    }
+  }
+  TclOption* report_top_n_option = getOptionOrArg("-report_top_n");
+  if (report_top_n_option->is_set_val()) {
+    request.grid_report_top_n = report_top_n_option->getIntVal();
+  }
+
+  if (!inst->runGlobalPlacementSession(request, mode)) {
+    const auto& last_result = iPLAPIInst.lastGPRunResult();
+    std::cerr << "iPL gp.run failed";
+    if (!last_result.reason.empty()) {
+      std::cerr << ": " << last_result.reason;
+    }
+    std::cerr << std::endl;
     return ipl::placementTclResult(false);
   }
 
   // Surface the batch summary: the session API is the source of truth for the
   // accepted-iteration budget semantics.
-  std::cout << "iPL gp.run (" << mode << ", " << request.accepted_iterations << " iterations) finished." << std::endl;
+  const auto& result = iPLAPIInst.lastGPRunResult();
+  std::cout << "iPL gp.run (" << mode << ", " << request.accepted_iterations << " iterations) stop_reason="
+            << ipl::gpStopReasonName(result.stop_reason) << " iterations=" << result.start_iteration << "-" << result.end_iteration
+            << " hpwl=" << result.hpwl << " overflow=" << result.overflow << " step_length=" << result.step_length
+            << " density_penalty=" << result.density_penalty << std::endl;
+  if (result.scope_effect.scope_applied) {
+    std::cout << "  scope_effect active=" << result.scope_effect.active_written << " halo=" << result.scope_effect.halo_written
+              << " context=" << result.scope_effect.context_written << " context_moved=" << result.scope_effect.context_moved
+              << " max_displacement=" << result.scope_effect.max_displacement << std::endl;
+  }
+  if (!result.checkpoint_path.empty()) {
+    std::cout << "  checkpoint=" << result.checkpoint_path << std::endl;
+  }
+  if (!result.parent_checkpoint_path.empty()) {
+    std::cout << "  parent_checkpoint=" << result.parent_checkpoint_path << std::endl;
+  }
+  if (!result.grid_report_path.empty()) {
+    std::cout << "  grid_report=" << result.grid_report_path << " overflowing_bins=" << result.grid_report.overflowing_bin_count
+              << " total_overflow_area=" << result.grid_report.total_overflow_area << std::endl;
+  }
+  if (!result.experiment_record_path.empty()) {
+    std::cout << "  experiment_record=" << result.experiment_record_path << std::endl;
+  }
   return ipl::placementTclResult(true);
 }
 

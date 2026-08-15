@@ -174,9 +174,28 @@ add_test(NAME ipl_gp_session_screen_degenerate COMMAND ipl_gp_session_test --sce
 add_test(NAME ipl_gp_session_screen_trial COMMAND ipl_gp_session_test --scenario screen_trial)
 add_test(NAME ipl_gp_session_density_degenerate COMMAND ipl_gp_session_test --scenario density_degenerate)
 add_test(NAME ipl_gp_session_density_knob COMMAND ipl_gp_session_test --scenario density_knob)
+add_test(NAME ipl_gp_session_agent_scope COMMAND ipl_gp_session_test --scenario agent_scope)
+add_test(NAME ipl_gp_session_agent_config_resume COMMAND ipl_gp_session_test --scenario agent_config_resume)
 add_test(NAME ipl_gp_session_legacy COMMAND ipl_gp_session_test --scenario legacy)
 add_test(NAME ipl_gp_session_full COMMAND ipl_gp_session_test --scenario full)
 add_test(NAME ipl_gp_session_validate COMMAND ipl_gp_session_test --scenario validate)
+
+# Several scenarios consume the checkpoint artifacts written by the *_save
+# scenario; CTest may run tests in parallel, so encode the file dependency.
+set_tests_properties(
+  ipl_gp_session_ckpt_resume
+  ipl_gp_session_resume_inproc
+  ipl_gp_session_mismatch
+  ipl_gp_session_local_degenerate
+  ipl_gp_session_local_context_frozen
+  ipl_gp_session_local_control
+  ipl_gp_session_local_ablate
+  ipl_gp_session_screen_degenerate
+  ipl_gp_session_screen_trial
+  PROPERTIES DEPENDS ipl_gp_session_ckpt_save
+)
+set_tests_properties(ipl_gp_session_ckpt_resume_cg PROPERTIES DEPENDS ipl_gp_session_ckpt_save_cg)
+set_tests_properties(ipl_gp_session_ckpt_resume_mt PROPERTIES DEPENDS ipl_gp_session_ckpt_save_mt)
 
 add_executable(ipl_nesterov_place_config_test NesterovPlaceConfigTest.cc)
 target_include_directories(

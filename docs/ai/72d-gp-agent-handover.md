@@ -1,5 +1,7 @@
 # 72d GP 会话化工具交接文档（供后续专家接手）
 
+> 后续实现见 `72e-gp-agent-surface.md`：局部 GP 已进入 API/Tcl、checkpoint 自包含、bin 级观测与实验账本已落地。
+
 - 日期：2026-08-15
 - 分支：`feat/parity-gp-session`（已推送 `ZhijunLStudio/iEDA`，7 个提交：c5cee7e → aadc0a0 → 494cee7 → c6ad6a4 → b3e7680 → 32be005 → 803584c）
 - 关联文档：`70-agent-native-ieda-system-design-final.md`（系统设计）、`72-gp-tool-first-stage-implementation-plan.md`（M1-M5 计划）、`72b-gp-cli-protocol.md`（CLI 协议）、`72c-gp-m1-implementation.md`（实现细节与全部实验数据）

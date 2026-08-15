@@ -25,6 +25,7 @@
 #include "PLAPI.hh"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <system_error>
@@ -931,17 +932,250 @@ struct GPSessionState
   // own stage transactions and bump the revision; a mismatch means the session's
   // solver state (momentum/gradients) no longer matches the design coordinates.
   int64_t base_revision = 0;
+  // Latest batch-boundary checkpoint for this session (the parent of the next
+  // advance call). Preserved into gp_checkpoints/ before each advance so a
+  // failed candidate never overwrites its rollback point.
+  std::string checkpoint_path;
 };
+
+namespace {
+
+bool hasStartConfigOverrides(const GPRunRequest& request)
+{
+  return request.target_density >= 0.0F || request.init_density_penalty >= 0.0F || request.min_phi_coef >= 0.0F
+         || request.max_phi_coef >= 0.0F;
+}
+
+bool validateStartConfigOverrides(const GPRunRequest& request, std::string* reason)
+{
+  const auto& nes_config = PlacerDBInst.get_placer_config()->get_nes_config();
+  if (request.target_density >= 0.0F && (request.target_density <= 0.0F || request.target_density >= 1.0F)) {
+    *reason = "target_density must be in (0,1)";
+    return false;
+  }
+  if (request.init_density_penalty >= 0.0F
+      && (!std::isfinite(request.init_density_penalty) || request.init_density_penalty <= 0.0F)) {
+    *reason = "init_density_penalty must be positive and finite";
+    return false;
+  }
+
+  const float min_phi = request.min_phi_coef >= 0.0F ? request.min_phi_coef : nes_config.get_min_phi_coef();
+  const float max_phi = request.max_phi_coef >= 0.0F ? request.max_phi_coef : nes_config.get_max_phi_coef();
+  if (request.min_phi_coef >= 0.0F && (!std::isfinite(min_phi) || min_phi <= 0.0F)) {
+    *reason = "min_phi_coef must be positive and finite";
+    return false;
+  }
+  if (request.max_phi_coef >= 0.0F && (!std::isfinite(max_phi) || max_phi <= 0.0F)) {
+    *reason = "max_phi_coef must be positive and finite";
+    return false;
+  }
+  if (min_phi > max_phi) {
+    *reason = "phi coefficients must satisfy 0 < min_phi_coef <= max_phi_coef";
+    return false;
+  }
+  return true;
+}
+
+void applyStartConfigOverrides(const GPRunRequest& request)
+{
+  auto& nes_config = PlacerDBInst.get_placer_config()->get_nes_config();
+  if (request.target_density >= 0.0F) {
+    // The agent-facing value is a REQUEST, not a hard setting: the placer
+    // clamps it to the feasible range (a target below the design's physical
+    // utilization can never converge). Applying the same adaptTargetDensity()
+    // correction the config-load path uses keeps explicit values bit-identical
+    // to the config default, and the effective value lands in the checkpoint
+    // config fingerprint automatically.
+    nes_config.set_target_density(request.target_density);
+    PlacerDBInst.adaptTargetDensity();
+  }
+  if (request.init_density_penalty >= 0.0F) {
+    nes_config.set_init_density_penalty(request.init_density_penalty);
+  }
+  if (request.min_phi_coef >= 0.0F) {
+    nes_config.set_min_phi_coef(request.min_phi_coef);
+  }
+  if (request.max_phi_coef >= 0.0F) {
+    nes_config.set_max_phi_coef(request.max_phi_coef);
+  }
+}
+
+bool validateGPRunScope(const GPRunRequest& request, std::string* reason)
+{
+  if (request.grid_report_top_n < 0 || request.grid_report_top_n > 1000000) {
+    *reason = "grid_report_top_n must be in [0,1000000]";
+    return false;
+  }
+  if (request.scope_halo_coeff < 0.0F || request.scope_halo_coeff > 1.0F) {
+    *reason = "scope_halo_coeff must be in [0,1]";
+    return false;
+  }
+  switch (request.scope_mode) {
+    case GPRunScopeMode::kGlobal:
+      return true;
+    case GPRunScopeMode::kHotspot:
+      if (request.scope_active_ratio <= 0.0F || request.scope_active_ratio > 1.0F) {
+        *reason = "scope_active_ratio must be in (0,1] for hotspot scope";
+        return false;
+      }
+      return true;
+    case GPRunScopeMode::kRandom:
+      if (request.scope_active_count <= 0) {
+        *reason = "scope_active_count must be positive for random scope";
+        return false;
+      }
+      return true;
+    case GPRunScopeMode::kInstances:
+      if (request.scope_instance_names.empty()) {
+        *reason = "scope_instance_names must not be empty for instances scope";
+        return false;
+      }
+      return true;
+  }
+  *reason = "unknown gp scope mode";
+  return false;
+}
+
+bool applyGPRunScope(NesterovPlace& session, const GPRunRequest& request, std::string* reason)
+{
+  switch (request.scope_mode) {
+    case GPRunScopeMode::kGlobal:
+      session.clearMovementScope();
+      return true;
+    case GPRunScopeMode::kHotspot:
+      session.buildHotOverflowScope(request.scope_active_ratio, request.scope_halo_coeff);
+      return true;
+    case GPRunScopeMode::kRandom:
+      session.buildRandomScope(static_cast<size_t>(request.scope_active_count), request.scope_halo_coeff, request.scope_seed);
+      return true;
+    case GPRunScopeMode::kInstances:
+      if (!session.buildInstanceScope(request.scope_instance_names, request.scope_halo_coeff)) {
+        *reason = "scope contains an instance name that is not movable";
+        return false;
+      }
+      return true;
+  }
+  *reason = "unknown gp scope mode";
+  return false;
+}
+
+std::string preserveParentCheckpoint(const std::string& parent_path, int32_t iter, const std::string& output_dir)
+{
+  if (parent_path.empty() || !std::filesystem::exists(parent_path)) {
+    return parent_path;
+  }
+
+  std::error_code ec;
+  const auto history_dir = std::filesystem::path(output_dir) / "pl" / "gp_checkpoints";
+  std::filesystem::create_directories(history_dir, ec);
+  if (ec) {
+    return parent_path;
+  }
+
+  std::filesystem::path candidate = history_dir / ("gp_ckpt_" + std::to_string(iter) + ".json");
+  for (int32_t suffix = 2; std::filesystem::exists(candidate); ++suffix) {
+    candidate = history_dir / ("gp_ckpt_" + std::to_string(iter) + "_" + std::to_string(suffix) + ".json");
+  }
+
+  // Try a hard link first: a 10M-instance checkpoint is GB-sized and candidate
+  // branching must not pay a full file copy. Fall back to copy on filesystems
+  // that do not support hard links.
+  std::filesystem::create_hard_link(parent_path, candidate, ec);
+  if (ec) {
+    ec.clear();
+    std::filesystem::copy_file(parent_path, candidate, ec);
+    if (ec) {
+      LOG_ERROR << "[GP lineage] cannot preserve parent checkpoint " << parent_path << " -> " << candidate.string();
+      return parent_path;
+    }
+  }
+  return candidate.string();
+}
+
+void appendExperimentRecord(const GPRunRequest& request, const GPRunResult& result, const std::string& path)
+{
+  try {
+    nlohmann::json record = nlohmann::json{
+        {"mode", request.mode == GPRunMode::kStart ? "start" : (request.mode == GPRunMode::kResume ? "resume" : "advance")},
+        {"scope", gpScopeModeName(request.scope_mode)},
+        {"scope_active_ratio", request.scope_active_ratio},
+        {"scope_active_count", request.scope_active_count},
+        {"scope_halo_coeff", request.scope_halo_coeff},
+        {"scope_seed", request.scope_seed},
+        {"scope_instance_count", request.scope_instance_names.size()},
+        {"requested_iterations", request.accepted_iterations},
+        {"executed_iterations", result.executed_iterations},
+        {"start_iteration", result.start_iteration},
+        {"end_iteration", result.end_iteration},
+        {"stop_reason", gpStopReasonName(result.stop_reason)},
+        {"seed", request.seed},
+        {"random_init", request.random_init},
+        {"target_density", request.target_density},
+        {"effective_target_density", PlacerDBInst.get_placer_config()->get_nes_config().get_target_density()},
+        {"effective_init_density_penalty", PlacerDBInst.get_placer_config()->get_nes_config().get_init_density_penalty()},
+        {"effective_min_phi_coef", PlacerDBInst.get_placer_config()->get_nes_config().get_min_phi_coef()},
+        {"effective_max_phi_coef", PlacerDBInst.get_placer_config()->get_nes_config().get_max_phi_coef()},
+        {"init_density_penalty", request.init_density_penalty},
+        {"min_phi_coef", request.min_phi_coef},
+        {"max_phi_coef", request.max_phi_coef},
+        {"parent_checkpoint", result.parent_checkpoint_path},
+        {"checkpoint", result.checkpoint_path},
+        {"hpwl", result.hpwl},
+        {"overflow", result.overflow},
+        {"step_length", result.step_length},
+        {"density_penalty", result.density_penalty},
+        {"best_hpwl", result.best_hpwl},
+        {"best_overflow", result.best_overflow},
+        {"scope_effect", {{"scope_applied", result.scope_effect.scope_applied},
+                          {"in_scope", result.scope_effect.in_scope},
+                          {"active_written", result.scope_effect.active_written},
+                          {"halo_written", result.scope_effect.halo_written},
+                          {"context_written", result.scope_effect.context_written},
+                          {"context_moved", result.scope_effect.context_moved},
+                          {"max_displacement", result.scope_effect.max_displacement}}},
+        {"overflowing_bin_count", result.grid_report.overflowing_bin_count},
+        {"total_overflow_area", result.grid_report.total_overflow_area},
+        {"reason", result.reason},
+    };
+    const std::filesystem::path target(path);
+    if (target.has_parent_path()) {
+      std::filesystem::create_directories(target.parent_path());
+    }
+    std::ofstream stream(target, std::ios::app);
+    if (stream.good()) {
+      stream << record.dump() << '\n';
+    }
+  } catch (const std::exception& e) {
+    LOG_ERROR << "[GP experiment record] append failed: " << e.what();
+  }
+}
+
+void fillBatchObservation(NesterovPlace& session, const GPRunRequest& request, GPRunResult& result, const std::string& output_dir)
+{
+  result.best_hpwl = session.bestHpwl();
+  result.best_overflow = session.bestOverflow();
+  result.scope_effect = session.computeScopeEffect();
+  result.grid_report = session.buildOverflowReport(request.grid_report_top_n);
+  result.grid_report_path = output_dir + "/pl/gp_grid_report.json";
+  if (!ipl::saveGPOverflowReportFile(result.grid_report_path, result.grid_report)) {
+    result.grid_report_path.clear();
+  }
+  result.experiment_record_path = output_dir + "/pl/gp_experiments.jsonl";
+  appendExperimentRecord(request, result, result.experiment_record_path);
+}
+
+}  // namespace
 
 GPRunResult PLAPI::gpRun(const GPRunRequest& request)
 {
   if (request.mode == GPRunMode::kStart) {
-    return gpRunStart(request);
+    _last_gp_run_result = gpRunStart(request);
+  } else if (request.mode == GPRunMode::kResume) {
+    _last_gp_run_result = gpRunResume(request);
+  } else {
+    _last_gp_run_result = gpRunAdvance(request);
   }
-  if (request.mode == GPRunMode::kResume) {
-    return gpRunResume(request);
-  }
-  return gpRunAdvance(request);
+  return _last_gp_run_result;
 }
 
 GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
@@ -966,21 +1200,19 @@ GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
     result.reason = "accepted_iterations must be positive";
     return result;
   }
-  if (request.target_density >= 0.0F && (request.target_density <= 0.0F || request.target_density >= 1.0F)) {
+  std::string reason;
+  if (!validateStartConfigOverrides(request, &reason)) {
     result.stop_reason = GPStopReason::kRejected;
-    result.reason = "target_density must be in (0,1)";
+    result.reason = reason;
     return result;
   }
-  if (request.target_density >= 0.0F) {
-    // The agent-facing value is a REQUEST, not a hard setting: the placer
-    // clamps it to the feasible range (a target below the design's physical
-    // utilization can never converge). Applying the same adaptTargetDensity()
-    // correction the config-load path uses keeps explicit 0.8 bit-identical to
-    // the config default, and the effective value lands in the checkpoint
-    // config fingerprint automatically.
-    PlacerDBInst.get_placer_config()->get_nes_config().set_target_density(request.target_density);
-    PlacerDBInst.adaptTargetDensity();
+  if (!validateGPRunScope(request, &reason)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = reason;
+    return result;
   }
+
+  applyStartConfigOverrides(request);
 
   _gp_session_state = std::make_unique<GPSessionState>();
   _gp_session_state->transaction = PlacerDBInst.beginStageTransaction("global_placement");
@@ -1012,6 +1244,18 @@ GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
     return gpFinalizeTerminal(result);
   }
 
+  if (!applyGPRunScope(*_gp_session_state->session, request, &reason)) {
+    PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction);
+    _gp_session_state.reset();
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = reason;
+    return result;
+  }
+
+  // Start-only overrides were already applied to the effective config. The
+  // shared advance path accepts them only for the internal kStart call; the
+  // original request is kept intact so the experiment ledger records what the
+  // agent actually asked for.
   return gpRunAdvance(request);
 }
 
@@ -1035,6 +1279,17 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
     result.reason = "kResume requires checkpoint_path";
     return result;
   }
+  if (hasStartConfigOverrides(request)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "start-time config overrides are not accepted on kResume; the checkpoint restores its saved effective config";
+    return result;
+  }
+  std::string reason;
+  if (!validateGPRunScope(request, &reason)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = reason;
+    return result;
+  }
 
   ipl::GPStateCheckpoint checkpoint;
   if (!ipl::loadGPCheckpointFile(request.checkpoint_path, checkpoint)) {
@@ -1042,6 +1297,26 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
     result.reason = "cannot load gp checkpoint: " + request.checkpoint_path;
     return result;
   }
+
+  // Checkpoint self-containment: apply the effective Nesterov config recorded
+  // at save time BEFORE constructing the solver database. This is what makes
+  // target_density/init_density_penalty/phi overrides resumable without
+  // re-supplying them on the command line.
+  auto previous_nes_config_state = PlacerDBInst.get_placer_config()->get_nes_config().captureState();
+  bool config_restored_from_checkpoint = false;
+  if (checkpoint.config_state_valid) {
+    PlacerDBInst.get_placer_config()->get_nes_config().restoreState(checkpoint.config_state);
+    // Same design and already-effective target: adapt is a no-op, but keeps the
+    // "request, not hard setting" invariant if the checkpoint was hand-edited.
+    PlacerDBInst.adaptTargetDensity();
+    config_restored_from_checkpoint = true;
+  }
+
+  const auto restore_previous_config = [&]() {
+    if (config_restored_from_checkpoint) {
+      PlacerDBInst.get_placer_config()->get_nes_config().restoreState(previous_nes_config_state);
+    }
+  };
 
   _gp_session_state = std::make_unique<GPSessionState>();
   _gp_session_state->transaction = PlacerDBInst.beginStageTransaction("global_placement");
@@ -1053,6 +1328,7 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
     _flow_status.setFailure(_flow_status.global_placement);
     writePlacementStatus();
     _gp_session_state.reset();
+    restore_previous_config();
     result.stop_reason = GPStopReason::kRejected;
     result.reason = "global placement could not start a PlacerDB transaction";
     return result;
@@ -1064,6 +1340,7 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
   if (!_gp_session_state->session->restoreCheckpoint(checkpoint)) {
     PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction);
     _gp_session_state.reset();
+    restore_previous_config();
     result.stop_reason = GPStopReason::kRejected;
     result.reason = "gp checkpoint rejected: config fingerprint or design topology mismatch";
     return result;
@@ -1071,6 +1348,7 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
   // Batch record slicing continues after the restored records.
   _gp_session_state->record_offset = checkpoint.iteration_records.size();
   _gp_session_state->base_revision = PlacerDBInst.get_revision();
+  _gp_session_state->checkpoint_path = request.checkpoint_path;
 
   return gpRunAdvance(request);
 }
@@ -1090,6 +1368,17 @@ GPRunResult PLAPI::gpRunAdvance(const GPRunRequest& request)
     result.reason = "accepted_iterations must be positive";
     return result;
   }
+  if (hasStartConfigOverrides(request) && request.mode != GPRunMode::kStart) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "start-time config overrides are only valid on kStart";
+    return result;
+  }
+  std::string reason;
+  if (!validateGPRunScope(request, &reason)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = reason;
+    return result;
+  }
 
   // Session invalidation (M3): external tools (LG/DP/manual edits) commit their
   // own transactions and bump the PlacerDB revision. Advancing a session whose
@@ -1101,6 +1390,18 @@ GPRunResult PLAPI::gpRunAdvance(const GPRunRequest& request)
   }
 
   const int32_t iter_before = _gp_session_state->session->currentIteration();
+
+  if (!applyGPRunScope(*_gp_session_state->session, request, &reason)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = reason;
+    return result;
+  }
+
+  // Candidate rollback point: never overwrite the checkpoint this batch starts
+  // from. For an active session this is the previous batch checkpoint; for a
+  // resumed session it is the user-supplied checkpoint.
+  result.parent_checkpoint_path = preserveParentCheckpoint(_gp_session_state->checkpoint_path, iter_before, obtainTargetDir());
+
   const auto advance = _gp_session_state->session->advanceAcceptedIterations(request.accepted_iterations);
   const int32_t iter_after = _gp_session_state->session->currentIteration();
 
@@ -1128,10 +1429,13 @@ GPRunResult PLAPI::gpRunAdvance(const GPRunRequest& request)
   _gp_session_state->record_offset = all_records.size();
 
   const auto& last = _gp_session_state->session->lastResult();
-  result.hpwl = last.hpwl;
-  result.overflow = last.overflow;
-  result.step_length = last.step_length;
-  result.density_penalty = last.density_penalty;
+  // Budget-limited batches do not finalize NesterovPlaceResult; the live
+  // session scalars are the batch metrics. Terminal paths still overwrite
+  // these in gpFinalizeTerminal from the finalized result.
+  result.hpwl = _gp_session_state->session->currentHpwl();
+  result.overflow = _gp_session_state->session->currentOverflow();
+  result.step_length = _gp_session_state->session->currentStepLength();
+  result.density_penalty = _gp_session_state->session->currentDensityPenalty();
 
   switch (advance) {
     case GPAdvanceOutcome::kBudgetReached:
@@ -1150,17 +1454,22 @@ GPRunResult PLAPI::gpRunAdvance(const GPRunRequest& request)
       if (!ipl::saveGPCheckpointFile(result.checkpoint_path, _gp_session_state->session->captureCheckpoint())) {
         result.ok = false;
         result.reason = "batch finished but checkpoint save failed: " + result.checkpoint_path;
+      } else {
+        _gp_session_state->checkpoint_path = result.checkpoint_path;
       }
+      fillBatchObservation(*_gp_session_state->session, request, result, obtainTargetDir());
       break;
     case GPAdvanceOutcome::kFinished:
       result.ok = true;
       _gp_session_state->session->finishSession();
       PlacerDBInst.updateTopoManager();
       PlacerDBInst.updateGridManager();
+      fillBatchObservation(*_gp_session_state->session, request, result, obtainTargetDir());
       return gpFinalizeTerminal(result);
     case GPAdvanceOutcome::kAlreadyFinished:
       result.reason = "gp session has already reached a terminal condition";
       result.stop_reason = mapGpStopReason(last.outcome);
+      fillBatchObservation(*_gp_session_state->session, request, result, obtainTargetDir());
       return gpFinalizeTerminal(result);
     case GPAdvanceOutcome::kNotInitialized:
       result.ok = false;

@@ -35,6 +35,7 @@
 #include <string>
 #include <vector>
 
+#include "../../../../api/GPContract.hh"
 #include "Config.hh"
 #include "Log.hh"
 #include "NesterovPlaceContract.hh"
@@ -48,6 +49,7 @@ namespace ipl {
 // every float; the reverse cast is lossless).
 bool saveGPCheckpointFile(const std::string& path, const GPStateCheckpoint& checkpoint);
 bool loadGPCheckpointFile(const std::string& path, GPStateCheckpoint& checkpoint);
+bool saveGPOverflowReportFile(const std::string& path, const GPOverflowReport& report);
 
 struct NesterovPlaceResult
 {
@@ -95,6 +97,12 @@ class NesterovPlace
   void publishPlacement();                               // per-batch: notify + write back (does not touch solver state)
   bool isSessionFinished() const { return _last_result.outcome != NesterovPlaceOutcome::kNotRun; }
   int32_t currentIteration() const { return _current_iter; }
+  int64_t bestHpwl() const { return _best_hpwl; }
+  float bestOverflow() const { return _best_overflow; }
+  int64_t currentHpwl() const { return _prev_hpwl; }
+  float currentOverflow() const { return _sum_overflow; }
+  float currentStepLength() const { return _final_step_length; }
+  float currentDensityPenalty() const { return _nes_database->_density_penalty; }
 
   // ---- checkpoint persistence (M2) ----
   GPStateCheckpoint captureCheckpoint() const;
@@ -120,6 +128,14 @@ class NesterovPlace
   // same size (fixed seed = reproducible) with the same net-hop halo closure.
   // Used by the experiment suite to test whether hot-bin selection matters.
   void buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed);
+  // Agent-facing instance scope: caller supplies seed instance names; net-hop
+  // closure adds the halo. Returns false (without changing the current scope)
+  // when any name is not a movable instance.
+  bool buildInstanceScope(const std::vector<std::string>& seed_instance_names, float halo_coeff);
+
+  // Observation / contract helpers for the api layer.
+  GPRunScopeEffect computeScopeEffect() const;
+  GPOverflowReport buildOverflowReport(int32_t top_n) const;
 
   // ---- region density screens (L1) ----
   // Set the density target factor (effective capacity multiplier) on every grid

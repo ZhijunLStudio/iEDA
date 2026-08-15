@@ -201,7 +201,7 @@ bool PlacerIO::runGlobalPlacement()
   return success && iPLAPIInst.writeBackSourceDataBase();
 }
 
-bool PlacerIO::runGlobalPlacementSession(std::string mode, int32_t iterations, bool random_init, std::string checkpoint, int32_t seed, float target_density)
+bool PlacerIO::runGlobalPlacementSession(const ipl::GPRunRequest& request, const std::string& mode)
 {
   // Mirror runGlobalPlacement()'s DB bootstrap for the session entry. For
   // advance/resume the PlacerDB is already started by the start call (or by
@@ -215,24 +215,6 @@ bool PlacerIO::runGlobalPlacementSession(std::string mode, int32_t iterations, b
     iPLAPIInst.resetFlowStatus();
   }
 
-  ipl::GPRunRequest request;
-  if (mode == "start") {
-    request.mode = ipl::GPRunMode::kStart;
-  } else if (mode == "resume") {
-    request.mode = ipl::GPRunMode::kResume;
-  } else if (mode == "relinearize") {
-    // Keep the externally-modified coordinates and rebuild all solver state
-    // (gradients/steplength/momentum) from them: a fresh session, no stale state.
-    request.mode = ipl::GPRunMode::kStart;
-    request.random_init = false;
-  } else {
-    request.mode = ipl::GPRunMode::kAdvance;
-  }
-  request.accepted_iterations = iterations;
-  request.random_init = random_init;
-  request.seed = seed;
-  request.target_density = target_density;
-  request.checkpoint_path = checkpoint;
   const auto result = iPLAPIInst.gpRun(request);
   if (!result.ok) {
     return false;
