@@ -54,7 +54,7 @@ python3 benchmarks/flows/run_gp_agent_search.py \
 - 同时把 recommendation 与 `benchmarks/results/innovus_gp_compare/<design>/result.json`
   里的 Innovus HPWL 比较。
 
-## 3. 当前状态（2026-08-15 22:40，A/B 均已完成）
+## 3. 当前状态（2026-08-15 23:45，A/B/timing 口径均已完成）
 
 - 旧会话撞上下文前只写入了 `run_gp_agent_search.py`，未跑完整 A。
 - 新会话修复并提交了这些 bug：
@@ -67,12 +67,19 @@ python3 benchmarks/flows/run_gp_agent_search.py \
 - B 的四个设计均完成 `-noPrePlaceOpt` 对照，结果写于
   `benchmarks/results/innovus_gp_compare_nodel/<design>/result.json`
   （该 results 目录被 `.gitignore` 忽略，不提交）。
+- timing-driven 口径已完成，详见 `benchmarks/flows/GPA_TIMING_COMPARISON.md`。
+  关键结论：s1238 / apb4 上 iEDA timing GP 同时改善 WNS/TNS；picorv32 上
+  timing 权重使 HPWL 代价过大且 WNS 回退；aes 上 TNS 大幅改善但 WNS 仍
+  落后 Innovus timing。大设计 timing 权重还需后续调优。
 - 相关提交：
   `4bd849c` 搜索脚本/批量脚本/续跑文档；
   `8b62052` 批量脚本数组默认值修复；
   `ffd565c` infeasible 排序策略；
   `d8459f6` noPrePlaceOpt 对照脚本；
-  `ed2c042` gp_agent.py 显式 checkpoint 修复。
+  `ed2c042` gp_agent.py 显式 checkpoint 修复；
+  `f17556f` timing 模式 physical-only cell 空指针修复；
+  `6fe4e96` timing-driven GP 对照 harness；
+  `2b73d95` timing 结果文档与解析修正。
 
 ## 4. 换新会话续跑 Harness 的正确姿势
 
