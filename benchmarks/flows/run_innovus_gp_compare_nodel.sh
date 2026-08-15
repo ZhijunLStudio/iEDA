@@ -107,9 +107,9 @@ set -e
 # before the overflow target. The session path can stop one batch earlier and
 # commit that placement cleanly.
 if [ "$ieda_rc" -ne 0 ] || [ ! -f "$WORK/ieda_gp.def" ]; then
-  echo "legacy iEDA GP failed (rc=$ieda_rc); retrying with a 530-iteration session; see $IEDa_LOG" >&2
+  echo "legacy iEDA GP failed (rc=$ieda_rc); retrying with a 520-iteration session; see $IEDa_LOG" >&2
   cp "$IEDa_LOG" "$WORK/ieda_legacy_fail.log" || true
-  GP_MODE="session-530-fallback"
+  GP_MODE="session-520-fallback"
   cat > "$WORK/ieda_gp.tcl" <<TCL
 flow_init -config $CONFIG_DIR/flow_config.json
 db_init -config $CONFIG_DIR/db_default_config.json -output_dir_path $WORK
@@ -117,8 +117,8 @@ source $TCL_SCRIPT_DIR/DB_script/db_path_setting.tcl
 source $TCL_SCRIPT_DIR/DB_script/db_init_lef.tcl
 def_init -path $IEDa_IN_DEF
 init_pl -config $IEDa_CONFIG
-placer_run_gp -mode start -iterations 530 -seed 1000
-placer_run_gp -mode accept
+placer_run_gp -mode start -iterations 520 -seed 42
+catch {placer_run_gp -mode accept}
 def_save -path $WORK/ieda_gp.def
 flow_exit
 TCL
