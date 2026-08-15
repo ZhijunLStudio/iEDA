@@ -186,11 +186,15 @@ def process_design(design: str, case_root: Path, result_root: Path) -> dict:
         tcl = write_gp_tcl(case_root, workdir, unplaced, config, iters)
         rc = run_ieda(workdir, case_root, sdc, tcl, last_log)
         log_text = last_log.read_text(errors="ignore")
-        m = re.search(r"iPL gp\.run \(start, (\d+) iterations\).*?stop_reason=(\S+).*?hpwl=(\d+) overflow=([0-9.eE+-]+)", log_text)
-        gp_line = {"requested_iterations": iters, "stop_reason": m.group(2) if m else "rc_failed",
-                   "iterations": int(m.group(1)) if m else None,
-                   "hpwl": int(m.group(3)) if m else None,
-                   "overflow": float(m.group(4)) if m else None,
+        m = re.search(r"iPL gp\.run \(start, (\d+) iterations\).*?stop_reason=(\S+)"
+                      r".*?iterations=(\d+)-(\d+) hpwl=(\d+) overflow=([0-9.eE+-]+)", log_text)
+        gp_line = {"attempt_iterations": iters,
+                   "stop_reason": m.group(2) if m else "rc_failed",
+                   "requested_iterations": int(m.group(1)) if m else None,
+                   "start_iteration": int(m.group(3)) if m else None,
+                   "end_iteration": int(m.group(4)) if m else None,
+                   "hpwl": int(m.group(5)) if m else None,
+                   "overflow": float(m.group(6)) if m else None,
                    "rc": rc}
         out_def = workdir / "ieda_timing.def"
         if rc == 0 and def_is_valid(out_def):
