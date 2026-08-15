@@ -194,11 +194,18 @@ def require_context(args: argparse.Namespace):
     return workdir, case_root, input_def, config, foundry
 
 
+def resolve_checkpoint(args: argparse.Namespace, workdir: Path) -> str | None:
+    if args.checkpoint:
+        return args.checkpoint
+    state_path = workdir / "gp_agent_state.json"
+    if not state_path.exists():
+        return None
+    return json.loads(state_path.read_text()).get("latest_checkpoint")
+
+
 def cmd_advance(args: argparse.Namespace) -> int:
     workdir, case_root, input_def, config, foundry = require_context(args)
-    state_path = workdir / "gp_agent_state.json"
-    state = json.loads(state_path.read_text())
-    ckpt = args.checkpoint or state.get("latest_checkpoint")
+    ckpt = resolve_checkpoint(args, workdir)
     if not ckpt or not Path(ckpt).exists():
         print(json.dumps({"ok": False, "reason": "no checkpoint; run start first"}))
         return 1
@@ -227,9 +234,7 @@ def parse_candidate_stdout(out: str) -> dict:
 
 def cmd_candidate(args: argparse.Namespace) -> int:
     workdir, case_root, input_def, config, foundry = require_context(args)
-    state_path = workdir / "gp_agent_state.json"
-    state = json.loads(state_path.read_text())
-    ckpt = args.checkpoint or state.get("latest_checkpoint")
+    ckpt = resolve_checkpoint(args, workdir)
     if not ckpt or not Path(ckpt).exists():
         print(json.dumps({"ok": False, "reason": "no checkpoint; run start first"}))
         return 1
@@ -253,9 +258,7 @@ def cmd_candidate(args: argparse.Namespace) -> int:
 
 def cmd_accept(args: argparse.Namespace) -> int:
     workdir, case_root, input_def, config, foundry = require_context(args)
-    state_path = workdir / "gp_agent_state.json"
-    state = json.loads(state_path.read_text())
-    ckpt = args.checkpoint or state.get("latest_checkpoint")
+    ckpt = resolve_checkpoint(args, workdir)
     if not ckpt or not Path(ckpt).exists():
         print(json.dumps({"ok": False, "reason": "no checkpoint; run start first"}))
         return 1
