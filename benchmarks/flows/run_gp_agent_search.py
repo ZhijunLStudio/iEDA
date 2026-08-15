@@ -183,9 +183,22 @@ def main():
         if m is None:
             continue
         feasible = m["overflow"] <= target + 1e-5
-        if best is None or (feasible and not best["feasible"]) or (
-            feasible == best["feasible"] and m["hpwl"] < best["hpwl"]
-        ):
+        # Lexicographic objective:
+        #   1) feasible beats infeasible,
+        #   2) feasible rows compare by HPWL,
+        #   3) if nothing is feasible yet, get as close to the overflow
+        #      target as possible (lower overflow first, HPWL as tie-break).
+        better = False
+        if best is None:
+            better = True
+        elif feasible != best["feasible"]:
+            better = feasible
+        elif feasible:
+            better = m["hpwl"] < best["hpwl"]
+        else:
+            better = (m["overflow"] < best["overflow"]
+                      or (m["overflow"] == best["overflow"] and m["hpwl"] < best["hpwl"]))
+        if better:
             best = {"tag": row["tag"], "verdict": row.get("candidate_verdict", "terminal"),
                     "winner_side": side, "hpwl": m["hpwl"], "overflow": m["overflow"],
                     "feasible": feasible, "local": row.get("local"), "global": row.get("global"),
