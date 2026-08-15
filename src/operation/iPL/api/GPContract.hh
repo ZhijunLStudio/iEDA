@@ -252,6 +252,11 @@ struct GPRunRequest
   // boundary and return it in GPRunResult.route_util. Off by default because
   // it is an O(nets) pass and is not needed by the numerical path.
   bool evaluate_route_util = false;
+  // Candidate acceptance: when both candidates are infeasible and neither
+  // Pareto-dominates, allow a controlled HPWL-vs-overflow tradeoff.
+  // score = delta_hpwl_ratio + overflow_penalty * delta_overflow_ratio.
+  // 0 keeps the strict Pareto policy (global baseline wins tradeoffs).
+  float candidate_overflow_penalty = 0.0F;
 
   // kStart-only cautious solver overrides (-1 = keep the configured value).
   // These are effective configuration, not mid-session mutation; they are

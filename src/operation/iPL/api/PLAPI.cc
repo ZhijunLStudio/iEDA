@@ -1601,7 +1601,7 @@ GPRunResult PLAPI::gpRunCandidate(const GPRunRequest& request)
   // Same-origin/same-budget comparison; global wins ties and incomparable pairs
   // (the baseline is always safe to keep).
   GPCandidateComparison comparison;
-  if (!gpCompareCheckpoints(local_path, global_path, comparison)) {
+  if (!gpCompareCheckpoints(local_path, global_path, comparison, request.candidate_overflow_penalty)) {
     result.stop_reason = GPStopReason::kRejected;
     result.reason = comparison.reason;
     return result;
@@ -1847,7 +1847,64 @@ void PLAPI::gpCloseSession()
   _gp_session_state.reset();
 }
 
-bool PLAPI::gpCompareCheckpoints(const std::string& left_path, const std::string& right_path, GPCandidateComparison& comparison) const
+namespace {
+void evaluateCandidatePair(GPCandidateComparison& comparison, float target_overflow, float overflow_penalty)
+{
+  const float left_overflow = comparison.left.overflow;
+  const float right_overflow = comparison.right.overflow;
+  const int64_t left_hpwl = comparison.left.hpwl;
+  const int64_t right_hpwl = comparison.right.hpwl;
+  const bool left_feasible = std::isfinite(left_overflow) && left_overflow <= target_overflow + 1.0e-5F;
+  const bool right_feasible = std::isfinite(right_overflow) && right_overflow <= target_overflow + 1.0e-5F;
+
+  if (left_feasible && right_feasible) {
+    const int64_t hpwl_delta = std::llabs(left_hpwl - right_hpwl);
+    comparison.verdict = hpwl_delta <= std::max<int64_t>(1, std::llabs(left_hpwl) / 100000)
+                             ? GPCandidateVerdict::kEqual
+                             : (left_hpwl < right_hpwl ? GPCandidateVerdict::kLeftBetter : GPCandidateVerdict::kRightBetter);
+    return;
+  }
+  if (left_feasible != right_feasible) {
+    comparison.verdict = left_feasible ? GPCandidateVerdict::kLeftBetter : GPCandidateVerdict::kRightBetter;
+    return;
+  }
+
+  const bool left_dominates = left_hpwl <= right_hpwl && left_overflow <= right_overflow
+                              && (left_hpwl < right_hpwl || left_overflow < right_overflow);
+  const bool right_dominates = right_hpwl <= left_hpwl && right_overflow <= left_overflow
+                               && (right_hpwl < left_hpwl || right_overflow < left_overflow);
+  if (left_dominates) {
+    comparison.verdict = GPCandidateVerdict::kLeftBetter;
+    return;
+  }
+  if (right_dominates) {
+    comparison.verdict = GPCandidateVerdict::kRightBetter;
+    return;
+  }
+
+  if (overflow_penalty <= 0.0F || left_hpwl <= 0 || right_hpwl <= 0) {
+    comparison.verdict = GPCandidateVerdict::kIncomparable;
+    comparison.reason = "neither candidate Pareto-dominates; keep the global baseline";
+    comparison.ok = true;
+    return;
+  }
+
+  const float left_excess = std::max(0.0F, left_overflow - target_overflow);
+  const float right_excess = std::max(0.0F, right_overflow - target_overflow);
+  const double hpwl_delta_ratio = (static_cast<double>(left_hpwl) - right_hpwl) / right_hpwl;
+  const float overflow_base = std::max({right_excess, target_overflow, 1.0e-4F});
+  const double overflow_delta_ratio = static_cast<double>(left_excess - right_excess) / overflow_base;
+  const double score_delta = hpwl_delta_ratio + static_cast<double>(overflow_penalty) * overflow_delta_ratio;
+  if (std::fabs(score_delta) <= 1.0e-4) {
+    comparison.verdict = GPCandidateVerdict::kEqual;
+  } else {
+    comparison.verdict = score_delta < 0.0 ? GPCandidateVerdict::kLeftBetter : GPCandidateVerdict::kRightBetter;
+  }
+}
+}  // namespace
+
+bool PLAPI::gpCompareCheckpoints(const std::string& left_path, const std::string& right_path, GPCandidateComparison& comparison,
+                                 float overflow_penalty) const
 {
   comparison = GPCandidateComparison{};
   GPStateCheckpoint left;
@@ -1865,7 +1922,6 @@ bool PLAPI::gpCompareCheckpoints(const std::string& left_path, const std::string
                                        left.density_penalty};
   comparison.right = GPCandidateMetrics{right.current_iter, right.prev_hpwl, right.sum_overflow, right.final_step_length,
                                         right.density_penalty};
-
   comparison.same_origin = left.config_fingerprint == right.config_fingerprint && left.instance_names == right.instance_names
                            && left.total_inst_area == right.total_inst_area;
   comparison.same_budget = left.current_iter == right.current_iter;
@@ -1878,45 +1934,7 @@ bool PLAPI::gpCompareCheckpoints(const std::string& left_path, const std::string
     return true;
   }
 
-  const float left_overflow = comparison.left.overflow;
-  const float right_overflow = comparison.right.overflow;
-  const int64_t left_hpwl = comparison.left.hpwl;
-  const int64_t right_hpwl = comparison.right.hpwl;
-  const float target_overflow = left.config_state_valid ? left.config_state.target_overflow : 0.1F;
-  const bool left_feasible = std::isfinite(left_overflow) && left_overflow <= target_overflow + 1.0e-5F;
-  const bool right_feasible = std::isfinite(right_overflow) && right_overflow <= target_overflow + 1.0e-5F;
-
-  if (left_feasible && right_feasible) {
-    // Both meet the density target: HPWL is the objective.
-    const int64_t hpwl_delta = std::llabs(left_hpwl - right_hpwl);
-    if (hpwl_delta <= std::max<int64_t>(1, std::llabs(left_hpwl) / 100000)) {
-      comparison.verdict = GPCandidateVerdict::kEqual;
-    } else {
-      comparison.verdict = left_hpwl < right_hpwl ? GPCandidateVerdict::kLeftBetter : GPCandidateVerdict::kRightBetter;
-    }
-  } else if (left_feasible != right_feasible) {
-    // One side is feasible, the other is not: the hard density target wins.
-    comparison.verdict = left_feasible ? GPCandidateVerdict::kLeftBetter : GPCandidateVerdict::kRightBetter;
-  } else {
-    // Both infeasible. Never reward a pure overflow-vs-HPWL tradeoff: accept a
-    // candidate only when it Pareto-dominates the other side. Tie/incomparable
-    // pairs fall back to the global baseline in kCandidate.
-    const bool left_dominates = left_hpwl <= right_hpwl && left_overflow <= right_overflow
-                                && (left_hpwl < right_hpwl || left_overflow < right_overflow);
-    const bool right_dominates = right_hpwl <= left_hpwl && right_overflow <= left_overflow
-                                 && (right_hpwl < left_hpwl || right_overflow < left_overflow);
-    if (left_dominates) {
-      comparison.verdict = GPCandidateVerdict::kLeftBetter;
-    } else if (right_dominates) {
-      comparison.verdict = GPCandidateVerdict::kRightBetter;
-    } else {
-      comparison.verdict = GPCandidateVerdict::kIncomparable;
-      comparison.reason = "neither candidate Pareto-dominates; keep the global baseline";
-      comparison.ok = true;
-      return true;
-    }
-  }
-
+  evaluateCandidatePair(comparison, left.config_state_valid ? left.config_state.target_overflow : 0.1F, overflow_penalty);
   comparison.ok = true;
   comparison.reason.clear();
   return true;

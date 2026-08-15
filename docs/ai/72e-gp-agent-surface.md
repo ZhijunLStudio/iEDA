@@ -217,7 +217,35 @@ Pareto 护栏（尤其在大设计上）：两个候选都未达到 target_overf
 
 结论与 72d 一致：局部 GP 必须作为“同 checkpoint 候选 + 同预算对照 + 只 accept 严格更优”的 Agent 动作，不能替代全局基线。Region/instances 种子 + 2-hop halo 是当前推荐参数，但最终以验收为准。
 
-## 5. 仍未做（下一优先）
+## 5bis. Claude Code 可直接调用的 JSON Agent CLI
+
+`benchmarks/flows/gp_agent.py` 把一次 GP 动作封装成无状态 JSON 调用：
+
+```bash
+python3 benchmarks/flows/gp_agent.py start \
+  --workdir /tmp/gp_agent_s1238 \
+  --case-root docs/ipl/pl_vis/cases/s1238 \
+  --input-def results/innovus_gp_compare/s1238/ieda_in_unplaced.def \
+  --config results/innovus_gp_compare/s1238/pl_clean_config.json \
+  --iterations 200 --seed 42 --report-route-util 1
+
+python3 benchmarks/flows/gp_agent.py candidate \
+  --workdir /tmp/gp_agent_s1238 --iterations 20 \
+  --scope longnet --scope-active-count 40 --halo-hops 2 \
+  --overflow-penalty 2
+
+python3 benchmarks/flows/gp_agent.py accept --workdir /tmp/gp_agent_s1238
+```
+
+输出为 JSON：状态文件、最新 checkpoint、hpwl/overflow/route_util、candidate_verdict。每次调用都是一个新 iEDA 进程，基于 checkpoint-per-call；无需 socket/MCP。
+
+新增可调接受策略 `-candidate_overflow_penalty`：
+
+- 0：严格 Pareto，tradeoff 一律保留 global baseline。
+- >0：两个候选都 infeasible 且互不支配时，按 `score_delta = HPWL_ratio_delta + penalty * overflow_excess_ratio_delta` 选优。
+
+s1238 实测：parent200 时 longnet 局部 HPWL 低 3.95%、overflow 高 0.008；penalty=2 选 local，penalty=5 选 global，证明该旋钮有效且可控。
+
 
 - checkpoint JSON 二进制化 / float 数组直存（72d P0；当前 parent checkpoint 用 hard-link 缓解复制成本，但 dump/parse 仍慢）。
 - `scope.build` 的图诊断与密度屏默认仍是实验工具；密度屏继续不作为默认局部策略。

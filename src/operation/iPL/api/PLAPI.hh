@@ -78,7 +78,8 @@ class PLAPI
   // Candidate governance: compare two persisted checkpoints (pure observation)
   // and commit the currently active restored/advanced session as the accepted
   // placement. gpCloseSession remains the discard path.
-  bool gpCompareCheckpoints(const std::string& left_path, const std::string& right_path, GPCandidateComparison& comparison) const;
+  bool gpCompareCheckpoints(const std::string& left_path, const std::string& right_path, GPCandidateComparison& comparison,
+                           float overflow_penalty = 0.0F) const;
   GPRunResult gpCommitSession();
 
   bool runLG();

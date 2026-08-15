@@ -294,6 +294,9 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
 
   auto* report_route_util_option = new TclIntOption("-report_route_util", 1, 0);
   addOption(report_route_util_option);
+
+  auto* candidate_overflow_penalty_option = new TclDoubleOption("-candidate_overflow_penalty", 1, 0.0);
+  addOption(candidate_overflow_penalty_option);
 }
 
 unsigned CmdPlacerRunGP::check()
@@ -493,6 +496,10 @@ unsigned CmdPlacerRunGP::exec()
   TclOption* report_route_util_option = getOptionOrArg("-report_route_util");
   if (report_route_util_option->is_set_val()) {
     request.evaluate_route_util = (report_route_util_option->getIntVal() != 0);
+  }
+  TclOption* candidate_overflow_penalty_option = getOptionOrArg("-candidate_overflow_penalty");
+  if (candidate_overflow_penalty_option->is_set_val()) {
+    request.candidate_overflow_penalty = static_cast<float>(candidate_overflow_penalty_option->getDoubleVal());
   }
 
   if (!inst->runGlobalPlacementSession(request, mode)) {
