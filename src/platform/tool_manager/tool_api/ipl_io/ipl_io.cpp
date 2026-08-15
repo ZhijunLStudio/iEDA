@@ -201,7 +201,7 @@ bool PlacerIO::runGlobalPlacement()
   return success && iPLAPIInst.writeBackSourceDataBase();
 }
 
-bool PlacerIO::runGlobalPlacementSession(std::string mode, int32_t iterations, bool random_init, std::string checkpoint)
+bool PlacerIO::runGlobalPlacementSession(std::string mode, int32_t iterations, bool random_init, std::string checkpoint, int32_t seed, float target_density)
 {
   // Mirror runGlobalPlacement()'s DB bootstrap for the session entry. For
   // advance/resume the PlacerDB is already started by the start call (or by
@@ -230,6 +230,8 @@ bool PlacerIO::runGlobalPlacementSession(std::string mode, int32_t iterations, b
   }
   request.accepted_iterations = iterations;
   request.random_init = random_init;
+  request.seed = seed;
+  request.target_density = target_density;
   request.checkpoint_path = checkpoint;
   const auto result = iPLAPIInst.gpRun(request);
   if (!result.ok) {

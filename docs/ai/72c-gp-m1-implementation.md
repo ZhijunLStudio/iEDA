@@ -303,6 +303,21 @@ C++ API：`iPLAPIInst.gpRun(GPRunRequest{mode, accepted_iterations, random_init,
 - **结论**：① 热点 bin 图选择不比同规模随机范围好 → "怎么找局部"的图工程在当前 GP 粒度上**不产生价值**；② 局部与全局的优劣随求解状态翻转 → 收益不稳健。按 70 号文档 §13.3 的证伪框架，"graph-scoped intervention 有效"假设**未被支持**。局部细化应放在离散阶段（LG/DP），GP 层面默认不做局部。
 - **因此不对外暴露** `-scope local`；范围机制保留为已验证的实验工具（`buildHotOverflowScope`/`buildRandomScope` + 移动系数），供未来按设计重新评估。
 
+## 21. Agent 输入：target_density 覆盖（2026-08-15 第六轮）
+
+`GPRunRequest.target_density`（-1 = 用配置值；Tcl `placer_run_gp -target_density N`，start 模式）。
+
+**语义（重要）**：Agent 给的是"请求"，不是硬设定——`PlacerDB::adaptTargetDensity()` 会把不可行的请求钳制到可行域：
+- 请求 < 设计物理利用率 → 钳到 `利用率 + 0.001`（低于利用率的密度目标在数学上永远无法收敛）；
+- 利用率 < 0.65 → 钳到 0.60。
+
+验证（gcd，利用率 0.8135）：
+- 显式 0.8 ≡ 配置默认 → **逐位一致**（退化等价，走同一钳制路径）；
+- 0.7 与 0.8 都被钳到 0.814478 → 结果相同（0.6873 overflow）；
+- 0.9 高于利用率 → 允许更密 → hpwl -1.3%、overflow 0.6730（更低）。
+
+即 Agent 的实际有效旋钮区间是 **[利用率, 1.0)**（或 0.60 下限）；低于利用率的请求被钳制而非报错。有效值进 checkpoint 配置指纹，resume 自动校验。
+
 ## 20. 多 PDK 规模验证（2026-08-14 第五轮）
 
 数据源：`/mnt/usb20t/PCL-155/`（本机没有 iDATA；有完整 T28 与 superblue16 用例）。大 DEF 用 `test/configs/def2placement_1000.py` 的 strip 模式去除布线段（T28 的 SPECIALNETS 电源网格在 iDB 解析时单线程 >10 分钟，strip 后 12 秒）。

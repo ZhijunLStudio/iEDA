@@ -64,6 +64,11 @@ struct GPRunRequest
   int32_t accepted_iterations = 20;
   bool random_init = true;          // kStart only: run RandomPlace before building the session
   int32_t seed = 1000;              // kStart only: RandomPlace seed (default preserves legacy determinism)
+  // kStart only: density target override, the agent-facing knob trading
+  // wirelength/timing (loose) against density/congestion (tight). Negative =
+  // keep the placer config value. Valid range (0,1). Changing it mid-session
+  // is not allowed: restart with random_init=false (relinearize) instead.
+  float target_density = -1.0F;
   std::string checkpoint_path;      // kResume only: checkpoint JSON to restore from
 };
 

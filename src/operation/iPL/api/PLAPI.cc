@@ -966,6 +966,21 @@ GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
     result.reason = "accepted_iterations must be positive";
     return result;
   }
+  if (request.target_density >= 0.0F && (request.target_density <= 0.0F || request.target_density >= 1.0F)) {
+    result.stop_reason = GPStopReason::kRejected;
+    result.reason = "target_density must be in (0,1)";
+    return result;
+  }
+  if (request.target_density >= 0.0F) {
+    // The agent-facing value is a REQUEST, not a hard setting: the placer
+    // clamps it to the feasible range (a target below the design's physical
+    // utilization can never converge). Applying the same adaptTargetDensity()
+    // correction the config-load path uses keeps explicit 0.8 bit-identical to
+    // the config default, and the effective value lands in the checkpoint
+    // config fingerprint automatically.
+    PlacerDBInst.get_placer_config()->get_nes_config().set_target_density(request.target_density);
+    PlacerDBInst.adaptTargetDensity();
+  }
 
   _gp_session_state = std::make_unique<GPSessionState>();
   _gp_session_state->transaction = PlacerDBInst.beginStageTransaction("global_placement");

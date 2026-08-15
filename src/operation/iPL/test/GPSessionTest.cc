@@ -1137,6 +1137,65 @@ int runLocalScale(const std::string& case_dir, int32_t start_iters)
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+// Density knob: agent-facing target_density override. Degeneration check
+// (explicit 0.8 == config default) is compared by the driver against seg20;
+// the tradeoff branches (0.7/0.8/0.9) restart keep-init from the same coords.
+int runDensityDegenerate()
+{
+  bool ok = true;
+  ipl::GPRunRequest request;
+  request.mode = ipl::GPRunMode::kStart;
+  request.accepted_iterations = 20;
+  request.random_init = true;
+  request.target_density = 0.8F;
+  const auto result = iPLAPIInst.gpRun(request);
+  ok &= require(result.ok, "density-degenerate: start(20, target=0.8) must succeed");
+  ok &= require(result.end_iteration == 20, "density-degenerate: batch must run 1-20");
+  ok &= require(dumpCoordinates("density_degenerate"), "must dump coordinates");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runDensityKnob()
+{
+  bool ok = true;
+  {
+    ipl::GPRunRequest request;
+    request.mode = ipl::GPRunMode::kStart;
+    request.accepted_iterations = 20;
+    request.random_init = true;
+    ok &= require(iPLAPIInst.gpRun(request).ok, "density-knob: warmup start(20) must succeed");
+    iPLAPIInst.gpCloseSession();
+  }
+  const auto run_branch = [&](const std::string& tag, float target) {
+    ipl::GPRunRequest request;
+    request.mode = ipl::GPRunMode::kStart;
+    request.accepted_iterations = 20;
+    request.random_init = false;  // same coords, new target
+    request.target_density = target;
+    const auto result = iPLAPIInst.gpRun(request);
+    if (!result.ok) {
+      return false;
+    }
+    std::filesystem::create_directories(scenarioRoot(tag));
+    std::ofstream out(scenarioRoot(tag) + "/records.txt");
+    for (const auto& record : result.iteration_records) {
+      out << record.iter << ' ' << record.hpwl << ' ' << record.overflow << ' ' << record.step_length << ' '
+          << record.gradient_norm << '\n';
+    }
+    const bool dumped = dumpCoordinates(tag);
+    iPLAPIInst.gpCloseSession();
+    return dumped;
+  };
+  ok &= require(run_branch("density_07", 0.7F), "density-knob: 0.7 branch");
+  ok &= require(run_branch("density_08", 0.8F), "density-knob: 0.8 branch");
+  ok &= require(run_branch("density_09", 0.9F), "density-knob: 0.9 branch");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 int runValidate()
 {
   bool ok = true;
@@ -1162,6 +1221,14 @@ int runValidate()
   const auto bogus = iPLAPIInst.gpRun(resume_bogus);
   ok &= require(!bogus.ok && bogus.stop_reason == ipl::GPStopReason::kRejected,
                 "resume with a nonexistent checkpoint must be rejected");
+
+  // out-of-range target density -> rejected
+  ipl::GPRunRequest bad_target;
+  bad_target.mode = ipl::GPRunMode::kStart;
+  bad_target.accepted_iterations = 5;
+  bad_target.target_density = 1.5F;
+  const auto bad = iPLAPIInst.gpRun(bad_target);
+  ok &= require(!bad.ok && bad.stop_reason == ipl::GPStopReason::kRejected, "out-of-range target_density must be rejected");
 
   // zero iterations -> rejected
   ipl::GPRunRequest zero_request;
@@ -1347,6 +1414,12 @@ int main(int argc, char** argv)
   }
   if (scenario == "screen_trial") {
     return runScreenTrial();
+  }
+  if (scenario == "density_degenerate") {
+    return runDensityDegenerate();
+  }
+  if (scenario == "density_knob") {
+    return runDensityKnob();
   }
   if (scenario == "resume_inproc") {
     return runResumeInProc();

@@ -172,6 +172,8 @@ add_test(NAME ipl_gp_session_local_sweep COMMAND ipl_gp_session_test --scenario 
 add_test(NAME ipl_gp_session_seed_vary COMMAND ipl_gp_session_test --scenario seed_vary)
 add_test(NAME ipl_gp_session_screen_degenerate COMMAND ipl_gp_session_test --scenario screen_degenerate)
 add_test(NAME ipl_gp_session_screen_trial COMMAND ipl_gp_session_test --scenario screen_trial)
+add_test(NAME ipl_gp_session_density_degenerate COMMAND ipl_gp_session_test --scenario density_degenerate)
+add_test(NAME ipl_gp_session_density_knob COMMAND ipl_gp_session_test --scenario density_knob)
 add_test(NAME ipl_gp_session_legacy COMMAND ipl_gp_session_test --scenario legacy)
 add_test(NAME ipl_gp_session_full COMMAND ipl_gp_session_test --scenario full)
 add_test(NAME ipl_gp_session_validate COMMAND ipl_gp_session_test --scenario validate)
