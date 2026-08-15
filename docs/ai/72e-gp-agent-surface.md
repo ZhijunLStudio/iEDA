@@ -150,7 +150,7 @@ build/bin/ipl_gp_session_test --scenario mismatch              # 不同 base con
 build/bin/ipl_config_validation_test                            # opt_overflow_list schema
 ```
 
-全量 37 项 GP 相关回归（31 场景 + legacy 1276 + config/contract）当前全部 PASS。
+全量 40 项 GP 相关回归（含 legacy 1276、config/contract、candidate/scope 新场景）当前全部 PASS。
 
 ## 4. 第二轮迭代：fixed-set 局部 GP + region scope + 候选闭环
 
@@ -212,6 +212,8 @@ placer_run_gp -mode accept
 | iter40 | **5,650,306 / 0.6963** | 5,667,226 / 0.7000 | 5,666,289 / 0.7000 | 5,666,340 / 0.7000 | 局部仍差，hops 不能救阶段错误 |
 
 `kCandidate` 实测：iter20 自动选 local（左胜），iter40 自动选 global（右胜），证明单调用闭环能跟随阶段翻转。
+
+Pareto 护栏（尤其在大设计上）：两个候选都未达到 target_overflow 时，只接受 **HPWL 和 overflow 同时不劣、且至少一项严格更优** 的候选；若只是 overflow 换 HPWL 的 tradeoff，判为 `incomparable` 并保留全局基线。s1238（829 实例）和 picorv32（29k 实例）上 local 都形成 tradeoff，`kCandidate` 均正确回退 global。
 
 结论与 72d 一致：局部 GP 必须作为“同 checkpoint 候选 + 同预算对照 + 只 accept 严格更优”的 Agent 动作，不能替代全局基线。Region/instances 种子 + 2-hop halo 是当前推荐参数，但最终以验收为准。
 
