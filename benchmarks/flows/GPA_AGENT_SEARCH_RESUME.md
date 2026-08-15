@@ -140,7 +140,7 @@ A 的批量实验脚本本身不需要 max reasoning。
 |---|---|---|---|---|---|---|
 | s1238 | 60/60 | parent400 -> longnet global -> +3 iters（总 iter 423） | 5,824,826 / 0.0995 | 25.7% 优势 | 17.1% 优势 |
 | apb4_timer | 60/60 | parent400 -> longnet global -> +70 iters（总 iter 490） | 14,851,106 / 0.0992 | 15.5% 优势 | 14.2% 优势 |
-| picorv32 | 60/60 | parent400 -> longnet global -> +61 iters（总 iter 481） | 230,930,871 / 0.0999 | 24.2% 优势 | 14.7% 优势（session-530-fallback, ov=0.1197） |
+| picorv32 | 60/60 | parent400 -> longnet global -> +61 iters（总 iter 481） | 230,930,871 / 0.0999 | 24.2% 优势 | 15.2% 优势（session-520-fallback, ov=0.1203） |
 | aes | 60/60 | parent400 -> longnet global -> +91 iters（总 iter 511） | 639,089,254 / 0.1000 | 27.2% 优势 | 9.5% 优势 |
 
 注：agent 最终 HPWL 是 GP 内部值；`placement.def` 用共同 evaluator 复核的 HPWL 为
