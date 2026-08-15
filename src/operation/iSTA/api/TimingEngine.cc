@@ -1815,8 +1815,16 @@ std::vector<StaVertex*> TimingEngine::getFanoutVertexs(
 unsigned TimingEngine::isSequentialCell(const char* instance_name) {
   auto* design_netlist = _ista->get_netlist();
   auto* design_instance = design_netlist->findInstance(instance_name);
+  if (design_instance == nullptr) {
+    // Fillers, endcaps and other physical-only cells are present in iDB but
+    // intentionally absent from the STA netlist.
+    return false;
+  }
 
   auto* lib_cell = design_instance->get_inst_cell();
+  if (lib_cell == nullptr) {
+    return false;
+  }
   bool is_sequential = lib_cell->isSequentialCell();
 
   return is_sequential;
