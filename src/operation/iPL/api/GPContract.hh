@@ -248,6 +248,10 @@ struct GPRunRequest
   // Observation: max overflowing bins returned in GPRunResult.grid_report.
   // The full top-N report is also written to <output>/pl/gp_grid_report.json.
   int32_t grid_report_top_n = 64;
+  // Observation: recompute RUDY route demand/utilization at this batch
+  // boundary and return it in GPRunResult.route_util. Off by default because
+  // it is an O(nets) pass and is not needed by the numerical path.
+  bool evaluate_route_util = false;
 
   // kStart-only cautious solver overrides (-1 = keep the configured value).
   // These are effective configuration, not mid-session mutation; they are

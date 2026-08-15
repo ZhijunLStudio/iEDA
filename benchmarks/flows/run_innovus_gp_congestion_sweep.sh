@@ -111,7 +111,7 @@ source $TCL_SCRIPT_DIR/DB_script/db_path_setting.tcl
 source $TCL_SCRIPT_DIR/DB_script/db_init_lef.tcl
 def_init -path $WORK/ieda_in_unplaced.def
 init_pl -config $cfg
-placer_run_gp -mode start -iterations $MAX_ITER -seed 1000
+placer_run_gp -mode start -iterations $MAX_ITER -seed 1000 -report_route_util 1
 catch {placer_run_gp -mode accept}
 def_save -path $out_def
 flow_exit

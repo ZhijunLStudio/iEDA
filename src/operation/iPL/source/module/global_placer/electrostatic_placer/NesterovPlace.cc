@@ -1573,15 +1573,8 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
                        "global placement produced an invalid metric");
         break;
       }
-      // The following parameters threshold "iter_num" and "_sum_overflow" for congestion optimization can be adjusted
-      // Start earlier (iter>=100) so route-util inflation has room to reshape density before legalization.
-      if (_nes_config.isOptCongestion() && iter_num >= 100 && iter_num % 10 == 0) {
-        _nes_database->_bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num());
-        _nes_database->_bin_grid->fastGaussianBlur();
-        _nes_database->_bin_grid->evalRouteUtil();
-        inflateInstancesByRouteUtil(_placable_inst_list);
-        // _nes_database->_bin_grid->plotRouteUtil(iter_num);
-      }
+      // Congestion information is refreshed in the congestion-aware branch below
+      // as soon as density overflow enters its operating window.
 
       if (!_nes_config.isOptCongestion()) {
         _nes_database->_wirelength_gradient->updateWirelengthForce(_nes_database->_wirelength_coef, _nes_database->_wirelength_coef,
@@ -1598,7 +1591,9 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
           _nes_database->_bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num());
           _nes_database->_bin_grid->fastGaussianBlur();
           _nes_database->_bin_grid->evalRouteUtil();
-          inflateInstancesByRouteUtil(_placable_inst_list);
+          // Congestion shapes the wirelength force directly. Density-scale
+          // inflation was removed here: repeated inflation had positive
+          // feedback and drove the solver to 3-7x overflow on real designs.
           iter_entropy_injected = true;
           // _nes_database->_bin_grid->plotOverflowUtil(_sum_overflow, iter_num);
 
@@ -2982,58 +2977,6 @@ void NesterovPlace::updateTimingNetWeight()
       float cur_netweight = n_net->get_weight() + delta_weight;
       n_net->set_weight(cur_netweight);
     }
-  }
-}
-
-void NesterovPlace::inflateInstancesByRouteUtil(std::vector<NesInstance*>& inst_list)
-{
-  auto* grid_manager = _nes_database->_bin_grid->get_grid_manager();
-  if (grid_manager == nullptr) {
-    return;
-  }
-
-  constexpr float kUtilThreshold = 0.85f;
-  constexpr float kInflateGain = 0.20f;
-  constexpr float kMaxDensityScale = 3.0f;
-
-  const int32_t grid_size_x = std::max(1, grid_manager->get_grid_size_x());
-  const int32_t grid_size_y = std::max(1, grid_manager->get_grid_size_y());
-  const auto region = grid_manager->get_shape();
-  auto& grid_2d = grid_manager->get_grid_2d_list();
-  if (grid_2d.empty() || grid_2d.front().empty()) {
-    return;
-  }
-
-  int32_t inflated_cnt = 0;
-  float max_util_seen = 0.0f;
-  for (auto* inst : inst_list) {
-    if (inst == nullptr || inst->isFixed() || inst->isFiller()) {
-      continue;
-    }
-
-    const auto center = inst->get_density_center_coordi();
-    int32_t gx = (center.get_x() - region.get_ll_x()) / grid_size_x;
-    int32_t gy = (center.get_y() - region.get_ll_y()) / grid_size_y;
-    gy = std::clamp(gy, 0, static_cast<int32_t>(grid_2d.size()) - 1);
-    gx = std::clamp(gx, 0, static_cast<int32_t>(grid_2d[gy].size()) - 1);
-
-    const float util = std::max(grid_2d[gy][gx].h_util, grid_2d[gy][gx].v_util);
-    max_util_seen = std::max(max_util_seen, util);
-    if (util <= kUtilThreshold) {
-      continue;
-    }
-
-    const float factor = 1.0f + kInflateGain * (util - kUtilThreshold);
-    const float new_scale = std::min(inst->get_density_scale() * factor, kMaxDensityScale);
-    if (new_scale > inst->get_density_scale() + 1e-4f) {
-      inst->set_density_scale(new_scale);
-      ++inflated_cnt;
-    }
-  }
-
-  if (inflated_cnt > 0) {
-    LOG_INFO << "[NesterovSolve] Route-util density inflation: instances=" << inflated_cnt
-             << ", max_route_util=" << max_util_seen;
   }
 }
 

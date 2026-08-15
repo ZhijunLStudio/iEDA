@@ -73,26 +73,31 @@ benchmarks/flows/run_innovus_gp_compare.sh aes
 
 本机 Innovus 20.10 可以稳定作为 GP 对照。当前 4 个 sky130 设计上，iEDA 全局布局 HPWL 全面低于 Innovus GP-only，领先 15.5%~27.2%；同时 iEDA overflow 均收敛到目标 0.1 附近。
 
-## 5bis. Congestion 探针（s1238，GP-only）
+## 5bis. Congestion 探针（GP-only，修复后）
 
-脚本：`benchmarks/flows/run_innovus_gp_congestion_sweep.sh s1238`
+脚本：`benchmarks/flows/run_innovus_gp_congestion_sweep.sh <design>`
 
-| run | HPWL | native congestion metric |
+修复内容：移除 congestion 模式中的逐迭代 density-scale 正向膨胀。拥塞信息现在只通过 RUDY 加权线长力进入求解，不再通过密度膨胀正反馈破坏布局。
+
+| design | iEDA WL HPWL | iEDA WL route_util | iEDA cong HPWL | iEDA cong route_util | 结论 |
+|---|---|---|---|---|---|
+| s1238 | 5,982,950 | 1.831 | 5,998,135 (+0.25%) | 1.658 (-9.4%) | 稳定，拥塞改善 |
+| apb4_timer | 15,689,143 | 1.246 | 15,764,030 (+0.48%) | 1.133 (-9.1%) | 稳定，拥塞改善 |
+| picorv32 | 234,083,737 | 2.178 | 237,164,266 (+1.32%) | 1.744 (-19.9%) | 稳定，拥塞明显改善 |
+
+Innovus 对照（GP-only, native EGR overflow）：
+
+| design | Innovus low HPWL / overflow | Innovus high HPWL / overflow |
 |---|---|---|
-| Innovus low congestion | 8,053,041 | EGR overflow 12.69% H / 3.24% V |
-| Innovus high congestion | 8,210,338 (+1.95%) | EGR overflow 11.27% H / 4.17% V |
-| iEDA wirelength-only | 5,982,950 | RUDY max route util 1.831 |
-| iEDA congestion effort | 19,049,867 | RUDY max route util 3.893, overflow 6.866 |
+| s1238 | 8,053,041 / H12.69 V3.24 | 8,210,338 / H11.27 V4.17 |
+| apb4_timer | 18,566,747 / H2.95 V0.24 | 18,578,313 / H2.73 V0.47 |
+| picorv32 | 308,691,343 / H9.50 V0.85 | 354,037,316 / H4.58 V1.11 |
 
-apb4_timer 复测：iEDA WL HPWL 15,689,143 / route util 1.246；iEDA congestion effort HPWL 59,763,329 / overflow 3.125 / route util 3.593。同方向恶化。
+说明：
 
-结论：
-
-1. Innovus high congestion 在 s1238 只换来 H overflow 1.4pp 改善，V overflow 反而变差，HPWL 变差 2%。
-2. **iEDA 当前 `is_congestion_effort=1` 路径在本设计上不可用**：密度膨胀正反馈导致 HPWL 恶化 3.2 倍、overflow 恶化 69 倍。这不是对比口径问题，是 congestion 求解路径的稳定性 bug。
-3. 在修好 iEDA congestion-effort 前，congestion 只做“工具原生指标并排记录”，不做胜率结论。
-
-下一步优先修：`inflateInstancesByRouteUtil` 的密度膨胀策略与 RUDY cap/calibration（当前 route util 在 WL 结果上已经 1.83，说明 RUDY 供给模型也可能偏保守）。
+1. iEDA congestion mode 现在所有已测设计都稳定收敛到 target overflow，route util 下降 9~20%，HPWL 代价 0.25~1.32%。
+2. Innovus high congestion 在 s1238/apb4 只改善 H，V 反而变差；picorv32 上 H 大幅下降但 HPWL 增加 14.7%。
+3. 两边 congestion 指标不是同一模型（Innovus EGR vs iEDA RUDY），因此上表只做并排观察，不做直接谁优谁劣。
 
 ## 6. 下一步
 

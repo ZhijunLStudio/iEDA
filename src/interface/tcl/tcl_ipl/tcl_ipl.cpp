@@ -291,6 +291,9 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
 
   auto* report_top_n_option = new TclIntOption("-report_top_n", 1, 64);
   addOption(report_top_n_option);
+
+  auto* report_route_util_option = new TclIntOption("-report_route_util", 1, 0);
+  addOption(report_route_util_option);
 }
 
 unsigned CmdPlacerRunGP::check()
@@ -486,6 +489,10 @@ unsigned CmdPlacerRunGP::exec()
   TclOption* report_top_n_option = getOptionOrArg("-report_top_n");
   if (report_top_n_option->is_set_val()) {
     request.grid_report_top_n = report_top_n_option->getIntVal();
+  }
+  TclOption* report_route_util_option = getOptionOrArg("-report_route_util");
+  if (report_route_util_option->is_set_val()) {
+    request.evaluate_route_util = (report_route_util_option->getIntVal() != 0);
   }
 
   if (!inst->runGlobalPlacementSession(request, mode)) {

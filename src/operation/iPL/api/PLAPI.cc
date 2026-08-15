@@ -1194,8 +1194,11 @@ void fillBatchObservation(NesterovPlace& session, const GPRunRequest& request, G
 {
   result.best_hpwl = session.bestHpwl();
   result.best_overflow = session.bestOverflow();
-  session.evaluateRouteUtilObservation();
   result.route_util = session.currentRouteUtil();
+  if (request.evaluate_route_util) {
+    session.evaluateRouteUtilObservation();
+    result.route_util = session.currentRouteUtil();
+  }
   result.scope_effect = session.computeScopeEffect();
   result.grid_report = session.buildOverflowReport(request.grid_report_top_n);
   result.grid_report_path = output_dir + "/pl/gp_grid_report.json";
