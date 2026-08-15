@@ -84,6 +84,8 @@ benchmarks/flows/run_innovus_gp_compare.sh aes
 | iEDA wirelength-only | 5,982,950 | RUDY max route util 1.831 |
 | iEDA congestion effort | 19,049,867 | RUDY max route util 3.893, overflow 6.866 |
 
+apb4_timer 复测：iEDA WL HPWL 15,689,143 / route util 1.246；iEDA congestion effort HPWL 59,763,329 / overflow 3.125 / route util 3.593。同方向恶化。
+
 结论：
 
 1. Innovus high congestion 在 s1238 只换来 H overflow 1.4pp 改善，V overflow 反而变差，HPWL 变差 2%。
