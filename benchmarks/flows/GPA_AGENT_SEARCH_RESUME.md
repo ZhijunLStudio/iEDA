@@ -54,14 +54,25 @@ python3 benchmarks/flows/run_gp_agent_search.py \
 - 同时把 recommendation 与 `benchmarks/results/innovus_gp_compare/<design>/result.json`
   里的 Innovus HPWL 比较。
 
-## 3. 当前状态（2026-08-15 22:15）
+## 3. 当前状态（2026-08-15 22:40，A/B 均已完成）
 
 - 旧会话撞上下文前只写入了 `run_gp_agent_search.py`，未跑完整 A。
-- 新会话已修复两个 bug 并验证 s1238 完整矩阵（60/60 candidate 成功）：
-  1. `-scope_region` 的矩形必须用 Tcl braces 包住：`{llx lly urx ury}`
-  2. recommendation 必须按 `candidate_verdict` 选 local/global，而不是默认 local
-- s1238 旧逻辑结果已作废，需用修复后的脚本重跑一次；其余三个设计未跑。
-- 修复后的搜索脚本和批量脚本还未提交（下一步提交）。
+- 新会话修复并提交了这些 bug：
+  1. `-scope_region` 矩形必须用 Tcl braces 包住：`{llx lly urx ury}`；
+  2. recommendation 必须按 `candidate_verdict` 选 local/global；
+  3. 无可行解时按 overflow 接近 target 排序，而不是只看 HPWL；
+  4. `gp_agent.py advance/candidate/accept` 允许显式 `--checkpoint`，不强制已有 state 文件。
+- A 的四个设计均完成 60/60 搜索矩阵，并已从 recommendation 的 winner checkpoint
+  继续 `advance` 到 overflow<=0.1，得到最终动作链与 placement.def。
+- B 的四个设计均完成 `-noPrePlaceOpt` 对照，结果写于
+  `benchmarks/results/innovus_gp_compare_nodel/<design>/result.json`
+  （该 results 目录被 `.gitignore` 忽略，不提交）。
+- 相关提交：
+  `4bd849c` 搜索脚本/批量脚本/续跑文档；
+  `8b62052` 批量脚本数组默认值修复；
+  `ffd565c` infeasible 排序策略；
+  `d8459f6` noPrePlaceOpt 对照脚本；
+  `ed2c042` gp_agent.py 显式 checkpoint 修复。
 
 ## 4. 换新会话续跑 Harness 的正确姿势
 
@@ -125,9 +136,12 @@ A 的批量实验脚本本身不需要 max reasoning。
 
 ## 6. 状态表（完成后填写）
 
-| design | search.json | recommendation | vs Innovus GP HPWL | 备注 |
-|---|---|---|---|---|
-| s1238 | 待重跑 | | | |
-| apb4_timer | 待跑 | | | |
-| picorv32 | 待跑 | | | |
-| aes | 待跑 | | | |
+| design | search.json | 最终动作链 | agent 最终 HPWL / overflow | 旧口径 vs Innovus | noPrePlaceOpt 口径 vs Innovus |
+|---|---|---|---|---|---|---|
+| s1238 | 60/60 | parent400 -> longnet global -> +3 iters（总 iter 423） | 5,824,826 / 0.0995 | 25.7% 优势 | 17.1% 优势 |
+| apb4_timer | 60/60 | parent400 -> longnet global -> +70 iters（总 iter 490） | 14,851,106 / 0.0992 | 15.5% 优势 | 14.2% 优势 |
+| picorv32 | 60/60 | parent400 -> longnet global -> +61 iters（总 iter 481） | 230,930,871 / 0.0999 | 24.2% 优势 | 14.7% 优势（session-530-fallback, ov=0.1197） |
+| aes | 60/60 | parent400 -> longnet global -> +91 iters（总 iter 511） | 639,089,254 / 0.1000 | 27.2% 优势 | 9.5% 优势 |
+
+注：agent 最终 HPWL 是 GP 内部值；`placement.def` 用共同 evaluator 复核的 HPWL 为
+s1238=5,957,257，apb4_timer=15,715,072，picorv32=234,280,119，aes=665,002,127。
