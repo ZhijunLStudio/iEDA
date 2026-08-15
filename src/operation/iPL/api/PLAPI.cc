@@ -1163,6 +1163,7 @@ void appendExperimentRecord(const GPRunRequest& request, const GPRunResult& resu
         {"overflow", result.overflow},
         {"step_length", result.step_length},
         {"density_penalty", result.density_penalty},
+        {"route_util", result.route_util},
         {"best_hpwl", result.best_hpwl},
         {"best_overflow", result.best_overflow},
         {"scope_effect", {{"scope_applied", result.scope_effect.scope_applied},
@@ -1193,6 +1194,8 @@ void fillBatchObservation(NesterovPlace& session, const GPRunRequest& request, G
 {
   result.best_hpwl = session.bestHpwl();
   result.best_overflow = session.bestOverflow();
+  session.evaluateRouteUtilObservation();
+  result.route_util = session.currentRouteUtil();
   result.scope_effect = session.computeScopeEffect();
   result.grid_report = session.buildOverflowReport(request.grid_report_top_n);
   result.grid_report_path = output_dir + "/pl/gp_grid_report.json";
@@ -1478,6 +1481,7 @@ GPRunResult PLAPI::gpRunRestore(const GPRunRequest& request)
   result.overflow = _gp_session_state->session->currentOverflow();
   result.step_length = _gp_session_state->session->currentStepLength();
   result.density_penalty = _gp_session_state->session->currentDensityPenalty();
+  result.route_util = _gp_session_state->session->currentRouteUtil();
   result.checkpoint_path = request.checkpoint_path;
 
   // Publish exactly the checkpoint placement without advancing the solver.
@@ -1554,6 +1558,7 @@ GPRunResult PLAPI::gpRunCandidate(const GPRunRequest& request)
     result.overflow = _gp_session_state->session->currentOverflow();
     result.step_length = _gp_session_state->session->currentStepLength();
     result.density_penalty = _gp_session_state->session->currentDensityPenalty();
+  result.route_util = _gp_session_state->session->currentRouteUtil();
     return gpFinalizeTerminal(result);
   }
   const GPRunScopeEffect local_scope_effect = _gp_session_state->session->computeScopeEffect();
@@ -1709,6 +1714,7 @@ GPRunResult PLAPI::gpRunAdvance(const GPRunRequest& request)
   result.overflow = _gp_session_state->session->currentOverflow();
   result.step_length = _gp_session_state->session->currentStepLength();
   result.density_penalty = _gp_session_state->session->currentDensityPenalty();
+  result.route_util = _gp_session_state->session->currentRouteUtil();
 
   switch (advance) {
     case GPAdvanceOutcome::kBudgetReached:

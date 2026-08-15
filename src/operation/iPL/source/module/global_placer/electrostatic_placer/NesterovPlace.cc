@@ -2307,6 +2307,20 @@ void NesterovPlace::buildLongNetScope(size_t active_count, float halo_coeff, int
   setMovementCoeffs(coeffs);
 }
 
+void NesterovPlace::evaluateRouteUtilObservation()
+{
+  auto* bin_grid = _nes_database->_bin_grid;
+  if (bin_grid == nullptr || _nes_database->_topology_manager == nullptr) {
+    return;
+  }
+  bin_grid->evalRouteCap(_nes_config.get_thread_num());
+  bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num());
+  bin_grid->fastGaussianBlur();
+  bin_grid->evalRouteUtil();
+  _final_route_util = std::max(_nes_database->_grid_manager->get_h_util_max(),
+                               _nes_database->_grid_manager->get_v_util_max());
+}
+
 void NesterovPlace::refreshGridOccupation()
 {
   _nes_database->_bin_grid->updateBinGrid(_placable_inst_list, _nes_config.get_thread_num());

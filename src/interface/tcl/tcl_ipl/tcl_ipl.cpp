@@ -504,7 +504,7 @@ unsigned CmdPlacerRunGP::exec()
   std::cout << "iPL gp.run (" << mode << ", " << request.accepted_iterations << " iterations) stop_reason="
             << ipl::gpStopReasonName(result.stop_reason) << " iterations=" << result.start_iteration << "-" << result.end_iteration
             << " hpwl=" << result.hpwl << " overflow=" << result.overflow << " step_length=" << result.step_length
-            << " density_penalty=" << result.density_penalty << std::endl;
+            << " density_penalty=" << result.density_penalty << " route_util=" << result.route_util << std::endl;
   if (result.scope_effect.scope_applied) {
     std::cout << "  scope_effect active=" << result.scope_effect.active_written << " halo=" << result.scope_effect.halo_written
               << " context=" << result.scope_effect.context_written << " context_moved=" << result.scope_effect.context_moved

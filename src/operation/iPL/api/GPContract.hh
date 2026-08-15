@@ -270,6 +270,7 @@ struct GPRunResult
   float overflow = 0.0F;
   float step_length = 0.0F;
   float density_penalty = 0.0F;
+  float route_util = 0.0F;  // congestion mode: max(H util, V util) at batch end
   int64_t best_hpwl = 0;
   float best_overflow = 0.0F;
   std::string reason;

@@ -103,6 +103,7 @@ class NesterovPlace
   float currentOverflow() const { return _sum_overflow; }
   float currentStepLength() const { return _final_step_length; }
   float currentDensityPenalty() const { return _nes_database->_density_penalty; }
+  float currentRouteUtil() const { return _final_route_util; }
 
   // ---- checkpoint persistence (M2) ----
   GPStateCheckpoint captureCheckpoint() const;
@@ -150,6 +151,10 @@ class NesterovPlace
   // reflects the checkpoint placement (the next accepted iteration recomputes
   // this occupancy again, so the observation cannot perturb the numerical path).
   void refreshGridOccupation();
+  // Observation-only congestion snapshot: computes route demand/capacity/util
+  // for the current placement. It does not feed any solver gradient state;
+  // the next accepted iteration recomputes whatever it needs.
+  void evaluateRouteUtilObservation();
 
   // ---- region density screens (L1) ----
   // Set the density target factor (effective capacity multiplier) on every grid

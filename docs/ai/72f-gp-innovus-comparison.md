@@ -73,6 +73,25 @@ benchmarks/flows/run_innovus_gp_compare.sh aes
 
 本机 Innovus 20.10 可以稳定作为 GP 对照。当前 4 个 sky130 设计上，iEDA 全局布局 HPWL 全面低于 Innovus GP-only，领先 15.5%~27.2%；同时 iEDA overflow 均收敛到目标 0.1 附近。
 
+## 5bis. Congestion 探针（s1238，GP-only）
+
+脚本：`benchmarks/flows/run_innovus_gp_congestion_sweep.sh s1238`
+
+| run | HPWL | native congestion metric |
+|---|---|---|
+| Innovus low congestion | 8,053,041 | EGR overflow 12.69% H / 3.24% V |
+| Innovus high congestion | 8,210,338 (+1.95%) | EGR overflow 11.27% H / 4.17% V |
+| iEDA wirelength-only | 5,982,950 | RUDY max route util 1.831 |
+| iEDA congestion effort | 19,049,867 | RUDY max route util 3.893, overflow 6.866 |
+
+结论：
+
+1. Innovus high congestion 在 s1238 只换来 H overflow 1.4pp 改善，V overflow 反而变差，HPWL 变差 2%。
+2. **iEDA 当前 `is_congestion_effort=1` 路径在本设计上不可用**：密度膨胀正反馈导致 HPWL 恶化 3.2 倍、overflow 恶化 69 倍。这不是对比口径问题，是 congestion 求解路径的稳定性 bug。
+3. 在修好 iEDA congestion-effort 前，congestion 只做“工具原生指标并排记录”，不做胜率结论。
+
+下一步优先修：`inflateInstancesByRouteUtil` 的密度膨胀策略与 RUDY cap/calibration（当前 route util 在 WL 结果上已经 1.83，说明 RUDY 供给模型也可能偏保守）。
+
 ## 6. 下一步
 
 - 加入 Innovus `place_opt -noPrePlaceOpt` / `place_design -noPrePlaceOpt` 对照，进一步剥离预放置优化。
