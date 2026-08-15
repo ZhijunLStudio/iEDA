@@ -75,6 +75,17 @@ int main()
   ok &= require(!validation.valid && validation.path == "$.PL.GP.Nesterov.opt_overflow_list",
                 "non-increasing opt_overflow_list must be rejected");
 
+  auto hold_guard = valid_json;
+  hold_guard["PL"]["GP"]["Nesterov"]["timing_hold_slack_guard"] = 0.2F;
+  validation = ipl::Config::validateJson(hold_guard);
+  ok &= require(validation.valid, "Nesterov timing_hold_slack_guard must be accepted as an optional number");
+
+  auto bad_hold_guard = valid_json;
+  bad_hold_guard["PL"]["GP"]["Nesterov"]["timing_hold_slack_guard"] = -0.1F;
+  validation = ipl::Config::validateJson(bad_hold_guard);
+  ok &= require(!validation.valid && validation.path == "$.PL.GP.Nesterov.timing_hold_slack_guard",
+                "negative timing_hold_slack_guard must be rejected");
+
   const std::filesystem::path malformed_path = "/tmp/ipl_config_validation_malformed.json";
   {
     std::ofstream stream(malformed_path);

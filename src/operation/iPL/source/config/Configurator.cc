@@ -164,7 +164,8 @@ ConfigValidationResult validateConfigSchema(const Json& json)
   result = validateObject(nesterov, "$.PL.GP.Nesterov",
                           {{"max_iter", true}, {"max_backtrack", true}, {"init_density_penalty", true},
                            {"target_overflow", true}, {"initial_prev_coordi_update_coef", true}, {"min_precondition", true},
-                           {"min_phi_coef", true}, {"max_phi_coef", true}, {"opt_overflow_list", false}});
+                           {"min_phi_coef", true}, {"max_phi_coef", true}, {"opt_overflow_list", false},
+                           {"timing_hold_slack_guard", false}});
   if (!result.valid) {
     return result;
   }
@@ -198,6 +199,16 @@ ConfigValidationResult validateConfigSchema(const Json& json)
       if (i > 0 && threshold <= overflow_list.at(i - 1).get<float>()) {
         return invalidConfig("$.PL.GP.Nesterov.opt_overflow_list", "thresholds must be strictly increasing (smallest first)");
       }
+    }
+  }
+  if (nesterov.contains("timing_hold_slack_guard")) {
+    const auto& hold_guard = nesterov.at("timing_hold_slack_guard");
+    if (!hold_guard.is_number()) {
+      return invalidConfig("$.PL.GP.Nesterov.timing_hold_slack_guard", "expected number");
+    }
+    const float guard = hold_guard.get<float>();
+    if (!std::isfinite(guard) || guard < 0.0F) {
+      return invalidConfig("$.PL.GP.Nesterov.timing_hold_slack_guard", "must be non-negative and finite");
     }
   }
 
@@ -346,6 +357,7 @@ ConfigValidationResult Config::validateJson(const nlohmann::json& json)
     }
     nesterov_config.set_opt_overflow_list(opt_overflow_list);
   }
+  nesterov_config.set_timing_hold_slack_guard(gp.at("Nesterov").value("timing_hold_slack_guard", 0.1F));
   nesterov_config.set_global_padding(gp.value("global_right_padding", 0));
   nesterov_config.set_is_opt_max_wirelength(pl.at("is_max_length_opt").get<int32_t>() == 1);
   nesterov_config.set_max_net_wirelength(pl.at("max_length_constraint").get<int32_t>());
@@ -470,6 +482,7 @@ void Config::initConfigByJson(nlohmann::json json)
       opt_overflow_list.push_back(value.get<float>());
     }
   }
+  float timing_hold_slack_guard = json.at("PL").at("GP").at("Nesterov").value("timing_hold_slack_guard", 0.1F);
   int32_t gp_global_padding = 0;
   if (json.contains("PL") && json["PL"].contains("GP") && json["PL"]["GP"].contains("global_right_padding")) {
     gp_global_padding = getDataByJson(json, {"PL", "GP", "global_right_padding"});
@@ -567,6 +580,7 @@ void Config::initConfigByJson(nlohmann::json json)
   if (json.at("PL").at("GP").at("Nesterov").contains("opt_overflow_list")) {
     _nes_config.set_opt_overflow_list(opt_overflow_list);
   }
+  _nes_config.set_timing_hold_slack_guard(timing_hold_slack_guard);
   _nes_config.set_global_padding(gp_global_padding);
   if (is_max_length_opt) {
     _nes_config.set_is_opt_max_wirelength(true);

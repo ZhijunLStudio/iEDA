@@ -1931,6 +1931,7 @@ std::string NesterovPlace::computeConfigFingerprint() const
       {"max_net_wirelength", _nes_config.get_max_net_wirelength()},
       {"global_padding", _nes_config.get_global_padding()},
       {"opt_overflow_list", _nes_config.get_opt_overflow_list()},
+      {"timing_hold_slack_guard", _nes_config.get_timing_hold_slack_guard()},
   };
   return fingerprint.dump();
 }
@@ -2558,7 +2559,8 @@ void to_json(nlohmann::json& json_obj, const NesterovPlaceConfig::State& state)
                             {"max_net_wirelength", state.max_net_wirelength},
                             {"global_padding", state.global_padding},
                             {"opt_overflow_list", state.opt_overflow_list},
-                            {"opt_overflow_list_configured", state.opt_overflow_list_configured}};
+                            {"opt_overflow_list_configured", state.opt_overflow_list_configured},
+                            {"timing_hold_slack_guard", state.timing_hold_slack_guard}};
 }
 
 void from_json(const nlohmann::json& json_obj, NesterovPlaceConfig::State& state)
@@ -2587,6 +2589,7 @@ void from_json(const nlohmann::json& json_obj, NesterovPlaceConfig::State& state
   state.global_padding = json_obj.at("global_padding").get<int32_t>();
   state.opt_overflow_list = json_obj.at("opt_overflow_list").get<std::vector<float>>();
   state.opt_overflow_list_configured = json_obj.at("opt_overflow_list_configured").get<bool>();
+  state.timing_hold_slack_guard = json_obj.at("timing_hold_slack_guard").get<float>();
 }
 
 void to_json(nlohmann::json& json_obj, const Nesterov::State& state)
@@ -2962,6 +2965,8 @@ void NesterovPlace::updateTimingNetWeight()
   timing_annotation->updateCriticalityAndCentralityFull();
 
   float cur_max_centrality = timing_annotation->get_max_centrality();
+  const float hold_guard = _nes_config.get_timing_hold_slack_guard();
+  int32_t hold_limited_net_count = 0;
   for (size_t i = 0; i < nNet_list.size(); i++) {
     if (Utility().isFloatApproximatelyZero(cur_max_centrality)) {
       break;
@@ -2974,9 +2979,32 @@ void NesterovPlace::updateTimingNetWeight()
     } else {
       float cur_miu = timing_annotation->get_network_centrality(network) / cur_max_centrality;
       float delta_weight = cita * prev_miu_list[i] + (1 - cita) * cur_miu;
+
+      // Hold-aware guard: setup-driven net weighting shortens wires and can
+      // turn a small positive hold margin negative. Scale the weight bump down
+      // as the net's early (hold) slack approaches the configured guard.
+      if (hold_guard > 0.0F) {
+        float early_slack = 1.0F;
+        auto* driver = network->get_transmitter();
+        if (driver != nullptr) {
+          early_slack = timing_annotation->get_node_early_slack(driver->get_node_id());
+        }
+        for (auto* receiver : network->get_receiver_list()) {
+          early_slack = std::min(early_slack, timing_annotation->get_node_early_slack(receiver->get_node_id()));
+        }
+        float hold_scale = early_slack >= hold_guard ? 1.0F : (early_slack > 0.0F ? early_slack / hold_guard : 0.0F);
+        if (hold_scale < 1.0F) {
+          ++hold_limited_net_count;
+          delta_weight *= hold_scale;
+        }
+      }
+
       float cur_netweight = n_net->get_weight() + delta_weight;
       n_net->set_weight(cur_netweight);
     }
+  }
+  if (hold_limited_net_count > 0) {
+    LOG_INFO << "[NesterovSolve] timing hold guard limited " << hold_limited_net_count << " nets.";
   }
 }
 

@@ -74,6 +74,10 @@ class NesterovPlaceConfig
     int32_t global_padding = 0;
     std::vector<float> opt_overflow_list;
     bool opt_overflow_list_configured = false;
+    // Timing net-weight updates are down-weighted for nets whose hold slack is
+    // already inside this margin (seconds), so setup optimization does not
+    // create hold violations. 0 disables the hold guard.
+    float timing_hold_slack_guard = 0.1F;
   };
 
   State captureState() const
@@ -103,6 +107,7 @@ class NesterovPlaceConfig
     state.global_padding = _global_padding;
     state.opt_overflow_list = _opt_overflow_list;
     state.opt_overflow_list_configured = _opt_overflow_list_configured;
+    state.timing_hold_slack_guard = _timing_hold_slack_guard;
     return state;
   }
 
@@ -132,6 +137,7 @@ class NesterovPlaceConfig
     _global_padding = state.global_padding;
     _opt_overflow_list = state.opt_overflow_list;
     _opt_overflow_list_configured = state.opt_overflow_list_configured;
+    _timing_hold_slack_guard = state.timing_hold_slack_guard;
   }
 
   // getter.
@@ -159,6 +165,7 @@ class NesterovPlaceConfig
   int32_t get_global_padding() const { return _global_padding; }
   const std::vector<float>& get_opt_overflow_list() const { return _opt_overflow_list; }
   bool isOptOverflowListConfigured() const { return _opt_overflow_list_configured; }
+  float get_timing_hold_slack_guard() const { return _timing_hold_slack_guard; }
 
   bool validate(std::string* reason = nullptr) const
   {
@@ -218,6 +225,9 @@ class NesterovPlaceConfig
     if (_global_padding < 0) {
       return fail("global_padding must be non-negative");
     }
+    if (!std::isfinite(_timing_hold_slack_guard) || _timing_hold_slack_guard < 0.0F) {
+      return fail("timing_hold_slack_guard must be non-negative and finite");
+    }
 
     return true;
   }
@@ -251,6 +261,7 @@ class NesterovPlaceConfig
     _opt_overflow_list = overflow_list;
     _opt_overflow_list_configured = true;
   }
+  void set_timing_hold_slack_guard(float guard) { _timing_hold_slack_guard = guard; }
 
  private:
   int32_t _thread_num = 1;
@@ -289,6 +300,7 @@ class NesterovPlaceConfig
   // about opt target overflow list
   std::vector<float> _opt_overflow_list;
   bool _opt_overflow_list_configured = false;
+  float _timing_hold_slack_guard = 0.1F;
 
   // about global right padding (site count)
   int32_t _global_padding = 0;
