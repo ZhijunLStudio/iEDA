@@ -88,9 +88,20 @@
    因此 DRC 差的根因是 **placement 坐标分布**，不是 iRT DEF 解析。
    后续新增 `seed_anchor_strength`：以 Innovus placement 为 seed 做
    `random_init=0` GP 时，每步向 seed 坐标回拉 alpha 比例。
-   初步 iRT 结果：alpha=0.1 时 residual_drc=1874（congestion+met5 为 2615），
-   alpha=0.05/0.15 正在路由中；对应 def HPWL 6.56M，仍比 Innovus 7.42M
-   好 11.6%。
+   完整 alpha 扫描（seed=Innovus DEF，GP+LG+DP，iRT met5）：
+
+| alpha | def HPWL | residual DRC |
+|---|---|---|
+| 0.05 | 6,563,057 | 1841 |
+| 0.10 | 6,627,076 | 1874 |
+| 0.15 | 6,617,066 | 2192 |
+| 0.20 | 6,614,378 | 2171 |
+| 0.25 | 6,621,153 | 2233 |
+| 0.30 | 6,549,477 | 2093 |
+
+   最优 alpha=0.05/0.10，DRC 从 WL full 的 3471 降到 ~1841（-47%），
+   HPWL 仍比 Innovus 7,417,394 好 11% 以上；继续降低 alpha 会趋近纯
+   Innovus seed（DRC 121）但 GP 收益消失。
 5. CTS/TO/STA 全流程仍缺；DRC clean、路由后 timing/power 也未收口。
    当前 P2 完成度：superblue16 大设计 GP+local candidate 验证 ✅；
    asic_top T28 GP smoke ✅（strip specialnets 后）；
