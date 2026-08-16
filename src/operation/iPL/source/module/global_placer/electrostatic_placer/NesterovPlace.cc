@@ -1949,8 +1949,23 @@ bool NesterovPlace::restoreCheckpoint(const GPStateCheckpoint& checkpoint)
   // Config fingerprint first: resuming under a different placer config silently
   // produces a meaningless numerical path, so reject before touching state.
   if (checkpoint.config_fingerprint != computeConfigFingerprint()) {
-    LOG_ERROR << "[GP checkpoint] config fingerprint mismatch; resume requires the same placer config that saved the checkpoint";
-    return false;
+    // Pre-hold-guard checkpoints predate timing_hold_slack_guard in the
+    // fingerprint. Normalize that one key and resume with legacy guard=0.
+    try {
+      auto current = nlohmann::json::parse(computeConfigFingerprint());
+      auto saved = nlohmann::json::parse(checkpoint.config_fingerprint);
+      current.erase("timing_hold_slack_guard");
+      saved.erase("timing_hold_slack_guard");
+      if (current != saved) {
+        LOG_ERROR << "[GP checkpoint] config fingerprint mismatch; resume requires the same placer config that saved the checkpoint";
+        return false;
+      }
+      _nes_config.set_timing_hold_slack_guard(0.0F);
+      LOG_WARNING << "[GP checkpoint] resumed a pre-hold-guard checkpoint with timing_hold_slack_guard=0";
+    } catch (const std::exception& error) {
+      LOG_ERROR << "[GP checkpoint] config fingerprint mismatch; resume requires the same placer config that saved the checkpoint";
+      return false;
+    }
   }
 
   // Topology fingerprint: the placable list must match the checkpoint exactly.
@@ -2597,7 +2612,10 @@ void from_json(const nlohmann::json& json_obj, NesterovPlaceConfig::State& state
   state.global_padding = json_obj.at("global_padding").get<int32_t>();
   state.opt_overflow_list = json_obj.at("opt_overflow_list").get<std::vector<float>>();
   state.opt_overflow_list_configured = json_obj.at("opt_overflow_list_configured").get<bool>();
-  state.timing_hold_slack_guard = json_obj.at("timing_hold_slack_guard").get<float>();
+  // Checkpoints written before the hold-guard feature predate this key. They
+  // resume with the legacy no-guard behavior (0.0), selected by the fingerprint
+  // compatibility path in restoreCheckpoint().
+  state.timing_hold_slack_guard = json_obj.value("timing_hold_slack_guard", 0.0F);
 }
 
 void to_json(nlohmann::json& json_obj, const Nesterov::State& state)
