@@ -943,7 +943,7 @@ namespace {
 bool hasStartConfigOverrides(const GPRunRequest& request)
 {
   return request.target_density >= 0.0F || request.init_density_penalty >= 0.0F || request.min_phi_coef >= 0.0F
-         || request.max_phi_coef >= 0.0F;
+         || request.max_phi_coef >= 0.0F || request.congestion_effort >= 0;
 }
 
 bool validateStartConfigOverrides(const GPRunRequest& request, std::string* reason)
@@ -973,6 +973,10 @@ bool validateStartConfigOverrides(const GPRunRequest& request, std::string* reas
     *reason = "phi coefficients must satisfy 0 < min_phi_coef <= max_phi_coef";
     return false;
   }
+  if (request.congestion_effort > 1) {
+    *reason = "congestion_effort must be 0 or 1";
+    return false;
+  }
   return true;
 }
 
@@ -997,6 +1001,9 @@ void applyStartConfigOverrides(const GPRunRequest& request)
   }
   if (request.max_phi_coef >= 0.0F) {
     nes_config.set_max_phi_coef(request.max_phi_coef);
+  }
+  if (request.congestion_effort >= 0) {
+    nes_config.set_is_opt_congestion(request.congestion_effort == 1);
   }
 }
 
@@ -2299,8 +2306,11 @@ void PLAPI::updateSequentialProperty()
   for (auto* net : PlacerDBInst.get_design()->get_net_list()) {
     if (this->isClockNet(net->get_name())) {
       net->set_net_type(NET_TYPE::kClock);
-      net->set_netweight(0.0f);
-      net->set_net_state(NET_STATE::kDontCare);
+      // Keep clock nets in the wirelength objective. Marking them dont-care
+      // lets the GP spread clock sinks freely and creates hold/skew issues
+      // under propagated-clock timing evaluation.
+      net->set_netweight(1.0f);
+      net->set_net_state(NET_STATE::kNormal);
     }
   }
 
