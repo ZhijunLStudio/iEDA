@@ -44,7 +44,7 @@
      （GP 不需要电源/地 special routing）；
    - `placer_run_gp -mode start -iterations 10` 成功，内部 HPWL 6,019,100,220；
    - 证明 T28/asic_top 也能进入 GP session，但完整 DEF 解析仍待 iDB 优化。
-3. GP -> LG -> DP 全 iPL 放置四设计完成：
+3. GP -> LG -> DP 全 iPL 放置四设计完成；timing-on 版本也四设计完成：
 
 | design | iEDA full HPWL | Innovus noPrePlaceOpt | iEDA 优势 |
 |---|---|---|---|
@@ -53,9 +53,20 @@
 | picorv32 | 297,009,860 | 358,263,695 | 17.1% |
 | aes | 1,048,273,641 | 1,154,174,869 | 9.2% |
 
+   timing-driven GP -> LG -> DP：
+
+| design | iEDA timing full HPWL | iEDA 优势 |
+|---|---|---|
+| s1238 | 5,745,273 | 22.5% |
+| apb4_timer | 17,535,062 | 14.0% |
+| picorv32 | 296,949,944 | 17.1% |
+| aes | 1,048,174,208 | 9.2% |
+
 4. s1238 已从 iEDA full placement 跑通 iRT 全局+详细布线（28.5 分钟），
-   输出 `/tmp/irt_s1238/iRT_result.def`，但终端状态 `residual_drc=3471`，
-   尚未 DRC clean。至少证明 GP->LG->DP->iRT 流程可跑通。
+   输出 `/tmp/irt_s1238/iRT_result.def`，但终端状态 `residual_drc=3471`。
+   补跑 CTS 后重新布线：`routed_nets=354/354, residual_drc=3394`，
+   DRC 仍不 clean；正在用同一 iRT 脚本路由 Innovus noPrePlaceOpt DEF 做
+   对照，以区分是 placement 问题还是 iRT 工具能力问题。
 5. CTS/TO/STA 全流程仍缺；DRC clean、路由后 timing/power 也未收口。
    当前 P2 完成度：superblue16 大设计 GP+local candidate 验证 ✅；
    asic_top T28 GP smoke ✅（strip specialnets 后）；
