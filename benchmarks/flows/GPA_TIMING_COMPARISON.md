@@ -32,37 +32,38 @@ python3 benchmarks/flows/run_gp_timing_compare.py --designs s1238 apb4_timer pic
 | s1238 | Innovus WL | 7,417,394 | 0.0022 | 0.0 | 667.7 |
 | | Innovus timing | 7,440,096 | 0.0014 | 0.0 | 667.3 |
 | | iEDA WL | 6,147,101 | 0.0630 | 0.0 | 695.9 |
-| | iEDA timing | **6,186,437** | **0.1647** | 0.0 | **748.9** |
+| | iEDA timing | **6,230,090** | **0.1325** | 0.0 | **731.2** |
 | apb4_timer | Innovus WL | 20,389,663 | -0.5499 | -24.73 | 487.8 |
 | | Innovus timing | 20,540,435 | -0.5067 | -23.21 | 498.3 |
 | | iEDA WL | 17,491,792 | -0.5195 | -22.89 | 495.2 |
-| | iEDA timing | **17,667,655** | **-0.4699** | **-20.74** | **507.6** |
+| | iEDA timing | **17,507,726** | **-0.4625** | **-19.66** | **509.6** |
 | picorv32 | Innovus WL | 358,263,695 | -4.8230 | -1303.4 | 136.6 |
 | | Innovus timing | 370,973,336 | -4.5001 | -1389.8 | 142.9 |
 | | iEDA WL | 303,689,095 | -3.2049 | -820.2 | 175.3 |
-| | iEDA timing | **326,641,051** | **-3.5900** | **-840.5** | **164.2** |
+| | iEDA timing | **305,618,735** | **-3.2310** | **-746.1** | **174.5** |
 | aes | Innovus WL | 1,154,174,869 | -2.2833 | -6128.1 | 209.1 |
 | | Innovus timing | 1,187,135,383 | -3.2363 | -6444.5 | 174.3 |
 | | iEDA WL | 1,044,588,360 | -4.7697 | -6122.9 | 137.6 |
-| | iEDA timing | **1,165,285,488** | **-4.1406** | **-3936.0** | **150.6** |
+| | iEDA timing | **1,044,703,203** | **-4.4024** | **-5958.9** | **144.9** |
 
 （加粗为 iEDA timing 行，便于和 Innovus timing 比较。）
 
-## 3. 结论
+## 3. 结论（v2，clock-net fix + hold guard 后）
 
-1. **timing-driven 口径已补上**，四设计均跑通：iEDA timing GP 成功启用
-   iSTA + timing net weight，且 placement 无 UNPLACED 残留。
-2. s1238 / apb4_timer：iEDA timing 相对 iEDA WL 同时改善 WNS/TNS，
-   HPWL 代价 0.64%~1.0%，并优于 Innovus timing。
-3. picorv32：iEDA timing 反而比 iEDA WL 差（WNS -0.385ns，HPWL +7.6%），
-   但仍优于 Innovus timing 0.91ns。
-4. aes：iEDA timing 相对 iEDA WL 大幅改善 TNS（-6123 → -3936），
-   但 WNS 仍落后 Innovus timing 0.90ns，且 HPWL 代价 11.6%。
-5. Innovus timing 在 s1238 / aes 上按统一 HPWL-RC 尺子甚至比 Innovus WL 差；
-   这是不同工具内部时序模型差异，不是结论说 Innovus timing 无用。
+1. **timing-driven 口径已补上且 hold 问题已修复**。根因是 timing 初始化把
+   clock net 标记为 dont-care/weight=0，GP 不再约束时钟网跨度，导致
+   propagated-clock 评估下 hold/skew 恶化。现在 clock net 保留在 HPWL 目标中，
+   timing 权重更新跳过 clock net。
+2. 四个设计的 hold WNS 全部回正：aes 从 -1.008ns 修到 +0.319ns，
+   picorv32 从 -0.353ns 修到 +0.383ns。
+3. s1238 / apb4：timing 同时改善 WNS/TNS，HPWL 代价仅 0.09%~1.35%。
+4. picorv32：timing 相对 WL 只差 0.026ns WNS，TNS 改善 9.0%，HPWL 代价 0.64%。
+5. aes：timing 相对 WL 改善 0.367ns WNS、164ns TNS，HPWL 代价仅 0.01%；
+   但 WNS 仍落后 Innovus timing 1.17ns，属于下一步 setup 权重调优空间。
+6. 旧版 timing 以 11.6% HPWL 代价换 setup 的做法被判定为不划算，已用
+   上述健康版本取代。
 
-**当前判断**：timing mode 已从“配置不可达”变为可运行、可比较；但 timing
-net weight 仍是一把粗刀：小型设计受益，大型设计需要再做权重/阈值调优。
+**当前判断**：timing mode 已可用且 hold 安全；大设计 setup 收敛仍需调优。
 
 ## 4. timing 会话等价性
 
