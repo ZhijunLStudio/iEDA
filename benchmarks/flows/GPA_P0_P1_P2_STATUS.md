@@ -21,13 +21,17 @@
 3. picorv32 full-netlist 在 overflow 约 0.117~0.120 会 plateau/divergence；
    solver 现在会接受 target_overflow*1.2 内的 best-rollback placement，
    不再丢弃事务。picorv32 600 次 WL run 已直接产生有效 DEF。
-4. 局部 GP stage chain：
-   - apb4_timer longnet chain 最终 def HPWL 15,595,418，优于 global chain
-     15,715,072（-0.76%）；
-   - picorv32 chain 与 global 完全一致；
-   - s1238 chain 比 global 略差；
-   - aes chain 待最终汇总。
-   结论：局部 GP 是可选候选，不是无条件提升；stage-adaptive 机制已可复现。
+4. 局部 GP stage chain（fixed longnet）最终结果：
+   - apb4_timer def HPWL 15,595,418，优于 global 15,715,072（-0.76%）；
+   - s1238 def HPWL 5,982,121，比 global 5,957,257 差 +0.42%；
+   - picorv32 与 global 完全一致；
+   - aes def HPWL 689,140,722，比 global 665,002,127 差 +3.6%。
+   per-stage multi-scope chain 结果类似（apb4 -0.37%，s1238 持平）。
+   s1238 parent400 的 local 参数扫描（active=20..200、hop=1..3、
+   hotspot ratio=0.05..0.4、penalty=0/2/5）全部 right_better/incomparable，
+   说明 local GP 在收敛期没有优势；早期 local 可被接受，但对最终 HPWL
+   影响很小。结论：当前 local GP 是安全候选，不是无条件提升，后续应
+   从“梯度乘系数”升级为带局部密度目标/局部回退的二次优化。
 
 ## P2：大设计 + 全流程（进行中）
 
