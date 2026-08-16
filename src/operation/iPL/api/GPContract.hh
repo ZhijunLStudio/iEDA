@@ -264,6 +264,8 @@ struct GPRunRequest
   float init_density_penalty = -1.0F;
   float min_phi_coef = -1.0F;
   float max_phi_coef = -1.0F;
+  // kStart-only congestion-effort override (-1 = keep configured value).
+  int32_t congestion_effort = -1;
 };
 
 struct GPRunResult

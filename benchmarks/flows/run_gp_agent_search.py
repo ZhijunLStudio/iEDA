@@ -83,6 +83,7 @@ def main():
     ap.add_argument("--hotspot-ratio", type=float, default=0.2)
     ap.add_argument("--halo-hops", type=int, default=2)
     ap.add_argument("--halo-coeff", type=float, default=0.5)
+    ap.add_argument("--congestion", type=int, default=0, help="start parents with congestion effort enabled")
     args = ap.parse_args()
 
     case_root = Path(args.case_root or f"{PLV_CASES_ROOT}/{args.design}")
@@ -94,8 +95,9 @@ def main():
 
     # ---------- 1. parent checkpoints ----------
     parent_cmds = []
+    congestion_flag = " -congestion_effort 1" if args.congestion else ""
     for p in args.parents:
-        parent_cmds.append(f"placer_run_gp -mode start -iterations {p} -seed {args.seed} -report_route_util 1")
+        parent_cmds.append(f"placer_run_gp -mode start -iterations {p} -seed {args.seed}{congestion_flag} -report_route_util 1")
         parent_cmds.append(f"file copy -force {shlex.quote(str(workdir / 'pl/gp_session_checkpoint.json'))} "
                            f"{shlex.quote(str(workdir / f'parent_{p}.json'))}")
         parent_cmds.append(f"file copy -force {shlex.quote(str(workdir / 'pl/gp_grid_report.json'))} "

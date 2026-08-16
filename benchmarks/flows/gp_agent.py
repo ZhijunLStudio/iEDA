@@ -142,6 +142,7 @@ def common_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--halo-coeff", type=float, default=0.5)
     p.add_argument("--halo-hops", type=int, default=2)
     p.add_argument("--target-density", type=float, default=-1.0)
+    p.add_argument("--congestion-effort", type=int, default=-1)
     p.add_argument("--report-route-util", type=int, default=1)
     return p
 
@@ -173,6 +174,14 @@ def cmd_start(args: argparse.Namespace) -> int:
     cmd = [f"placer_run_gp -mode start -iterations {args.iterations} -seed {args.seed}"]
     if args.target_density > 0:
         cmd[-1] += f" -target_density {args.target_density}"
+    if args.init_density_penalty >= 0:
+        cmd[-1] += f" -init_density_penalty {args.init_density_penalty}"
+    if args.min_phi_coef >= 0:
+        cmd[-1] += f" -min_phi_coef {args.min_phi_coef}"
+    if args.max_phi_coef >= 0:
+        cmd[-1] += f" -max_phi_coef {args.max_phi_coef}"
+    if args.congestion_effort >= 0:
+        cmd[-1] += f" -congestion_effort {args.congestion_effort}"
     if args.report_route_util:
         cmd[-1] += " -report_route_util 1"
     rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmd, def_save=True)
@@ -349,6 +358,10 @@ def main() -> int:
                 (("--halo-coeff",), {"type": float, "default": 0.5}),
                 (("--halo-hops",), {"type": int, "default": 2}),
                 (("--target-density",), {"type": float, "default": -1.0}),
+                (("--init-density-penalty",), {"type": float, "default": -1.0}),
+                (("--min-phi-coef",), {"type": float, "default": -1.0}),
+                (("--max-phi-coef",), {"type": float, "default": -1.0}),
+                (("--congestion-effort",), {"type": int, "default": -1}),
                 (("--report-route-util",), {"type": int, "default": 1}),
                 (("--overflow-penalty",), {"type": float, "default": 0.0}),
             ]:

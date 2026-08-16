@@ -262,6 +262,9 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
   auto* max_phi_option = new TclDoubleOption("-max_phi_coef", 1, -1.0);
   addOption(max_phi_option);
 
+  auto* congestion_effort_option = new TclIntOption("-congestion_effort", 1, -1);
+  addOption(congestion_effort_option);
+
   auto* checkpoint_option = new TclStringOption("-checkpoint", 1, nullptr);
   addOption(checkpoint_option);
 
@@ -424,6 +427,10 @@ unsigned CmdPlacerRunGP::exec()
   TclOption* max_phi_option = getOptionOrArg("-max_phi_coef");
   if (max_phi_option->is_set_val()) {
     request.max_phi_coef = static_cast<float>(max_phi_option->getDoubleVal());
+  }
+  TclOption* congestion_effort_option = getOptionOrArg("-congestion_effort");
+  if (congestion_effort_option->is_set_val()) {
+    request.congestion_effort = congestion_effort_option->getIntVal();
   }
   TclOption* checkpoint_option = getOptionOrArg("-checkpoint");
   if (checkpoint_option->is_set_val()) {
