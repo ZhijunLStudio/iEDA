@@ -67,10 +67,15 @@ python3 benchmarks/flows/run_gp_agent_search.py \
 - B 的四个设计均完成 `-noPrePlaceOpt` 对照，结果写于
   `benchmarks/results/innovus_gp_compare_nodel/<design>/result.json`
   （该 results 目录被 `.gitignore` 忽略，不提交）。
-- timing-driven 口径已完成，详见 `benchmarks/flows/GPA_TIMING_COMPARISON.md`。
-  关键结论：s1238 / apb4 上 iEDA timing GP 同时改善 WNS/TNS；picorv32 上
-  timing 权重使 HPWL 代价过大且 WNS 回退；aes 上 TNS 大幅改善但 WNS 仍
-  落后 Innovus timing。大设计 timing 权重还需后续调优。
+- timing-driven 口径已完成并修复 hold 问题，详见
+  `benchmarks/flows/GPA_TIMING_COMPARISON.md`。关键结论：clock net 不再
+  dont-care 后，四个设计 hold WNS 全部回正；timing 模式 HPWL 代价降至
+  0.01%~1.35%，picorv32 WNS 回退从 0.385ns 缩到 0.026ns。
+- P0-P2 执行状态见 `benchmarks/flows/GPA_P0_P1_P2_STATUS.md`：
+  congestion 搜索四设计 ✅；picorv32 near-target divergence 修复 ✅；
+  局部 GP stage chain 机制 ✅（apb4 -0.76%，其余持平/略差）；
+  superblue16/asic_top 大设计 GP smoke ✅；GP+LG+DP 四设计 ✅；
+  s1238 iRT route smoke ✅（DRC 未清）。
 - 相关提交：
   `4bd849c` 搜索脚本/批量脚本/续跑文档；
   `8b62052` 批量脚本数组默认值修复；
