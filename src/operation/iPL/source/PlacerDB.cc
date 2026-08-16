@@ -678,7 +678,13 @@ namespace ipl {
     float cur_util = this->obtainUtilization();
     float user_target_density = this->get_placer_config()->get_nes_config().get_target_density();
     float setting_util = user_target_density;
-    if (cur_util > 0.0f && cur_util < 0.65f) {
+    // The legacy config surface ships target_density=0.8 for every design. For
+    // low-utilization designs that legacy value was historically mapped to
+    // 0.60. Preserve that compatibility default, but honor any explicit
+    // agent/user request (0.7, 0.9, ...) so the density knob is actually
+    // meaningful. The only hard rule is that a target below the physical
+    // utilization cannot converge.
+    if (cur_util > 0.0f && cur_util < 0.65f && std::fabs(user_target_density - 0.8f) < 1e-6f) {
       setting_util = 0.60f;
     } else if (user_target_density < cur_util) {
       setting_util = cur_util + 0.001f;
