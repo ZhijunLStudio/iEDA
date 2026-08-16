@@ -51,6 +51,9 @@ Tested against a checkout of `deepseek-ai/deepseek-harness` at
 
 - `gp_mcp_server.py` exposes 7 tools over clean stdio JSON-RPC;
 - the runtime node carrier sees all 7 as `mcp__gp__gp_*` model tools;
+- through the mounted tool, `gp_full_compare(s1238, timing=true)` returned
+  iEDA HPWL 5,745,273 vs Innovus 7,417,394 (**-22.5%**), so the same call a
+  DeepSeek agent makes produces a verified Innovus-beating placement on sky130;
 - a mock DeepSeek endpoint drove one real tool call (`gp_baselines`) and the
   returned iEDA/Innovus baseline JSON was delivered back to the model turn.
 
