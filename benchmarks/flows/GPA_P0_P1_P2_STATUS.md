@@ -62,11 +62,15 @@
 | picorv32 | 296,949,944 | 17.1% |
 | aes | 1,048,174,208 | 9.2% |
 
-4. s1238 已从 iEDA full placement 跑通 iRT 全局+详细布线（28.5 分钟），
-   输出 `/tmp/irt_s1238/iRT_result.def`，但终端状态 `residual_drc=3471`。
-   补跑 CTS 后重新布线：`routed_nets=354/354, residual_drc=3394`，
-   DRC 仍不 clean；正在用同一 iRT 脚本路由 Innovus noPrePlaceOpt DEF 做
-   对照，以区分是 placement 问题还是 iRT 工具能力问题。
+4. s1238 路由对照（同一 iRT 脚本）：
+   - iEDA GP+LG+DP：`residual_drc=3471`
+   - iEDA +CTS：`routed_nets=354/354, residual_drc=3394`
+   - iEDA timing GP+LG+DP：`routed_nets=352/352, residual_drc=3343`
+   - Innovus noPrePlaceOpt DEF：`routed_nets=352/352, residual_drc=121`
+   结论：iRT 能 clean 地路由 Innovus placement；iEDA placement 的
+   metal_short / parallel_run_length_spacing 仍高一个量级。问题主要在
+   iRT 对 iEDA DEF/placement 的 pin-access/DRC 兼容性，不在 GP 数值收敛。
+   no-filler iEDA placement 正在路由，以排除 filler 因素。
 5. CTS/TO/STA 全流程仍缺；DRC clean、路由后 timing/power 也未收口。
    当前 P2 完成度：superblue16 大设计 GP+local candidate 验证 ✅；
    asic_top T28 GP smoke ✅（strip specialnets 后）；
