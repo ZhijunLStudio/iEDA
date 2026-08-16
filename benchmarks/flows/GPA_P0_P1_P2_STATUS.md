@@ -30,8 +30,16 @@
    s1238 parent400 的 local 参数扫描（active=20..200、hop=1..3、
    hotspot ratio=0.05..0.4、penalty=0/2/5）全部 right_better/incomparable，
    说明 local GP 在收敛期没有优势；早期 local 可被接受，但对最终 HPWL
-   影响很小。结论：当前 local GP 是安全候选，不是无条件提升，后续应
-   从“梯度乘系数”升级为带局部密度目标/局部回退的二次优化。
+   影响很小。结论：当前 local GP 是安全候选，不是无条件提升。
+
+   已实现 scoped density-target screen（`-scope_density_target` /
+   `-scope_density_ratio`），候选 batch 内有效、checkpoint 边界前清除。
+   扫描结果：s1238/apb4_timer parent400 最热 region，target=0.7/0.8/0.9
+   均出现相同 Pareto tradeoff：local HPWL 降 0.7~1.1%，但 overflow 从
+   ~0.10/0.19 升到 ~0.13/0.21，candidate 判定 right_better；picorv32
+   target=0.8 是 local 双劣。密度屏幕作为候选已可用，但不能单独产出
+   Pareto 赢家；下一级应把密度屏幕与 hotspot movement scope 联合搜索，
+   而不是作为独立开关。
 
 ## P2：大设计 + 全流程（进行中）
 
