@@ -11,12 +11,15 @@ EVAL=ROOT/'benchmarks/flows/def_hpwl_eval.py'
 LEF=FOUNDRY/'lef/sky130_fd_sc_hd_merged.lef'
 DESIGNS=['s1238','apb4_timer','picorv32','aes']
 
-def run_one(design, result_root):
+def run_one(design, result_root, timing=False):
     case=CASES/design; work=result_root/design
     work.mkdir(parents=True, exist_ok=True)
     sdc=next(case.glob('*.sdc'))
     cfg=json.load(open(case/'iEDA_config/pl_default_config.json'))['PL']
     cfg['num_threads']=1
+    if timing:
+        cfg['is_timing_effort']=1
+        cfg['GP']['Nesterov']['opt_overflow_list']=[0.15,0.20,0.25,0.30]
     (work/'pl_clean_config.json').write_text(json.dumps({'PL':cfg},indent=2))
     # derive unplaced full-netlist DEF from the WL noPrePlaceOpt Innovus reference
     src=(case/'innovus_placed_nodel.def').read_text()
@@ -69,7 +72,8 @@ flow_exit
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--designs',nargs='+',default=DESIGNS)
     ap.add_argument('--result-root',default=str(ROOT/'benchmarks/results/ipl_full_compare'))
+    ap.add_argument('--timing',action='store_true',help='enable timing-driven GP before LG/DP')
     args=ap.parse_args(); root=Path(args.result_root)
-    for d in args.designs: run_one(d,root)
+    for d in args.designs: run_one(d,root,args.timing)
 
 if __name__=='__main__': raise SystemExit(main())
