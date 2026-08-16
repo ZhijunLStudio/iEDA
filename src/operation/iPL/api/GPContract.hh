@@ -222,6 +222,9 @@ struct GPRunRequest
   GPRunMode mode = GPRunMode::kStart;
   int32_t accepted_iterations = 20;
   bool random_init = true;          // kStart only: run RandomPlace before building the session
+  // kStart only with random_init=false: blend each solver step toward the
+  // session-start coordinates. 0 = unconstrained re-linearize, 1 = freeze.
+  float seed_anchor_strength = 0.0F;
   int32_t seed = 1000;              // kStart only: RandomPlace seed (default preserves legacy determinism)
   // kStart only: density target override, the agent-facing knob trading
   // wirelength/timing (loose) against density/congestion (tight). Negative =

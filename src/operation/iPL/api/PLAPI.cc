@@ -1031,6 +1031,11 @@ bool validateGPRunScope(const GPRunRequest& request, std::string* reason)
     *reason = "scope_density_ratio must be in [0,1]";
     return false;
   }
+  if (!std::isfinite(request.seed_anchor_strength) || request.seed_anchor_strength < 0.0F
+      || request.seed_anchor_strength > 1.0F) {
+    *reason = "seed_anchor_strength must be in [0,1]";
+    return false;
+  }
   switch (request.scope_mode) {
     case GPRunScopeMode::kGlobal:
       return true;
@@ -1309,6 +1314,9 @@ GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
   }
   _gp_session_state->session
       = std::make_unique<NesterovPlace>(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());
+  if (request.seed_anchor_strength > 0.0F) {
+    _gp_session_state->session->setSeedAnchorStrength(request.seed_anchor_strength);
+  }
   _gp_session_state->session->printNesterovDatabase();
   _gp_session_state->record_offset = 0;
   _gp_session_state->base_revision = PlacerDBInst.get_revision();
@@ -1411,6 +1419,9 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
 
   _gp_session_state->session
       = std::make_unique<NesterovPlace>(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());
+  if (request.seed_anchor_strength > 0.0F) {
+    _gp_session_state->session->setSeedAnchorStrength(request.seed_anchor_strength);
+  }
   _gp_session_state->session->printNesterovDatabase();
   if (!_gp_session_state->session->restoreCheckpoint(checkpoint)) {
     PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction);
@@ -1487,6 +1498,9 @@ GPRunResult PLAPI::gpRunRestore(const GPRunRequest& request)
 
   _gp_session_state->session
       = std::make_unique<NesterovPlace>(PlacerDBInst.get_placer_config(), &PlacerDBInst, isJsonOutputEnabled());
+  if (request.seed_anchor_strength > 0.0F) {
+    _gp_session_state->session->setSeedAnchorStrength(request.seed_anchor_strength);
+  }
   _gp_session_state->session->printNesterovDatabase();
   if (!_gp_session_state->session->restoreCheckpoint(checkpoint)) {
     PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction);

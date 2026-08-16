@@ -175,6 +175,10 @@ def cmd_start(args: argparse.Namespace) -> int:
     config = Path(args.config)
     foundry = Path(args.foundry_dir)
     cmd = [f"placer_run_gp -mode start -iterations {args.iterations} -seed {args.seed}"]
+    if args.random_init == 0:
+        cmd[-1] += " -random_init 0"
+    if args.seed_anchor_strength > 0:
+        cmd[-1] += f" -seed_anchor_strength {args.seed_anchor_strength}"
     if args.target_density > 0:
         cmd[-1] += f" -target_density {args.target_density}"
     if args.init_density_penalty >= 0:
@@ -354,6 +358,8 @@ def main() -> int:
                 (("--foundry-dir",), {"default": str(REPO_ROOT / "scripts/foundry/sky130")}),
                 (("--iterations",), {"type": int, "default": 20}),
                 (("--seed",), {"type": int, "default": 1000}), (("--checkpoint",), {}),
+                (("--random-init",), {"type": int, "default": 1}),
+                (("--seed-anchor-strength",), {"type": float, "default": 0.0}),
                 (("--scope",), {"choices": ["global", "hotspot", "random", "instances", "region", "longnet"], "default": "global"}),
                 (("--scope-active-ratio",), {"type": float, "default": 0.2}),
                 (("--scope-active-count",), {"type": int, "default": 100}),

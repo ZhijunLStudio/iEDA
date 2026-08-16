@@ -162,6 +162,7 @@ class NesterovPlace
   // global density field pushes cells out (soft steering, nothing frozen).
   // clearRegionDensityTargets() restores the global (1.0) path, which is
   // bit-identical to never having set a screen.
+  void setSeedAnchorStrength(float strength) { _seed_anchor_strength = std::clamp(strength, 0.0F, 1.0F); }
   void setRegionDensityTargets(const std::vector<Rectangle<int32_t>>& regions, float target);
   void clearRegionDensityTargets();
   // Screen the hottest overflowing bins (top_ratio fraction) with `target`.
@@ -221,6 +222,10 @@ class NesterovPlace
   float _final_step_length = 0.0F;
   float _final_gradient_norm = 0.0F;
   float _final_route_util = 0.0F;
+  // Experimental seed-anchor screen: blend each solver step toward the
+  // session-start coordinates. 0 disables, 1 freezes at the seed.
+  float _seed_anchor_strength = 0.0F;
+  std::vector<Point<int32_t>> _seed_anchor_coord_list;
 
   void resetOverflowRecordList();
   void resetHPWLRecordList();

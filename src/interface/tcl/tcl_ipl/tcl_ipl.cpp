@@ -247,6 +247,9 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
   auto* random_init_option = new TclIntOption("-random_init", 1, 1);
   addOption(random_init_option);
 
+  auto* seed_anchor_strength_option = new TclDoubleOption("-seed_anchor_strength", 1, 0.0);
+  addOption(seed_anchor_strength_option);
+
   auto* seed_option = new TclIntOption("-seed", 1, 1000);
   addOption(seed_option);
 
@@ -413,6 +416,10 @@ unsigned CmdPlacerRunGP::exec()
   TclOption* random_init_option = getOptionOrArg("-random_init");
   if (random_init_option->is_set_val()) {
     request.random_init = (random_init_option->getIntVal() != 0);
+  }
+  TclOption* seed_anchor_strength_option = getOptionOrArg("-seed_anchor_strength");
+  if (seed_anchor_strength_option->is_set_val()) {
+    request.seed_anchor_strength = static_cast<float>(seed_anchor_strength_option->getDoubleVal());
   }
   TclOption* seed_option = getOptionOrArg("-seed");
   if (seed_option->is_set_val()) {

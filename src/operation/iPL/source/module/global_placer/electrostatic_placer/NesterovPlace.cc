@@ -1517,6 +1517,15 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
 
         // Local scope (M4): freeze context (coeff 0) at the batch-start position
         // and scale halo (0<coeff<1) movement; active (coeff 1) passes through.
+        if (!_seed_anchor_coord_list.empty()) {
+          const float anchor_strength = _seed_anchor_strength;
+          const auto& anchor = _seed_anchor_coord_list[i];
+          next_coordi.set_x(anchor.get_x() + static_cast<int32_t>(anchor_strength * (next_coordi.get_x() - anchor.get_x())));
+          next_coordi.set_y(anchor.get_y() + static_cast<int32_t>(anchor_strength * (next_coordi.get_y() - anchor.get_y())));
+          next_slp_coordi.set_x(anchor.get_x() + static_cast<int32_t>(anchor_strength * (next_slp_coordi.get_x() - anchor.get_x())));
+          next_slp_coordi.set_y(anchor.get_y() + static_cast<int32_t>(anchor_strength * (next_slp_coordi.get_y() - anchor.get_y())));
+        }
+
         if (!_move_coeff_list.empty()) {
           const float coeff = _move_coeff_list[i];
           if (coeff <= 0.0F) {
@@ -1841,6 +1850,15 @@ bool NesterovPlace::initializeSession()
 {
   resetRunState();
   _placable_inst_list = this->obtianPlacableNesInstanceList();
+  if (_seed_anchor_strength > 0.0F) {
+    _seed_anchor_coord_list.clear();
+    _seed_anchor_coord_list.reserve(_placable_inst_list.size());
+    for (auto* inst : _placable_inst_list) {
+      _seed_anchor_coord_list.emplace_back(inst->get_density_center_coordi());
+    }
+  } else {
+    _seed_anchor_coord_list.clear();
+  }
   if (_placable_inst_list.empty()) {
     finalizeResult(NesterovPlaceOutcome::kInvalidMetric, 0, 0, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
                    "global placement requires at least one movable instance");
