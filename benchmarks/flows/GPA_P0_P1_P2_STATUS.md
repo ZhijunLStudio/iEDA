@@ -80,6 +80,17 @@
    - target_density=0.55/0.7 的初始 GR overflow 反而更高。
    另修复 `adaptTargetDensity()`：util<0.65 时不再强制把显式
    target_density 改成 0.60，Agent 的密度旋钮现在真正生效。
+
+5. iRT DRC 根因控制实验（s1238）：
+   - 把 Innovus DEF 的 COMPONENTS 段移植进 iEDA DEF 后，iRT 输出
+     `residual_drc=111`（Innovus 原 DEF 121）；
+   - 把 Innovus 的 SPECIALNETS 段移植进 iEDA DEF，结果仍是 2615。
+   因此 DRC 差的根因是 **placement 坐标分布**，不是 iRT DEF 解析。
+   后续新增 `seed_anchor_strength`：以 Innovus placement 为 seed 做
+   `random_init=0` GP 时，每步向 seed 坐标回拉 alpha 比例。
+   初步 iRT 结果：alpha=0.1 时 residual_drc=1874（congestion+met5 为 2615），
+   alpha=0.05/0.15 正在路由中；对应 def HPWL 6.56M，仍比 Innovus 7.42M
+   好 11.6%。
 5. CTS/TO/STA 全流程仍缺；DRC clean、路由后 timing/power 也未收口。
    当前 P2 完成度：superblue16 大设计 GP+local candidate 验证 ✅；
    asic_top T28 GP smoke ✅（strip specialnets 后）；
