@@ -244,6 +244,15 @@ struct GPRunRequest
   int32_t scope_region_ll_y = 0;
   int32_t scope_region_ur_x = 0;
   int32_t scope_region_ur_y = 0;
+  // Local density screen (L1): effective grid capacity factor inside the
+  // selected scope. 1.0 keeps the global density model; values in (0,1) make
+  // the scoped grids harder/easier? A value below 1.0 reduces the effective
+  // capacity, pushing cells out of the scoped region. Applied per batch and
+  // cleared before the checkpoint boundary, so it never leaks.
+  float scope_density_target = 1.0F;
+  // kHotspot only: apply scope_density_target to the top ratio of overflowing
+  // bins. 0 keeps the movement-scope-only behavior.
+  float scope_density_ratio = 0.0F;
 
   // Observation: max overflowing bins returned in GPRunResult.grid_report.
   // The full top-N report is also written to <output>/pl/gp_grid_report.json.

@@ -292,6 +292,12 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
   auto* scope_region_option = new TclStringOption("-scope_region", 1, nullptr);
   addOption(scope_region_option);
 
+  auto* scope_density_target_option = new TclDoubleOption("-scope_density_target", 1, 1.0);
+  addOption(scope_density_target_option);
+
+  auto* scope_density_ratio_option = new TclDoubleOption("-scope_density_ratio", 1, 0.0);
+  addOption(scope_density_ratio_option);
+
   auto* report_top_n_option = new TclIntOption("-report_top_n", 1, 64);
   addOption(report_top_n_option);
 
@@ -482,6 +488,14 @@ unsigned CmdPlacerRunGP::exec()
       }
       request.scope_instance_names.push_back(name.substr(first, last - first + 1));
     }
+  }
+  TclOption* scope_density_target_option = getOptionOrArg("-scope_density_target");
+  if (scope_density_target_option->is_set_val()) {
+    request.scope_density_target = static_cast<float>(scope_density_target_option->getDoubleVal());
+  }
+  TclOption* scope_density_ratio_option = getOptionOrArg("-scope_density_ratio");
+  if (scope_density_ratio_option->is_set_val()) {
+    request.scope_density_ratio = static_cast<float>(scope_density_ratio_option->getDoubleVal());
   }
   TclOption* scope_region_option = getOptionOrArg("-scope_region");
   if (scope_region_option->is_set_val()) {

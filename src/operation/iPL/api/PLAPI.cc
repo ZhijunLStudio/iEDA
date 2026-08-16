@@ -1021,6 +1021,16 @@ bool validateGPRunScope(const GPRunRequest& request, std::string* reason)
     *reason = "scope_halo_hops must be in [1,16]";
     return false;
   }
+  if (!std::isfinite(request.scope_density_target) || request.scope_density_target <= 0.0F
+      || request.scope_density_target > 1.0F) {
+    *reason = "scope_density_target must be in (0,1]";
+    return false;
+  }
+  if (!std::isfinite(request.scope_density_ratio) || request.scope_density_ratio < 0.0F
+      || request.scope_density_ratio > 1.0F) {
+    *reason = "scope_density_ratio must be in [0,1]";
+    return false;
+  }
   switch (request.scope_mode) {
     case GPRunScopeMode::kGlobal:
       return true;
@@ -1068,6 +1078,9 @@ bool applyGPRunScope(NesterovPlace& session, const GPRunRequest& request, std::s
       return true;
     case GPRunScopeMode::kHotspot:
       session.buildHotOverflowScope(request.scope_active_ratio, request.scope_halo_coeff, request.scope_halo_hops);
+      if (request.scope_density_target < 1.0F && request.scope_density_ratio > 0.0F) {
+        session.buildHotOverflowDensityTargets(request.scope_density_ratio, request.scope_density_target);
+      }
       return true;
     case GPRunScopeMode::kRandom:
       session.buildRandomScope(static_cast<size_t>(request.scope_active_count), request.scope_halo_coeff, request.scope_seed,
@@ -1083,6 +1096,12 @@ bool applyGPRunScope(NesterovPlace& session, const GPRunRequest& request, std::s
       session.buildRegionScope(
           Rectangle<int32_t>(request.scope_region_ll_x, request.scope_region_ll_y, request.scope_region_ur_x, request.scope_region_ur_y),
           request.scope_halo_coeff, request.scope_halo_hops);
+      if (request.scope_density_target < 1.0F) {
+        session.setRegionDensityTargets(
+            {Rectangle<int32_t>(request.scope_region_ll_x, request.scope_region_ll_y, request.scope_region_ur_x,
+                                request.scope_region_ur_y)},
+            request.scope_density_target);
+      }
       return true;
     case GPRunScopeMode::kLongNet:
       session.buildLongNetScope(static_cast<size_t>(request.scope_active_count), request.scope_halo_coeff,

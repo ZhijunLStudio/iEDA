@@ -1801,12 +1801,14 @@ if (iter_num - _last_perturb_iter > 50 && checkPlateau(50, 0.01)) {
     finalizeResult(converged ? NesterovPlaceOutcome::kConverged : NesterovPlaceOutcome::kOverflowTargetMiss, iter_num, _prev_hpwl,
                    _sum_overflow, _final_gradient_norm, _final_step_length, _nes_database->_density_penalty, _final_route_util,
                    converged ? "global placement converged" : "global placement stopped before reaching target overflow");
+    clearRegionDensityTargets();
     break;
   }
 
   _finished_iter = iter_num;
   }
 
+  clearRegionDensityTargets();
   _current_iter = _finished_iter;
   return (_last_result.outcome != NesterovPlaceOutcome::kNotRun) ? GPAdvanceOutcome::kFinished : GPAdvanceOutcome::kBudgetReached;
 }
