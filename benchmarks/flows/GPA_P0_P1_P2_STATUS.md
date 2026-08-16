@@ -70,7 +70,7 @@
    结论：iRT 能 clean 地路由 Innovus placement；iEDA placement 的
    metal_short / parallel_run_length_spacing 仍高一个量级。问题主要在
    iRT 对 iEDA DEF/placement 的 pin-access/DRC 兼容性，不在 GP 数值收敛。
-   no-filler iEDA placement 正在路由，以排除 filler 因素。
+   no-filler iEDA placement 路由结果同为 `residual_drc=3471`，已排除 filler。
 5. CTS/TO/STA 全流程仍缺；DRC clean、路由后 timing/power 也未收口。
    当前 P2 完成度：superblue16 大设计 GP+local candidate 验证 ✅；
    asic_top T28 GP smoke ✅（strip specialnets 后）；
