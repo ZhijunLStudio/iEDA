@@ -77,6 +77,9 @@ s1238 timing 配置，单线程 seed=42：
 说明 timing 模式下的 checkpoint/resume 数值路径可复现；跨工艺角/大设计等价
 尚未做。
 
+clock-net fix + hold guard 版本已复测：`start(380)` vs
+`start(340)+resume(40)` DEF 仍逐字节一致，md5 不变。
+
 ## 5. 前置 bug 修复
 
 timing 模式初始化时 `StaIO::set_instance_flip_flop()` 会对 filler/endcap 等
