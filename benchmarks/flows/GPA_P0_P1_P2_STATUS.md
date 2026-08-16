@@ -35,7 +35,9 @@
    - GP start 20 iterations 成功，内部 HPWL 54,420,887,545；
    - `candidate longnet` 20 iterations 成功，verdict=right_better，安全回退 global；
    - checkpoint 约 746MB，验证了当前 JSON checkpoint 能承载百万级设计。
-2. asic_top T28（约 321k instances）GP smoke 正在跑（Specialnet 解析较慢）。
+2. asic_top T28（约 321k instances）GP smoke 受阻：iDB 解析 DEF Specialnet 阶段
+   超过 25 分钟未完成/进程退出，未产出 placement DEF。当前 P2 大设计验证
+   以 superblue16 为可信证据，asic_top 待 iDB 解析优化后补做。
 3. GP -> LG -> DP 全 iPL 放置四设计完成：
 
 | design | iEDA full HPWL | Innovus noPrePlaceOpt | iEDA 优势 |
@@ -45,5 +47,9 @@
 | picorv32 | 297,009,860 | 358,263,695 | 17.1% |
 | aes | 1,048,273,641 | 1,154,174,869 | 9.2% |
 
-4. s1238 iRT route 正在跑，完成后补 DRC/route 口径。
-5. CTS/TO/STA 全流程仍未跑；当前 P2 只完成 placement flow + 大设计 GP 机制验证。
+4. s1238 已从 iEDA full placement 跑通 iRT 全局+详细布线（28.5 分钟），
+   输出 `/tmp/irt_s1238/iRT_result.def`，但终端状态 `residual_drc=3471`，
+   尚未 DRC clean。至少证明 GP->LG->DP->iRT 流程可跑通。
+5. CTS/TO/STA 全流程仍缺；DRC clean、路由后 timing/power 也未收口。
+   当前 P2 完成度：superblue16 大设计 GP+local candidate 验证 ✅；
+   GP+LG+DP 四设计 ✅；s1238 route smoke ✅（DRC 未清）；asic_top ❌。
