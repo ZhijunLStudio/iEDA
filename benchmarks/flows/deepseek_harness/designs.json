@@ -1,0 +1,42 @@
+{
+  "s1238": {
+    "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/s1238",
+    "input_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/s1238/ieda_in_unplaced.def",
+    "pl_config": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/s1238/pl_clean_config.json",
+    "innovus_def": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/s1238/innovus_placed_nodel.def",
+    "innovus_hpwl": 7417394,
+    "ieda_best_hpwl": 5745273,
+    "pdk": "sky130",
+    "notes": "timing GP+LG+DP full placement"
+  },
+  "apb4_timer": {
+    "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/apb4_timer",
+    "input_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/apb4_timer/ieda_in_unplaced.def",
+    "pl_config": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/apb4_timer/pl_clean_config.json",
+    "innovus_def": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/apb4_timer/innovus_placed_nodel.def",
+    "innovus_hpwl": 20389663,
+    "ieda_best_hpwl": 17535062,
+    "pdk": "sky130",
+    "notes": "timing GP+LG+DP full placement"
+  },
+  "picorv32": {
+    "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/picorv32",
+    "input_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/picorv32/ieda_in_unplaced.def",
+    "pl_config": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/picorv32/pl_clean_config.json",
+    "innovus_def": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/picorv32/innovus_placed_nodel.def",
+    "innovus_hpwl": 358263695,
+    "ieda_best_hpwl": 296949944,
+    "pdk": "sky130",
+    "notes": "timing GP+LG+DP full placement"
+  },
+  "aes": {
+    "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/aes",
+    "input_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/aes/ieda_in_unplaced.def",
+    "pl_config": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/aes/pl_clean_config.json",
+    "innovus_def": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/aes/innovus_placed_nodel.def",
+    "innovus_hpwl": 1154174869,
+    "ieda_best_hpwl": 1048174208,
+    "pdk": "sky130",
+    "notes": "timing GP+LG+DP full placement"
+  }
+}
