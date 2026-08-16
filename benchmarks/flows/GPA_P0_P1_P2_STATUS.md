@@ -71,6 +71,12 @@
    metal_short / parallel_run_length_spacing 仍高一个量级。问题主要在
    iRT 对 iEDA DEF/placement 的 pin-access/DRC 兼容性，不在 GP 数值收敛。
    no-filler iEDA placement 路由结果同为 `residual_drc=3471`，已排除 filler。
+   额外控制实验：iEDA congestion-effort 全流程 placement 路由后
+   `residual_drc=3058`（初始 GR overflow 从 20 降到 6），说明 congestion
+   mode 能降低但不能消除 iRT DRC；target_density=0.55/0.7 的初始 GR
+   overflow 反而更高。
+   另修复 `adaptTargetDensity()`：util<0.65 时不再强制把显式
+   target_density 改成 0.60，Agent 的密度旋钮现在真正生效。
 5. CTS/TO/STA 全流程仍缺；DRC clean、路由后 timing/power 也未收口。
    当前 P2 完成度：superblue16 大设计 GP+local candidate 验证 ✅；
    asic_top T28 GP smoke ✅（strip specialnets 后）；
