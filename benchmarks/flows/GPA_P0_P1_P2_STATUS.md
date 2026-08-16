@@ -35,9 +35,11 @@
    - GP start 20 iterations 成功，内部 HPWL 54,420,887,545；
    - `candidate longnet` 20 iterations 成功，verdict=right_better，安全回退 global；
    - checkpoint 约 746MB，验证了当前 JSON checkpoint 能承载百万级设计。
-2. asic_top T28（约 321k instances）GP smoke 受阻：iDB 解析 DEF Specialnet 阶段
-   超过 25 分钟未完成/进程退出，未产出 placement DEF。当前 P2 大设计验证
-   以 superblue16 为可信证据，asic_top 待 iDB 解析优化后补做。
+2. asic_top T28（约 851k solver instances，含 filler）GP smoke 已跑通：
+   - 工作绕开 iDB Specialnet 解析瓶颈，先剥离 DEF SPECIALNETS section
+     （GP 不需要电源/地 special routing）；
+   - `placer_run_gp -mode start -iterations 10` 成功，内部 HPWL 6,019,100,220；
+   - 证明 T28/asic_top 也能进入 GP session，但完整 DEF 解析仍待 iDB 优化。
 3. GP -> LG -> DP 全 iPL 放置四设计完成：
 
 | design | iEDA full HPWL | Innovus noPrePlaceOpt | iEDA 优势 |
@@ -52,4 +54,5 @@
    尚未 DRC clean。至少证明 GP->LG->DP->iRT 流程可跑通。
 5. CTS/TO/STA 全流程仍缺；DRC clean、路由后 timing/power 也未收口。
    当前 P2 完成度：superblue16 大设计 GP+local candidate 验证 ✅；
-   GP+LG+DP 四设计 ✅；s1238 route smoke ✅（DRC 未清）；asic_top ❌。
+   asic_top T28 GP smoke ✅（strip specialnets 后）；
+   GP+LG+DP 四设计 ✅；s1238 route smoke ✅（DRC 未清）。
