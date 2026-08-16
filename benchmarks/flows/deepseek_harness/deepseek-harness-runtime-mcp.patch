@@ -1,0 +1,12 @@
+diff --git a/python/sdk-runtime/package.json b/python/sdk-runtime/package.json
+index 89d4b81..22301fa 100644
+--- a/python/sdk-runtime/package.json
++++ b/python/sdk-runtime/package.json
+@@ -46,6 +46,7 @@
+     "@deepseek-ai/dsh-llm-deepseek": "workspace:^",
+     "@deepseek-ai/dsh-llm-pi-ai": "workspace:^",
+     "@deepseek-ai/dsh-llm-retry": "workspace:^",
++    "@deepseek-ai/dsh-mcp-client": "workspace:^",
+     "@deepseek-ai/dsh-home-paths": "workspace:^",
+     "@deepseek-ai/dsh-permission-presets": "workspace:^",
+     "@deepseek-ai/dsh-plan-mode": "workspace:^",
