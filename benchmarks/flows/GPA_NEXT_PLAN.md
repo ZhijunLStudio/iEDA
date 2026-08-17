@@ -15,6 +15,21 @@
 
 ## 2. 要做的 GP 工具（按 2.0 五分面）
 
+Harness 实际暴露 6 个入口工具，内部用 `kind` 枚举分派；下方详细能力仍按
+五分面维护：
+
+```text
+ieda_gp_inspect    kind: status | checkpoints | grid
+ieda_gp_diagnose   kind: hotspots | longnets | unstable
+ieda_gp_propose    kind: regions | region_density | freeze
+ieda_gp_run         kind: start | advance | candidate | local_run
+                          | apply_freeze | apply_region_density
+ieda_gp_verify      kind: delta | lg
+ieda_gp_session     kind: restore | accept | unfreeze | clear_density
+```
+
+
+
 命名约定：文档内用 `gp_*` 简写；DeepSeek Harness 中实际工具名统一为
 `ieda_gp_*`。
 
