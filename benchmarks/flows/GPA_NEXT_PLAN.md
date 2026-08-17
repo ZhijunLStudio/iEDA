@@ -35,11 +35,73 @@
 
 | 工具 | 输入 | 输出 |
 |---|---|---|
-| `gp_propose_scope` | workdir, scope, count/ratio | 将要移动的 active/halo cell 列表 + 选择理由 |
+| `gp_propose_regions` | workdir, priority, top_n, min/max_cell_count, 可选先验 | 具体 bin 区域 + active/halo cell + 原因 + 预测影响 |
 | `gp_propose_region_density` | workdir, region | 建议的 density target + 预测影响 |
 | `gp_propose_freeze` | workdir, region | 建议冻结区域 + 冻结后密度变化预测 |
 
 propose 不改变设计状态，只返回候选和理由。
+
+#### `gp_propose_regions` 契约
+
+Agent 只给“重点看什么”，不给坐标；iEDA 根据当前 bin/网/拥塞/timing
+状态计算出具体区域，Agent 再从返回结果中挑选。
+
+输入：
+
+```json
+{
+  "design": "s1238",
+  "workdir": "/tmp/gp_work",
+  "priority": "density",
+  "top_n": 5,
+  "min_cell_count": 20,
+  "max_cell_count": 200,
+  "preferred_region": "",
+  "avoid_region": ""
+}
+```
+
+`priority` 可选：
+
+- `density`：密度溢出最高的 bin；
+- `congestion`：RUDY 拥塞最高的 bin；
+- `longnet`：HPWL 贡献最大的网和 cell；
+- `timing`：关键时序路径上的 cell；
+- `stability`：最近迭代移动最大的不稳定区域；
+- `mixed`：密度 + 拥塞 + 网长加权。
+
+`preferred_region` / `avoid_region` 是 Agent 给的软先验。iEDA 必须基于
+实际指标生成候选，并在结果中说明候选和先验是否一致。
+
+输出：
+
+```json
+{
+  "regions": [
+    {
+      "id": "region-1",
+      "bin_indices": [23, 55, 56, 87],
+      "bbox": "56879 12325 59352 14790",
+      "active_cell_count": 132,
+      "halo_cell_count": 87,
+      "density_overflow": 0.081,
+      "rudy_route_util": 1.69,
+      "score": 0.82,
+      "reason": "density overflow top bin, merged 4 connected bins",
+      "predicted_hpwl_delta_range": [-0.8, 0.3],
+      "predicted_density_delta_range": [-0.12, -0.03]
+    }
+  ]
+}
+```
+
+区域大小规则：
+
+1. 从最高分 bin 开始，把相邻高分 bin 合并成连通区域；
+2. 合并后 cell 数小于 `min_cell_count`，向外扩一圈 halo；
+3. 合并后 cell 数超过 `max_cell_count`，只保留分数最高的 bin。
+
+这样“不大不小”由数据、上下界决定，不由 Agent 直接猜坐标。
 
 ### apply：执行动作
 
