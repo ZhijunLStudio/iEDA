@@ -58,3 +58,20 @@
 
 因此“所有 PDK 全验证”在当前机器上无法完成，需要补充 PDK 物理库和
 Innovus/第三方参考结果。
+
+
+## 本地 PDK 可用性补充
+
+无需外网下载：本机 `/mnt/usb20t` 已挂载多个用户的 PDK 数据。
+
+- nangate45：
+  - `/mnt/usb20t/PCL-167/data3/taosimin/OpenROAD/test/Nangate45/`
+  - 有 tech/cell LEF、lib、OpenROAD gcd DEF；
+  - 已搭最小 iEDA case `/tmp/nangate45_gcd`；
+  - 直接 GP 随机初始化跑通，392 迭代 overflow=0.0989，internal HPWL=5,070,217，
+    def HPWL=5,850,034；输入 OpenROAD floorplan def HPWL=4,472,593（本配置下 iEDA 差于 OpenROAD 初始布局）。
+- asap7：
+  - `/mnt/usb20t/PCL-155/home/dengqinyi/iFlow/foundry/asap7/`
+  - 有 tech/cell LEF 和 lib；
+  - 尚无可直接用于 iEDA GP 的 DEF/case，需要 iFP floorplan 后再验证。
+- ics55：仍未找到物理 LEF/lib，无法验证。
