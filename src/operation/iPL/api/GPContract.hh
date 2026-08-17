@@ -240,6 +240,10 @@ struct GPRunRequest
   int32_t scope_active_count = 0;    // kRandom: number of random Active instances
   float scope_halo_coeff = 0.5F;     // (0,1) movement scale for one-net-hop neighbors
   int32_t scope_halo_hops = 1;       // net-hop radius of the halo; level h moves at halo_coeff^h
+  // Fraction [0,1) of the batch spent under the local movement mask; the
+  // remaining iterations run with a cleared mask (global repair) so the halo
+  // and context can re-settle before the checkpoint boundary.
+  float scope_anneal_ratio = 0.0F;
   uint32_t scope_seed = 1000;        // kRandom: reproducible Active-set shuffle seed
   std::vector<std::string> scope_instance_names;  // kInstances: seed instance names
   bool scope_region_set = false;       // kRegion: physical rectangle seed

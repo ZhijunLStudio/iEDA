@@ -127,6 +127,7 @@ def scope_args(args: argparse.Namespace) -> list[str]:
     out += ["-scope_halo_coeff", str(args.halo_coeff), "-scope_halo_hops", str(args.halo_hops)]
     out += ["-scope_density_target", str(args.scope_density_target),
             "-scope_density_ratio", str(args.scope_density_ratio)]
+    out += ["-scope_anneal_ratio", str(getattr(args, "scope_anneal_ratio", 0.0))]
     return out
 
 
@@ -513,6 +514,7 @@ def main() -> int:
                 (("--scope-density-ratio",), {"type": float, "default": 0.0}),
                 (("--halo-coeff",), {"type": float, "default": 0.5}),
                 (("--halo-hops",), {"type": int, "default": 2}),
+                (("--scope-anneal-ratio",), {"type": float, "default": 0.0}),
                 (("--target-density",), {"type": float, "default": -1.0}),
                 (("--init-density-penalty",), {"type": float, "default": -1.0}),
                 (("--min-phi-coef",), {"type": float, "default": -1.0}),

@@ -1031,6 +1031,11 @@ bool validateGPRunScope(const GPRunRequest& request, std::string* reason)
     *reason = "scope_density_ratio must be in [0,1]";
     return false;
   }
+  if (!std::isfinite(request.scope_anneal_ratio) || request.scope_anneal_ratio < 0.0F
+      || request.scope_anneal_ratio >= 1.0F) {
+    *reason = "scope_anneal_ratio must be in [0,1)";
+    return false;
+  }
   if (!std::isfinite(request.seed_anchor_strength) || request.seed_anchor_strength < 0.0F
       || request.seed_anchor_strength > 1.0F) {
     *reason = "seed_anchor_strength must be in [0,1]";
@@ -1077,6 +1082,7 @@ bool validateGPRunScope(const GPRunRequest& request, std::string* reason)
 
 bool applyGPRunScope(NesterovPlace& session, const GPRunRequest& request, std::string* reason)
 {
+  bool ok = false;
   switch (request.scope_mode) {
     case GPRunScopeMode::kGlobal:
       session.clearMovementScope();
@@ -1086,17 +1092,20 @@ bool applyGPRunScope(NesterovPlace& session, const GPRunRequest& request, std::s
       if (request.scope_density_target < 1.0F && request.scope_density_ratio > 0.0F) {
         session.buildHotOverflowDensityTargets(request.scope_density_ratio, request.scope_density_target);
       }
-      return true;
+      ok = true;
+      break;
     case GPRunScopeMode::kRandom:
       session.buildRandomScope(static_cast<size_t>(request.scope_active_count), request.scope_halo_coeff, request.scope_seed,
                                request.scope_halo_hops);
-      return true;
+      ok = true;
+      break;
     case GPRunScopeMode::kInstances:
       if (!session.buildInstanceScope(request.scope_instance_names, request.scope_halo_coeff, request.scope_halo_hops)) {
         *reason = "scope contains an instance name that is not movable";
         return false;
       }
-      return true;
+      ok = true;
+      break;
     case GPRunScopeMode::kRegion:
       session.buildRegionScope(
           Rectangle<int32_t>(request.scope_region_ll_x, request.scope_region_ll_y, request.scope_region_ur_x, request.scope_region_ur_y),
@@ -1107,14 +1116,25 @@ bool applyGPRunScope(NesterovPlace& session, const GPRunRequest& request, std::s
                                 request.scope_region_ur_y)},
             request.scope_density_target);
       }
-      return true;
+      ok = true;
+      break;
     case GPRunScopeMode::kLongNet:
       session.buildLongNetScope(static_cast<size_t>(request.scope_active_count), request.scope_halo_coeff,
                                 request.scope_halo_hops);
-      return true;
+      ok = true;
+      break;
   }
-  *reason = "unknown gp scope mode";
-  return false;
+  if (!ok) {
+    *reason = "unknown gp scope mode";
+    return false;
+  }
+  if (request.scope_density_target < 1.0F
+      && request.scope_mode != GPRunScopeMode::kHotspot
+      && request.scope_mode != GPRunScopeMode::kRegion) {
+    session.buildActiveScopeDensityTargets(request.scope_density_target);
+  }
+  session.setScopeAnnealIterations(static_cast<int32_t>(request.accepted_iterations * request.scope_anneal_ratio));
+  return true;
 }
 
 std::string preserveParentCheckpoint(const std::string& parent_path, int32_t iter, const std::string& output_dir)

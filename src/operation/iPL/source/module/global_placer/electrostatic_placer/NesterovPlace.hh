@@ -115,6 +115,7 @@ class NesterovPlace
   // update), (0,1) = halo (scaled update), 0 = context (coordinates frozen).
   // Empty list = global GP (the default path is bit-identical without masking).
   void setMovementCoeffs(const std::vector<float>& move_coeff_list);
+  void setScopeAnnealIterations(int32_t iterations) { _scope_anneal_iterations = iterations; }
   void clearMovementScope()
   {
     _move_coeff_list.clear();
@@ -167,6 +168,9 @@ class NesterovPlace
   void clearRegionDensityTargets();
   // Screen the hottest overflowing bins (top_ratio fraction) with `target`.
   void buildHotOverflowDensityTargets(float top_ratio, float target);
+  // Screen every grid overlapped by an Active (coefficient 1) instance with
+  // `target`, for scopes that do not have an explicit hot-bin/region screen.
+  void buildActiveScopeDensityTargets(float target);
 
  private:
   void applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff, int32_t halo_hops);
@@ -203,6 +207,7 @@ class NesterovPlace
   // batch-start coordinate snapshot used to freeze context instances.
   std::vector<float> _move_coeff_list;
   std::vector<Point<int32_t>> _frozen_coord_list;
+  int32_t _scope_anneal_iterations = 0;
   float _sum_overflow = 0.0F;
   int64_t _prev_hpwl = 0;
   int64_t _cur_hpwl = 0;

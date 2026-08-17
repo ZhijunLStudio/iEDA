@@ -1502,7 +1502,14 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
 
   // algorithm core loop.
   const int64_t last_iter = std::min<int64_t>(_nes_config.get_max_iter(), static_cast<int64_t>(_current_iter) + budget);
+  const int32_t scope_anneal_start = _current_iter;
   for (int32_t iter_num = _current_iter + 1; iter_num <= last_iter; iter_num++) {
+    // Local-scope annealing: the first scope_anneal_iterations run under the
+    // movement mask, then the mask is cleared so the remaining iterations are
+    // a full global repair on the same total budget.
+    if (!_move_coeff_list.empty() && _scope_anneal_iterations > 0 && iter_num > scope_anneal_start + _scope_anneal_iterations) {
+      clearMovementScope();
+    }
     bool iter_entropy_injected = false;
     solver->runNextIter(iter_num, _nes_config.get_thread_num());
     int32_t num_backtrack = 0;
@@ -1818,6 +1825,7 @@ if (iter_num - _last_perturb_iter > 50 && checkPlateau(50, 0.01)) {
   }
 
   clearRegionDensityTargets();
+  _scope_anneal_iterations = 0;
   _current_iter = _finished_iter;
   return (_last_result.outcome != NesterovPlaceOutcome::kNotRun) ? GPAdvanceOutcome::kFinished : GPAdvanceOutcome::kBudgetReached;
 }
@@ -2486,6 +2494,27 @@ void NesterovPlace::clearRegionDensityTargets()
   for (auto& grid_row : grid_2d) {
     for (auto& grid : grid_row) {
       grid.density_target = 1.0F;
+    }
+  }
+}
+
+void NesterovPlace::buildActiveScopeDensityTargets(float target)
+{
+  auto* grid_manager = _nes_database->_grid_manager;
+  const size_t n = _move_coeff_list.size();
+  if (n == 0 || n != _placable_inst_list.size()) {
+    return;
+  }
+  for (size_t i = 0; i < n; i++) {
+    if (_move_coeff_list[i] < 1.0F) {
+      continue;
+    }
+    const auto& shape = _placable_inst_list[i]->get_origin_shape();
+    Rectangle<int32_t> rect(shape.get_ll_x(), shape.get_ll_y(), shape.get_ur_x(), shape.get_ur_y());
+    std::vector<Grid*> overlap_grid_list;
+    grid_manager->obtainOverlapGridList(overlap_grid_list, rect);
+    for (auto* grid : overlap_grid_list) {
+      grid->density_target = target;
     }
   }
 }
