@@ -1,0 +1,32 @@
+{
+  "name": "@deepseek-ai/dsh-tool-ieda-gp",
+  "description": "First-party native DeepSeek Harness tool plugin for the iEDA global-placement agent",
+  "version": "0.1.0-rc.5",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/index.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:^"
+  }
+}

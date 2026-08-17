@@ -1,9 +1,13 @@
 # DeepSeek Harness plugin for iEDA GP
 
-`deepseek-harness` can mount an external MCP server as native model tools
-through `@deepseek-ai/dsh-mcp-client`. This directory packages the iEDA
-global-placement (GP) agent as exactly that: one stdio MCP server plus a
-Cordis composition and an SDK runner.
+This directory packages the iEDA global-placement (GP) agent for
+`deepseek-harness` in BOTH supported plugin forms:
+
+- **native plugin (preferred)**: `@deepseek-ai/dsh-tool-ieda-gp` registers
+  `ieda_gp_*` tools directly on `ctx.tools` through `defineTool`; no MCP
+  subprocess is involved. Source lives in `native_plugin/`.
+- **MCP bridge**: `gp_mcp_server.py` + `@deepseek-ai/dsh-mcp-client`, kept
+  for deployments that already standardize on MCP.
 
 ## Files
 
@@ -11,7 +15,10 @@ Cordis composition and an SDK runner.
 |---|---|
 | `gp_mcp_server.py` | stdio MCP server exposing `gp_baselines`, `gp_start`, `gp_candidate`, `gp_advance`, `gp_report`, `gp_eval_def`, `gp_full_compare` |
 | `designs.json` | registered designs/PDKs and Innovus baselines (s1238, apb4_timer, picorv32, aes) |
-| `gp_agent.cordis.yml` | DeepSeek Harness composition with only `mcp__gp__*` tools enabled |
+| `gp_agent.cordis.yml` | MCP-bridge composition with only `mcp__gp__*` tools enabled |
+| `gp_agent_native.cordis.yml` | **native-plugin composition** with only `ieda_gp_*` tools enabled |
+| `run_gp_agent_native.py` | Python SDK entrypoint for the native composition |
+| `native_plugin/` | source package for `@deepseek-ai/dsh-tool-ieda-gp` |
 | `run_gp_agent.py` | Python SDK entrypoint |
 
 ## Run

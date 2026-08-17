@@ -1,0 +1,76 @@
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 1490a0f..d785bb3 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -4957,6 +4957,19 @@ importers:
+         specifier: workspace:^
+         version: link:../../runtime-diagnostics/invariants
+
++  packages/ieda/tool-ieda-gp:
++    dependencies:
++      '@deepseek-ai/schemastery':
++        specifier: link:../../../vendor/schemastery
++        version: link:../../../vendor/schemastery
++    devDependencies:
++      '@deepseek-ai/cordis':
++        specifier: workspace:^
++        version: link:../../../vendor/cordis
++      '@deepseek-ai/dsh-tools':
++        specifier: workspace:^
++        version: link:../../core/tools
++
+   packages/interaction/commands:
+     dependencies:
+       zod:
+@@ -8436,6 +8449,9 @@ importers:
+       '@deepseek-ai/dsh-llm-retry':
+         specifier: workspace:^
+         version: link:../../packages/llm/llm-retry
++      '@deepseek-ai/dsh-mcp-client':
++        specifier: workspace:^
++        version: link:../../packages/mcp/mcp-client
+       '@deepseek-ai/dsh-output-retention':
+         specifier: workspace:^
+         version: link:../../packages/util/output-retention
+@@ -8571,6 +8587,9 @@ importers:
+       '@deepseek-ai/dsh-tool-goal':
+         specifier: workspace:^
+         version: link:../../packages/goal/tool-goal
++      '@deepseek-ai/dsh-tool-ieda-gp':
++        specifier: workspace:^
++        version: link:../../packages/ieda/tool-ieda-gp
+       '@deepseek-ai/dsh-tool-jobs':
+         specifier: workspace:^
+         version: link:../../packages/jobs/tool-jobs
+diff --git a/python/sdk-runtime/package.json b/python/sdk-runtime/package.json
+index 89d4b81..91ce0f7 100644
+--- a/python/sdk-runtime/package.json
++++ b/python/sdk-runtime/package.json
+@@ -46,6 +46,7 @@
+     "@deepseek-ai/dsh-llm-deepseek": "workspace:^",
+     "@deepseek-ai/dsh-llm-pi-ai": "workspace:^",
+     "@deepseek-ai/dsh-llm-retry": "workspace:^",
++    "@deepseek-ai/dsh-mcp-client": "workspace:^",
+     "@deepseek-ai/dsh-home-paths": "workspace:^",
+     "@deepseek-ai/dsh-permission-presets": "workspace:^",
+     "@deepseek-ai/dsh-plan-mode": "workspace:^",
+@@ -90,6 +91,7 @@
+     "@deepseek-ai/dsh-tool-cordis": "workspace:^",
+     "@deepseek-ai/dsh-tool-fs": "workspace:^",
+     "@deepseek-ai/dsh-tool-goal": "workspace:^",
++    "@deepseek-ai/dsh-tool-ieda-gp": "workspace:^",
+     "@deepseek-ai/dsh-tool-skill": "workspace:^",
+     "@deepseek-ai/dsh-tool-str-replace-editor": "workspace:^",
+     "@deepseek-ai/dsh-tool-subagent": "workspace:^",
+diff --git a/tsconfig.host.json b/tsconfig.host.json
+index 4590362..a37fe81 100644
+--- a/tsconfig.host.json
++++ b/tsconfig.host.json
+@@ -178,6 +178,7 @@
+     { "path": "./packages/interaction/user-approval" },
+     { "path": "./packages/interaction/permission-presets" },
+     { "path": "./packages/core/tools" },
++    { "path": "./packages/ieda/tool-ieda-gp" },
+     { "path": "./packages/core/agent-tool-presentation" },
+     { "path": "./packages/skill/skill" },
+     { "path": "./packages/skill/skill-badge" },
