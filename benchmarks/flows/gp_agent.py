@@ -278,26 +278,42 @@ def cmd_verify_lg(args: argparse.Namespace) -> int:
     """Run LG in a throwaway workdir as a read-only oracle for a checkpoint."""
     workdir, case_root, input_def, config, foundry = require_context(args)
     ckpt = resolve_checkpoint(args, workdir)
+    placed_def = Path(workdir) / "placement.def"
     if not ckpt or not Path(ckpt).exists():
-        print(json.dumps({"ok": False, "reason": "no checkpoint; run start first"}))
+        ckpt = None
+    if not ckpt and not placed_def.exists():
+        print(json.dumps({"ok": False, "reason": "no checkpoint and no placement.def; run start first"}))
         return 1
-    cp = json.loads(Path(ckpt).read_text())
-    names = cp.get("instance_names") or []
-    before = cp.get("instance_density_coords") or []
+    cp = None
+    names: list[str] = []
+    before: list[list[float]] = []
+    input_for_lg = input_def
+    if ckpt:
+        cp = json.loads(Path(ckpt).read_text())
+        names = cp.get("instance_names") or []
+        before = cp.get("instance_density_coords") or []
+    else:
+        comps = parse_def_components(placed_def)
+        names = list(comps.keys())
+        before = [[float(x), float(y)] for x, y in comps.values()]
+        input_for_lg = placed_def
     if not names or len(names) != len(before):
-        print(json.dumps({"ok": False, "reason": "checkpoint has no instance coordinates"}))
+        print(json.dumps({"ok": False, "reason": "no placement coordinates"}))
         return 1
     temp = Path(workdir) / "_lg_verify"
     import shutil
     if temp.exists():
         shutil.rmtree(temp)
     temp.mkdir(parents=True)
-    cmds = [
-        f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
-        "placer_run_gp -mode accept",
-        "placer_run_lg",
-    ]
-    rc, out, err = run_ieda(temp, case_root, foundry, config, input_def, cmds, def_save=True)
+    if ckpt:
+        cmds = [
+            f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
+            "placer_run_gp -mode accept",
+            "placer_run_lg",
+        ]
+    else:
+        cmds = ["placer_run_lg"]
+    rc, out, err = run_ieda(temp, case_root, foundry, config, input_for_lg, cmds, def_save=True)
     if rc != 0:
         print(json.dumps({"ok": False, "stage": "lg", "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
@@ -332,7 +348,8 @@ def cmd_verify_lg(args: argparse.Namespace) -> int:
     print(json.dumps({
         "ok": True,
         "checkpoint": str(ckpt),
-        "iteration": cp.get("current_iter"),
+        "iteration": cp.get("current_iter") if cp else None,
+        "verified_from": str(ckpt) if cp else str(placed_def),
         "lg_success": True,
         "lg_def": str(lg_def),
         "lg_max_displacement": max_disp,

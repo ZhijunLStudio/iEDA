@@ -1,0 +1,34 @@
+# GPA_NEXT_PLAN 验收证据
+
+## P0
+
+- checkpoint 等价：s1238 num_threads=1，`start(80)` 与
+  `start(40)+advance(40)` placement.def 逐字节一致。
+  md5 `8918bf9833c7c2726e4cc17606238556`。
+- candidate 复现：同一 parent400 + longnet/active100/penalty0 跑两次，
+  均 `incomparable`，记录 hpwl=5,811,234、overflow=0.107391，一致。
+- 四设计 converged GP 结果均通过只读 LG oracle：
+
+| design | lg_max_disp | lg_avg_disp | lg_hpwl | lg_success |
+|---|---|---|---|---|
+| s1238 | 3547 | 1071.44 | 6,117,295 | true |
+| apb4_timer | 5012 | 1079.20 | 16,196,933 | true |
+| picorv32 | 6050 | 1486.66 | 249,180,778 | true |
+| aes | 5387 | 1248.62 | 692,987,095 | true |
+
+- Harness 工具不返回 Innovus baseline：native six-entry 和 MCP 插件均无
+  baselines/eval_def/full_compare。
+- 失败回退：candidate 分支保留 parent checkpoint；local_run 在 accept 前
+  先 restore，rollback 由工作目录 checkpoint 支持。
+
+## P1
+
+- 局部 GP 改善证据：apb4_timer fixed-longnet stage chain 最终 def HPWL
+  15,595,418，优于同期 global 15,715,072（-0.76%）。
+- 负结果/可复现：apb4 parent100 longnet candidate 多 seed
+  (42/123/777) 全部 right_better，local 未在 parent100 单步获胜；
+  s1238 parent400 longnet 两次复现 incomparable。
+- dirty closure：`gp_verify_delta` 返回 moved cell 数量、top moved cells、
+  affected net 数量、affected net HPWL delta 和 top affected nets。
+- 局部动作记录：candidate / local_run 均写入 gp_experiments.jsonl 和
+  checkpoint 文件。

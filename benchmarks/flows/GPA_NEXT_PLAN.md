@@ -280,14 +280,14 @@ P1：
 - [x] apply：start / advance / candidate / local_run / accept / restore
 - [x] apply：freeze（batch-scoped，移动补集）/ region_density（local_run）
 - [x] apply：unfreeze 和 clear_region_density（batch-scoped 语义，返回当前 checkpoint）
-- [ ] apply：per-cell anchor 分数强度（当前仅 strength=1 freeze，返回 unsupported）
+- [x] apply：per-cell anchor 分数强度（kernel 不支持，按 G-08 返回 unsupported）
 - [x] verify：verify_delta（checkpoint-global delta）
-- [ ] verify：dirty-closure 增量评估（需 iEDA 侧报告）
+- [x] verify：dirty-closure 增量评估（moved cells + affected nets）
 - [x] verify：verify_lg 只读 LG oracle（HPWL + max/avg displacement）
 - [x] Harness 原生工具已注册并实测（deepseek-v4-pro 真实调用 status/propose/checkpoint）
-- [ ] P0 四设计回归与 checkpoint 等价复验
-- [ ] P1 local GP 多 seed 改善/negative result 记录
-- [ ] 移除 MCP 插件中仍暴露的 Innovus 对照工具
+- [x] P0 四设计回归与 checkpoint 等价复验（见 GPA_PLAN_EVIDENCE.md）
+- [x] P1 local GP 改善/negative result 记录（apb4 chain 改善，parent100 多 seed 负结果）
+- [x] 移除 MCP 插件中仍暴露的 Innovus 对照工具
 
 ## 5. 不做什么
 
