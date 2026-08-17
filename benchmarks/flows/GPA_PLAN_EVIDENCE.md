@@ -125,3 +125,24 @@ longnet stage chain（-0.76%）。
 - nangate45 / asap7 / ihp130：本机 Innovus 二进制存在，但当前 shell
   license 失败（LMC-01902），无法生成这些 PDK 的 Innovus 参考；
   因此不能宣称在这些 PDK 上超过 Innovus。
+
+
+## 局部 GP 改进（local perturb + relinearize）
+
+新增 C++ 能力：
+- `scope_anneal_ratio`：局部 mask 只跑前 N 步，其余步骤自动清除 mask，
+  做全局修复；
+- `scope_density_target` 现在也作用于 longnet / instances / random 等非
+  region/hotspot scope（对 active 实例覆盖网格加密度筛）。
+
+新增策略：candidate 局部解 -> accept -> 以该布局为初始值重新 random_init=0
+global GP。sky130 四设计结果：
+
+| design | raw GP def HPWL | local-restart HPWL | 变化 |
+|---|---|---|---|
+| s1238 | 5,957,257 | 5,948,770 | -0.14% |
+| apb4_timer | 15,715,072 | 15,646,612 | -0.44% |
+| picorv32 | 234,280,119 | 234,878,612 (hotspot+anneal) | +0.26% |
+| aes | 665,002,127 | 645,379,700 | -2.95% |
+
+picorv32 尚未超过 raw GP，需继续调整 scope/anneal 或做多轮扰动。
