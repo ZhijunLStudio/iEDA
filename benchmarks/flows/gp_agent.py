@@ -379,6 +379,20 @@ def cmd_candidate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_restore(args: argparse.Namespace) -> int:
+    """Point the workdir at an existing checkpoint without running iEDA."""
+    workdir = Path(args.workdir)
+    ckpt = resolve_checkpoint(args, workdir)
+    if not ckpt or not Path(ckpt).exists():
+        print(json.dumps({"ok": False, "reason": "no checkpoint"}))
+        return 1
+    state = update_state(workdir)
+    state["latest_checkpoint"] = str(ckpt)
+    (workdir / "gp_agent_state.json").write_text(json.dumps(state, indent=2))
+    print(json.dumps({"ok": True, "state": state, "checkpoint": str(ckpt)}, indent=2))
+    return 0
+
+
 def cmd_accept(args: argparse.Namespace) -> int:
     workdir, case_root, input_def, config, foundry = require_context(args)
     ckpt = resolve_checkpoint(args, workdir)
@@ -448,7 +462,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for name, fn in [("start", cmd_start), ("advance", cmd_advance), ("local_run", cmd_local_run),
-                     ("candidate", cmd_candidate), ("verify_lg", cmd_verify_lg),
+                     ("candidate", cmd_candidate), ("verify_lg", cmd_verify_lg), ("restore", cmd_restore),
                      ("accept", cmd_accept), ("compare", cmd_compare), ("status", cmd_status)]:
         sp = sub.add_parser(name)
         if name in ("start", "advance", "candidate"):
@@ -488,7 +502,7 @@ def main() -> int:
                 (("--overflow-penalty",), {"type": float, "default": 0.0}),
             ]:
                 sp.add_argument(*args_, **kwargs)
-        elif sp.prog.endswith(("accept", "verify_lg")):
+        elif sp.prog.endswith(("accept", "verify_lg", "restore")):
             sp.add_argument("--workdir", required=True)
             sp.add_argument("--case-root"); sp.add_argument("--input-def"); sp.add_argument("--config")
             sp.add_argument("--foundry-dir"); sp.add_argument("--checkpoint")
@@ -500,8 +514,8 @@ def main() -> int:
             sp.add_argument("--workdir", required=True)
     args = parser.parse_args()
     return {"start": cmd_start, "advance": cmd_advance, "local_run": cmd_local_run,
-            "candidate": cmd_candidate, "verify_lg": cmd_verify_lg, "accept": cmd_accept,
-            "compare": cmd_compare, "status": cmd_status}[args.command](args)
+            "candidate": cmd_candidate, "verify_lg": cmd_verify_lg, "restore": cmd_restore,
+            "accept": cmd_accept, "compare": cmd_compare, "status": cmd_status}[args.command](args)
 
 
 if __name__ == "__main__":

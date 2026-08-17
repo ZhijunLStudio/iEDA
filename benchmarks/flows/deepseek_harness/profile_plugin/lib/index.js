@@ -199,6 +199,51 @@ parameters: { workdir: { type: "string", required: true }, checkpoint: { type: "
 output: { schema: commonResultSchema(), render: (_args, value) => jsonContent(value) },
 execute: async (args) => asJson({ ok: true, note: "batch-scoped density target already cleared", workdir: resolve(args.workdir), checkpoint: args.checkpoint ?? null })
 }));
+ctx.tools.register(defineTool({
+name: "ieda_gp_restore",
+description: "Point the workdir at an existing checkpoint without running iEDA. Later reads and local runs start from that checkpoint.",
+parameters: { workdir: { type: "string", required: true }, checkpoint: { type: "string" } },
+output: { schema: commonResultSchema(), render: (_args, value) => jsonContent(value) },
+execute: async (args) => asJson(await runCli(config.iedaRoot, config.python, config.timeoutMs, join(config.iedaRoot, "benchmarks/flows/gp_agent.py"), ["--workdir", resolve(args.workdir), "restore", ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]))
+}));
+ctx.tools.register(defineTool({
+name: "ieda_gp_apply_region_density",
+description: "Run one local GP batch for a rectangular region with a scoped density target.",
+parameters: {
+design: { type: "string", required: true },
+workdir: { type: "string", required: true },
+region: { type: "string", required: true },
+density_target: { type: "number" },
+checkpoint: { type: "string" },
+iterations: { type: "integer" },
+halo_hops: { type: "integer" },
+halo_coeff: { type: "number" }
+},
+output: { schema: commonResultSchema(), render: (_args, value) => jsonContent(value) },
+execute: async (args) => asJson(await runtime.agent(args.design, args.workdir, ["local_run", "--iterations", String(args.iterations ?? 10), "--scope", "region", "--scope-region", args.region, "--scope-density-target", String(args.density_target ?? 1), "--scope-density-ratio", "1", "--halo-hops", String(args.halo_hops ?? 1), "--halo-coeff", String(args.halo_coeff ?? 0.5), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]))
+}));
+ctx.tools.register(defineTool({
+name: "ieda_gp_apply_anchor",
+description: "Apply an anchor prior for a batch. v1 only supports strength=1 (freeze the specified cells at their current positions); fractional strength is unsupported until the iEDA kernel exposes per-cell anchor blending.",
+parameters: {
+design: { type: "string", required: true },
+workdir: { type: "string", required: true },
+scope_instances: { type: "string", required: true, description: "Comma-separated cell names to anchor/freeze." },
+strength: { type: "number" },
+checkpoint: { type: "string" },
+iterations: { type: "integer" }
+},
+output: { schema: commonResultSchema(), render: (_args, value) => jsonContent(value) },
+execute: async (args) => {
+if ((args.strength ?? 1) !== 1) return asJson({ ok: false, unsupported: true, reason: "fractional per-cell anchor strength is not implemented" });
+const names = args.scope_instances.split(",").map(s => s.trim()).filter(Boolean);
+const cpPath = args.checkpoint ?? null;
+const cp = cpPath ? JSON.parse(readFileSync(cpPath, "utf8")) : null;
+const all = cp?.instance_names ?? [];
+const outside = all.filter(n => !names.includes(n));
+return asJson(await runtime.agent(args.design, args.workdir, ["local_run", "--iterations", String(args.iterations ?? 10), "--scope", "instances", "--scope-instances", outside.join(","), "--halo-hops", "0", "--halo-coeff", "0", ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]));
+}
+}));
 	ctx.tools.register(defineTool({
 		name: "ieda_gp_start",
 		description: "Start a new iEDA global-placement session for a registered design. A fresh workdir is required for each independent search; use ieda_gp_candidate or ieda_gp_advance afterwards.",
