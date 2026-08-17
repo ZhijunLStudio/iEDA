@@ -51,6 +51,8 @@ through the same CLIs used by the manual experiments.
 - `gp_eval_def(...)`: canonical DEF HPWL comparison vs Innovus.
 - `gp_full_compare(...)`: run GP->LG->DP for one design.
 
+See [USAGE.md](USAGE.md) for the 8 model-facing tools and concrete prompts.
+
 ## Register into an installed dsh service (rc.6)
 
 The running `dsh` CLI keeps profiles under `$DSH_HOME/profiles` and manages

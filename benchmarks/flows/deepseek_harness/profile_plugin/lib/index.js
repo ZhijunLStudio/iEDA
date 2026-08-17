@@ -334,6 +334,38 @@ function apply(ctx, config) {
 		]))
 	}));
 	ctx.tools.register(defineTool({
+		name: "ieda_gp_accept",
+		description: "Commit a GP checkpoint into the design and write placement.def under the workdir. Use this after a winning candidate or a converged advance so ieda_gp_eval_def can score the final placement.",
+		parameters: {
+			design: {
+				type: "string",
+				required: true
+			},
+			workdir: {
+				type: "string",
+				required: true
+			},
+			checkpoint: {
+				type: "string",
+				description: "Optional checkpoint to commit; omit for the workdir latest checkpoint."
+			}
+		},
+		output: {
+			schema: commonResultSchema(),
+			render: (_args, value) => jsonContent(value)
+		},
+		execute: async (args) => {
+			const result = await runtime.agent(args.design, args.workdir, [
+				"accept",
+				...args.checkpoint ? ["--checkpoint", args.checkpoint] : []
+			]);
+			return asJson({
+				...result,
+				placement_def: join(resolve(args.workdir), "placement.def")
+			});
+		}
+	}));
+	ctx.tools.register(defineTool({
 		name: "ieda_gp_report",
 		description: "Report the current iEDA GP session state, experiment ledger record, and latest checkpoint.",
 		parameters: { workdir: {
