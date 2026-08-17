@@ -478,7 +478,21 @@ def diagnose_unstable_region(workdir: str | Path, checkpoint_a: str | None, chec
             "most_moved": moved[: max(1, top_n)]}
 
 
-def verify_delta(workdir: str | Path, checkpoint_a: str, checkpoint_b: str) -> dict:
+def net_hpwl_for_checkpoint(net: dict, inst_idx: dict, coords: list[list[float]]) -> float:
+    points = []
+    for inst, _pin in net["pins"]:
+        idx = inst_idx.get(inst)
+        if idx is not None:
+            points.append((float(coords[idx][0]), float(coords[idx][1])))
+    if len(points) < 2:
+        return 0.0
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    return max(xs) - min(xs) + max(ys) - min(ys)
+
+
+def verify_delta(workdir: str | Path, checkpoint_a: str, checkpoint_b: str,
+                 def_path: str | None = None) -> dict:
     a = resolve_checkpoint(workdir, checkpoint_a)
     b = resolve_checkpoint(workdir, checkpoint_b)
     same = (a.get("config_fingerprint") == b.get("config_fingerprint")
@@ -492,6 +506,40 @@ def verify_delta(workdir: str | Path, checkpoint_a: str, checkpoint_b: str) -> d
     hpwl_delta = val(b, "prev_hpwl") - val(a, "prev_hpwl")
     ov_delta = val(b, "sum_overflow") - val(a, "sum_overflow")
     rudy_delta = val(b, "final_route_util") - val(a, "final_route_util")
+
+    names = a.get("instance_names") or []
+    ca, cb = a.get("instance_density_coords") or [], b.get("instance_density_coords") or []
+    moved = []
+    if names and len(names) == len(ca) == len(cb):
+        for i, name in enumerate(names):
+            dx = float(ca[i][0]) - float(cb[i][0])
+            dy = float(ca[i][1]) - float(cb[i][1])
+            if abs(dx) + abs(dy) > 1e-6:
+                moved.append({"cell": name, "dx": dx, "dy": dy,
+                              "l1": abs(dx) + abs(dy)})
+    moved.sort(key=lambda x: x["l1"], reverse=True)
+
+    affected_nets = []
+    net_hpwl_delta_affected = None
+    if def_path:
+        try:
+            nets = load_net_topology(def_path)
+            idx = {name: i for i, name in enumerate(names)}
+            moved_names = {m["cell"] for m in moved}
+            for net in nets:
+                touched = any(pin[0] in moved_names for pin in net["pins"])
+                if not touched:
+                    continue
+                before = net_hpwl_for_checkpoint(net, idx, ca)
+                after = net_hpwl_for_checkpoint(net, idx, cb)
+                affected_nets.append({"net": net["name"], "hpwl_before": before,
+                                      "hpwl_after": after, "hpwl_delta": after - before})
+            affected_nets.sort(key=lambda x: abs(x["hpwl_delta"]), reverse=True)
+            net_hpwl_delta_affected = sum(x["hpwl_delta"] for x in affected_nets)
+        except Exception:
+            affected_nets = []
+            net_hpwl_delta_affected = None
+
     return {
         "ok": True,
         "checkpoint_a": checkpoint_path(workdir, checkpoint_a),
@@ -503,7 +551,13 @@ def verify_delta(workdir: str | Path, checkpoint_a: str, checkpoint_b: str) -> d
             "rudy_route_util_max": rudy_delta,
             "timing": {"available": False, "reason": "checkpoint does not persist setup/hold WNS"},
         },
-        "dirty_closure": {"note": "v1 reports checkpoint-global deltas; local dirty closure requires iEDA-side reporting"},
+        "dirty_closure": {
+            "moved_cell_count": len(moved),
+            "top_moved_cells": moved[:20],
+            "affected_net_count": len(affected_nets),
+            "affected_net_hpwl_delta": net_hpwl_delta_affected,
+            "top_affected_nets": affected_nets[:20],
+        },
         "fidelity": "gp",
     }
 
@@ -555,7 +609,7 @@ def main() -> int:
     elif args.command == "unstable":
         print(json.dumps(diagnose_unstable_region(args.workdir, args.checkpoint_a, args.checkpoint_b, args.top_n), indent=2))
     elif args.command == "verify_delta":
-        print(json.dumps(verify_delta(args.workdir, args.checkpoint_a, args.checkpoint_b), indent=2))
+        print(json.dumps(verify_delta(args.workdir, args.checkpoint_a, args.checkpoint_b, args.def_path), indent=2))
     return 0
 
 

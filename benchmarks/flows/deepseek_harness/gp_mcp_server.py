@@ -87,27 +87,6 @@ def _hpwl_for_def(def_path: str | Path) -> tuple[int, int]:
 
 
 @mcp.tool()
-def gp_baselines() -> dict[str, Any]:
-    """List designs/PDKs, Innovus baseline HPWL, and the best iEDA GP result committed so far.
-
-    Use this first to choose a design where the remaining headroom is largest.
-    """
-    out: dict[str, Any] = {}
-    for name, design in _registry().items():
-        out[name] = {
-            "pdk": design["pdk"],
-            "innovus_hpwl": design["innovus_hpwl"],
-            "ieda_best_hpwl": design["ieda_best_hpwl"],
-            "ieda_improvement_pct": round((1.0 - design["ieda_best_hpwl"] / design["innovus_hpwl"]) * 100.0, 3),
-            "case_root": design["case_root"],
-            "input_def": design["input_def"],
-            "pl_config": design["pl_config"],
-            "notes": design["notes"],
-        }
-    return out
-
-
-@mcp.tool()
 def gp_start(design: str, workdir: str, iterations: int = 20, random_init: int = 1, seed: int = 1000,
              target_density: float = -1.0, init_density_penalty: float = -1.0, min_phi_coef: float = -1.0,
              max_phi_coef: float = -1.0, congestion_effort: int = -1, seed_anchor_strength: float = 0.0,
@@ -201,41 +180,6 @@ def gp_report(workdir: str) -> dict[str, Any]:
         if lines:
             last_ledger = json.loads(lines[-1])
     return {"state": state, "last_ledger": last_ledger}
-
-
-@mcp.tool()
-def gp_eval_def(design: str, def_path: str) -> dict[str, Any]:
-    """Evaluate a placement DEF with the common HPWL script and compare vs Innovus.
-
-    This is the canonical cross-tool comparison used by the GP workflows.
-    """
-    hpwl, _ = _hpwl_for_def(def_path)
-    d = _design(design)
-    return {
-        "design": design,
-        "def": def_path,
-        "hpwl": hpwl,
-        "innovus_hpwl": d["innovus_hpwl"],
-        "innovus_ratio": round(hpwl / d["innovus_hpwl"], 6),
-        "improvement_pct_vs_innovus": round((1.0 - hpwl / d["innovus_hpwl"]) * 100.0, 3),
-        "vs_ieda_best_pct": round((1.0 - hpwl / d["ieda_best_hpwl"]) * 100.0, 3),
-    }
-
-
-@mcp.tool()
-def gp_full_compare(design: str, result_root: str, timing: bool = False, timeout_seconds: int = 7200) -> dict[str, Any]:
-    """Run the full iEDA GP->LG->DP placement flow for one design.
-
-    timing=true enables timing-driven GP. The result is the same JSON produced
-    by run_ipl_full_compare.py and contains the Innovus ratio.
-    """
-    args = [sys.executable, str(FULL_COMPARE), "--designs", design, "--result-root", str(result_root)]
-    if timing:
-        args += ["--timing"]
-    result = _run(args, timeout=timeout_seconds, cwd=str(IEDA_ROOT))
-    if result["rc"] != 0 or not isinstance(result["json"], dict):
-        return result
-    return result["json"]
 
 
 if __name__ == "__main__":

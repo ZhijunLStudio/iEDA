@@ -171,8 +171,8 @@ throw new Error("ieda_gp_propose: kind must be regions|region_density|freeze");
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_run",
-description: "Execute GP actions. kind: start, advance, candidate, local_run, apply_freeze, apply_region_density. design and workdir are required; all apply kinds return the new checkpoint path.",
-parameters: p({ design: { type: "string", required: true }, workdir: { type: "string", required: true }, checkpoint: { type: "string" }, iterations: { type: "integer" }, seed: { type: "integer" }, random_init: { type: "integer" }, target_density: { type: "number" }, congestion_effort: { type: "integer" }, seed_anchor_strength: { type: "number" }, report_route_util: { type: "integer" }, scope: { type: "string" }, scope_active_ratio: { type: "number" }, scope_active_count: { type: "integer" }, scope_instances: { type: "string" }, scope_region: { type: "string" }, halo_coeff: { type: "number" }, halo_hops: { type: "integer" }, overflow_penalty: { type: "number" }, scope_density_target: { type: "number" }, scope_density_ratio: { type: "number" }, region: { type: "string" } }),
+description: "Execute GP actions. kind: start, advance, candidate, local_run, apply_freeze, apply_region_density, apply_anchor. design and workdir are required; all apply kinds return the new checkpoint path. apply_anchor currently supports only strength=1 (freeze specified cells); fractional strength returns unsupported.",
+parameters: p({ design: { type: "string", required: true }, workdir: { type: "string", required: true }, checkpoint: { type: "string" }, iterations: { type: "integer" }, seed: { type: "integer" }, random_init: { type: "integer" }, target_density: { type: "number" }, congestion_effort: { type: "integer" }, seed_anchor_strength: { type: "number" }, report_route_util: { type: "integer" }, scope: { type: "string" }, scope_active_ratio: { type: "number" }, scope_active_count: { type: "integer" }, scope_instances: { type: "string" }, scope_region: { type: "string" }, halo_coeff: { type: "number" }, halo_hops: { type: "integer" }, overflow_penalty: { type: "number" }, scope_density_target: { type: "number" }, scope_density_ratio: { type: "number" }, region: { type: "string" }, strength: { type: "number" } }),
 output: out(),
 execute: async (args) => {
 const k = args.kind;
@@ -181,18 +181,21 @@ if (k === "advance") return agent([...["advance", "--iterations", String(args.it
 if (k === "candidate") return agent([...["candidate", "--iterations", String(args.iterations ?? 20), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]]);
 if (k === "local_run") return agent([...["local_run", "--iterations", String(args.iterations ?? 10), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]]);
 if (k === "apply_freeze") return freezeRun(args);
+if (k === "apply_anchor") {
+return asJson({ ok: false, unsupported: true, reason: "per-cell anchor is not implemented; use apply_freeze for strength=1 batch freeze" });
+}
 if (k === "apply_region_density") return agent([...["local_run", "--iterations", String(args.iterations ?? 10), "--scope", "region", "--scope-region", args.region, "--scope-density-target", String(args.scope_density_target ?? 1), "--scope-density-ratio", "1", "--halo-hops", String(args.halo_hops ?? 1), "--halo-coeff", String(args.halo_coeff ?? 0.5), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]]);
-throw new Error("ieda_gp_run: kind must be start|advance|candidate|local_run|apply_freeze|apply_region_density");
+throw new Error("ieda_gp_run: kind must be start|advance|candidate|local_run|apply_freeze|apply_region_density|apply_anchor");
 }
 }));
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_verify",
 description: "Verify GP results. kind: delta (metric delta between checkpoint_a and checkpoint_b), lg (read-only LG oracle: post-LG HPWL and max/avg displacement).",
-parameters: p({ design: { type: "string" }, workdir: { type: "string", required: true }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" } }),
+parameters: p({ design: { type: "string" }, workdir: { type: "string", required: true }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, def_path: { type: "string" } }),
 output: out(),
 execute: async (args) => {
-if (args.kind === "delta") return toolbox(["verify_delta", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b]);
+if (args.kind === "delta") return toolbox(["verify_delta", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, ...args.def_path ? ["--def-path", args.def_path] : []]);
 if (args.kind === "lg") return asJson(await runtime.agent(args.design ?? "s1238", args.workdir, ["verify_lg", ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]));
 throw new Error("ieda_gp_verify: kind must be delta|lg");
 }
