@@ -130,15 +130,23 @@ def main():
             "--seed", str(args.seed), "--random-init", "0", "--report-route-util", "1")
         baseline_restart_hpwl = hpwl(baseline_restart_dir / "placement.def")
 
+    local_restart_hpwl = hpwl(restart_dir / "placement.def")
+    raw_hpwl = hpwl(baseline_def)
+    candidates = [(v, k) for v, k in [(raw_hpwl, "raw_gp"), (local_restart_hpwl, "local_restart"),
+                                      (baseline_restart_hpwl, "baseline_restart")] if v is not None]
+    recommended_hpwl, recommended_side = min(candidates) if candidates else (None, "unknown")
     result = {
         "ok": True,
         "design": design,
         "candidate_verdict": verdict,
         "accepted_branch": "local" if chosen == local_cp else ("global" if chosen == global_cp else "parent"),
         "accepted_checkpoint": chosen,
-        "local_restart_hpwl": hpwl(restart_dir / "placement.def"),
+        "local_restart_hpwl": local_restart_hpwl,
         "baseline_def": str(baseline_def),
+        "raw_gp_hpwl": raw_hpwl,
         "baseline_restart_hpwl": baseline_restart_hpwl,
+        "recommended_side": recommended_side,
+        "recommended_hpwl": recommended_hpwl,
         "local_place": str(local_place),
         "restart_workdir": str(restart_dir),
         "baseline_restart_workdir": str(baseline_restart_dir),
