@@ -147,7 +147,7 @@ export function apply(ctx: Context, config: Config): void {
     '--scope-active-count', String(args.scope_active_count ?? 100), '--scope-instances', args.scope_instances ?? '',
     '--scope-region', args.scope_region ?? '', '--halo-coeff', String(args.halo_coeff ?? 0.5),
     '--halo-hops', String(args.halo_hops ?? 1), '--scope-density-target', String(args.scope_density_target ?? 1),
-    '--scope-density-ratio', String(args.scope_density_ratio ?? 0), '--overflow-penalty', String(args.overflow_penalty ?? 0)]
+    '--scope-density-ratio', String(args.scope_density_ratio ?? 0), '--scope-anneal-ratio', String(args.scope_anneal_ratio ?? 0), '--overflow-penalty', String(args.overflow_penalty ?? 0)]
   const freezeRun = async (args: any) => {
     const fz: any = await runtime.toolbox(['freeze_instances', '--workdir', resolve(args.workdir), '--region', args.region,
       ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
@@ -198,8 +198,8 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'ieda_gp_run',
-    description: 'Execute GP actions. kind: start, advance, candidate, local_run, apply_freeze, apply_region_density, apply_anchor. design and workdir are required; all apply kinds return the new checkpoint path. apply_anchor currently returns unsupported (kernel lacks fractional per-cell anchor).',
-    parameters: p({ design: { type: 'string', required: true }, workdir: { type: 'string', required: true }, checkpoint: { type: 'string' }, iterations: { type: 'integer' }, seed: { type: 'integer' }, random_init: { type: 'integer' }, target_density: { type: 'number' }, congestion_effort: { type: 'integer' }, seed_anchor_strength: { type: 'number' }, report_route_util: { type: 'integer' }, scope: { type: 'string' }, scope_active_ratio: { type: 'number' }, scope_active_count: { type: 'integer' }, scope_instances: { type: 'string' }, scope_region: { type: 'string' }, halo_coeff: { type: 'number' }, halo_hops: { type: 'integer' }, overflow_penalty: { type: 'number' }, scope_density_target: { type: 'number' }, scope_density_ratio: { type: 'number' }, region: { type: 'string' }, strength: { type: 'number' } }),
+    description: 'Execute GP actions. kind: start, advance, candidate, local_run, apply_freeze, apply_region_density, local_restart, apply_anchor. local_restart runs one local/global candidate, accepts the local child (force_local=1 to force it), then starts a fresh random_init=0 global GP from that placement; returns def HPWL for local restart and raw-GP restart baseline.',
+    parameters: p({ design: { type: 'string', required: true }, workdir: { type: 'string', required: true }, checkpoint: { type: 'string' }, iterations: { type: 'integer' }, seed: { type: 'integer' }, random_init: { type: 'integer' }, target_density: { type: 'number' }, congestion_effort: { type: 'integer' }, seed_anchor_strength: { type: 'number' }, report_route_util: { type: 'integer' }, scope: { type: 'string' }, scope_active_ratio: { type: 'number' }, scope_active_count: { type: 'integer' }, scope_instances: { type: 'string' }, scope_region: { type: 'string' }, halo_coeff: { type: 'number' }, halo_hops: { type: 'integer' }, overflow_penalty: { type: 'number' }, scope_density_target: { type: 'number' }, scope_density_ratio: { type: 'number' }, scope_anneal_ratio: { type: 'number' }, force_local: { type: 'integer' }, region: { type: 'string' }, strength: { type: 'number' } }),
     output: out(),
     execute: async (args: any) => {
       const k = args.kind
@@ -207,6 +207,18 @@ export function apply(ctx: Context, config: Config): void {
       if (k === 'advance') return agent([...['advance', '--iterations', String(args.iterations ?? 100), '--report-route-util', String(args.report_route_util ?? 1), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]])
       if (k === 'candidate') return agent([...['candidate', '--iterations', String(args.iterations ?? 20), ...scopeArgs(args), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]])
       if (k === 'local_run') return agent([...['local_run', '--iterations', String(args.iterations ?? 10), ...scopeArgs(args), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]])
+      if (k === 'local_restart') return asJson(await runCli(config.iedaRoot, config.python, config.timeoutMs,
+      join(config.iedaRoot, 'benchmarks/flows/gp_local_restart.py'),
+      ['--design', args.design, '--workdir', resolve(args.workdir),
+       ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : []),
+       '--scope', args.scope ?? 'longnet', '--scope-active-count', String(args.scope_active_count ?? 100),
+       '--scope-active-ratio', String(args.scope_active_ratio ?? 0.2),
+       '--halo-hops', String(args.halo_hops ?? 2), '--halo-coeff', String(args.halo_coeff ?? 0.5),
+       '--overflow-penalty', String(args.overflow_penalty ?? 0.005),
+       '--scope-anneal-ratio', String(args.scope_anneal_ratio ?? 0),
+       '--scope-density-target', String(args.scope_density_target ?? 1),
+       ...(args.force_local === 1 ? ['--force-local'] : []),
+       ...(args.scope_region ? ['--scope-region', args.scope_region] : [])]))
       if (k === 'apply_freeze') return freezeRun(args)
       if (k === 'apply_anchor') return asJson({ ok: false, unsupported: true, reason: 'per-cell anchor is not implemented; use apply_freeze for strength=1 batch freeze' })
       if (k === 'apply_region_density') return agent([...['local_run', '--iterations', String(args.iterations ?? 10), '--scope', 'region', '--scope-region', args.region, '--scope-density-target', String(args.scope_density_target ?? 1), '--scope-density-ratio', '1', '--halo-hops', String(args.halo_hops ?? 1), '--halo-coeff', String(args.halo_coeff ?? 0.5), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]])
