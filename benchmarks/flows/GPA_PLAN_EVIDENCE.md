@@ -146,3 +146,26 @@ global GP。sky130 四设计结果：
 | aes | 665,002,127 | 645,379,700 | -2.95% |
 
 picorv32 尚未超过 raw GP，需继续调整 scope/anneal 或做多轮扰动。
+
+
+## local_restart 跨 PDK 结果（最新）
+
+`ieda_gp_run kind=local_restart` = 局部 candidate + accept + 以局部解为
+初始值重新 random_init=0 global GP，并与同一预算 raw-GP restart 比较。
+
+| PDK | 设计 | raw GP HPWL | local_restart HPWL | 相对变化 |
+|---|---|---|---|---|
+| sky130 | s1238 | 5,957,257 | 5,948,770 | -0.14% |
+| sky130 | apb4_timer | 15,715,072 | 15,646,612 | -0.44% |
+| sky130 | picorv32 | 234,280,119 | 234,878,612（agent 应保留 raw） | +0.26% |
+| sky130 | aes | 665,002,127 | 645,379,700 | -2.95% |
+| nangate45 | gcd | 5,850,034 | 5,790,441 | -1.02% |
+| asap7 | aes | 58,392,975 | 57,785,023 | -1.04% |
+| ihp130 | gcd | 620,662,411 | 待跑 | — |
+
+Harness 真实模型调用验证：
+```
+ieda_gp_run kind=local_restart s1238
+candidate_verdict=left_better
+local_restart_hpwl=5948770 < baseline_restart_hpwl=5963695
+```
