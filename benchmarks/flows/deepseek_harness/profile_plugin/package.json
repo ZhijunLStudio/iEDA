@@ -1,0 +1,20 @@
+{
+  "name": "@ieda-ai/dsh-tool-ieda-gp",
+  "version": "0.1.0",
+  "description": "iEDA global-placement native tool bundle for a dsh profile",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "3.18.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

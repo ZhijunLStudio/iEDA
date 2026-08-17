@@ -1,0 +1,10 @@
+# iEDA GP bundle patch. A dsh profile bundle must ship this file and declare it
+# under `dsh.bundle.patch`; `dsh plugin --profile <name> add` then reconciles
+# the package into the profile's bundle list automatically.
+- insert:
+    - id: ieda-gp
+      name: '@ieda-ai/dsh-tool-ieda-gp'
+      config:
+        iedaRoot: !!js process.env.IEDA_ROOT ?? '/home/lizhijun/work/iEDA.ai'
+        python: python3
+        timeoutMs: 7200000

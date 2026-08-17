@@ -51,6 +51,29 @@ through the same CLIs used by the manual experiments.
 - `gp_eval_def(...)`: canonical DEF HPWL comparison vs Innovus.
 - `gp_full_compare(...)`: run GP->LG->DP for one design.
 
+## Register into an installed dsh service (rc.6)
+
+The running `dsh` CLI keeps profiles under `$DSH_HOME/profiles` and manages
+plugins with `dsh plugin --profile <name> add <package>`. A bundle package must
+declare `dsh.bundle.patch`; `profile_plugin/` is that package.
+
+On this machine:
+
+```sh
+benchmarks/flows/deepseek_harness/install_local_service.sh
+```
+
+or manually:
+
+```sh
+export PATH="$HOME/.npm-global/bin:$PATH"
+dsh plugin --profile web add   /home/lizhijun/work/iEDA.ai/benchmarks/flows/deepseek_harness/profile_plugin
+systemctl --user restart dsh-web.service
+```
+
+Verified against the running service: a real `deepseek-v4-pro` headless call
+invoked `ieda_gp_baselines` and reported s1238 with 22.543% improvement.
+
 ## Verified integration
 
 Tested against a checkout of `deepseek-ai/deepseek-harness` at
