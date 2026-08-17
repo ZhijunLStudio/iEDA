@@ -28,6 +28,7 @@ def main():
     ap.add_argument("--input-def")
     ap.add_argument("--config")
     ap.add_argument("--lef")
+    ap.add_argument("--foundry-dir")
     ap.add_argument("--checkpoint")
     ap.add_argument("--scope", default="longnet",
                     choices=["longnet", "hotspot", "random", "region", "instances"])
@@ -54,6 +55,7 @@ def main():
     input_def = Path(args.input_def or f"{repo}/benchmarks/results/innovus_gp_compare/{design}/ieda_in_unplaced.def")
     config = Path(args.config or f"{repo}/benchmarks/results/innovus_gp_compare/{design}/pl_clean_config.json")
     lef = Path(args.lef or f"{repo}/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef")
+    foundry = Path(args.foundry_dir or f"{repo}/scripts/foundry/sky130")
     parent = Path(args.checkpoint or f"/tmp/gp_agent_search/{design}/parent_400.json")
     root = Path(args.workdir)
     shutil.rmtree(root, ignore_errors=True)
@@ -86,7 +88,8 @@ def main():
     cand_dir = root / "candidate"
     cand_dir.mkdir()
     candidate = run("candidate", "--workdir", str(cand_dir), "--case-root", str(case_root),
-                    "--input-def", str(input_def), "--config", str(config), "--checkpoint", str(parent),
+                    "--input-def", str(input_def), "--config", str(config), "--foundry-dir", str(foundry),
+                    "--checkpoint", str(parent),
                     "--iterations", str(args.candidate_iterations), *scope_args,
                     "--halo-hops", str(args.halo_hops), "--halo-coeff", str(args.halo_coeff),
                     "--overflow-penalty", str(args.overflow_penalty),
@@ -106,9 +109,9 @@ def main():
     acc_dir = root / "accepted"
     acc_dir.mkdir()
     run("restore", "--workdir", str(acc_dir), "--case-root", str(case_root),
-        "--input-def", str(input_def), "--config", str(config), "--checkpoint", str(chosen))
+        "--input-def", str(input_def), "--config", str(config), "--foundry-dir", str(foundry), "--checkpoint", str(chosen))
     run("accept", "--workdir", str(acc_dir), "--case-root", str(case_root),
-        "--input-def", str(input_def), "--config", str(config), "--checkpoint", str(chosen))
+        "--input-def", str(input_def), "--config", str(config), "--foundry-dir", str(foundry), "--checkpoint", str(chosen))
     local_place = acc_dir / "placement.def"
     if not local_place.exists():
         return json.dumps({"ok": False, "stage": "accept", "chosen": chosen}, indent=2)
@@ -116,7 +119,7 @@ def main():
     restart_dir = root / "local_restart"
     restart_dir.mkdir()
     run("start", "--workdir", str(restart_dir), "--case-root", str(case_root),
-        "--input-def", str(local_place), "--config", str(config), "--iterations", str(args.restart_iterations),
+        "--input-def", str(local_place), "--config", str(config), "--foundry-dir", str(foundry), "--iterations", str(args.restart_iterations),
         "--seed", str(args.seed), "--random-init", "0", "--report-route-util", "1")
 
     baseline_def = Path(args.baseline_def) if args.baseline_def else Path(f"/tmp/p0_converged/{design}/placement.def")
@@ -126,7 +129,7 @@ def main():
         baseline_restart_dir = root / "baseline_restart"
         baseline_restart_dir.mkdir()
         run("start", "--workdir", str(baseline_restart_dir), "--case-root", str(case_root),
-            "--input-def", str(baseline_def), "--config", str(config), "--iterations", str(args.restart_iterations),
+            "--input-def", str(baseline_def), "--config", str(config), "--foundry-dir", str(foundry), "--iterations", str(args.restart_iterations),
             "--seed", str(args.seed), "--random-init", "0", "--report-route-util", "1")
         baseline_restart_hpwl = hpwl(baseline_restart_dir / "placement.def")
 

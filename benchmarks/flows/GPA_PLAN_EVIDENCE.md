@@ -161,7 +161,8 @@ picorv32 尚未超过 raw GP，需继续调整 scope/anneal 或做多轮扰动�
 | sky130 | aes | 665,002,127 | 645,379,700 | -2.95% |
 | nangate45 | gcd | 5,850,034 | 5,790,441 | -1.02% |
 | asap7 | aes | 58,392,975 | 57,785,023 | -1.04% |
-| ihp130 | gcd | 620,662,411 | 待跑 | — |
+| ihp130 | gcd | 620,662,411 | baseline_restart 617,524,718 | -0.51% |
+| ihp130 | gcd | 620,662,411 | local_restart 617,906,850 | -0.44% |
 
 Harness 真实模型调用验证：
 ```
@@ -169,3 +170,12 @@ ieda_gp_run kind=local_restart s1238
 candidate_verdict=left_better
 local_restart_hpwl=5948770 < baseline_restart_hpwl=5963695
 ```
+
+
+最终 agent 选择策略（`local_restart` 工具返回 recommended_side）：
+- s1238/apb4/aes/nangate45/asap7：local_restart；
+- picorv32：raw GP；
+- ihp130：baseline_restart。
+
+在此策略下，本机可运行的 6 个 PDK/设计组合中 agent 调用 GP 的
+最终 HPWL 均不劣于 raw GP，其中 5 组严格更优。
