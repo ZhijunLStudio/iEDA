@@ -256,7 +256,92 @@ def cmd_local_run(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
     state = update_state(workdir)
+    save_context(state, args, workdir, case_root, input_def, config, foundry)
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
+    return 0
+
+
+def parse_def_components(def_path: str | Path) -> dict[str, tuple[int, int]]:
+    text = Path(def_path).read_text(errors="ignore")
+    comp_start = text.find("\nCOMPONENTS")
+    comp_end = text.find("\nEND COMPONENTS")
+    if comp_start < 0 or comp_end < 0:
+        return {}
+    out: dict[str, tuple[int, int]] = {}
+    pattern = re.compile(r"^\s*-\s+(\S+)\s+\S+.*?\+\s+(?:FIXED|PLACED)\s*\(\s*(-?\d+)\s+(-?\d+)\s*\)", re.M)
+    for m in pattern.finditer(text[comp_start:comp_end]):
+        out[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+    return out
+
+
+def cmd_verify_lg(args: argparse.Namespace) -> int:
+    """Run LG in a throwaway workdir as a read-only oracle for a checkpoint."""
+    workdir, case_root, input_def, config, foundry = require_context(args)
+    ckpt = resolve_checkpoint(args, workdir)
+    if not ckpt or not Path(ckpt).exists():
+        print(json.dumps({"ok": False, "reason": "no checkpoint; run start first"}))
+        return 1
+    cp = json.loads(Path(ckpt).read_text())
+    names = cp.get("instance_names") or []
+    before = cp.get("instance_density_coords") or []
+    if not names or len(names) != len(before):
+        print(json.dumps({"ok": False, "reason": "checkpoint has no instance coordinates"}))
+        return 1
+    temp = Path(workdir) / "_lg_verify"
+    import shutil
+    if temp.exists():
+        shutil.rmtree(temp)
+    temp.mkdir(parents=True)
+    cmds = [
+        f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
+        "placer_run_gp -mode accept",
+        "placer_run_lg",
+    ]
+    rc, out, err = run_ieda(temp, case_root, foundry, config, input_def, cmds, def_save=True)
+    if rc != 0:
+        print(json.dumps({"ok": False, "stage": "lg", "rc": rc, "stderr_tail": err[-2000:]}))
+        return 1
+    lg_def = temp / "placement.def"
+    after = parse_def_components(lg_def)
+    idx = {name: i for i, name in enumerate(names)}
+    pairs = []
+    missing = 0
+    for name, xy in after.items():
+        i = idx.get(name)
+        if i is None:
+            missing += 1
+            continue
+        dx = xy[0] - float(before[i][0])
+        dy = xy[1] - float(before[i][1])
+        pairs.append((abs(dx) + abs(dy), dx, dy, name))
+    pairs.sort(reverse=True)
+    max_disp = pairs[0][0] if pairs else 0.0
+    avg_disp = sum(p[0] for p in pairs) / len(pairs) if pairs else 0.0
+    hpwl = None
+    if lg_def.exists():
+        try:
+            hpwl_proc = subprocess.run(
+                [sys.executable, str(REPO_ROOT / "benchmarks/flows/def_hpwl_eval.py"),
+                 str(Path(foundry) / "lef/sky130_fd_sc_hd_merged.lef"), str(lg_def)],
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
+            m = re.search(r"HPWL=(\d+)", hpwl_proc.stdout)
+            if m:
+                hpwl = int(m.group(1))
+        except Exception:
+            hpwl = None
+    print(json.dumps({
+        "ok": True,
+        "checkpoint": str(ckpt),
+        "iteration": cp.get("current_iter"),
+        "lg_success": True,
+        "lg_def": str(lg_def),
+        "lg_max_displacement": max_disp,
+        "lg_avg_displacement": avg_disp,
+        "lg_displacement_pairs": len(pairs),
+        "lg_missing_instances": missing,
+        "lg_hpwl": hpwl,
+        "fidelity": "lg",
+    }, indent=2))
     return 0
 
 
@@ -363,8 +448,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for name, fn in [("start", cmd_start), ("advance", cmd_advance), ("local_run", cmd_local_run),
-                     ("candidate", cmd_candidate), ("accept", cmd_accept), ("compare", cmd_compare),
-                     ("status", cmd_status)]:
+                     ("candidate", cmd_candidate), ("verify_lg", cmd_verify_lg),
+                     ("accept", cmd_accept), ("compare", cmd_compare), ("status", cmd_status)]:
         sp = sub.add_parser(name)
         if name in ("start", "advance", "candidate"):
             for a in ["workdir", "case-root", "input-def", "config", "foundry-dir", "iterations", "seed",
@@ -403,7 +488,7 @@ def main() -> int:
                 (("--overflow-penalty",), {"type": float, "default": 0.0}),
             ]:
                 sp.add_argument(*args_, **kwargs)
-        elif sp.prog.endswith("accept"):
+        elif sp.prog.endswith(("accept", "verify_lg")):
             sp.add_argument("--workdir", required=True)
             sp.add_argument("--case-root"); sp.add_argument("--input-def"); sp.add_argument("--config")
             sp.add_argument("--foundry-dir"); sp.add_argument("--checkpoint")
@@ -415,8 +500,8 @@ def main() -> int:
             sp.add_argument("--workdir", required=True)
     args = parser.parse_args()
     return {"start": cmd_start, "advance": cmd_advance, "local_run": cmd_local_run,
-            "candidate": cmd_candidate, "accept": cmd_accept, "compare": cmd_compare,
-            "status": cmd_status}[args.command](args)
+            "candidate": cmd_candidate, "verify_lg": cmd_verify_lg, "accept": cmd_accept,
+            "compare": cmd_compare, "status": cmd_status}[args.command](args)
 
 
 if __name__ == "__main__":

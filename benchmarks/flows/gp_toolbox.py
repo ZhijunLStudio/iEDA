@@ -367,10 +367,17 @@ def propose_regions(workdir: str | Path, checkpoint: str | None = None, priority
         dx = max(b["ur_x"] - b["ll_x"] for b in group) // 2
         dy = max(b["ur_y"] - b["ll_y"] for b in group) // 2
         active = instance_points_in_bbox(f"{bbox[0]} {bbox[1]} {bbox[2]} {bbox[3]}", names, coords)
+        # Grow until the minimum cell count or the core boundary. The first
+        # pass uses a half-bin step to stay local; subsequent passes use one
+        # full bin step.
         if len(active) < min_cell_count:
-            expanded = expand_bbox(bbox, dx, dy, core)
-            active = instance_points_in_bbox(f"{expanded[0]} {expanded[1]} {expanded[2]} {expanded[3]}", names, coords)
-            bbox = expanded
+            for step, size in [(0.5, (dx, dy))] + [(1.0, (2 * dx, 2 * dy))] * 8:
+                prev = bbox
+                expanded = expand_bbox(bbox, int(dx * step * 2) or dx, int(dy * step * 2) or dy, core)
+                bbox = expanded
+                active = instance_points_in_bbox(f"{bbox[0]} {bbox[1]} {bbox[2]} {bbox[3]}", names, coords)
+                if len(active) >= min_cell_count or expanded == prev:
+                    break
         if len(active) > max_cell_count:
             # keep the hottest bin only
             hot = max(group, key=lambda b: b.get("overflow_area", 0))
@@ -427,6 +434,30 @@ def propose_freeze(workdir: str | Path, region: str, checkpoint: str | None = No
             "prediction_status": "unavailable"}
 
 
+def freeze_instances(workdir: str | Path, region: str, checkpoint: str | None = None) -> dict:
+    """Return the complement instance list for one-batch freeze semantics.
+
+    Freezing region R for a batch means marking every instance inside R as
+    context (coefficient 0) and every other instance as active. gp_agent
+    local_run then executes this scope without a global control branch.
+    """
+    cp = resolve_checkpoint(workdir, checkpoint)
+    names = cp.get("instance_names") or []
+    coords = cp.get("instance_density_coords") or []
+    inside = {name for name, _xy in instance_points_in_bbox(region, names, coords)}
+    outside = [name for name in names if name not in inside]
+    return {
+        "ok": True,
+        "checkpoint_path": checkpoint_path(workdir, checkpoint),
+        "iteration": cp.get("current_iter"),
+        "region": region,
+        "frozen_cell_count": len(inside),
+        "active_outside_cell_count": len(outside),
+        "scope": "instances",
+        "scope_instances": ",".join(outside),
+    }
+
+
 def diagnose_unstable_region(workdir: str | Path, checkpoint_a: str | None, checkpoint_b: str | None,
                              top_n: int = 5) -> dict:
     a = resolve_checkpoint(workdir, checkpoint_a)
@@ -480,6 +511,7 @@ def verify_delta(workdir: str | Path, checkpoint_a: str, checkpoint_b: str) -> d
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=["status", "checkpoints", "grid", "hotspots", "longnets", "propose_regions",
+                                        "freeze_instances",
                                         "propose_region_density", "propose_freeze", "unstable", "verify_delta"])
     ap.add_argument("--workdir", required=True)
     ap.add_argument("--checkpoint")
@@ -511,6 +543,8 @@ def main() -> int:
         print(json.dumps(diagnose_hotspots(args.workdir, args.checkpoint, args.top_n), indent=2))
     elif args.command == "longnets":
         print(json.dumps(diagnose_longnets(args.workdir, args.checkpoint, args.top_n, args.def_path), indent=2))
+    elif args.command == "freeze_instances":
+        print(json.dumps(freeze_instances(args.workdir, args.region, args.checkpoint), indent=2))
     elif args.command == "propose_regions":
         print(json.dumps(propose_regions(args.workdir, args.checkpoint, args.priority, args.top_n,
                                          args.min_cell_count, args.max_cell_count, args.def_path), indent=2))
