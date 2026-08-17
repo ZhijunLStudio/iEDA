@@ -100,3 +100,28 @@ Innovus/第三方参考结果。
 ### ics55
 
 - 仍缺少 `N551P6M_ieda.lef` 和 signalStorm lib，无法执行。
+
+
+## Agent 调用 GP vs 原始 GP：跨 PDK 细粒度动作结果
+
+从各 PDK 的 parent checkpoint 出发，按 agent 流程执行
+propose_regions -> candidate(region/longnet, 20 iterations)：
+
+| PDK | 设计 | parent | 区域候选 | 长网候选 | 是否优于 parent/global |
+|---|---|---|---|---|---|
+| sky130 | s1238 | iter400 | — | incomparable | 否 |
+| sky130 | apb4_timer | iter100 | — | right_better（3 seed） | 否 |
+| ihp130 | gcd | chain | chain +1.67% | — | 否 |
+| nangate45 | gcd | iter300 | incomparable | incomparable | 否 |
+| asap7 | aes | iter400 | incomparable | incomparable | 否 |
+
+结论：细粒度 agent 动作在当前 iEDA GP kernel 上还不能稳定超过
+原始 GP 的 global 分支；唯一正向案例是 sky130/apb4_timer 的
+longnet stage chain（-0.76%）。
+
+### Innovus 对比可用性
+
+- sky130 四设计：有 Innovus DEF，iEDA 原始 GP HPWL 全部优于 Innovus；
+- nangate45 / asap7 / ihp130：本机 Innovus 二进制存在，但当前 shell
+  license 失败（LMC-01902），无法生成这些 PDK 的 Innovus 参考；
+  因此不能宣称在这些 PDK 上超过 Innovus。
