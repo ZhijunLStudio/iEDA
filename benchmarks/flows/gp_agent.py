@@ -238,6 +238,28 @@ def cmd_advance(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_local_run(args: argparse.Namespace) -> int:
+    """Apply a scope for N iterations WITHOUT a global control branch."""
+    workdir, case_root, input_def, config, foundry = require_context(args)
+    ckpt = resolve_checkpoint(args, workdir)
+    if not ckpt or not Path(ckpt).exists():
+        print(json.dumps({"ok": False, "reason": "no checkpoint; run start first"}))
+        return 1
+    cmds = [
+        f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
+        f"placer_run_gp -mode advance -iterations {args.iterations} " + " ".join(scope_args(args)),
+        "placer_run_gp -mode accept",
+    ]
+    rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmds, def_save=True)
+    record = last_ledger(workdir)
+    if rc != 0:
+        print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
+        return 1
+    state = update_state(workdir)
+    print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
+    return 0
+
+
 def parse_candidate_stdout(out: str) -> dict:
     info = {}
     m = re.search(r"candidate_verdict=(\S+).*?local=(\S+)\s+global=(\S+)", out)
@@ -340,18 +362,22 @@ def cmd_status(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name, fn in [("start", cmd_start), ("advance", cmd_advance), ("candidate", cmd_candidate),
-                     ("accept", cmd_accept), ("compare", cmd_compare), ("status", cmd_status)]:
+    for name, fn in [("start", cmd_start), ("advance", cmd_advance), ("local_run", cmd_local_run),
+                     ("candidate", cmd_candidate), ("accept", cmd_accept), ("compare", cmd_compare),
+                     ("status", cmd_status)]:
         sp = sub.add_parser(name)
         if name in ("start", "advance", "candidate"):
             for a in ["workdir", "case-root", "input-def", "config", "foundry-dir", "iterations", "seed",
                       "checkpoint", "scope", "scope-active-ratio", "scope-active-count", "scope-instances",
-                      "scope-region", "halo-coeff", "halo-hops", "target-density", "report-route-util"]:
+                      "scope-region", "halo-coeff", "halo-hops", "target-density", "report-route-util",
+                      "scope-density-target", "scope-density-ratio", "overflow-penalty", "random-init",
+                      "seed-anchor-strength", "init-density-penalty", "min-phi-coef", "max-phi-coef",
+                      "congestion-effort"]:
                 # reuse common parser option definitions
                 pass
     # Simpler: attach common options to every parser manually.
     for sp in parser._subparsers._group_actions[0].choices.values():
-        if sp.prog.endswith(("start", "advance", "candidate")):
+        if sp.prog.endswith(("start", "advance", "local_run", "candidate")):
             for args_, kwargs in [
                 (("--workdir",), {"required": True}),
                 (("--case-root",), {}), (("--input-def",), {}), (("--config",), {}),
@@ -388,8 +414,9 @@ def main() -> int:
         elif sp.prog.endswith("status"):
             sp.add_argument("--workdir", required=True)
     args = parser.parse_args()
-    return {"start": cmd_start, "advance": cmd_advance, "candidate": cmd_candidate,
-            "accept": cmd_accept, "compare": cmd_compare, "status": cmd_status}[args.command](args)
+    return {"start": cmd_start, "advance": cmd_advance, "local_run": cmd_local_run,
+            "candidate": cmd_candidate, "accept": cmd_accept, "compare": cmd_compare,
+            "status": cmd_status}[args.command](args)
 
 
 if __name__ == "__main__":

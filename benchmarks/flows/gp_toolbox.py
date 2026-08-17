@@ -1,0 +1,529 @@
+#!/usr/bin/env python3
+"""Python toolbox backing the fine-grained iEDA GP tools.
+
+This module reads the same artifacts that gp_agent.py produces:
+- workdir/gp_agent_state.json
+- workdir/pl/gp_experiments.jsonl
+- workdir/pl/gp_grid_report.json
+- workdir/*.json checkpoints
+- placement/input DEF for net topology
+
+It implements inspect/diagnose/propose semantics from GPA_NEXT_PLAN.md.
+No iEDA subprocess is started by any read-only function in this module.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from pathlib import Path
+from typing import Any, Iterable
+
+INST_NAME_RE = re.compile(r"^\s*-\s+(\S+)\s+(.+?)\s*;\s*$")
+PIN_PAIR_RE = re.compile(r"\(\s*(\S+)\s+(\S+)\s*\)")
+
+
+def load_json(path: str | Path) -> dict | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text())
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def workdir_context(workdir: str | Path) -> dict:
+    state = load_json(Path(workdir) / "gp_agent_state.json") or {}
+    return state
+
+
+def latest_checkpoint(workdir: str | Path) -> str | None:
+    state = workdir_context(workdir)
+    cp = state.get("latest_checkpoint")
+    if not cp:
+        ledger = load_json(Path(workdir) / "pl/gp_experiments.jsonl")
+        if ledger:
+            cp = ledger.get("checkpoint")
+    if cp and Path(cp).exists():
+        return cp
+    # Fallback for search workdirs that only keep checkpoint files.
+    best: tuple[int, str] | None = None
+    for item in checkpoint_list(workdir):
+        key = (int(item.get("iteration") or 0), item["checkpoint"])
+        if best is None or key > best:
+            best = key
+    return best[1] if best else None
+
+
+def resolve_checkpoint(workdir: str | Path, checkpoint: str | None) -> dict:
+    if checkpoint:
+        cp = Path(checkpoint)
+        if not cp.exists():
+            raise ValueError(f"checkpoint does not exist: {checkpoint}")
+        data = load_json(cp)
+        if data is None:
+            raise ValueError(f"checkpoint is not valid JSON: {checkpoint}")
+        return data
+    cp = latest_checkpoint(workdir)
+    if not cp:
+        raise ValueError(f"no checkpoint in workdir {workdir}; run gp_start first")
+    data = load_json(cp)
+    if data is None:
+        raise ValueError(f"latest checkpoint is not valid JSON: {cp}")
+    return data
+
+
+def checkpoint_path(workdir: str | Path, checkpoint: str | None) -> str:
+    if checkpoint:
+        return str(Path(checkpoint))
+    cp = latest_checkpoint(workdir)
+    if not cp:
+        raise ValueError(f"no checkpoint in workdir {workdir}")
+    return cp
+
+
+def metric(value: Any, available: bool, reason: str | None = None) -> dict:
+    return {"value": value if available else None, "available": available,
+            "reason": reason if not available else None}
+
+
+def checkpoint_metrics(cp: dict, path: str) -> dict:
+    config = cp.get("config_state") or {}
+    timing_on = bool(config.get("is_timing_effort", 0))
+    congestion_on = bool(config.get("is_congestion_effort", 0))
+    timing_stale = not timing_on
+    rudy_stale = not congestion_on
+    records = cp.get("iteration_records") or []
+    last_timing_iter = None
+    last_rudy_iter = None
+    for rec in reversed(records):
+        if last_timing_iter is None and timing_on:
+            last_timing_iter = rec.get("iter")
+        if last_rudy_iter is None and congestion_on:
+            last_rudy_iter = rec.get("iter")
+    return {
+        "checkpoint_path": path,
+        "iteration": cp.get("current_iter"),
+        "hpwl": metric(cp.get("prev_hpwl"), True),
+        "density_overflow": metric(cp.get("sum_overflow"), True),
+        "overflowing_bin_count": None,  # filled from grid report by status()
+        "peak_bin_density": None,
+        "rudy_route_util_max": metric(cp.get("final_route_util"), congestion_on,
+                                      "congestion_effort is off" if rudy_stale else None),
+        "timing_iter": last_timing_iter,
+        "rudy_iter": last_rudy_iter,
+        "setup_wns": metric(None, timing_on, "timing_effort is off"),
+        "hold_wns": metric(None, timing_on, "timing_effort is off"),
+        "step_length": metric(cp.get("final_step_length"), True),
+        "fidelity": "gp",
+    }
+
+
+def grid_report(workdir: str | Path, checkpoint: str | None = None) -> dict | None:
+    # gp_agent.py currently always dumps the report for the active session at
+    # the latest iteration. Prefer the explicit artifact; checkpoint-specific
+    # bin reports are a future iEDA-side addition.
+    path = Path(workdir) / "pl/gp_grid_report.json"
+    return load_json(path)
+
+
+def checkpoint_list(workdir: str | Path) -> list[dict]:
+    root = Path(workdir)
+    items: list[dict] = []
+    for path in sorted(root.glob("*.json")):
+        name = path.name
+        if name in ("gp_agent_state.json", "search.json"):
+            continue
+        data = load_json(path)
+        if not data or "current_iter" not in data:
+            continue
+        items.append({
+            "checkpoint": str(path),
+            "name": name,
+            "iteration": data.get("current_iter"),
+            "hpwl": data.get("prev_hpwl"),
+            "overflow": data.get("sum_overflow"),
+            "stop_reason": data.get("stop_reason"),
+            "finished": data.get("finished_iter", 0) >= (data.get("current_iter") or 0),
+        })
+    items.sort(key=lambda x: (x["iteration"] or 0, x["name"]))
+    return items
+
+
+def design_status(workdir: str | Path, checkpoint: str | None = None) -> dict:
+    cp = resolve_checkpoint(workdir, checkpoint)
+    cp_path = checkpoint_path(workdir, checkpoint)
+    out = checkpoint_metrics(cp, cp_path)
+    grid = grid_report(workdir)
+    if grid:
+        out["overflowing_bin_count"] = metric(grid.get("overflowing_bin_count"), True)
+        out["peak_bin_density"] = metric(grid.get("peak_density"), True)
+        out["grid_bin_cnt"] = metric((grid.get("bin_cnt_x"), grid.get("bin_cnt_y")), True)
+    else:
+        out["overflowing_bin_count"] = metric(None, False, "gp_grid_report.json missing")
+        out["peak_bin_density"] = metric(None, False, "gp_grid_report.json missing")
+    out["checkpoint_list"] = [x["name"] for x in checkpoint_list(workdir)[-20:]]
+    out["timing_stale"] = out["timing_iter"] != out["iteration"]
+    out["rudy_stale"] = out["rudy_iter"] != out["iteration"]
+    return out
+
+
+def diagnose_hotspots(workdir: str | Path, checkpoint: str | None = None, top_n: int = 5) -> dict:
+    cp = resolve_checkpoint(workdir, checkpoint)
+    grid = grid_report(workdir)
+    if not grid:
+        return {"ok": False, "reason": "gp_grid_report.json missing"}
+    bins = sorted(grid.get("bins", []), key=lambda b: b.get("overflow_area", 0), reverse=True)[:max(1, top_n)]
+    return {
+        "ok": True,
+        "checkpoint_path": checkpoint_path(workdir, checkpoint),
+        "iteration": cp.get("current_iter"),
+        "hotspots": [
+            {
+                "row": b.get("row"),
+                "col": b.get("col"),
+                "bbox": f"{b.get('ll_x')} {b.get('ll_y')} {b.get('ur_x')} {b.get('ur_y')}",
+                "density": b.get("density"),
+                "overflow_area": b.get("overflow_area"),
+                "suggested_action": "region_spread",
+            }
+            for b in bins
+        ],
+    }
+
+
+def load_net_topology(def_path: str | Path) -> list[dict]:
+    text = Path(def_path).read_text(errors="ignore")
+    nets_start = text.find("\nNETS")
+    nets_end = text.find("\nEND NETS")
+    if nets_start < 0 or nets_end < 0:
+        raise ValueError("DEF has no NETS section")
+    block = text[nets_start:nets_end]
+    nets: list[dict] = []
+    current: dict | None = None
+    for raw in block.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("NETS"):
+            continue
+        # `- name` may carry pins on the same line or on following lines.
+        if line.startswith("-"):
+            if current:
+                nets.append(current)
+            body = line[1:].strip()
+            first_space = body.find(" ")
+            if first_space < 0:
+                current = {"name": body, "pins": []}
+            else:
+                current = {"name": body[:first_space], "pins": []}
+                line = body[first_space:]
+            if ";" in line:
+                line = line[:line.index(";")]
+        if current is None:
+            continue
+        if line.startswith("+"):
+            line = line[1:].strip()
+        if ";" in line:
+            line = line[:line.index(";")]
+        current["pins"].extend(PIN_PAIR_RE.findall(line))
+    if current:
+        nets.append(current)
+    return nets
+
+
+def diagnose_longnets(workdir: str | Path, checkpoint: str | None = None, top_n: int = 5,
+                      def_path: str | None = None) -> dict:
+    cp = resolve_checkpoint(workdir, checkpoint)
+    names = cp.get("instance_names") or []
+    coords = cp.get("instance_density_coords") or []
+    if not names or len(names) != len(coords):
+        return {"ok": False, "reason": "checkpoint has no instance density coordinates"}
+    inst_idx = {name: i for i, name in enumerate(names)}
+    if not def_path:
+        state = workdir_context(workdir)
+        def_path = state.get("input_def")
+        if not def_path:
+            return {"ok": False, "reason": "input_def is not recorded in workdir; pass def_path"}
+    nets = load_net_topology(def_path)
+    scored: list[dict] = []
+    for net in nets:
+        points: list[tuple[int, int]] = []
+        for inst, _pin in net["pins"]:
+            idx = inst_idx.get(inst)
+            if idx is None:
+                continue
+            xy = coords[idx]
+            points.append((int(xy[0]), int(xy[1])))
+        if len(points) < 2:
+            continue
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        hpwl = max(xs) - min(xs) + max(ys) - min(ys)
+        scored.append({"net": net["name"], "hpwl": hpwl, "pin_count": len(points)})
+    scored.sort(key=lambda x: x["hpwl"], reverse=True)
+    return {
+        "ok": True,
+        "checkpoint_path": checkpoint_path(workdir, checkpoint),
+        "iteration": cp.get("current_iter"),
+        "longnets": scored[: max(1, top_n)],
+    }
+
+
+def instance_points_in_bbox(bbox: str, names: list[str], coords: list[list[float]]) -> list[tuple[str, list[float]]]:
+    llx, lly, urx, ury = map(int, bbox.split())
+    out = []
+    for i, xy in enumerate(coords):
+        x, y = float(xy[0]), float(xy[1])
+        if llx <= x <= urx and lly <= y <= ury:
+            out.append((names[i], [x, y]))
+    return out
+
+
+def merge_connected_bins(bins: list[dict], cnt_x: int, cnt_y: int, top_n: int) -> list[list[dict]]:
+    """Merge adjacent top overflow bins into connected groups."""
+    chosen = bins[: max(1, top_n)]
+    groups: list[list[dict]] = []
+    used: set[int] = set()
+    for b in chosen:
+        key = b["row"] * cnt_x + b["col"]
+        if key in used:
+            continue
+        group = [b]
+        used.add(key)
+        changed = True
+        while changed:
+            changed = False
+            for other in chosen:
+                okey = other["row"] * cnt_x + other["col"]
+                if okey in used:
+                    continue
+                for member in group:
+                    if abs(other["row"] - member["row"]) + abs(other["col"] - member["col"]) == 1:
+                        group.append(other)
+                        used.add(okey)
+                        changed = True
+                        break
+        groups.append(group)
+    return groups
+
+
+def bbox_of_group(group: list[dict]) -> tuple[int, int, int, int]:
+    return (min(b["ll_x"] for b in group), min(b["ll_y"] for b in group),
+            max(b["ur_x"] for b in group), max(b["ur_y"] for b in group))
+
+
+def expand_bbox(bbox: tuple[int, int, int, int], dx: int, dy: int,
+                core: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    llx, lly, urx, ury = bbox
+    cllx, clly, curx, cury = core
+    return (max(cllx, llx - dx), max(clly, lly - dy), min(curx, urx + dx), min(cury, ury + dy))
+
+
+def propose_regions(workdir: str | Path, checkpoint: str | None = None, priority: str = "density",
+                    top_n: int = 5, min_cell_count: int = 20, max_cell_count: int = 200,
+                    def_path: str | None = None) -> dict:
+    cp = resolve_checkpoint(workdir, checkpoint)
+    names = cp.get("instance_names") or []
+    coords = cp.get("instance_density_coords") or []
+    if not names or len(names) != len(coords):
+        return {"ok": False, "reason": "checkpoint has no instance density coordinates"}
+
+    if priority in ("longnet", "timing", "mixed"):
+        if priority != "longnet":
+            return {"ok": False, "reason": f"priority={priority} is not implemented; use density or longnet"}
+        diag = diagnose_longnets(workdir, checkpoint, top_n=top_n, def_path=def_path)
+        if not diag.get("ok"):
+            return diag
+        regions = []
+        for ln in diag["longnets"]:
+            net = ln["net"]
+            # Get cell groups from net topology later; this v1 returns net seeds
+            # with the instruction to feed them to gp_candidate via scope=longnet.
+            regions.append({
+                "id": f"net:{net}",
+                "kind": "longnet",
+                "net": net,
+                "net_hpwl": ln["hpwl"],
+                "reason": "top HPWL net from current checkpoint",
+                "prediction_status": "unavailable",
+            })
+        return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
+                "iteration": cp.get("current_iter"), "priority": priority, "regions": regions}
+
+    grid = grid_report(workdir)
+    if not grid:
+        return {"ok": False, "reason": "gp_grid_report.json missing"}
+    bins = sorted(grid.get("bins", []), key=lambda b: b.get("overflow_area", 0), reverse=True)
+    if not bins:
+        return {"ok": False, "reason": "grid report contains no bins"}
+    cnt_x, cnt_y = int(grid.get("bin_cnt_x", 0)), int(grid.get("bin_cnt_y", 0))
+    core = (int(grid.get("core_ll_x", 0)), int(grid.get("core_ll_y", 0)),
+            int(grid.get("core_ur_x", 0)), int(grid.get("core_ur_y", 0)))
+    groups = merge_connected_bins(bins, cnt_x, cnt_y, top_n)
+    regions = []
+    for gi, group in enumerate(groups):
+        bbox = bbox_of_group(group)
+        dx = max(b["ur_x"] - b["ll_x"] for b in group) // 2
+        dy = max(b["ur_y"] - b["ll_y"] for b in group) // 2
+        active = instance_points_in_bbox(f"{bbox[0]} {bbox[1]} {bbox[2]} {bbox[3]}", names, coords)
+        if len(active) < min_cell_count:
+            expanded = expand_bbox(bbox, dx, dy, core)
+            active = instance_points_in_bbox(f"{expanded[0]} {expanded[1]} {expanded[2]} {expanded[3]}", names, coords)
+            bbox = expanded
+        if len(active) > max_cell_count:
+            # keep the hottest bin only
+            hot = max(group, key=lambda b: b.get("overflow_area", 0))
+            bbox = (hot["ll_x"], hot["ll_y"], hot["ur_x"], hot["ur_y"])
+            active = instance_points_in_bbox(f"{bbox[0]} {bbox[1]} {bbox[2]} {bbox[3]}", names, coords)
+        region = {
+            "id": f"region-{gi + 1}",
+            "kind": "density",
+            "bin_indices": [b["row"] * cnt_x + b["col"] for b in group],
+            "bbox": f"{bbox[0]} {bbox[1]} {bbox[2]} {bbox[3]}",
+            "active_cell_count": len(active),
+            "halo_cell_count": 0,
+            "density_overflow": max(b.get("overflow_area", 0) for b in group),
+            "score": max(b.get("overflow_area", 0) for b in group),
+            "reason": f"merged {len(group)} connected high-overflow bins",
+            "prediction_status": "unavailable",
+        }
+        regions.append(region)
+    return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
+            "iteration": cp.get("current_iter"), "priority": priority,
+            "bin_cnt": (cnt_x, cnt_y), "regions": regions}
+
+
+def propose_region_density(workdir: str | Path, region: str, checkpoint: str | None = None) -> dict:
+    cp = resolve_checkpoint(workdir, checkpoint)
+    grid = grid_report(workdir)
+    if not grid:
+        return {"ok": False, "reason": "gp_grid_report.json missing"}
+    llx, lly, urx, ury = map(int, region.split())
+    overlap = []
+    for b in grid.get("bins", []):
+        blx, bly, bux, buy = b["ll_x"], b["ll_y"], b["ur_x"], b["ur_y"]
+        if not (urx <= blx or llx >= bux or ury <= bly or lly >= buy):
+            overlap.append(b)
+    if not overlap:
+        return {"ok": False, "reason": "region does not overlap any GP bin"}
+    peak = max(b.get("density", 0.0) for b in overlap)
+    suggested = max(0.6, min(1.0, round(1.0 / peak, 2)))
+    return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
+            "iteration": cp.get("current_iter"), "region": region,
+            "overlapping_bins": len(overlap), "peak_density": peak,
+            "suggested_density_target": suggested,
+            "prediction_status": "unavailable"}
+
+
+def propose_freeze(workdir: str | Path, region: str, checkpoint: str | None = None) -> dict:
+    cp = resolve_checkpoint(workdir, checkpoint)
+    names = cp.get("instance_names") or []
+    coords = cp.get("instance_density_coords") or []
+    active = instance_points_in_bbox(region, names, coords)
+    return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
+            "iteration": cp.get("current_iter"), "region": region,
+            "cells_in_region": len(active), "freeze_cell_count": len(active),
+            "prediction_status": "unavailable"}
+
+
+def diagnose_unstable_region(workdir: str | Path, checkpoint_a: str | None, checkpoint_b: str | None,
+                             top_n: int = 5) -> dict:
+    a = resolve_checkpoint(workdir, checkpoint_a)
+    b = resolve_checkpoint(workdir, checkpoint_b)
+    na, nb = a.get("instance_names") or [], b.get("instance_names") or []
+    ca, cb = a.get("instance_density_coords") or [], b.get("instance_density_coords") or []
+    if na != nb or len(ca) != len(cb):
+        return {"ok": False, "reason": "checkpoints are not comparable"}
+    moved = []
+    for i, name in enumerate(na):
+        dx = float(ca[i][0]) - float(cb[i][0])
+        dy = float(ca[i][1]) - float(cb[i][1])
+        moved.append({"cell": name, "dx": dx, "dy": dy, "dist": (dx * dx + dy * dy) ** 0.5})
+    moved.sort(key=lambda x: x["dist"], reverse=True)
+    return {"ok": True, "checkpoint_a": checkpoint_path(workdir, checkpoint_a),
+            "checkpoint_b": checkpoint_path(workdir, checkpoint_b),
+            "iteration_a": a.get("current_iter"), "iteration_b": b.get("current_iter"),
+            "most_moved": moved[: max(1, top_n)]}
+
+
+def verify_delta(workdir: str | Path, checkpoint_a: str, checkpoint_b: str) -> dict:
+    a = resolve_checkpoint(workdir, checkpoint_a)
+    b = resolve_checkpoint(workdir, checkpoint_b)
+    same = (a.get("config_fingerprint") == b.get("config_fingerprint")
+            and a.get("instance_names") == b.get("instance_names")
+            and a.get("total_inst_area") == b.get("total_inst_area"))
+    if not same:
+        return {"ok": False, "reason": "checkpoints have different config or topology",
+                "incomparable": True}
+    def val(cp, key):
+        return float(cp.get(key, 0.0) or 0.0)
+    hpwl_delta = val(b, "prev_hpwl") - val(a, "prev_hpwl")
+    ov_delta = val(b, "sum_overflow") - val(a, "sum_overflow")
+    rudy_delta = val(b, "final_route_util") - val(a, "final_route_util")
+    return {
+        "ok": True,
+        "checkpoint_a": checkpoint_path(workdir, checkpoint_a),
+        "checkpoint_b": checkpoint_path(workdir, checkpoint_b),
+        "iteration_delta": int(b.get("current_iter", 0) or 0) - int(a.get("current_iter", 0) or 0),
+        "delta": {
+            "hpwl": hpwl_delta,
+            "density_overflow": ov_delta,
+            "rudy_route_util_max": rudy_delta,
+            "timing": {"available": False, "reason": "checkpoint does not persist setup/hold WNS"},
+        },
+        "dirty_closure": {"note": "v1 reports checkpoint-global deltas; local dirty closure requires iEDA-side reporting"},
+        "fidelity": "gp",
+    }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("command", choices=["status", "checkpoints", "grid", "hotspots", "longnets", "propose_regions",
+                                        "propose_region_density", "propose_freeze", "unstable", "verify_delta"])
+    ap.add_argument("--workdir", required=True)
+    ap.add_argument("--checkpoint")
+    ap.add_argument("--checkpoint-a")
+    ap.add_argument("--checkpoint-b")
+    ap.add_argument("--def-path")
+    ap.add_argument("--priority", default="density")
+    ap.add_argument("--region")
+    ap.add_argument("--top-n", type=int, default=5)
+    ap.add_argument("--min-cell-count", type=int, default=20)
+    ap.add_argument("--max-cell-count", type=int, default=200)
+    args = ap.parse_args()
+
+    if args.command == "status":
+        print(json.dumps(design_status(args.workdir, args.checkpoint), indent=2))
+    elif args.command == "checkpoints":
+        print(json.dumps({"ok": True, "checkpoints": checkpoint_list(args.workdir)}, indent=2))
+    elif args.command == "grid":
+        cp = resolve_checkpoint(args.workdir, args.checkpoint)
+        grid = grid_report(args.workdir)
+        if not grid:
+            print(json.dumps({"ok": False, "reason": "gp_grid_report.json missing"}, indent=2))
+            return 1
+        bins = sorted(grid.get("bins", []), key=lambda b: b.get("overflow_area", 0), reverse=True)[:max(1, args.top_n)]
+        print(json.dumps({"ok": True, "checkpoint_path": checkpoint_path(args.workdir, args.checkpoint),
+                          "iteration": cp.get("current_iter"), "bin_cnt": (grid.get("bin_cnt_x"), grid.get("bin_cnt_y")),
+                          "bins": bins}, indent=2))
+    elif args.command == "hotspots":
+        print(json.dumps(diagnose_hotspots(args.workdir, args.checkpoint, args.top_n), indent=2))
+    elif args.command == "longnets":
+        print(json.dumps(diagnose_longnets(args.workdir, args.checkpoint, args.top_n, args.def_path), indent=2))
+    elif args.command == "propose_regions":
+        print(json.dumps(propose_regions(args.workdir, args.checkpoint, args.priority, args.top_n,
+                                         args.min_cell_count, args.max_cell_count, args.def_path), indent=2))
+    elif args.command == "propose_region_density":
+        print(json.dumps(propose_region_density(args.workdir, args.region, args.checkpoint), indent=2))
+    elif args.command == "propose_freeze":
+        print(json.dumps(propose_freeze(args.workdir, args.region, args.checkpoint), indent=2))
+    elif args.command == "unstable":
+        print(json.dumps(diagnose_unstable_region(args.workdir, args.checkpoint_a, args.checkpoint_b, args.top_n), indent=2))
+    elif args.command == "verify_delta":
+        print(json.dumps(verify_delta(args.workdir, args.checkpoint_a, args.checkpoint_b), indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
