@@ -64,12 +64,15 @@ def run_ieda(workdir: Path, case_root: Path, foundry_dir: Path, config: Path, in
              commands: list[str], def_save: bool = False) -> tuple[int, str, str]:
     tcl = write_tcl(workdir, case_root, foundry_dir, config, input_def, commands, def_save)
     env = os.environ.copy()
+    sdc = case_root / f"{case_root.name}.sdc"
+    if not sdc.exists():
+        sdc = case_root / "default.sdc"
     env.update({
         "CONFIG_DIR": str(case_root / "iEDA_config"),
         "RESULT_DIR": str(workdir),
         "TCL_SCRIPT_DIR": str(case_root / "script"),
         "FOUNDRY_DIR": str(foundry_dir),
-        "SDC_FILE": str(case_root / f"{case_root.name}.sdc"),
+        "SDC_FILE": str(sdc),
     })
     proc = subprocess.run([str(IEDa_BIN), "-script", str(tcl)], cwd=REPO_ROOT, env=env,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=1800)
