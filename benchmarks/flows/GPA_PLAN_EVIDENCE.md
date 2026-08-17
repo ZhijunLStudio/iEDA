@@ -75,3 +75,28 @@ Innovus/第三方参考结果。
   - 有 tech/cell LEF 和 lib；
   - 尚无可直接用于 iEDA GP 的 DEF/case，需要 iFP floorplan 后再验证。
 - ics55：仍未找到物理 LEF/lib，无法验证。
+
+
+## 其他 PDK 实验补充
+
+### nangate45_gcd
+
+- 输入 OpenROAD `gcd_nangate45.def` HPWL 4,472,593；
+- iEDA 直接 GP（random_init=1, seed=42, 600 iter）392 次迭代收敛，
+  internal HPWL 5,070,217，def HPWL 5,850,034，当前配置下未超过输入布局；
+- target_density 0.80/0.85/0.90 显式请求均被 adaptTargetDensity 钳制到
+  物理利用率边界，三组结果相同。
+
+### asap7_aes
+
+- 用 OpenROAD 0.9 从 `aes_asap7.v` + asap7 LEF/lib 生成初始 DEF；
+- iEDA 直接 GP 431 次迭代收敛：
+  - overflow=0.09872
+  - route_util=2.08596
+  - def HPWL=58,392,975
+- longnet stage chain 在第 167 次迭代 `overflow_target_miss`，chain 未收敛。
+  细粒度链在该 asap7 设计上不稳定。
+
+### ics55
+
+- 仍缺少 `N551P6M_ieda.lef` 和 signalStorm lib，无法执行。
