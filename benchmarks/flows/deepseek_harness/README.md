@@ -65,12 +65,22 @@ On this machine:
 benchmarks/flows/deepseek_harness/install_local_service.sh
 ```
 
-or manually:
+The script registers the bundle **without** restarting the running web service:
+rebuilds are hot-reloaded by the dsh-super-injector watch (see the
+`watches` config in `dsh-super-injector/cordis.patch.yml`), or reload
+explicitly in a GUI session with
+`dev_reload_package '@ieda-ai/dsh-tool-ieda-gp'`. To restart the service
+anyway (this interrupts any in-flight agent tool call), pass `--restart`:
+
+```sh
+benchmarks/flows/deepseek_harness/install_local_service.sh --restart
+```
+
+Manual registration without restart:
 
 ```sh
 export PATH="$HOME/.npm-global/bin:$PATH"
 dsh plugin --profile web add   /home/lizhijun/work/iEDA.ai/benchmarks/flows/deepseek_harness/profile_plugin
-systemctl --user restart dsh-web.service
 ```
 
 Verified against the running service: a real `deepseek-v4-pro` headless call
