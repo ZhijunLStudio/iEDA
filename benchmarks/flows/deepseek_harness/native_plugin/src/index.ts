@@ -136,251 +136,105 @@ class IedaGpRuntime {
 
 export function apply(ctx: Context, config: Config): void {
   const runtime = new IedaGpRuntime(resolve(config.iedaRoot), config.python, config.timeoutMs)
-
-  const toolboxTool = (name: string, description: string, args: (args: any) => string[]) =>
-    ctx.tools.register(defineTool({
-      name,
-      description,
-      parameters: {
-        workdir: { type: 'string', required: true },
-        checkpoint: { type: 'string' },
-        top_n: { type: 'integer' },
-        priority: { type: 'string' },
-        min_cell_count: { type: 'integer' },
-        max_cell_count: { type: 'integer' },
-        def_path: { type: 'string' },
-        region: { type: 'string' },
-        checkpoint_a: { type: 'string' },
-        checkpoint_b: { type: 'string' },
-      },
-      output: { schema: commonResultSchema(), render: (_args: any, value: any) => jsonContent(value as Record<string, unknown>) },
-      execute: async (args: any) => asJson(await runtime.toolbox(args(args))),
-    }));
-
-  toolboxTool('ieda_gp_design_status', 'Report current GP checkpoint metrics with availability and staleness fields.', a => ['status', '--workdir', resolve(a.workdir), ...(a.checkpoint ? ['--checkpoint', a.checkpoint] : [])]);
-  toolboxTool('ieda_gp_checkpoint_list', 'List every GP checkpoint in the workdir.', a => ['checkpoints', '--workdir', resolve(a.workdir)]);
-  toolboxTool('ieda_gp_grid_report', 'Return top density-overflow GP bins.', a => ['grid', '--workdir', resolve(a.workdir), '--top-n', String(a.top_n ?? 8), ...(a.checkpoint ? ['--checkpoint', a.checkpoint] : [])]);
-  toolboxTool('ieda_gp_diagnose_hotspots', 'Diagnose density hotspots.', a => ['hotspots', '--workdir', resolve(a.workdir), '--top-n', String(a.top_n ?? 5), ...(a.checkpoint ? ['--checkpoint', a.checkpoint] : [])]);
-  toolboxTool('ieda_gp_diagnose_longnets', 'Diagnose highest-HPWL nets.', a => ['longnets', '--workdir', resolve(a.workdir), '--top-n', String(a.top_n ?? 5), ...(a.def_path ? ['--def-path', a.def_path] : []), ...(a.checkpoint ? ['--checkpoint', a.checkpoint] : [])]);
-  toolboxTool('ieda_gp_propose_regions', 'Let iEDA propose concrete local-GP regions from priority and size bounds.', a => ['propose_regions', '--workdir', resolve(a.workdir), '--priority', a.priority ?? 'density', '--top-n', String(a.top_n ?? 5), '--min-cell-count', String(a.min_cell_count ?? 20), '--max-cell-count', String(a.max_cell_count ?? 200), ...(a.def_path ? ['--def-path', a.def_path] : []), ...(a.checkpoint ? ['--checkpoint', a.checkpoint] : [])]);
-  toolboxTool('ieda_gp_propose_region_density', 'Propose a scoped density target for a rectangular GP region.', a => ['propose_region_density', '--workdir', resolve(a.workdir), '--region', a.region, ...(a.checkpoint ? ['--checkpoint', a.checkpoint] : [])]);
-  toolboxTool('ieda_gp_diagnose_unstable', 'Compare two checkpoints and report the most-moved cells.', a => ['unstable', '--workdir', resolve(a.workdir), '--checkpoint-a', a.checkpoint_a, '--checkpoint-b', a.checkpoint_b, '--top-n', String(a.top_n ?? 5)]);
-  toolboxTool('ieda_gp_verify_delta', 'Verify metric delta between two comparable checkpoints.', a => ['verify_delta', '--workdir', resolve(a.workdir), '--checkpoint-a', a.checkpoint_a, '--checkpoint-b', a.checkpoint_b]);
+  const p = (extra: Record<string, unknown> = {}) => ({ kind: { type: 'string', required: true }, ...extra })
+  const out = () => ({ schema: commonResultSchema(), render: (_args: unknown, value: unknown) => jsonContent(value as Record<string, unknown>) })
+  const toolbox = async (args: string[]) => asJson(await runtime.toolbox(args))
+  const agent = async (args: any) => asJson(await runtime.agent(args.design, args.workdir, args as string[]))
+  const restore = async (args: any) => asJson(await runCli(config.iedaRoot, config.python, config.timeoutMs,
+    join(config.iedaRoot, 'benchmarks/flows/gp_agent.py'),
+    ['--workdir', resolve(args.workdir), 'restore', ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]))
+  const scopeArgs = (args: any) => ['--scope', args.scope ?? 'region', '--scope-active-ratio', String(args.scope_active_ratio ?? 0.2),
+    '--scope-active-count', String(args.scope_active_count ?? 100), '--scope-instances', args.scope_instances ?? '',
+    '--scope-region', args.scope_region ?? '', '--halo-coeff', String(args.halo_coeff ?? 0.5),
+    '--halo-hops', String(args.halo_hops ?? 1), '--scope-density-target', String(args.scope_density_target ?? 1),
+    '--scope-density-ratio', String(args.scope_density_ratio ?? 0), '--overflow-penalty', String(args.overflow_penalty ?? 0)]
+  const freezeRun = async (args: any) => {
+    const fz: any = await runtime.toolbox(['freeze_instances', '--workdir', resolve(args.workdir), '--region', args.region,
+      ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
+    if (!fz.ok) return asJson(fz)
+    return asJson(await runtime.agent(args.design, args.workdir, ['local_run', '--iterations', String(args.iterations ?? 10),
+      '--scope', 'instances', '--scope-instances', String(fz.scope_instances), '--halo-hops', String(args.halo_hops ?? 0),
+      '--halo-coeff', String(args.halo_coeff ?? 0.5), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]))
+  }
 
   ctx.tools.register(defineTool({
-    name: 'ieda_gp_local_run',
-    description: 'Run local GP for a scoped cell set without a global control branch.',
-    parameters: {
-      design: { type: 'string', required: true },
-      workdir: { type: 'string', required: true },
-      checkpoint: { type: 'string' },
-      iterations: { type: 'integer' },
-      scope: { type: 'string' },
-      scope_region: { type: 'string' },
-      scope_active_count: { type: 'integer' },
-      scope_active_ratio: { type: 'number' },
-      halo_hops: { type: 'integer' },
-      halo_coeff: { type: 'number' },
-      scope_density_target: { type: 'number' },
-      scope_density_ratio: { type: 'number' },
-    },
-    output: { schema: commonResultSchema(), render: (_args, value) => jsonContent(value as Record<string, unknown>) },
-    execute: async args => asJson(await runtime.agent(args.design, args.workdir, [
-      'local_run', '--iterations', String(args.iterations ?? 10), '--scope', args.scope ?? 'region',
-      '--scope-region', args.scope_region ?? '', '--scope-active-count', String(args.scope_active_count ?? 100),
-      '--scope-active-ratio', String(args.scope_active_ratio ?? 0.2), '--halo-hops', String(args.halo_hops ?? 1),
-      '--halo-coeff', String(args.halo_coeff ?? 0.5), '--scope-density-target', String(args.scope_density_target ?? 1),
-      '--scope-density-ratio', String(args.scope_density_ratio ?? 0),
-      ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : []),
-    ])),
-  }))
-
-  toolboxTool('ieda_gp_propose_freeze', 'Return the cell set that would be frozen inside a rectangular region for one batch.', a => ['propose_freeze', '--workdir', resolve(a.workdir), '--region', a.region, ...(a.checkpoint ? ['--checkpoint', a.checkpoint] : [])]);
-  ctx.tools.register(defineTool({
-    name: 'ieda_gp_apply_freeze',
-    description: 'Freeze the cells inside a region for one GP batch and move the complement. Batch-scoped: the freeze clears automatically when the batch ends.',
-    parameters: {
-      design: { type: 'string', required: true },
-      workdir: { type: 'string', required: true },
-      region: { type: 'string', required: true, description: 'llx lly urx ury' },
-      checkpoint: { type: 'string' },
-      iterations: { type: 'integer' },
-      halo_hops: { type: 'integer' },
-      halo_coeff: { type: 'number' },
-    },
-    output: { schema: commonResultSchema(), render: (_args, value) => jsonContent(value as Record<string, unknown>) },
-    execute: async args => {
-      const fz = await runtime.toolbox(['freeze_instances', '--workdir', resolve(args.workdir), '--region', args.region, ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]) as any
-      if (!fz.ok) return asJson(fz)
-      return asJson(await runtime.agent(args.design, args.workdir, [
-        'local_run', '--iterations', String(args.iterations ?? 10), '--scope', 'instances',
-        '--scope-instances', String(fz.scope_instances), '--halo-hops', String(args.halo_hops ?? 0),
-        '--halo-coeff', String(args.halo_coeff ?? 0.5),
-        ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : []),
-      ]))
-    },
-  }))
-  ctx.tools.register(defineTool({
-    name: 'ieda_gp_unfreeze',
-    description: 'Freeze is batch-scoped in the current GP implementation, so no persistent freeze state exists. Returns the current checkpoint for continuation.',
-    parameters: { workdir: { type: 'string', required: true }, checkpoint: { type: 'string' } },
-    output: { schema: commonResultSchema(), render: (_args, value) => jsonContent(value as Record<string, unknown>) },
-    execute: async args => asJson({ ok: true, note: 'batch-scoped freeze already cleared', workdir: resolve(args.workdir), checkpoint: args.checkpoint ?? null }),
-  }))
-  ctx.tools.register(defineTool({
-    name: 'ieda_gp_clear_region_density',
-    description: 'Region density targets are batch-scoped and clear automatically; this returns the current checkpoint for continuation.',
-    parameters: { workdir: { type: 'string', required: true }, checkpoint: { type: 'string' } },
-    output: { schema: commonResultSchema(), render: (_args, value) => jsonContent(value as Record<string, unknown>) },
-    execute: async args => asJson({ ok: true, note: 'batch-scoped density target already cleared', workdir: resolve(args.workdir), checkpoint: args.checkpoint ?? null }),
-  }))
-  ctx.tools.register(defineTool({
-    name: 'ieda_gp_start',
-    description: 'Start a new iEDA global-placement session for a registered design. A fresh workdir is required for each independent search; use ieda_gp_candidate or ieda_gp_advance afterwards.',
-    parameters: {
-      design: { type: 'string', required: true, description: 'Registered design name, e.g. s1238.' },
-      workdir: { type: 'string', required: true, description: 'Absolute empty/new work directory for the GP session.' },
-      iterations: { type: 'integer', description: 'Iterations in the first batch.' },
-      random_init: { type: 'integer', description: '1 = random initial placement (default), 0 = keep current coordinates.' },
-      seed: { type: 'integer', description: 'Random placement seed.' },
-      target_density: { type: 'number', description: 'Explicit GP target density in (0,1); -1 keeps config default.' },
-      congestion_effort: { type: 'integer', description: '-1 config default, 0 off, 1 on.' },
-      seed_anchor_strength: { type: 'number', description: '0..1; with random_init=0, blend each solver step toward start coordinates.' },
-      report_route_util: { type: 'integer', description: '1 prints RUDY route utilization.' },
-    },
-    output: {
-      schema: commonResultSchema(),
-      render: (_args, value) => jsonContent(value as Record<string, unknown>),
-    },
-    execute: async args => asJson(await runtime.agent(args.design, args.workdir, [
-      'start',
-      '--iterations', String(args.iterations ?? 20),
-      '--seed', String(args.seed ?? 1000),
-      '--random-init', String(args.random_init ?? 1),
-      '--seed-anchor-strength', String(args.seed_anchor_strength ?? 0),
-      '--target-density', String(args.target_density ?? -1),
-      '--congestion-effort', String(args.congestion_effort ?? -1),
-      '--report-route-util', String(args.report_route_util ?? 1),
-    ])),
-  }))
-
-  ctx.tools.register(defineTool({
-    name: 'ieda_gp_candidate',
-    description: 'Run one local-vs-global GP candidate pair from a checkpoint. The returned verdict is a safe Pareto/score decision; keep the winning branch checkpoint for the next stage.',
-    parameters: {
-      design: { type: 'string', required: true },
-      workdir: { type: 'string', required: true },
-      iterations: { type: 'integer', description: 'Candidate branch budget, usually 20-80.' },
-      scope: { type: 'string', description: 'global, hotspot, random, instances, region, or longnet.' },
-      scope_active_ratio: { type: 'number', description: 'Hotspot top-bin ratio, e.g. 0.2.' },
-      scope_active_count: { type: 'integer', description: 'Active instance count for random/longnet.' },
-      scope_region: { type: 'string', description: 'Four integers "llx lly urx ury" for region scope.' },
-      halo_coeff: { type: 'number', description: 'Halo movement coefficient in [0,1].' },
-      halo_hops: { type: 'integer', description: 'Net-hop radius of the halo.' },
-      overflow_penalty: { type: 'number', description: 'Score penalty for overflow when candidates do not dominate.' },
-      scope_density_target: { type: 'number', description: 'Scoped grid capacity factor in (0,1].' },
-      scope_density_ratio: { type: 'number', description: 'Hotspot density-screen top ratio in [0,1].' },
-      checkpoint: { type: 'string', description: 'Parent checkpoint; omit to use the workdir latest checkpoint.' },
-    },
-    output: {
-      schema: commonResultSchema(),
-      render: (_args, value) => jsonContent(value as Record<string, unknown>),
-    },
-    execute: async args => asJson(await runtime.agent(args.design, args.workdir, [
-      'candidate',
-      '--iterations', String(args.iterations ?? 20),
-      '--scope', args.scope ?? 'longnet',
-      '--scope-active-ratio', String(args.scope_active_ratio ?? 0.2),
-      '--scope-active-count', String(args.scope_active_count ?? 100),
-      '--scope-region', args.scope_region ?? '',
-      '--halo-coeff', String(args.halo_coeff ?? 0.5),
-      '--halo-hops', String(args.halo_hops ?? 2),
-      '--overflow-penalty', String(args.overflow_penalty ?? 2),
-      '--scope-density-target', String(args.scope_density_target ?? 1),
-      '--scope-density-ratio', String(args.scope_density_ratio ?? 0),
-      ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : []),
-    ])),
-  }))
-
-  ctx.tools.register(defineTool({
-    name: 'ieda_gp_advance',
-    description: 'Advance an existing iEDA GP session toward its overflow target.',
-    parameters: {
-      design: { type: 'string', required: true },
-      workdir: { type: 'string', required: true },
-      iterations: { type: 'integer', description: 'Iterations to run.' },
-      checkpoint: { type: 'string', description: 'Optional explicit checkpoint; omit for workdir latest.' },
-      report_route_util: { type: 'integer', description: '1 prints RUDY route utilization.' },
-    },
-    output: {
-      schema: commonResultSchema(),
-      render: (_args, value) => jsonContent(value as Record<string, unknown>),
-    },
-    execute: async args => asJson(await runtime.agent(args.design, args.workdir, [
-      'advance',
-      '--iterations', String(args.iterations ?? 100),
-      '--report-route-util', String(args.report_route_util ?? 1),
-      ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : []),
-    ])),
-  }))
-
-  ctx.tools.register(defineTool({
-    name: 'ieda_gp_verify_lg',
-    description: 'Run LG as a read-only oracle for a checkpoint: restores it in a throwaway workdir, runs placer_run_lg, and reports post-LG HPWL, max/avg displacement, and fidelity=lg.',
-    parameters: {
-      design: { type: 'string', required: true },
-      workdir: { type: 'string', required: true },
-      checkpoint: { type: 'string' },
-    },
-    output: { schema: commonResultSchema(), render: (_args, value) => jsonContent(value as Record<string, unknown>) },
-    execute: async args => asJson(await runtime.agent(args.design, args.workdir, [
-      'verify_lg',
-      ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : []),
-    ])),
-  }))
-
-  ctx.tools.register(defineTool({
-    name: 'ieda_gp_accept',
-    description: 'Commit a GP checkpoint into the design and write placement.def under the workdir. Use this after a winning candidate or a converged advance to a placement DEF file.',
-    parameters: {
-      design: { type: 'string', required: true },
-      workdir: { type: 'string', required: true },
-      checkpoint: { type: 'string', description: 'Optional checkpoint to commit; omit for the workdir latest checkpoint.' },
-    },
-    output: {
-      schema: commonResultSchema(),
-      render: (_args, value) => jsonContent(value as Record<string, unknown>),
-    },
-    execute: async args => {
-      const result = await runtime.agent(args.design, args.workdir, [
-        'accept',
-        ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : []),
-      ])
-      return asJson({ ...result, placement_def: join(resolve(args.workdir), 'placement.def') })
+    name: 'ieda_gp_inspect',
+    description: 'Inspect GP state. kind: status (current metrics with availability/staleness), checkpoints (all checkpoints), grid (top density bins). workdir is required; checkpoint is optional and defaults to the latest checkpoint.',
+    parameters: p({ workdir: { type: 'string', required: true }, checkpoint: { type: 'string' }, top_n: { type: 'integer' }, def_path: { type: 'string' } }),
+    output: out(),
+    execute: async (args: any) => {
+      if (args.kind === 'status') return toolbox(['status', '--workdir', resolve(args.workdir), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
+      if (args.kind === 'checkpoints') return toolbox(['checkpoints', '--workdir', resolve(args.workdir)])
+      if (args.kind === 'grid') return toolbox(['grid', '--workdir', resolve(args.workdir), '--top-n', String(args.top_n ?? 8), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
+      throw new Error('ieda_gp_inspect: kind must be status|checkpoints|grid')
     },
   }))
 
   ctx.tools.register(defineTool({
-    name: 'ieda_gp_report',
-    description: 'Report the current iEDA GP session state, experiment ledger record, and latest checkpoint.',
-    parameters: {
-      workdir: { type: 'string', required: true },
-    },
-    output: {
-      schema: commonResultSchema(),
-      render: (_args, value) => jsonContent(value as Record<string, unknown>),
-    },
-    execute: async args => {
-      const workdir = resolve(args.workdir)
-      const readJson = (file: string): unknown => {
-        try { return JSON.parse(readFileSync(join(workdir, file), 'utf8')) } catch { return null }
-      }
-      return asJson({
-        state: readJson('gp_agent_state.json'),
-        last_ledger: readJson('pl/gp_experiments.jsonl'),
-        search: readJson('search.json'),
-      })
+    name: 'ieda_gp_diagnose',
+    description: 'Diagnose GP problems. kind: hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b).',
+    parameters: p({ workdir: { type: 'string', required: true }, checkpoint: { type: 'string' }, checkpoint_a: { type: 'string' }, checkpoint_b: { type: 'string' }, top_n: { type: 'integer' }, def_path: { type: 'string' }, region: { type: 'string' } }),
+    output: out(),
+    execute: async (args: any) => {
+      if (args.kind === 'hotspots') return toolbox(['hotspots', '--workdir', resolve(args.workdir), '--top-n', String(args.top_n ?? 5), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
+      if (args.kind === 'longnets') return toolbox(['longnets', '--workdir', resolve(args.workdir), '--top-n', String(args.top_n ?? 5), ...(args.def_path ? ['--def-path', args.def_path] : []), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
+      if (args.kind === 'unstable') return toolbox(['unstable', '--workdir', resolve(args.workdir), '--checkpoint-a', args.checkpoint_a, '--checkpoint-b', args.checkpoint_b, '--top-n', String(args.top_n ?? 5)])
+      throw new Error('ieda_gp_diagnose: kind must be hotspots|longnets|unstable')
     },
   }))
 
+  ctx.tools.register(defineTool({
+    name: 'ieda_gp_propose',
+    description: 'Propose GP actions without changing state. kind: regions, region_density, freeze. prediction_status is unavailable until a predictor exists.',
+    parameters: p({ workdir: { type: 'string', required: true }, checkpoint: { type: 'string' }, priority: { type: 'string' }, top_n: { type: 'integer' }, min_cell_count: { type: 'integer' }, max_cell_count: { type: 'integer' }, def_path: { type: 'string' }, region: { type: 'string' } }),
+    output: out(),
+    execute: async (args: any) => {
+      if (args.kind === 'regions') return toolbox(['propose_regions', '--workdir', resolve(args.workdir), '--priority', args.priority ?? 'density', '--top-n', String(args.top_n ?? 5), '--min-cell-count', String(args.min_cell_count ?? 20), '--max-cell-count', String(args.max_cell_count ?? 200), ...(args.def_path ? ['--def-path', args.def_path] : []), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
+      if (args.kind === 'region_density') return toolbox(['propose_region_density', '--workdir', resolve(args.workdir), '--region', args.region, ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
+      if (args.kind === 'freeze') return toolbox(['propose_freeze', '--workdir', resolve(args.workdir), '--region', args.region, ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
+      throw new Error('ieda_gp_propose: kind must be regions|region_density|freeze')
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'ieda_gp_run',
+    description: 'Execute GP actions. kind: start, advance, candidate, local_run, apply_freeze, apply_region_density. design and workdir are required; all apply kinds return the new checkpoint path.',
+    parameters: p({ design: { type: 'string', required: true }, workdir: { type: 'string', required: true }, checkpoint: { type: 'string' }, iterations: { type: 'integer' }, seed: { type: 'integer' }, random_init: { type: 'integer' }, target_density: { type: 'number' }, congestion_effort: { type: 'integer' }, seed_anchor_strength: { type: 'number' }, report_route_util: { type: 'integer' }, scope: { type: 'string' }, scope_active_ratio: { type: 'number' }, scope_active_count: { type: 'integer' }, scope_instances: { type: 'string' }, scope_region: { type: 'string' }, halo_coeff: { type: 'number' }, halo_hops: { type: 'integer' }, overflow_penalty: { type: 'number' }, scope_density_target: { type: 'number' }, scope_density_ratio: { type: 'number' }, region: { type: 'string' } }),
+    output: out(),
+    execute: async (args: any) => {
+      const k = args.kind
+      if (k === 'start') return agent([...['start', '--iterations', String(args.iterations ?? 20), '--seed', String(args.seed ?? 1000), '--random-init', String(args.random_init ?? 1), '--seed-anchor-strength', String(args.seed_anchor_strength ?? 0), '--target-density', String(args.target_density ?? -1), '--congestion-effort', String(args.congestion_effort ?? -1), '--report-route-util', String(args.report_route_util ?? 1)]])
+      if (k === 'advance') return agent([...['advance', '--iterations', String(args.iterations ?? 100), '--report-route-util', String(args.report_route_util ?? 1), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]])
+      if (k === 'candidate') return agent([...['candidate', '--iterations', String(args.iterations ?? 20), ...scopeArgs(args), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]])
+      if (k === 'local_run') return agent([...['local_run', '--iterations', String(args.iterations ?? 10), ...scopeArgs(args), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]])
+      if (k === 'apply_freeze') return freezeRun(args)
+      if (k === 'apply_region_density') return agent([...['local_run', '--iterations', String(args.iterations ?? 10), '--scope', 'region', '--scope-region', args.region, '--scope-density-target', String(args.scope_density_target ?? 1), '--scope-density-ratio', '1', '--halo-hops', String(args.halo_hops ?? 1), '--halo-coeff', String(args.halo_coeff ?? 0.5), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]])
+      throw new Error('ieda_gp_run: kind must be start|advance|candidate|local_run|apply_freeze|apply_region_density')
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'ieda_gp_verify',
+    description: 'Verify GP results. kind: delta (metric delta between checkpoint_a and checkpoint_b), lg (read-only LG oracle: post-LG HPWL and max/avg displacement).',
+    parameters: p({ design: { type: 'string' }, workdir: { type: 'string', required: true }, checkpoint: { type: 'string' }, checkpoint_a: { type: 'string' }, checkpoint_b: { type: 'string' } }),
+    output: out(),
+    execute: async (args: any) => {
+      if (args.kind === 'delta') return toolbox(['verify_delta', '--workdir', resolve(args.workdir), '--checkpoint-a', args.checkpoint_a, '--checkpoint-b', args.checkpoint_b])
+      if (args.kind === 'lg') return asJson(await runtime.agent(args.design ?? 's1238', args.workdir, ['verify_lg', ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]))
+      throw new Error('ieda_gp_verify: kind must be delta|lg')
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'ieda_gp_session',
+    description: 'Manage the GP session state. kind: restore, accept, unfreeze, clear_density.',
+    parameters: p({ design: { type: 'string' }, workdir: { type: 'string', required: true }, checkpoint: { type: 'string' } }),
+    output: out(),
+    execute: async (args: any) => {
+      if (args.kind === 'restore') return restore(args)
+      if (args.kind === 'accept') return asJson(await runtime.agent(args.design ?? 's1238', args.workdir, ['accept', ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])]))
+      if (args.kind === 'unfreeze' || args.kind === 'clear_density') return asJson({ ok: true, note: 'batch-scoped state is already cleared', workdir: resolve(args.workdir), checkpoint: args.checkpoint ?? null })
+      throw new Error('ieda_gp_session: kind must be restore|accept|unfreeze|clear_density')
+    },
+  }))
 }
