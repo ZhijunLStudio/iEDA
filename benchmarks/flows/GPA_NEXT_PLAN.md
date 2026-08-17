@@ -257,6 +257,23 @@ P1：
 - 工具 manifest 必须声明预算上限和耗时量级，Agent 不能无限调用；
 - iEDA 工具名统一为 `ieda_gp_*`，本文 `gp_*` 是简写。
 
+## 4b. 实施状态（随轮次更新）
+
+- [x] inspect：status / checkpoint_list / grid_report（`gp_toolbox.py`）
+- [x] diagnose：hotspots / longnets / unstable
+- [x] propose：regions / region_density / freeze
+- [x] apply：start / advance / candidate / local_run / accept / restore
+- [x] apply：freeze（batch-scoped，移动补集）/ region_density（local_run）
+- [x] apply：unfreeze 和 clear_region_density（batch-scoped 语义，返回当前 checkpoint）
+- [ ] apply：per-cell anchor 分数强度（当前仅 strength=1 freeze，返回 unsupported）
+- [x] verify：verify_delta（checkpoint-global delta）
+- [ ] verify：dirty-closure 增量评估（需 iEDA 侧报告）
+- [x] verify：verify_lg 只读 LG oracle（HPWL + max/avg displacement）
+- [x] Harness 原生工具已注册并实测（deepseek-v4-pro 真实调用 status/propose/checkpoint）
+- [ ] P0 四设计回归与 checkpoint 等价复验
+- [ ] P1 local GP 多 seed 改善/negative result 记录
+- [ ] 移除 MCP 插件中仍暴露的 Innovus 对照工具
+
 ## 5. 不做什么
 
 - 不在 GP 工具里实现 LG/DP；
