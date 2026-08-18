@@ -66,8 +66,19 @@ def density(def_path: Path, case_root: Path, grid_size: int):
     csv = work / "density_map/place_allcell_density.csv"
     if csv.exists():
         try:
-            result["ok"] = True
-            result["peak_cell_density"] = float(csv.read_text().strip())
+            values = []
+            for line in csv.read_text().splitlines():
+                for token in line.split(","):
+                    token = token.strip()
+                    if token:
+                        values.append(float(token))
+            if values and all(v >= 0.0 for v in values):
+                result["ok"] = True
+                result["peak_cell_density"] = max(values)
+                result["mean_cell_density"] = sum(values) / len(values)
+            else:
+                result["ok"] = False
+                result["density_reason"] = "density csv contains negative values" if values else "density csv empty"
         except Exception:
             result["ok"] = False
             result["density_reason"] = "density csv unparsable"

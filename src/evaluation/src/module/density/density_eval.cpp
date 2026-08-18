@@ -142,8 +142,8 @@ std::string DensityEval::evalDensity(DensityCells cells, DensityRegion region, i
         int32_t overlap_ux = std::min(cell.lx + cell.width, grid_ux);
         int32_t overlap_uy = std::min(cell.ly + cell.height, grid_uy);
 
-        int32_t overlap_area = std::max(0, overlap_ux - overlap_lx) * std::max(0, overlap_uy - overlap_ly);
-        int32_t grid_area = (grid_ux - grid_lx) * (grid_uy - grid_ly);
+        int64_t overlap_area = static_cast<int64_t>(std::max(0, overlap_ux - overlap_lx)) * std::max(0, overlap_uy - overlap_ly);
+        int64_t grid_area = static_cast<int64_t>(grid_ux - grid_lx) * (grid_uy - grid_ly);
 
         density_grid[row][col] += static_cast<double>(overlap_area) / grid_area;
       }
