@@ -268,3 +268,29 @@ local_restart 会推荐 raw。
 - timing：iEDA 全面优于或接近 Innovus；
 - density peak：Innovus 在 aes 上更均衡，其余相近；
 - RUDY max：Innovus 更优；iEDA agent 在 s1238/apb4/aes 上比 raw 略差。
+
+
+## 长程 Agent 验证（Harness + ieda_gp 工具，GP-only profile）
+
+真实 deepseek-v4-pro，仅 GP 工具，parent -> local_restart -> 新 parent ->
+local_restart，最多 2-3 轮：
+
+| PDK | design | raw GP DEF HPWL | 长程结果 | 说明 |
+|---|---|---|---|---|
+| sky130 | s1238 | 5,957,257 | parent 保留 | 本轮 local_restart 5,957,606 未改善 |
+| sky130 | apb4_timer | 15,715,072 | parent400 保留 | R1 15,591,351 改善 raw，但新 parent 内部指标退化 |
+| sky130 | picorv32 | 234,280,119 | parent400 保留 | local_restart 235.2M 未改善 |
+| sky130 | aes | 665,002,127 | parent400 保留 | local_restart 不可行，正确停止 |
+| nangate45 | gcd | 5,850,034 | local_restart 5,805,987 | feasible，-0.75% |
+| asap7 | aes | 58,392,975 | R2 local_restart 58,044,765 | feasible，-0.60% |
+| ihp130 | gcd | 620,662,411 | R1 parent1 608,715,951 | feasible，-1.93% |
+
+长程实验暴露并修复的工具 bug：
+1. `ieda_gp_run` 的 start/advance/candidate/local_run 把参数数组传给
+   design lookup，导致 `unknown design undefined`；
+2. `gp_agent.py` 调用参数顺序错误，子命令前有全局参数；
+3. `ieda_gp_session restore` 参数顺序错误；
+4. cross-PDK `local_restart` 未传 case/config/foundry/lef；
+5. cross-PDK raw baseline 未传，raw_gp_hpwl 为 null。
+
+以上均已在 profile_plugin 和 designs.json 修复。
