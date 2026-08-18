@@ -35,6 +35,7 @@ def main():
     ap.add_argument("--scope-active-count", type=int, default=100)
     ap.add_argument("--scope-active-ratio", type=float, default=0.2)
     ap.add_argument("--scope-region", default="")
+    ap.add_argument("--scope-instances", default="")
     ap.add_argument("--halo-hops", type=int, default=2)
     ap.add_argument("--halo-coeff", type=float, default=0.5)
     ap.add_argument("--overflow-penalty", type=float, default=0.005)
@@ -84,6 +85,8 @@ def main():
         scope_args += ["--scope-active-ratio", str(args.scope_active_ratio)]
     if args.scope == "region" and args.scope_region:
         scope_args += ["--scope-region", args.scope_region]
+    if args.scope == "instances" and args.scope_instances:
+        scope_args += ["--scope-instances", args.scope_instances]
 
     cand_dir = root / "candidate"
     cand_dir.mkdir()

@@ -288,7 +288,7 @@ def propose_longnet_instances(workdir: str | Path, checkpoint: str | None, top_n
         if not def_path:
             return {"ok": False, "reason": "input_def is not recorded in workdir; pass def_path"}
     nets = load_net_topology(def_path)
-    proposals = []
+    scored = []
     for net in nets:
         instances = []
         points = []
@@ -305,24 +305,46 @@ def propose_longnet_instances(workdir: str | Path, checkpoint: str | None, top_n
         xs = [p[0] for p in points]
         ys = [p[1] for p in points]
         hpwl = max(xs) - min(xs) + max(ys) - min(ys)
+        scored.append({"net": net["name"], "hpwl": hpwl, "pin_count": len(points),
+                       "instances": instances})
+    scored.sort(key=lambda x: x["hpwl"], reverse=True)
+    scored = scored[: max(1, top_n)]
+
+    # Facts: individual top nets.
+    top_nets = [{"net": x["net"], "hpwl": x["hpwl"], "pin_count": x["pin_count"],
+                 "instance_count": len(x["instances"])} for x in scored]
+
+    # Executable proposals: union of the top k nets. The agent chooses the
+    # coverage size; the kernel does not decide how many cells are "right".
+    proposals = []
+    selected_instances = []
+    selected_nets = []
+    seen = set()
+    for net in scored:
+        selected_nets.append(net["net"])
+        for inst in net["instances"]:
+            if inst not in seen:
+                seen.add(inst)
+                selected_instances.append(inst)
         proposals.append({
-            "net": net["name"],
-            "hpwl": hpwl,
-            "pin_count": len(points),
-            "instance_count": len(instances),
-            "instances": instances,
+            "id": f"longnet-top-{len(selected_nets)}",
+            "nets": list(selected_nets),
+            "net_count": len(selected_nets),
+            "instance_count": len(selected_instances),
+            "max_net_hpwl": scored[0]["hpwl"],
+            "instances": list(selected_instances),
             "executable_action": {
                 "tool": "ieda_gp_run",
                 "kind": "local_run",
                 "scope": "instances",
-                "scope_instances": ",".join(instances),
+                "scope_instances": ",".join(selected_instances),
                 "checkpoint": checkpoint_path(workdir, checkpoint),
             },
             "prediction_status": "unavailable",
         })
-    proposals.sort(key=lambda x: x["hpwl"], reverse=True)
     return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
-            "iteration": cp.get("current_iter"), "proposals": proposals[: max(1, top_n)]}
+            "iteration": cp.get("current_iter"), "top_nets": top_nets,
+            "proposals": proposals}
 
 
 def instance_points_in_bbox(bbox: str, names: list[str], coords: list[list[float]]) -> list[tuple[str, list[float]]]:
