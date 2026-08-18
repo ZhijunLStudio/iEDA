@@ -101,6 +101,14 @@ def main():
         "--input-def", str(input_def), "--config", str(config), "--foundry-dir", str(foundry),
         "--checkpoint", str(parent))
     parent_def_hpwl = hpwl(parent_acc_dir / "placement.def") if (parent_acc_dir / "placement.def").exists() else None
+    parent_state_path = parent_acc_dir / "gp_agent_state.json"
+    parent_def_overflow = None
+    if parent_state_path.exists():
+        try:
+            parent_def_overflow = float(json.loads(parent_state_path.read_text()).get("last_overflow", 1.0))
+        except Exception:
+            parent_def_overflow = None
+    parent_feasible = parent_def_overflow is not None and parent_def_overflow <= 0.12
 
     cand_dir = root / "candidate"
     cand_dir.mkdir()
@@ -185,6 +193,8 @@ def main():
         "local_restart_hpwl_unit": "def",
         "parent_def_hpwl": parent_def_hpwl,
         "parent_def_hpwl_unit": "def",
+        "parent_def_overflow": parent_def_overflow,
+        "parent_feasible": parent_feasible,
         "local_restart_overflow": local_restart_overflow,
         "local_restart_route_util": local_restart_route_util,
         "local_restart_feasible": local_restart_feasible,
