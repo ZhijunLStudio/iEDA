@@ -1375,6 +1375,119 @@ int runAgentScope()
   return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+// Hotspot and random scopes through the public API: same write-boundary
+// contract as the instance scope, plus full-scope == global equivalence.
+int runHotspotRandomScope()
+{
+  bool ok = true;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/hotspot_random_scope/pl/gp_session_checkpoint.json";
+
+  {
+    ipl::GPRunRequest start_request;
+    start_request.mode = ipl::GPRunMode::kStart;
+    start_request.accepted_iterations = 20;
+    start_request.random_init = true;
+    const auto start_result = iPLAPIInst.gpRun(start_request);
+    ok &= require(start_result.ok && start_result.session_active, "hotspot-random: start(20) must succeed");
+    iPLAPIInst.gpCloseSession();
+  }
+
+  ipl::GPRunRequest hotspot_request;
+  hotspot_request.mode = ipl::GPRunMode::kResume;
+  hotspot_request.accepted_iterations = 10;
+  hotspot_request.checkpoint_path = checkpoint_path;
+  hotspot_request.scope_mode = ipl::GPRunScopeMode::kHotspot;
+  hotspot_request.scope_active_ratio = 0.2F;
+  hotspot_request.scope_halo_coeff = 0.5F;
+  hotspot_request.scope_halo_hops = 1;
+  const auto hotspot_result = iPLAPIInst.gpRun(hotspot_request);
+  ok &= require(hotspot_result.ok && hotspot_result.scope_effect.scope_applied, "hotspot-random: hotspot scope must succeed");
+  ok &= require(hotspot_result.scope_effect.active_written > 0, "hotspot-random: hotspot scope must write active cells");
+  ok &= require(hotspot_result.scope_effect.context_moved == 0, "hotspot-random: hotspot context must be frozen");
+  iPLAPIInst.gpCloseSession();
+
+  ipl::GPRunRequest random_request;
+  random_request.mode = ipl::GPRunMode::kResume;
+  random_request.accepted_iterations = 10;
+  random_request.checkpoint_path = checkpoint_path;
+  random_request.scope_mode = ipl::GPRunScopeMode::kRandom;
+  random_request.scope_active_count = 20;
+  random_request.scope_seed = 1000;
+  random_request.scope_halo_coeff = 0.5F;
+  random_request.scope_halo_hops = 1;
+  const auto random_result = iPLAPIInst.gpRun(random_request);
+  ok &= require(random_result.ok && random_result.scope_effect.scope_applied, "hotspot-random: random scope must succeed");
+  ok &= require(random_result.scope_effect.active_written > 0, "hotspot-random: random scope must write active cells");
+  ok &= require(random_result.scope_effect.context_moved == 0, "hotspot-random: random context must be frozen");
+  iPLAPIInst.gpCloseSession();
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runFullScopeEquivalence()
+{
+  bool ok = true;
+  const std::string checkpoint_path = "/tmp/ipl_gp_session_test/full_scope_equiv/pl/gp_session_checkpoint.json";
+
+  {
+    ipl::GPRunRequest start_request;
+    start_request.mode = ipl::GPRunMode::kStart;
+    start_request.accepted_iterations = 20;
+    start_request.random_init = true;
+    const auto start_result = iPLAPIInst.gpRun(start_request);
+    ok &= require(start_result.ok && start_result.session_active, "full-scope: start(20) must succeed");
+    iPLAPIInst.gpCloseSession();
+  }
+
+  ipl::GPStateCheckpoint parent;
+  ok &= require(ipl::loadGPCheckpointFile(checkpoint_path, parent), "full-scope: must load parent checkpoint");
+
+  auto run_branch = [&](bool all_active, const std::string& out_path) -> bool {
+    auto session = restoreSolverFromCheckpoint(checkpoint_path);
+    if (session == nullptr) {
+      return false;
+    }
+    if (all_active) {
+      if (!session->buildInstanceScope(parent.instance_names, 0.0F, 1)) {
+        return false;
+      }
+    }
+    if (session->advanceAcceptedIterations(10) != ipl::GPAdvanceOutcome::kBudgetReached) {
+      return false;
+    }
+    const auto checkpoint = session->captureCheckpoint();
+    return ipl::saveGPCheckpointFile(out_path, checkpoint);
+  };
+
+  const std::string global_path = scenarioRoot("full_scope_equiv") + "/global_child.json";
+  const std::string all_active_path = scenarioRoot("full_scope_equiv") + "/all_active_child.json";
+  std::filesystem::create_directories(scenarioRoot("full_scope_equiv"));
+  ok &= require(run_branch(false, global_path), "full-scope: global branch must succeed");
+  ok &= require(run_branch(true, all_active_path), "full-scope: all-active scope branch must succeed");
+
+  ipl::GPStateCheckpoint global_child;
+  ipl::GPStateCheckpoint all_active_child;
+  ok &= require(ipl::loadGPCheckpointFile(global_path, global_child), "full-scope: must load global child");
+  ok &= require(ipl::loadGPCheckpointFile(all_active_path, all_active_child), "full-scope: must load all-active child");
+  ok &= require(global_child.instance_names == all_active_child.instance_names, "full-scope: child instance order must match");
+  ok &= require(global_child.instance_density_coords.size() == all_active_child.instance_density_coords.size(),
+                "full-scope: child coordinate count must match");
+  bool coords_equal = global_child.instance_density_coords.size() == all_active_child.instance_density_coords.size();
+  if (coords_equal) {
+    for (size_t i = 0; i < global_child.instance_density_coords.size(); ++i) {
+      if (global_child.instance_density_coords[i] != all_active_child.instance_density_coords[i]) {
+        coords_equal = false;
+        break;
+      }
+    }
+  }
+  ok &= require(coords_equal, "full-scope: all-active local scope must be bitwise equal to global GP");
+
+  iPLAPIInst.destoryInst();
+  return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 // Checkpoint self-containment: a start-time target_density override must be
 // resumable without re-supplying the override, because the checkpoint carries
 // the effective NesterovPlaceConfig used to build the solver database.
@@ -1649,7 +1762,7 @@ int main(int argc, char** argv)
   if (argc < 2) {
     std::cerr << "usage: " << argv[0] << " --scenario {seg20|seg40|seg10x2|observe|ckpt_save|ckpt_resume|resume_inproc|"
               << "seg40_cg|ckpt_save_cg|ckpt_resume_cg|seg40_mt|ckpt_save_mt|ckpt_resume_mt|conv_mid|diverge|mismatch|invalidate|relinearize|"
-              << "local_hops|agent_scope|agent_config_resume|agent_candidate|agent_auto_candidate|legacy|full|validate}\n";
+              << "local_hops|agent_scope|hotspot_random_scope|full_scope_equiv|agent_config_resume|agent_candidate|agent_auto_candidate|legacy|full|validate}\n";
     return EXIT_FAILURE;
   }
   const std::string arg = argv[1];
@@ -1815,6 +1928,12 @@ int main(int argc, char** argv)
   }
   if (scenario == "agent_scope") {
     return runAgentScope();
+  }
+  if (scenario == "hotspot_random_scope") {
+    return runHotspotRandomScope();
+  }
+  if (scenario == "full_scope_equiv") {
+    return runFullScopeEquivalence();
   }
   if (scenario == "agent_config_resume") {
     return runAgentConfigResume();
