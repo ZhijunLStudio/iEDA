@@ -59,8 +59,12 @@ def main():
     foundry = Path(args.foundry_dir or f"{repo}/scripts/foundry/sky130")
     parent = Path(args.checkpoint or f"/tmp/gp_agent_search/{design}/parent_400.json")
     root = Path(args.workdir)
-    shutil.rmtree(root, ignore_errors=True)
-    root.mkdir(parents=True)
+    # Do NOT wipe the whole workdir: it may contain the parent checkpoint or
+    # other session artifacts the caller still needs. Only clear our own
+    # run subdirectories.
+    root.mkdir(parents=True, exist_ok=True)
+    for sub in ("candidate", "accepted", "local_restart", "baseline_restart"):
+        shutil.rmtree(root / sub, ignore_errors=True)
 
     def run(*argv):
         proc = subprocess.run([args.python, str(repo / "benchmarks/flows/gp_agent.py"), *argv],
