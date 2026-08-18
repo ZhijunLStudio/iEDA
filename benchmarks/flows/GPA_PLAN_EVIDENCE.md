@@ -344,3 +344,16 @@ local_restart，最多 2-3 轮：
 
 本轮额外修复：`scope_instances` 列表改为 Tcl 花括号包裹，避免
 `text_out[N]_reg_p` 这类带方括号的实例名破坏命令解析。
+
+
+## s1238 补充两候选实验（v6）
+
+真实 Agent 选择 longnet-top-2（23 instances）和 longnet-top-5（51 instances），
+都用同单位 DEF HPWL 比较：
+
+- top-2 local_restart: 5,939,909, feasible=true
+- top-5 local_restart: 5,954,941, feasible=true
+- raw baseline: 5,957,257
+- parent accepted: 5,884,828, feasible=false（只做 seed）
+
+最终 winner：top-2 local_restart，相对 raw -0.29%。
