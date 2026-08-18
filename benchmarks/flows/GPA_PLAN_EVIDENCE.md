@@ -179,3 +179,30 @@ local_restart_hpwl=5948770 < baseline_restart_hpwl=5963695
 
 在此策略下，本机可运行的 6 个 PDK/设计组合中 agent 调用 GP 的
 最终 HPWL 均不劣于 raw GP，其中 5 组严格更优。
+
+
+## 真实 Agent 调用 GP 的最终结果（无规则策略）
+
+同一套提示和工具，Agent 自己观察、提议、选择、执行，没有按设计硬编码。
+
+| design | raw GP | agent-selected | 改善 | Agent 选择 |
+|---|---|---|---|---|
+| s1238 | 5,957,257 | 5,949,564 | -0.13% | longnet-top-8, 77 instances |
+| apb4_timer | 15,715,072 | 15,591,351 | -0.79% | longnet-top-3, 63 instances |
+| aes | 665,002,127 | 644,812,888 | -3.04% | longnet-top-1, 112 instances |
+| picorv32 | 234,280,119 | 234,280,119 | 0.00% | Agent 判断 raw 更优，保留 raw |
+
+对比 Innovus（同一设计）：
+
+| design | agent GP | Innovus | 胜方 |
+|---|---|---|---|
+| s1238 | 5,949,564 | 7,417,394 | agent GP |
+| apb4_timer | 15,591,351 | 20,389,663 | agent GP |
+| picorv32 | 234,280,119 | 358,263,695 | agent GP |
+| aes | 644,812,888 | 1,154,174,869 | agent GP |
+
+picorv32 是明确 negative result：Agent 试了两个 proposal，局部结果均比
+raw GP 差，最终正确选择 raw，而不是强行接受局部解。
+
+nangate45 / asap7 / ihp130 因没有 Innovus placement DEF，未做 Innovus 对比；
+三者的 local_restart 均优于各自 raw GP（见上表）。

@@ -322,7 +322,7 @@ P1：
 - [x] Harness 原生工具已注册并实测（deepseek-v4-pro 真实调用 status/propose/checkpoint）
 - [x] P0 四设计回归与 checkpoint 等价复验（见 GPA_PLAN_EVIDENCE.md）
 - [x] P1 local GP 改善/negative result 记录（旧规则链证据保留在 GPA_PLAN_EVIDENCE.md）
-- [ ] P1 重验：由真实 Agent 从观察/提议中自主选择动作并复现改善
+- [x] P1 重验：真实 Agent 自主选择动作，s1238/apb4/aes 改善，picorv32 正确回退 raw
 - [x] 移除 MCP 插件中仍暴露的 Innovus 对照工具
 - [x] 删除规则策略脚本，观察输出只保留事实，propose 只给可执行动作
 
