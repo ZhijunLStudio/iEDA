@@ -206,3 +206,35 @@ raw GP 差，最终正确选择 raw，而不是强行接受局部解。
 
 nangate45 / asap7 / ihp130 因没有 Innovus placement DEF，未做 Innovus 对比；
 三者的 local_restart 均优于各自 raw GP（见上表）。
+
+
+## 同维度指标复评（HPWL + 密度 + HPWL-based timing）
+
+用 `gp_metrics_compare.py` 对 raw / agent / Innovus 的 DEF 跑同一 evaluator：
+
+| design | metric | raw GP | agent | Innovus |
+|---|---|---|---|---|
+| s1238 | HPWL | 5,957,257 | 5,949,564 | 8,053,041 |
+| s1238 | setup WNS | -0.0492 | **-0.0282** | -0.1329 |
+| s1238 | peak cell density | 1.43373 | 1.43373 | 1.42950 |
+| apb4_timer | HPWL | 15,715,072 | 15,591,351 | 18,566,747 |
+| apb4_timer | setup WNS | **-0.5616** | -0.5647 | -0.6764 |
+| apb4_timer | peak cell density | 36.8102 | 36.8102 | 36.7646 |
+| picorv32 | HPWL | 234,280,119 | 234,280,119(raw) | 308,691,343 |
+| picorv32 | setup WNS | -15.923 | -15.923(raw) | -21.366 |
+| aes | HPWL | 665,002,127 | 644,812,888* | 914,210,691 |
+| aes | setup WNS | -75.812 | -76.083* | -94.454 |
+
+\* aes 的 agent 布局 `overflow=0.287, route_util=5.33`，未收敛，不能作为
+合法改善；feasibility-aware 版本会把推荐改回 raw。
+
+已知 evaluator 问题：
+- picorv32 density evaluator 返回负值（-99.18），不可信；
+- aes density csv 缺失；
+- Innovus 的 eGR congestion 与 iEDA GP RUDY 不是同一 estimator，
+  目前不能同维对比。
+
+GP 内部 density/congestion（raw vs agent）：
+- s1238：overflow 0.09947 -> 0.09974，route_util 1.692 -> 1.680；
+- apb4：overflow 0.09924 -> 0.09965，route_util 1.373 -> 1.189；
+- aes：overflow 0.10000 -> 0.28664，route_util 2.586 -> 5.329（agent 不可行）。
