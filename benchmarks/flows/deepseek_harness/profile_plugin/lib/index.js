@@ -94,7 +94,11 @@ var IedaGpRuntime = class {
 	script(name) {
 		return join(this.iedaRoot, "benchmarks/flows", name);
 	}
-	async agent(design, workdir, args) {
+	foundryDir(design) {
+		const record = readDesigns(this.iedaRoot)[design] || {};
+		return record.foundry_dir || join(this.iedaRoot, "scripts/foundry/sky130");
+	}
+	async agent(design, workdir, args, inputDef, foundryDir) {
 		const record = readDesigns(this.iedaRoot)[design];
 		if (!record) throw new Error(`unknown design ${JSON.stringify(design)}; known designs: ${knownDesigns(this.iedaRoot).join(", ")}`);
 		const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_agent.py"), [
@@ -103,9 +107,11 @@ var IedaGpRuntime = class {
 			"--case-root",
 			String(record.case_root),
 			"--input-def",
-			String(record.input_def),
+			String(inputDef || record.input_def),
 			"--config",
 			String(record.pl_config),
+			"--foundry-dir",
+			String(foundryDir || record.foundry_dir || join(this.iedaRoot, "scripts/foundry/sky130")),
 			...args
 		]);
 		trace(workdir, { source: "ieda_gp_run", design, args, result: value });
@@ -187,15 +193,15 @@ throw new Error("ieda_gp_propose: kind must be regions|region_density|freeze|lon
 ctx.tools.register(defineTool({
 name: "ieda_gp_run",
 description: "Execute GP actions. kind: start, advance, candidate, local_run, apply_freeze, apply_region_density, local_restart, apply_anchor. local_restart runs one local/global candidate, accepts the local child (set force_local=1 to force it even when the instant verdict is not left_better), then starts a fresh random_init=0 global GP from that placement; it returns def HPWL for both the local restart and a same-budget raw-GP restart baseline.",
-parameters: p({ design: { type: "string", required: true }, workdir: { type: "string", required: true }, checkpoint: { type: "string" }, iterations: { type: "integer" }, seed: { type: "integer" }, random_init: { type: "integer" }, target_density: { type: "number" }, congestion_effort: { type: "integer" }, seed_anchor_strength: { type: "number" }, report_route_util: { type: "integer" }, scope: { type: "string" }, scope_active_ratio: { type: "number" }, scope_active_count: { type: "integer" }, scope_instances: { type: "string" }, scope_region: { type: "string" }, halo_coeff: { type: "number" }, halo_hops: { type: "integer" }, overflow_penalty: { type: "number" }, scope_density_target: { type: "number" }, scope_density_ratio: { type: "number" }, scope_anneal_ratio: { type: "number" }, force_local: { type: "integer" }, region: { type: "string" }, strength: { type: "number" } }),
+parameters: p({ design: { type: "string", required: true }, workdir: { type: "string", required: true }, input_def: { type: "string" }, foundry_dir: { type: "string" }, checkpoint: { type: "string" }, iterations: { type: "integer" }, seed: { type: "integer" }, random_init: { type: "integer" }, target_density: { type: "number" }, congestion_effort: { type: "integer" }, seed_anchor_strength: { type: "number" }, report_route_util: { type: "integer" }, scope: { type: "string" }, scope_active_ratio: { type: "number" }, scope_active_count: { type: "integer" }, scope_instances: { type: "string" }, scope_region: { type: "string" }, halo_coeff: { type: "number" }, halo_hops: { type: "integer" }, overflow_penalty: { type: "number" }, scope_density_target: { type: "number" }, scope_density_ratio: { type: "number" }, scope_anneal_ratio: { type: "number" }, force_local: { type: "integer" }, region: { type: "string" }, strength: { type: "number" } }),
 output: out(),
 execute: async (args) => {
 const k = args.kind;
-if (k === "start") return agent([...["start", "--iterations", String(args.iterations ?? 20), "--seed", String(args.seed ?? 1000), "--random-init", String(args.random_init ?? 1), "--seed-anchor-strength", String(args.seed_anchor_strength ?? 0), "--target-density", String(args.target_density ?? -1), "--congestion-effort", String(args.congestion_effort ?? -1), "--report-route-util", String(args.report_route_util ?? 1)]], args.input_def);
+if (k === "start") return agent([...["start", "--iterations", String(args.iterations ?? 20), "--seed", String(args.seed ?? 1000), "--random-init", String(args.random_init ?? 1), "--seed-anchor-strength", String(args.seed_anchor_strength ?? 0), "--target-density", String(args.target_density ?? -1), "--congestion-effort", String(args.congestion_effort ?? -1), "--report-route-util", String(args.report_route_util ?? 1)]], args.input_def, args.foundry_dir);
 if (k === "advance") return agent([...["advance", "--iterations", String(args.iterations ?? 100), "--report-route-util", String(args.report_route_util ?? 1), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]]);
 if (k === "candidate") return agent([...["candidate", "--iterations", String(args.iterations ?? 20), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]]);
 if (k === "local_run") return agent([...["local_run", "--iterations", String(args.iterations ?? 10), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]]);
-if (k === "local_restart") return asJson(await runCli(config.iedaRoot, config.python, config.timeoutMs, join(config.iedaRoot, "benchmarks/flows/gp_local_restart.py"), ["--design", args.design, "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : [], "--scope", args.scope ?? "longnet", "--scope-active-count", String(args.scope_active_count ?? 100), "--scope-active-ratio", String(args.scope_active_ratio ?? 0.2), "--halo-hops", String(args.halo_hops ?? 2), "--halo-coeff", String(args.halo_coeff ?? 0.5), "--overflow-penalty", String(args.overflow_penalty ?? 0.005), "--scope-anneal-ratio", String(args.scope_anneal_ratio ?? 0), "--scope-density-target", String(args.scope_density_target ?? 1), ...args.force_local == 1 ? ["--force-local"] : [], ...args.scope_region ? ["--scope-region", args.scope_region] : [], ...args.scope_instances ? ["--scope-instances", args.scope_instances] : []]));
+if (k === "local_restart") return asJson(await runCli(config.iedaRoot, config.python, config.timeoutMs, join(config.iedaRoot, "benchmarks/flows/gp_local_restart.py"), ["--design", args.design, "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : [], "--foundry-dir", String(args.foundry_dir || runtime.foundryDir(args.design)), "--scope", args.scope ?? "longnet", "--scope-active-count", String(args.scope_active_count ?? 100), "--scope-active-ratio", String(args.scope_active_ratio ?? 0.2), "--halo-hops", String(args.halo_hops ?? 2), "--halo-coeff", String(args.halo_coeff ?? 0.5), "--overflow-penalty", String(args.overflow_penalty ?? 0.005), "--scope-anneal-ratio", String(args.scope_anneal_ratio ?? 0), "--scope-density-target", String(args.scope_density_target ?? 1), ...args.force_local == 1 ? ["--force-local"] : [], ...args.scope_region ? ["--scope-region", args.scope_region] : [], ...args.scope_instances ? ["--scope-instances", args.scope_instances] : []]));
 if (k === "apply_freeze") return freezeRun(args);
 if (k === "apply_anchor") {
 return asJson({ ok: false, unsupported: true, reason: "per-cell anchor is not implemented; use apply_freeze for strength=1 batch freeze" });

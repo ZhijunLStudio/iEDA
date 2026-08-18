@@ -38,5 +38,26 @@
     "ieda_best_hpwl": 1048174208,
     "pdk": "sky130",
     "notes": "timing GP+LG+DP full placement"
+  },
+  "nangate45_gcd": {
+    "case_root": "/tmp/nangate45_gcd",
+    "input_def": "/tmp/nangate45_gcd/gcd_nangate45.def",
+    "pl_config": "/tmp/nangate45_gcd/pl_clean_config.json",
+    "foundry_dir": "/home/lizhijun/work/iEDA.ai/scripts/foundry/sky130",
+    "pdk": "nangate45"
+  },
+  "asap7_aes": {
+    "case_root": "/tmp/asap7_aes",
+    "input_def": "/tmp/asap7_aes/asap7_aes_initial.def",
+    "pl_config": "/tmp/asap7_aes/pl_clean_config.json",
+    "foundry_dir": "/home/lizhijun/work/iEDA.ai/scripts/foundry/sky130",
+    "pdk": "asap7"
+  },
+  "ihp130_gcd": {
+    "case_root": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd",
+    "input_def": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/result/iFP_result.def",
+    "pl_config": "/tmp/ihp130_gcd_pl_clean_config.json",
+    "foundry_dir": "/home/lizhijun/work/iEDA/scripts/foundry/ihp130",
+    "pdk": "ihp130"
   }
 }
