@@ -639,9 +639,38 @@ def verify_delta(workdir: str | Path, checkpoint_a: str, checkpoint_b: str,
     }
 
 
+def trajectory(workdir: str | Path, top_n: int = 0) -> dict:
+    """Return the append-only batch history. Facts only, no verdict or advice."""
+    ledger = Path(workdir) / "pl/gp_experiments.jsonl"
+    if not ledger.exists():
+        return {"ok": False, "reason": "pl/gp_experiments.jsonl missing"}
+    rows = []
+    for raw in ledger.read_text().splitlines():
+        if not raw.strip():
+            continue
+        try:
+            row = json.loads(raw)
+        except Exception:
+            continue
+        rows.append({
+            "mode": row.get("mode"),
+            "start_iteration": row.get("start_iteration"),
+            "end_iteration": row.get("end_iteration"),
+            "hpwl": row.get("hpwl"),
+            "overflow": row.get("overflow"),
+            "route_util": row.get("route_util"),
+            "stop_reason": row.get("stop_reason"),
+            "scope": row.get("scope"),
+            "checkpoint": row.get("checkpoint"),
+        })
+    if top_n and top_n > 0:
+        rows = rows[-top_n:]
+    return {"ok": True, "workdir": str(workdir), "batch_count": len(rows), "batches": rows}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["status", "checkpoints", "grid", "hotspots", "longnets", "propose_regions",
+    ap.add_argument("command", choices=["status", "checkpoints", "grid", "hotspots", "longnets", "trajectory", "propose_regions",
                                         "freeze_instances", "propose_longnet_instances",
                                         "propose_region_density", "propose_freeze", "unstable", "verify_delta"])
     ap.add_argument("--workdir", required=True)
@@ -666,7 +695,8 @@ def main() -> int:
         if not grid:
             print(json.dumps({"ok": False, "reason": "gp_grid_report.json missing"}, indent=2))
             return 1
-        bins = sorted(grid.get("bins", []), key=lambda b: b.get("overflow_area", 0), reverse=True)[:max(1, args.top_n)]
+        sorted_bins = sorted(grid.get("bins", []), key=lambda b: b.get("overflow_area", 0), reverse=True)
+        bins = sorted_bins if args.top_n <= 0 else sorted_bins[:max(1, args.top_n)]
         print(json.dumps({"ok": True, "checkpoint_path": checkpoint_path(args.workdir, args.checkpoint),
                           "iteration": cp.get("current_iter"), "bin_cnt": (grid.get("bin_cnt_x"), grid.get("bin_cnt_y")),
                           "bins": bins}, indent=2))
@@ -674,6 +704,8 @@ def main() -> int:
         print(json.dumps(diagnose_hotspots(args.workdir, args.checkpoint, args.top_n), indent=2))
     elif args.command == "longnets":
         print(json.dumps(diagnose_longnets(args.workdir, args.checkpoint, args.top_n, args.def_path), indent=2))
+    elif args.command == "trajectory":
+        print(json.dumps(trajectory(args.workdir, args.top_n), indent=2))
     elif args.command == "propose_longnet_instances":
         print(json.dumps(propose_longnet_instances(args.workdir, args.checkpoint, args.top_n, args.def_path), indent=2))
     elif args.command == "freeze_instances":

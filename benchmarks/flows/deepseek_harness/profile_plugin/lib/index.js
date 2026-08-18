@@ -74,6 +74,13 @@ function commonResultSchema() {
 function asJson(value) {
 	return value;
 }
+function trace(workdir, entry) {
+if (!workdir) return;
+try {
+mkdirSync(resolve(workdir), { recursive: true });
+appendFileSync(join(resolve(workdir), "gp_agent_trace.jsonl"), JSON.stringify({ ts: Date.now(), ...entry }) + "\n");
+} catch (_) {}
+}
 /** One shared execution context for every registered tool. */
 var IedaGpRuntime = class {
 	iedaRoot;
@@ -90,7 +97,7 @@ var IedaGpRuntime = class {
 	async agent(design, workdir, args) {
 		const record = readDesigns(this.iedaRoot)[design];
 		if (!record) throw new Error(`unknown design ${JSON.stringify(design)}; known designs: ${knownDesigns(this.iedaRoot).join(", ")}`);
-		return runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_agent.py"), [
+		const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_agent.py"), [
 			"--workdir",
 			resolve(workdir),
 			"--case-root",
@@ -101,9 +108,15 @@ var IedaGpRuntime = class {
 			String(record.pl_config),
 			...args
 		]);
+		trace(workdir, { source: "ieda_gp_run", design, args, result: value });
+		return value;
 	}
 	async toolbox(args) {
-		return runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_toolbox.py"), args);
+		const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_toolbox.py"), args);
+		const wi = args.indexOf("--workdir");
+		const workdir = wi >= 0 ? args[wi + 1] : null;
+		trace(workdir, { source: "ieda_gp_observe", args, result: value });
+		return value;
 	}
 async fullCompare(design, resultRoot, timing) {
 		if (!readDesigns(this.iedaRoot)[design]) throw new Error(`unknown design ${JSON.stringify(design)}; known designs: ${knownDesigns(this.iedaRoot).join(", ")}`);
@@ -145,14 +158,15 @@ throw new Error("ieda_gp_inspect: kind must be status|checkpoints|grid");
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_diagnose",
-description: "Diagnose GP problems. kind: hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b).",
+description: "Diagnose GP problems. kind: hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history from gp_experiments.jsonl). Use top_n=0 for the full grid/batch history.",
 parameters: p({ workdir: { type: "string", required: true }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" } }),
 output: out(),
 execute: async (args) => {
 if (args.kind === "hotspots") return toolbox(["hotspots", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "longnets") return toolbox(["longnets", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.def_path ? ["--def-path", args.def_path] : [], ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "unstable") return toolbox(["unstable", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, "--top-n", String(args.top_n ?? 5)]);
-throw new Error("ieda_gp_diagnose: kind must be hotspots|longnets|unstable");
+if (args.kind === "trajectory") return toolbox(["trajectory", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 0)]);
+throw new Error("ieda_gp_diagnose: kind must be hotspots|longnets|unstable|trajectory");
 }
 }));
 

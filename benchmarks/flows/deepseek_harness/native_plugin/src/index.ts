@@ -172,14 +172,15 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'ieda_gp_diagnose',
-    description: 'Diagnose GP problems. kind: hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b).',
+    description: 'Diagnose GP problems. kind: hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history). top_n=0 returns the full grid/history.',
     parameters: p({ workdir: { type: 'string', required: true }, checkpoint: { type: 'string' }, checkpoint_a: { type: 'string' }, checkpoint_b: { type: 'string' }, top_n: { type: 'integer' }, def_path: { type: 'string' }, region: { type: 'string' } }),
     output: out(),
     execute: async (args: any) => {
       if (args.kind === 'hotspots') return toolbox(['hotspots', '--workdir', resolve(args.workdir), '--top-n', String(args.top_n ?? 5), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
       if (args.kind === 'longnets') return toolbox(['longnets', '--workdir', resolve(args.workdir), '--top-n', String(args.top_n ?? 5), ...(args.def_path ? ['--def-path', args.def_path] : []), ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])])
       if (args.kind === 'unstable') return toolbox(['unstable', '--workdir', resolve(args.workdir), '--checkpoint-a', args.checkpoint_a, '--checkpoint-b', args.checkpoint_b, '--top-n', String(args.top_n ?? 5)])
-      throw new Error('ieda_gp_diagnose: kind must be hotspots|longnets|unstable')
+      if (args.kind === 'trajectory') return toolbox(['trajectory', '--workdir', resolve(args.workdir), '--top-n', String(args.top_n ?? 0)])
+      throw new Error('ieda_gp_diagnose: kind must be hotspots|longnets|unstable|trajectory')
     },
   }))
 
