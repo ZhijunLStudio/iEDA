@@ -44,20 +44,23 @@
     "input_def": "/tmp/nangate45_gcd/gcd_nangate45.def",
     "pl_config": "/tmp/nangate45_gcd/pl_clean_config.json",
     "foundry_dir": "/home/lizhijun/work/iEDA.ai/scripts/foundry/sky130",
-    "pdk": "nangate45"
+    "pdk": "nangate45",
+    "lef": "/mnt/usb20t/PCL-167/data3/taosimin/OpenROAD/test/Nangate45/Nangate45_stdcell.lef"
   },
   "asap7_aes": {
     "case_root": "/tmp/asap7_aes",
     "input_def": "/tmp/asap7_aes/asap7_aes_initial.def",
     "pl_config": "/tmp/asap7_aes/pl_clean_config.json",
     "foundry_dir": "/home/lizhijun/work/iEDA.ai/scripts/foundry/sky130",
-    "pdk": "asap7"
+    "pdk": "asap7",
+    "lef": "/mnt/usb20t/PCL-155/home/dengqinyi/iFlow/foundry/asap7/lef/asap7sc7p5t_27_R_1x_201211.lef"
   },
   "ihp130_gcd": {
     "case_root": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd",
     "input_def": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/result/iFP_result.def",
     "pl_config": "/tmp/ihp130_gcd_pl_clean_config.json",
     "foundry_dir": "/home/lizhijun/work/iEDA/scripts/foundry/ihp130",
-    "pdk": "ihp130"
+    "pdk": "ihp130",
+    "lef": "/home/lizhijun/work/iEDA/scripts/foundry/ihp130/ihp-sg13g2/libs.ref/sg13g2_stdcell/lef/sg13g2_stdcell.lef"
   }
 }
