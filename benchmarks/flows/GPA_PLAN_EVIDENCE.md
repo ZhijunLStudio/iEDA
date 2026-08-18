@@ -294,3 +294,35 @@ local_restart，最多 2-3 轮：
 5. cross-PDK raw baseline 未传，raw_gp_hpwl 为 null。
 
 以上均已在 profile_plugin 和 designs.json 修复。
+
+
+## 工具信息一致性契约测试（排除工具问题）
+
+`gp_tool_contract_test.py` 对 7 设计 / 4 PDK 逐一调用 local_restart，
+并独立用 def_hpwl_eval 复核工具返回的每一个 HPWL 字段：
+
+- raw_gp_hpwl == def_hpwl_eval(raw DEF)
+- local_restart_hpwl == def_hpwl_eval(restart placement)
+- parent_def_hpwl == def_hpwl_eval(parent accepted placement)
+- 三个字段 unit 都为 "def"
+- overflow/route_util 有限
+
+结果：7/7 通过，problems=[]。
+
+因此：现在 agent 看到的 raw / parent / local HPWL 是同一 evaluator、
+同一单位，可以安全比较。之前“parent internal HPWL 和 raw DEF HPWL
+混比”的工具信息问题已排除。
+
+各设计关键 DEF HPWL：
+
+| design | raw | parent accepted | local_restart | feasible |
+|---|---|---|---|---|
+| s1238 | 5,957,257 | 5,884,828 | 5,948,770 | true |
+| apb4 | 15,715,072 | 14,913,559 | 15,646,612 | true |
+| picorv32 | 234,280,119 | 231,535,715 | 235,316,171 | true |
+| aes | 665,002,127 | 644,528,490 | 647,205,078 | false |
+| nangate45 | 5,850,034 | 5,576,884* | 5,809,151 | true |
+| asap7 | 58,392,975 | 56,885,355* | 58,043,717 | true |
+| ihp130 | 620,662,411 | — | 契约通过 | — |
+
+* parent 为不可行 checkpoint（overflow 高），不能直接和可行解比较。
