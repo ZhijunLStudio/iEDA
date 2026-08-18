@@ -35,9 +35,10 @@ Harness 实际暴露 6 个入口工具，内部用 `kind` 枚举分派；下方�
 ```text
 ieda_gp_inspect    kind: status | checkpoints | grid
 ieda_gp_diagnose   kind: hotspots | longnets | unstable
-ieda_gp_propose    kind: regions | region_density | freeze
+ieda_gp_propose    kind: regions | region_density | freeze | longnet_instances
 ieda_gp_run         kind: start | advance | candidate | local_run
                           | apply_freeze | apply_region_density
+                          | local_restart | apply_anchor
 ieda_gp_verify      kind: delta | lg
 ieda_gp_session     kind: restore | accept | unfreeze | clear_density
 ```
@@ -68,19 +69,22 @@ ieda_gp_session     kind: restore | accept | unfreeze | clear_density
 
 | 工具 | 输入 | 输出 |
 |---|---|---|
-| `gp_diagnose_hotspots` | workdir, checkpoint?, top_n | 密度热点区域 + 建议动作类型 |
-| `gp_diagnose_longnets` | workdir, checkpoint?, top_n | 高 HPWL net 及关联 cell 集合 |
+| `gp_diagnose_hotspots` | workdir, checkpoint?, top_n | 密度热点 bin 的坐标、密度、溢出面积（只给事实，不给建议） |
+| `gp_diagnose_longnets` | workdir, checkpoint?, top_n | 高 HPWL net 的 net 名、HPWL、pin 数；cell 集合由 propose 输出 |
 | `gp_diagnose_unstable_region` | workdir, checkpoint?, window | 最近 N 次迭代移动较大的区域 |
 
 ### propose：给候选动作
 
 | 工具 | 输入 | 输出 |
 |---|---|---|
-| `gp_propose_regions` | workdir, priority, top_n, min/max_cell_count, 可选先验 | 具体 bin 区域 + active/halo cell + 原因 + 预测影响 |
-| `gp_propose_region_density` | workdir, region | 建议的 density target + 预测影响 |
-| `gp_propose_freeze` | workdir, region | 建议冻结区域 + 冻结后密度变化预测 |
+| `gp_propose_regions` | workdir, priority, top_n, min/max_cell_count, 可选先验 | 具体 bin 区域 + active/halo cell + 事实原因 |
+| `gp_propose_region_density` | workdir, region | 基于重叠 bin 密度的 density target + 重叠 bin 事实 |
+| `gp_propose_freeze` | workdir, region | 区域内 cell 集合和数量（冻结事实） |
+| `gp_propose_longnet_instances` | workdir, top_n | 高 HPWL net 的 instance 集合 + 可直接执行的 `executable_action` |
 
-propose 不改变设计状态，只返回候选和理由。
+propose 不改变设计状态。每个 proposal 必须带 `executable_action`，
+即 iEDA 现在就能执行的 tool/kind/scope 参数；不能执行的必须返回
+`unsupported` 和原因，不得输出“应该冻结”“建议 spread”这类不可执行建议。
 
 #### `gp_propose_regions` 契约
 
@@ -102,14 +106,11 @@ Agent 只给“重点看什么”，不给坐标；iEDA 根据当前 bin/网/拥
 }
 ```
 
-`priority` 可选：
+`priority` 当前实际支持与不支持：
 
-- `density`：密度溢出最高的 bin；
-- `congestion`：RUDY 拥塞最高的 bin；
-- `longnet`：HPWL 贡献最大的网和 cell；
-- `timing`：关键时序路径上的 cell；
-- `stability`：最近迭代移动最大的不稳定区域；
-- `mixed`：密度 + 拥塞 + 网长加权。
+- `density`：密度溢出最高的 bin（已实现）；
+- `congestion` / `timing` / `stability` / `mixed`：内核尚无对应
+  可信输入，propose 必须返回 `unsupported`，不允许用密度结果冒充。
 
 先验必须结构化，而不是两个零散字段：
 
@@ -139,9 +140,13 @@ iEDA 必须基于实际指标生成候选，并在结果中说明候选和先验
       "rudy_route_util": 1.69,
       "score": 0.82,
       "reason": "density overflow top bin, merged 4 connected bins",
-      "prediction_status": "available",
-      "predicted_hpwl_delta_range": [-0.8, 0.3],
-      "predicted_density_delta_range": [-0.12, -0.03]
+      "executable_action": {
+        "tool": "ieda_gp_run",
+        "kind": "candidate",
+        "scope": "region",
+        "scope_region": "56879 12325 59352 14790"
+      },
+      "prediction_status": "unavailable"
     }
   ]
 }
@@ -156,38 +161,49 @@ iEDA 必须基于实际指标生成候选，并在结果中说明候选和先验
 这样“不大不小”由数据、上下界决定，不由 Agent 直接猜坐标。
 
 预测规则：没有 PAE 实现时 `prediction_status` 必须为 `"unavailable"`，
-并且不得返回伪造的 delta 范围；只能返回当前实际指标。
+不得返回伪造的 delta 范围，只返回当前实际指标；executable_action 只能
+引用 iEDA 已实现的参数，不能引用“未来会实现”的动作。
 ### apply：执行动作
 
 | 工具 | 输入 | 输出 |
 |---|---|---|
 | `gp_start` | design, workdir, iterations, seed, config | 新 GP session |
 | `gp_advance` | workdir, iterations | 继续全局 GP |
-| `gp_candidate` | workdir, checkpoint, proposal_id?, budget | 对 proposal 指定区域跑 local vs global 双分支和 verdict |
-| `gp_apply_proposal` | workdir, proposal_id, budget | 直接执行某个 proposal，不跑对照 |
-| `gp_apply_region_density` | workdir, region, target | 设置局部密度目标 |
-| `gp_clear_region_density` | workdir | 清除局部密度目标 |
-| `gp_apply_freeze` | workdir, region | 冻结区域并继续 GP |
-| `gp_unfreeze` | workdir, region | 解除冻结 |
-| `gp_apply_anchor` | workdir, cells, strength | 指定 cell 向锚点回拉 |
+| `gp_candidate` | workdir, checkpoint, scope 参数 | 从同一 checkpoint 跑 local vs global 双分支并给 verdict；global 平局/不可比时胜出 |
+| `gp_local_run` | workdir, checkpoint, scope 参数 | 只执行指定局部 scope，不跑对照；失败可回退 |
+| `gp_apply_region_density` | workdir, region, target | 对一个矩形区域设置 batch 密度目标 |
+| `gp_clear_region_density` | workdir | 当前内核为 batch-scoped，batch 结束即清除；返回当前 checkpoint |
+| `gp_apply_freeze` | workdir, region | 冻结区域内 cell，移动补集；batch-scoped |
+| `gp_unfreeze` | workdir | 当前内核为 batch-scoped，batch 结束即清除；返回当前 checkpoint |
+| `gp_apply_anchor` | workdir, cells, strength | 当前内核不支持分数 strength；返回 unsupported |
+| `gp_local_restart` | workdir, checkpoint, scope 参数 | local candidate -> accept -> random_init=0 重新 global GP；返回 raw/restart 对比 |
 | `gp_restore` | workdir, checkpoint | 回退到指定 checkpoint |
 
-所有 apply 动作必须在 branch/checkpoint 上执行，失败可回退。
-`proposal_id` 由 `gp_propose_regions` 返回；apply 不接受 Agent 直接猜的
-region_id，必须使用当前 workdir 中有效的 proposal。
+所有 apply 动作都在 checkpoint/branch 上执行，失败可回退到动作前
+checkpoint；session 状态由返回的 `checkpoint_path` 标识。
+
+scope 通用参数：`scope`、`scope_active_ratio`、`scope_active_count`、
+`scope_instances`、`scope_region`、`halo_coeff`、`halo_hops`、
+`scope_density_target`、`scope_density_ratio`、`scope_anneal_ratio`、
+`overflow_penalty`。这些都是通用原语，不包含任何“if 条件则选什么”的规则。
+
+proposal 与 apply 的连接：propose 返回的 `executable_action` 是当前
+workdir/checkpoint 下可直接填给 `gp_candidate` 或 `gp_local_run` 的参数。
+内核当前不持久化 proposal_id；因此 Agent 执行 proposal 时必须原样携带
+该 executable_action，不能只传一个 id。
 ### verify：验证动作
 
 | 工具 | 输入 | 输出 |
 |---|---|---|
 | `gp_verify_delta` | workdir, checkpoint_a, checkpoint_b | dirty closure 内的 HPWL/密度/RUDY/timing delta |
-| `gp_verify_lg` | workdir, checkpoint, timing? | 外部 LG 验证：post-LG HPWL、最大/平均位移、合法化结果、可选 timing |
+| `gp_verify_lg` | workdir, checkpoint | 外部 LG 验证：post-LG HPWL、最大/平均位移、合法化结果；timing 当前返回 `available:false`，不伪造 |
 | `gp_accept` | design, workdir, checkpoint | 提交 winner 并写 DEF |
 
 `gp_verify_delta` 必须校验两个 checkpoint 的 config fingerprint 和
 instance 集合一致；不一致返回 `incomparable`，不计算 delta。
 
 `gp_verify_lg` 是只读验证器：在临时 workdir 上执行 LG，不修改当前
-GP session，不写回数据库；timing 默认关闭，显式打开才跑 iSTA。
+GP session，不写回数据库；timing 在接入 iSTA 前返回 unavailable。
 ## 3. 验收指标
 
 ### 3.1 GP 内部快速指标（不需要 LG）
@@ -249,6 +265,11 @@ P1：
 - 多 seed 重复结果记录在案。
 - 如果局部 GP 在所有目标设计上都不能改善，必须产出明确的
   negative result 记录，而不是继续调参到“偶然成功”。
+- 决策边界验收：仓库中不得存在按设计名或按阈值分支选择 scope 的
+  规则脚本；改善必须来自真实 Agent 对 inspect/diagnose/propose 输出
+  的分析与选择。
+- proposal 验收：每个 proposal 必须有可执行参数；不可执行的返回
+  unsupported；不存在“建议做 X”但无法执行的 proposal。
 ## 4. DeepSeek Harness 调用方式
 
 插件继续使用原生 Cordis 工具形式，注册在 `~/.dsh/profiles/web`。
@@ -256,19 +277,19 @@ P1：
 
 ### 4.1 模型完整调用流程
 
-冷启动：
+冷启动（示例；具体动作和参数由 Agent 根据观察决定，不是固定流程）：
 
 ```text
-1. gp_start(design, workdir, iterations)        创建 session
-2. gp_design_status(design, workdir)            看初始状态
-3. gp_grid_report(...)                           看热点
-4. gp_diagnose_hotspots(...)                     找问题
-5. gp_propose_regions(...)                        iEDA 给出具体区域
-6. gp_candidate(..., proposal_id)                执行局部 GP 对照
-7. gp_verify_delta(...)                          看增量是否值得接受
-8. gp_advance(...)                               继续收敛
-9. gp_verify_lg(...)                             合法化验证
-10. gp_accept(...)                               提交结果
+1. ieda_gp_run kind=start                       创建 session
+2. ieda_gp_inspect kind=status                  读指标
+3. ieda_gp_inspect kind=grid                    读逐 bin 密度
+4. ieda_gp_diagnose kind=hotspots / longnets    读事实
+5. ieda_gp_propose kind=regions / longnet_instances
+                                                iEDA 给出可执行候选
+6. Agent 比较候选，决定 scope 和预算
+7. ieda_gp_run kind=candidate / local_run / local_restart
+8. ieda_gp_verify kind=delta / lg               验证
+9. ieda_gp_session kind=accept / restore        接受或回退
 ```
 
 热启动：从 `gp_checkpoint_list` 选择 checkpoint，直接进入第 2 步，
@@ -290,8 +311,8 @@ P1：
 
 - [x] inspect：status / checkpoint_list / grid_report（`gp_toolbox.py`）
 - [x] diagnose：hotspots / longnets / unstable
-- [x] propose：regions / region_density / freeze
-- [x] apply：start / advance / candidate / local_run / accept / restore
+- [x] propose：regions / region_density / freeze / longnet_instances
+- [x] apply：start / advance / candidate / local_run / local_restart / accept / restore
 - [x] apply：freeze（batch-scoped，移动补集）/ region_density（local_run）
 - [x] apply：unfreeze 和 clear_region_density（batch-scoped 语义，返回当前 checkpoint）
 - [x] apply：per-cell anchor 分数强度（kernel 不支持，按 G-08 返回 unsupported）
@@ -300,8 +321,10 @@ P1：
 - [x] verify：verify_lg 只读 LG oracle（HPWL + max/avg displacement）
 - [x] Harness 原生工具已注册并实测（deepseek-v4-pro 真实调用 status/propose/checkpoint）
 - [x] P0 四设计回归与 checkpoint 等价复验（见 GPA_PLAN_EVIDENCE.md）
-- [x] P1 local GP 改善/negative result 记录（apb4 chain 改善，parent100 多 seed 负结果）
+- [x] P1 local GP 改善/negative result 记录（旧规则链证据保留在 GPA_PLAN_EVIDENCE.md）
+- [ ] P1 重验：由真实 Agent 从观察/提议中自主选择动作并复现改善
 - [x] 移除 MCP 插件中仍暴露的 Innovus 对照工具
+- [x] 删除规则策略脚本，观察输出只保留事实，propose 只给可执行动作
 
 ## 5. 不做什么
 
