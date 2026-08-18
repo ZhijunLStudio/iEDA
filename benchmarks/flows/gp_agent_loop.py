@@ -50,7 +50,10 @@ def observe(workdir: Path, checkpoint: Path, case_root: Path, input_def: Path,
     return {"grid": grid, "hotspots": hot, "longnets": long, "status": status}
 
 
-def decide(obs: dict) -> dict:
+def decide_actions(obs: dict) -> list[dict]:
+    """Design-agnostic proposal list. The loop tries every proposed action and
+    keeps the best result, so the agent does not hard-code one scope per design.
+    """
     grid = obs.get("grid") or {}
     hot = obs.get("hotspots") or {}
     long = obs.get("longnets") or {}
@@ -64,22 +67,19 @@ def decide(obs: dict) -> dict:
     top_longnet_hpwl = float((longnets[0] or {}).get("hpwl", 0) if longnets else 0)
     longnet_share = top_longnet_hpwl / hpwl if hpwl > 0 else 0.0
 
+    actions = []
+    if longnet_share > 0.01:
+        actions.append({"scope": "longnet", "density_target": 1.0, "anneal_ratio": 0.0})
     if hotspots and peak_overflow > 0 and peak_density > 1.05:
-        scope = "hotspot"
         density_target = round(max(0.75, min(0.95, 1.0 - 0.10 * (peak_density - 1.0))), 2)
-        anneal_ratio = 0.25
-    elif longnet_share > 0.02:
-        scope = "longnet"
-        density_target = 1.0
-        anneal_ratio = 0.0
-    else:
-        scope = "region"
-        density_target = 0.90
-        anneal_ratio = 0.25
-    return {"scope": scope, "density_target": density_target, "anneal_ratio": anneal_ratio,
-            "overflow_penalty": 0.005, "force_local": 1,
-            "reason": {"peak_density": peak_density, "peak_overflow": peak_overflow,
-                       "longnet_share": longnet_share}}
+        actions.append({"scope": "hotspot", "density_target": density_target, "anneal_ratio": 0.25})
+    if not actions:
+        actions.append({"scope": "region", "density_target": 0.90, "anneal_ratio": 0.25})
+    for action in actions:
+        action.update({"overflow_penalty": 0.005, "force_local": 1,
+                       "reason": {"peak_density": peak_density, "peak_overflow": peak_overflow,
+                                  "longnet_share": longnet_share}})
+    return actions
 
 
 def main():
@@ -108,44 +108,57 @@ def main():
         obs_workdir.mkdir(parents=True, exist_ok=True)
         obs = observe(obs_workdir, current_parent, Path(args.case_root), Path(args.input_def),
                       Path(args.config), Path(args.foundry_dir))
-        decision = decide(obs)
-        lr = run_py("gp_local_restart.py",
-                    "--design", args.design, "--workdir", str(root / f"local_restart_{round_idx}"),
-                    "--case-root", args.case_root, "--input-def", args.input_def,
-                    "--config", args.config, "--foundry-dir", args.foundry_dir, "--lef", args.lef,
-                    "--checkpoint", str(current_parent), "--scope", decision["scope"],
-                    "--overflow-penalty", str(decision["overflow_penalty"]),
-                    "--scope-anneal-ratio", str(decision["anneal_ratio"]),
-                    "--scope-density-target", str(decision["density_target"]),
-                    "--force-local", "--baseline-def", str(best_def), timeout=3600)
-        if not lr.get("ok"):
-            rounds.append({"round": round_idx, "decision": decision, "error": lr})
-            break
-        local_hpwl = lr.get("local_restart_hpwl")
-        baseline_restart_hpwl = lr.get("baseline_restart_hpwl")
-        raw_hpwl = lr.get("raw_gp_hpwl")
-        candidates = []
-        if local_hpwl is not None:
-            candidates.append((local_hpwl, "local_restart", str(Path(lr["local_place"]))))
-        if baseline_restart_hpwl is not None:
-            candidates.append((baseline_restart_hpwl, "baseline_restart",
-                               str(Path(lr.get("baseline_restart_workdir", "")) / "placement.def")))
-        if raw_hpwl is not None:
-            candidates.append((raw_hpwl, "raw", str(best_def)))
-        if not candidates:
-            rounds.append({"round": round_idx, "decision": decision, "error": "no hpwl"})
-            break
-        win_hpwl, win_side, win_def = min(candidates, key=lambda x: x[0])
-        improved = best_hpwl is not None and win_hpwl < best_hpwl - 1
-        if best_hpwl is None or win_hpwl < best_hpwl:
-            best_hpwl, best_def = win_hpwl, Path(win_def)
-        rounds.append({"round": round_idx, "decision": decision,
-                       "local_restart_hpwl": local_hpwl,
-                       "baseline_restart_hpwl": baseline_restart_hpwl,
-                       "raw_hpwl": raw_hpwl, "winner": win_side, "winner_hpwl": win_hpwl,
+        decisions = decide_actions(obs)
+        action_results = []
+        original_baseline_def = Path(args.baseline_def)
+        best_round_hpwl = best_hpwl
+        best_round_def = original_baseline_def
+        best_round_side = "raw"
+        for action_idx, decision in enumerate(decisions):
+            lr = run_py("gp_local_restart.py",
+                        "--design", args.design, "--workdir", str(root / f"local_restart_{round_idx}_{action_idx}"),
+                        "--case-root", args.case_root, "--input-def", args.input_def,
+                        "--config", args.config, "--foundry-dir", args.foundry_dir, "--lef", args.lef,
+                        "--checkpoint", str(current_parent), "--scope", decision["scope"],
+                        "--overflow-penalty", str(decision["overflow_penalty"]),
+                        "--scope-anneal-ratio", str(decision["anneal_ratio"]),
+                        "--scope-density-target", str(decision["density_target"]),
+                        "--force-local", "--baseline-def", str(original_baseline_def), timeout=3600)
+            if not lr.get("ok"):
+                action_results.append({"action": action_idx, "decision": decision, "error": lr})
+                continue
+            local_hpwl = lr.get("local_restart_hpwl")
+            baseline_restart_hpwl = lr.get("baseline_restart_hpwl")
+            raw_hpwl = lr.get("raw_gp_hpwl")
+            candidates = []
+            if local_hpwl is not None:
+                candidates.append((local_hpwl, "local_restart", str(Path(lr["local_place"]))))
+            if baseline_restart_hpwl is not None:
+                candidates.append((baseline_restart_hpwl, "baseline_restart",
+                                   str(Path(lr.get("baseline_restart_workdir", "")) / "placement.def")))
+            if raw_hpwl is not None:
+                candidates.append((raw_hpwl, "raw", str(original_baseline_def)))
+            if not candidates:
+                action_results.append({"action": action_idx, "decision": decision, "error": "no hpwl"})
+                continue
+            win_hpwl, win_side, win_def = min(candidates, key=lambda x: x[0])
+            action_results.append({"action": action_idx, "decision": decision,
+                                   "local_restart_hpwl": local_hpwl,
+                                   "baseline_restart_hpwl": baseline_restart_hpwl,
+                                   "raw_hpwl": raw_hpwl, "winner": win_side,
+                                   "winner_hpwl": win_hpwl})
+            if best_round_hpwl is None or win_hpwl < best_round_hpwl:
+                best_round_hpwl, best_round_def, best_round_side = win_hpwl, Path(win_def), win_side
+                # remember the local restart workdir for the next parent generation
+                best_round_restart = Path(lr.get("restart_workdir", ""))
+        improved = best_hpwl is not None and best_round_hpwl is not None and best_round_hpwl < best_hpwl - 1
+        if best_round_hpwl is not None and (best_hpwl is None or best_round_hpwl < best_hpwl):
+            best_hpwl, best_def = best_round_hpwl, best_round_def
+        rounds.append({"round": round_idx, "actions": action_results,
+                       "winner": best_round_side, "winner_hpwl": best_round_hpwl,
                        "improved_over_previous": improved})
-        if win_side == "local_restart":
-            next_place = Path(lr.get("restart_workdir", "")) / "placement.def"
+        if best_round_side == "local_restart" and best_round_def is not None:
+            next_place = best_round_def
             if next_place.exists():
                 parent_dir = root / f"parent_{round_idx + 1}"
                 parent_dir.mkdir(parents=True, exist_ok=True)
