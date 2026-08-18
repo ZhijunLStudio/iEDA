@@ -326,3 +326,21 @@ local_restart，最多 2-3 轮：
 | ihp130 | 620,662,411 | — | 契约通过 | — |
 
 * parent 为不可行 checkpoint（overflow 高），不能直接和可行解比较。
+
+
+## 修复同单位信息后的长程结果（v5）
+
+同一套规则：parent 只做 seed，winner 必须 feasible；比较只用 DEF HPWL。
+
+| PDK | design | raw DEF HPWL | 最终 feasible HPWL | 结果 |
+|---|---|---|---|---|
+| sky130 | s1238 | 5,957,257 | 5,957,606（模型误选 local，应保留 raw） | 工具信息已一致，决策仍不稳定 |
+| sky130 | apb4 | 15,715,072 | 15,591,351 | -0.79% |
+| sky130 | picorv32 | 234,280,119 | 234,280,119（raw） | local 未改善 |
+| sky130 | aes | 665,002,127 | 665,002,127（raw） | local 不可行 |
+| nangate45 | gcd | 5,850,034 | 5,819,606 | -0.52% |
+| asap7 | aes | 58,392,975 | 58,056,930 | -0.575% |
+| ihp130 | gcd | 620,662,411 | 617,865,587 | -0.45% |
+
+本轮额外修复：`scope_instances` 列表改为 Tcl 花括号包裹，避免
+`text_out[N]_reg_p` 这类带方括号的实例名破坏命令解析。
