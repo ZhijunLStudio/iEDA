@@ -52,6 +52,7 @@ def density(def_path: Path, case_root: Path, grid_size: int):
         f"source {shlex.quote(str(case_root / 'script/DB_script/db_init_lef.tcl'))}\n"
         f"def_init -path {shlex.quote(str(def_path))}\n"
         f"run_density_eval -eval_output_path {shlex.quote(str(work))} -grid_size {grid_size} -stage place\n"
+        f"run_congestion_eval -model rudy -bin_cnt_x 64 -bin_cnt_y 64 -eval_output_path {shlex.quote(str(work))}\n"
         f"flow_exit\n")
     env = __import__("os").environ.copy()
     env.update({"CONFIG_DIR": str(case_root / "iEDA_config"), "RESULT_DIR": str(work),
@@ -61,13 +62,31 @@ def density(def_path: Path, case_root: Path, grid_size: int):
     p = run([str(IEDa_BIN), "-script", str(tcl)], env=env)
     if p.returncode != 0:
         return {"ok": False, "rc": p.returncode, "log": p.stdout[-1000:]}
+    result = {}
     csv = work / "density_map/place_allcell_density.csv"
     if csv.exists():
         try:
-            return {"ok": True, "peak_cell_density": float(csv.read_text().strip())}
+            result["ok"] = True
+            result["peak_cell_density"] = float(csv.read_text().strip())
         except Exception:
-            pass
-    return {"ok": False, "reason": "density csv missing"}
+            result["ok"] = False
+            result["density_reason"] = "density csv unparsable"
+    else:
+        result["ok"] = False
+        result["density_reason"] = "density csv missing"
+    cj = work / "congestion_result.json"
+    if cj.exists():
+        try:
+            cdata = json.loads(cj.read_text())
+            result["rudy_max_congestion"] = cdata.get("max_congestion")
+            result["rudy_total_congestion"] = cdata.get("total_congestion")
+            result["congestion_model"] = cdata.get("model")
+            result["congestion_bin_cnt"] = (cdata.get("bin_cnt_x"), cdata.get("bin_cnt_y"))
+        except Exception:
+            result["congestion_reason"] = "congestion json unparsable"
+    else:
+        result["congestion_reason"] = "congestion json missing"
+    return result
 
 
 def timing(def_path: Path, case_root: Path):

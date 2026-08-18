@@ -24,10 +24,12 @@
  */
 #include "tcl_eval.h"
 
+#include <fstream>
 #include <iostream>
 
 #include "wirelength_io.h"
 #include "density_io.h"
+#include "congestion_api.h"
 #include "init_egr.h"
 
 using namespace ieval;
@@ -203,6 +205,61 @@ unsigned CmdEvalDensityRun::exec()
 
 
 namespace tcl {
+
+CmdEvalCongestionRun::CmdEvalCongestionRun(const char* cmd_name) : TclCmd(cmd_name)
+{
+  auto* bin_cnt_x = new TclIntOption("-bin_cnt_x", 1, 256);
+  auto* bin_cnt_y = new TclIntOption("-bin_cnt_y", 1, 256);
+  auto* output_path = new TclStringOption("-eval_output_path", 1, nullptr);
+  auto* model = new TclStringOption("-model", 1, "rudy");
+  addOption(bin_cnt_x);
+  addOption(bin_cnt_y);
+  addOption(output_path);
+  addOption(model);
+}
+
+unsigned CmdEvalCongestionRun::check()
+{
+  return 1;
+}
+
+unsigned CmdEvalCongestionRun::exec()
+{
+  if (!check()) {
+    return 0;
+  }
+  auto* bin_x = getOptionOrArg("-bin_cnt_x");
+  auto* bin_y = getOptionOrArg("-bin_cnt_y");
+  auto* path_opt = getOptionOrArg("-eval_output_path");
+  auto* model_opt = getOptionOrArg("-model");
+  const int32_t bin_cnt_x = bin_x ? bin_x->getIntVal() : 256;
+  const int32_t bin_cnt_y = bin_y ? bin_y->getIntVal() : 256;
+  const std::string output_path = path_opt && path_opt->getStringVal() ? path_opt->getStringVal() : "";
+  const std::string model = model_opt && model_opt->getStringVal() ? model_opt->getStringVal() : "rudy";
+
+  ieval::CongestionValue value{0.0, 0.0};
+  if (model == "lutrudy") {
+    value = ieval::CongestionAPI::getInst()->lutRudyCongestion(bin_cnt_x, bin_cnt_y, output_path);
+  } else {
+    value = ieval::CongestionAPI::getInst()->rudyCongestion(bin_cnt_x, bin_cnt_y, output_path);
+  }
+
+  const std::string json = "{\"model\":\"" + model + "\",\"bin_cnt_x\":" + std::to_string(bin_cnt_x)
+                           + ",\"bin_cnt_y\":" + std::to_string(bin_cnt_y)
+                           + ",\"max_congestion\":" + std::to_string(value.max_congestion)
+                           + ",\"total_congestion\":" + std::to_string(value.total_congestion)
+                           + ",\"save_path\":\"" + output_path + "\"}";
+  if (!output_path.empty()) {
+    const std::string result_file = output_path + "/congestion_result.json";
+    std::ofstream ofs(result_file);
+    if (ofs.is_open()) {
+      ofs << json << std::endl;
+      ofs.close();
+    }
+  }
+  std::cout << json << std::endl;
+  return 1;
+}
 
 CmdEvalEgrConfig::CmdEvalEgrConfig(const char* cmd_name) : TclCmd(cmd_name)
 {
