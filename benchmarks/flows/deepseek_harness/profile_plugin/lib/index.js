@@ -101,7 +101,9 @@ var IedaGpRuntime = class {
 	async agent(design, workdir, args, inputDef, foundryDir) {
 		const record = readDesigns(this.iedaRoot)[design];
 		if (!record) throw new Error(`unknown design ${JSON.stringify(design)}; known designs: ${knownDesigns(this.iedaRoot).join(", ")}`);
+		const [command, ...rest] = args;
 		const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_agent.py"), [
+			command,
 			"--workdir",
 			resolve(workdir),
 			"--case-root",
@@ -112,7 +114,7 @@ var IedaGpRuntime = class {
 			String(record.pl_config),
 			"--foundry-dir",
 			String(foundryDir || record.foundry_dir || join(this.iedaRoot, "scripts/foundry/sky130")),
-			...args
+			...rest
 		]);
 		trace(workdir, { source: "ieda_gp_run", design, args, result: value });
 		return value;
