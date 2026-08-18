@@ -167,6 +167,15 @@ def design_status(workdir: str | Path, checkpoint: str | None = None) -> dict:
     out["checkpoint_list"] = [x["name"] for x in checkpoint_list(workdir)[-20:]]
     out["timing_stale"] = out["timing_iter"] != out["iteration"]
     out["rudy_stale"] = out["rudy_iter"] != out["iteration"]
+    out["metric_units"] = {
+        "hpwl": "gp_internal_solver_hpwl",
+        "overflow": "gp_internal_density_overflow_ratio",
+        "route_util": "gp_internal_rudy_max_util",
+        "timing": "gp_internal_ista_if_enabled",
+    }
+    out["note"] = ("status.hpwl is the solver-internal HPWL; it is NOT the same scale as "
+                   "def_hpwl_eval / local_restart_hpwl. Compare DEF-level numbers only "
+                   "with local_restart's *_def_hpwl fields or gp_verify_lg.")
     return out
 
 

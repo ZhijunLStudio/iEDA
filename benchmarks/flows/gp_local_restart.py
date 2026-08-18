@@ -92,6 +92,16 @@ def main():
     if args.scope == "instances" and args.scope_instances:
         scope_args += ["--scope-instances", args.scope_instances]
 
+    parent_acc_dir = root / "parent_accepted"
+    parent_acc_dir.mkdir(parents=True, exist_ok=True)
+    run("restore", "--workdir", str(parent_acc_dir), "--case-root", str(case_root),
+        "--input-def", str(input_def), "--config", str(config), "--foundry-dir", str(foundry),
+        "--checkpoint", str(parent))
+    run("accept", "--workdir", str(parent_acc_dir), "--case-root", str(case_root),
+        "--input-def", str(input_def), "--config", str(config), "--foundry-dir", str(foundry),
+        "--checkpoint", str(parent))
+    parent_def_hpwl = hpwl(parent_acc_dir / "placement.def") if (parent_acc_dir / "placement.def").exists() else None
+
     cand_dir = root / "candidate"
     cand_dir.mkdir()
     candidate = run("candidate", "--workdir", str(cand_dir), "--case-root", str(case_root),
@@ -172,11 +182,15 @@ def main():
         "accepted_branch": "local" if chosen == local_cp else ("global" if chosen == global_cp else "parent"),
         "accepted_checkpoint": chosen,
         "local_restart_hpwl": local_restart_hpwl,
+        "local_restart_hpwl_unit": "def",
+        "parent_def_hpwl": parent_def_hpwl,
+        "parent_def_hpwl_unit": "def",
         "local_restart_overflow": local_restart_overflow,
         "local_restart_route_util": local_restart_route_util,
         "local_restart_feasible": local_restart_feasible,
         "baseline_def": str(baseline_def),
         "raw_gp_hpwl": raw_hpwl,
+        "raw_gp_hpwl_unit": "def",
         "baseline_restart_hpwl": baseline_restart_hpwl,
         "recommended_side": recommended_side,
         "recommended_hpwl": recommended_hpwl,
