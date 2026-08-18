@@ -187,7 +187,6 @@ def diagnose_hotspots(workdir: str | Path, checkpoint: str | None = None, top_n:
                 "bbox": f"{b.get('ll_x')} {b.get('ll_y')} {b.get('ur_x')} {b.get('ur_y')}",
                 "density": b.get("density"),
                 "overflow_area": b.get("overflow_area"),
-                "suggested_action": "region_spread",
             }
             for b in bins
         ],
@@ -268,6 +267,62 @@ def diagnose_longnets(workdir: str | Path, checkpoint: str | None = None, top_n:
         "iteration": cp.get("current_iter"),
         "longnets": scored[: max(1, top_n)],
     }
+
+
+def propose_longnet_instances(workdir: str | Path, checkpoint: str | None, top_n: int,
+                              def_path: str | None) -> dict:
+    """Return concrete, executable instance sets for the highest-HPWL nets.
+
+    This is a proposal, not a decision: every returned set can be passed
+    directly to gp.run kind=local_run scope=instances.
+    """
+    cp = resolve_checkpoint(workdir, checkpoint)
+    names = cp.get("instance_names") or []
+    coords = cp.get("instance_density_coords") or []
+    if not names or len(names) != len(coords):
+        return {"ok": False, "reason": "checkpoint has no instance density coordinates"}
+    inst_idx = {name: i for i, name in enumerate(names)}
+    if not def_path:
+        state = workdir_context(workdir)
+        def_path = state.get("input_def")
+        if not def_path:
+            return {"ok": False, "reason": "input_def is not recorded in workdir; pass def_path"}
+    nets = load_net_topology(def_path)
+    proposals = []
+    for net in nets:
+        instances = []
+        points = []
+        for inst, _pin in net["pins"]:
+            idx = inst_idx.get(inst)
+            if idx is None:
+                continue
+            if inst not in instances:
+                instances.append(inst)
+            xy = coords[idx]
+            points.append((int(xy[0]), int(xy[1])))
+        if len(instances) < 2 or len(points) < 2:
+            continue
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        hpwl = max(xs) - min(xs) + max(ys) - min(ys)
+        proposals.append({
+            "net": net["name"],
+            "hpwl": hpwl,
+            "pin_count": len(points),
+            "instance_count": len(instances),
+            "instances": instances,
+            "executable_action": {
+                "tool": "ieda_gp_run",
+                "kind": "local_run",
+                "scope": "instances",
+                "scope_instances": ",".join(instances),
+                "checkpoint": checkpoint_path(workdir, checkpoint),
+            },
+            "prediction_status": "unavailable",
+        })
+    proposals.sort(key=lambda x: x["hpwl"], reverse=True)
+    return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
+            "iteration": cp.get("current_iter"), "proposals": proposals[: max(1, top_n)]}
 
 
 def instance_points_in_bbox(bbox: str, names: list[str], coords: list[list[float]]) -> list[tuple[str, list[float]]]:
@@ -565,7 +620,7 @@ def verify_delta(workdir: str | Path, checkpoint_a: str, checkpoint_b: str,
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=["status", "checkpoints", "grid", "hotspots", "longnets", "propose_regions",
-                                        "freeze_instances",
+                                        "freeze_instances", "propose_longnet_instances",
                                         "propose_region_density", "propose_freeze", "unstable", "verify_delta"])
     ap.add_argument("--workdir", required=True)
     ap.add_argument("--checkpoint")
@@ -597,6 +652,8 @@ def main() -> int:
         print(json.dumps(diagnose_hotspots(args.workdir, args.checkpoint, args.top_n), indent=2))
     elif args.command == "longnets":
         print(json.dumps(diagnose_longnets(args.workdir, args.checkpoint, args.top_n, args.def_path), indent=2))
+    elif args.command == "propose_longnet_instances":
+        print(json.dumps(propose_longnet_instances(args.workdir, args.checkpoint, args.top_n, args.def_path), indent=2))
     elif args.command == "freeze_instances":
         print(json.dumps(freeze_instances(args.workdir, args.region, args.checkpoint), indent=2))
     elif args.command == "propose_regions":
