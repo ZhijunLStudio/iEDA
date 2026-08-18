@@ -1,5 +1,19 @@
 # iEDA GP 工具下一步计划（GP-only，合法化解耦）
 
+## 0. 决策边界（不写规则）
+
+- iEDA GP 只负责三类事实：
+  1. **执行**：global/local/restore/candidate/accept 等内核能精确执行的动作；
+  2. **观察**：细粒度、可归因的原始数据（逐 bin、逐 net、逐 instance、
+     checkpoint delta、scope effect），不输出“应该怎么办”；
+  3. **提议**：把观察到的对象翻译成 iEDA 可以执行的候选参数
+     （region 矩形、instance 集合、density target），并显式标注
+     `executable_action`；iEDA 不能执行的动作不伪造，返回 unsupported。
+- **分析、比较、选择动作、设置参数、决定接受还是回退：全部属于 Agent**，
+  iEDA 内核和 Python 包装都不内置“if density>1.05 then hotspot”之类的规则。
+- 验证也采用真实 Agent 调用六入口工具完成，而不是跑一个写死策略的脚本。
+
+
 本文件回答三个问题：
 1. GP 工具到底要做哪些事；
 2. 最后用什么指标验收；
