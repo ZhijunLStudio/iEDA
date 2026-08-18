@@ -191,7 +191,7 @@ parameters: p({ design: { type: "string", required: true }, workdir: { type: "st
 output: out(),
 execute: async (args) => {
 const k = args.kind;
-if (k === "start") return agent([...["start", "--iterations", String(args.iterations ?? 20), "--seed", String(args.seed ?? 1000), "--random-init", String(args.random_init ?? 1), "--seed-anchor-strength", String(args.seed_anchor_strength ?? 0), "--target-density", String(args.target_density ?? -1), "--congestion-effort", String(args.congestion_effort ?? -1), "--report-route-util", String(args.report_route_util ?? 1)]]);
+if (k === "start") return agent([...["start", "--iterations", String(args.iterations ?? 20), "--seed", String(args.seed ?? 1000), "--random-init", String(args.random_init ?? 1), "--seed-anchor-strength", String(args.seed_anchor_strength ?? 0), "--target-density", String(args.target_density ?? -1), "--congestion-effort", String(args.congestion_effort ?? -1), "--report-route-util", String(args.report_route_util ?? 1)]], args.input_def);
 if (k === "advance") return agent([...["advance", "--iterations", String(args.iterations ?? 100), "--report-route-util", String(args.report_route_util ?? 1), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]]);
 if (k === "candidate") return agent([...["candidate", "--iterations", String(args.iterations ?? 20), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]]);
 if (k === "local_run") return agent([...["local_run", "--iterations", String(args.iterations ?? 10), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]]);
