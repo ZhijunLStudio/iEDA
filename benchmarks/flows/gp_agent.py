@@ -143,7 +143,7 @@ def scope_args(args: argparse.Namespace) -> list[str]:
     if args.scope in ("random", "longnet"):
         out += ["-scope_active_count", str(args.scope_active_count)]
     if args.scope == "instances":
-        out += ["-scope_instances", args.scope_instances]
+        out += ["-scope_instances", "{" + args.scope_instances + "}"]
     if args.scope == "region":
         if args.scope_region:
             out += ["-scope_region", "{" + args.scope_region + "}"]
