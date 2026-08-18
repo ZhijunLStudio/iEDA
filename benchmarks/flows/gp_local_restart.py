@@ -121,9 +121,23 @@ def main():
 
     restart_dir = root / "local_restart"
     restart_dir.mkdir()
-    run("start", "--workdir", str(restart_dir), "--case-root", str(case_root),
-        "--input-def", str(local_place), "--config", str(config), "--foundry-dir", str(foundry), "--iterations", str(args.restart_iterations),
-        "--seed", str(args.seed), "--random-init", "0", "--report-route-util", "1")
+    restart_input = local_place
+    restart_state = {}
+    for _attempt in range(3):
+        run("start", "--workdir", str(restart_dir), "--case-root", str(case_root),
+            "--input-def", str(restart_input), "--config", str(config), "--foundry-dir", str(foundry), "--iterations", str(args.restart_iterations),
+            "--seed", str(args.seed), "--random-init", "0", "--report-route-util", "1")
+        state_path = restart_dir / "gp_agent_state.json"
+        if state_path.exists():
+            restart_state = json.loads(state_path.read_text())
+        overflow = float(restart_state.get("last_overflow", 1.0))
+        if overflow <= 0.12:
+            break
+        next_place = restart_dir / "placement.def"
+        if next_place.exists():
+            restart_input = next_place
+        else:
+            break
 
     baseline_def = Path(args.baseline_def) if args.baseline_def else Path(f"/tmp/p0_converged/{design}/placement.def")
     baseline_restart_hpwl = None
@@ -137,9 +151,15 @@ def main():
         baseline_restart_hpwl = hpwl(baseline_restart_dir / "placement.def")
 
     local_restart_hpwl = hpwl(restart_dir / "placement.def")
+    local_restart_overflow = float(restart_state.get("last_overflow", 1.0))
+    local_restart_route_util = float(restart_state.get("last_route_util", 0.0))
+    local_restart_feasible = local_restart_overflow <= 0.12
     raw_hpwl = hpwl(baseline_def)
-    candidates = [(v, k) for v, k in [(raw_hpwl, "raw_gp"), (local_restart_hpwl, "local_restart"),
-                                      (baseline_restart_hpwl, "baseline_restart")] if v is not None]
+    candidates = [(raw_hpwl, "raw_gp")] if raw_hpwl is not None else []
+    if local_restart_hpwl is not None and local_restart_feasible:
+        candidates.append((local_restart_hpwl, "local_restart"))
+    if baseline_restart_hpwl is not None:
+        candidates.append((baseline_restart_hpwl, "baseline_restart"))
     recommended_hpwl, recommended_side = min(candidates) if candidates else (None, "unknown")
     result = {
         "ok": True,
@@ -148,6 +168,9 @@ def main():
         "accepted_branch": "local" if chosen == local_cp else ("global" if chosen == global_cp else "parent"),
         "accepted_checkpoint": chosen,
         "local_restart_hpwl": local_restart_hpwl,
+        "local_restart_overflow": local_restart_overflow,
+        "local_restart_route_util": local_restart_route_util,
+        "local_restart_feasible": local_restart_feasible,
         "baseline_def": str(baseline_def),
         "raw_gp_hpwl": raw_hpwl,
         "baseline_restart_hpwl": baseline_restart_hpwl,

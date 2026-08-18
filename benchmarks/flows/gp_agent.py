@@ -79,6 +79,28 @@ def run_ieda(workdir: Path, case_root: Path, foundry_dir: Path, config: Path, in
     return proc.returncode, proc.stdout, proc.stderr
 
 
+def last_gp_line(out: str) -> dict:
+    """Parse the final `iPL gp.run` line; it carries the true terminal status,
+    which the append-only ledger may not contain for terminal batches."""
+    m = None
+    for line in out.splitlines():
+        mm = re.search(r"iPL gp\.run \(([^)]+)\) stop_reason=(\S+).*?iterations=(\d+)-(\d+) "
+                       r"hpwl=(\d+) overflow=([0-9.eE+-]+).*?route_util=([0-9.eE+-]+)", line)
+        if mm:
+            m = mm
+    if not m:
+        return {}
+    return {
+        "mode": m.group(1).split(",")[0].split()[-1],
+        "stop_reason": m.group(2),
+        "start_iteration": int(m.group(3)),
+        "end_iteration": int(m.group(4)),
+        "hpwl": int(m.group(5)),
+        "overflow": float(m.group(6)),
+        "route_util": float(m.group(7)),
+    }
+
+
 def last_ledger(workdir: Path) -> dict:
     path = workdir / "pl/gp_experiments.jsonl"
     if not path.exists():
@@ -87,7 +109,7 @@ def last_ledger(workdir: Path) -> dict:
     return json.loads(lines[-1]) if lines else {}
 
 
-def update_state(workdir: Path, extra: dict | None = None) -> dict:
+def update_state(workdir: Path, extra: dict | None = None, record: dict | None = None) -> dict:
     state_path = workdir / "gp_agent_state.json"
     state = {}
     if state_path.exists():
@@ -95,7 +117,8 @@ def update_state(workdir: Path, extra: dict | None = None) -> dict:
             state = json.loads(state_path.read_text())
         except Exception:
             state = {}
-    record = last_ledger(workdir)
+    if record is None:
+        record = last_ledger(workdir)
     state.update({
         "workdir": str(workdir),
         "last_mode": record.get("mode"),
@@ -196,12 +219,12 @@ def cmd_start(args: argparse.Namespace) -> int:
     if args.report_route_util:
         cmd[-1] += " -report_route_util 1"
     rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmd, def_save=True)
-    record = last_ledger(workdir)
+    record = last_gp_line(out) or last_ledger(workdir)
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
     state = update_state(workdir, {"case_root": str(case_root), "input_def": str(input_def),
-                                   "config": str(config), "foundry_dir": str(foundry)})
+                                   "config": str(config), "foundry_dir": str(foundry)}, record=record)
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
     return 0
 
@@ -233,7 +256,7 @@ def cmd_advance(args: argparse.Namespace) -> int:
     if args.report_route_util:
         cmd[-1] += " -report_route_util 1"
     rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmd, def_save=True)
-    record = last_ledger(workdir)
+    record = last_gp_line(out) or last_ledger(workdir)
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
@@ -255,11 +278,11 @@ def cmd_local_run(args: argparse.Namespace) -> int:
         "placer_run_gp -mode accept",
     ]
     rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmds, def_save=True)
-    record = last_ledger(workdir)
+    record = last_gp_line(out) or last_ledger(workdir)
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
-    state = update_state(workdir)
+    state = update_state(workdir, record=record)
     save_context(state, args, workdir, case_root, input_def, config, foundry)
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
     return 0
@@ -390,7 +413,7 @@ def cmd_candidate(args: argparse.Namespace) -> int:
         "catch {placer_run_gp -mode accept}",
     ]
     rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmds, def_save=True)
-    record = last_ledger(workdir)
+    record = last_gp_line(out) or last_ledger(workdir)
     candidate = parse_candidate_stdout(out)
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
