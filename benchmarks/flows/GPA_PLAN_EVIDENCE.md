@@ -238,3 +238,33 @@ GP 内部 density/congestion（raw vs agent）：
 - s1238：overflow 0.09947 -> 0.09974，route_util 1.692 -> 1.680；
 - apb4：overflow 0.09924 -> 0.09965，route_util 1.373 -> 1.189；
 - aes：overflow 0.10000 -> 0.28664，route_util 2.586 -> 5.329（agent 不可行）。
+
+
+## 同 evaluator 四列矩阵（修复后）
+
+`gp_evaluator_regression.py --repeat 2` 四设计全通过。
+所有数字来自同一 evaluator：HPWL=def_hpwl_eval，density=run_density_eval，
+RUDY=run_congestion_eval，timing=eval_timing_metrics.tcl。
+
+| design | placement | HPWL | peak density | RUDY max | RUDY total | setup WNS |
+|---|---|---|---|---|---|---|
+| s1238 | raw | 5,957,257 | 0.458522 | 0.004824 | 3.778444 | -0.0492 |
+| s1238 | agent | 5,949,564 | 0.458522 | 0.005120 | 3.781833 | -0.0282 |
+| s1238 | innovus | 8,053,041 | 0.457168 | 0.003627 | 5.257225 | -0.1329 |
+| apb4 | raw | 15,715,072 | 0.366530 | 0.003046 | 2.337015 | -0.5616 |
+| apb4 | agent | 15,591,351 | 0.366530 | 0.003190 | 2.328226 | -0.5647 |
+| apb4 | innovus | 18,566,747 | 0.366077 | 0.002559 | 2.918314 | -0.6764 |
+| picorv32 | raw/agent | 234,280,119 | 0.340668 | 0.003854 | 3.399836 | -15.9233 |
+| picorv32 | innovus | 308,691,343 | 0.340663 | 0.003650 | 4.552387 | -21.3663 |
+| aes | raw | 665,002,127 | 0.491452 | 0.004218 | 3.733800 | -75.8116 |
+| aes | agent* | 644,812,888 | 0.496452 | 0.005146 | 3.637586 | -76.0834 |
+| aes | innovus | 914,210,691 | 0.410401 | 0.003348 | 5.379015 | -94.4539 |
+
+\* aes agent 布局 overflow=0.287，不满足收敛条件；feasibility-aware
+local_restart 会推荐 raw。
+
+结论：
+- HPWL：iEDA raw/agent 全面优于 Innovus；
+- timing：iEDA 全面优于或接近 Innovus；
+- density peak：Innovus 在 aes 上更均衡，其余相近；
+- RUDY max：Innovus 更优；iEDA agent 在 s1238/apb4/aes 上比 raw 略差。

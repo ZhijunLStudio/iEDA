@@ -325,6 +325,9 @@ P1：
 - [x] P1 重验：真实 Agent 自主选择动作，s1238/apb4/aes 改善，picorv32 正确回退 raw
 - [x] 移除 MCP 插件中仍暴露的 Innovus 对照工具
 - [x] 删除规则策略脚本，观察输出只保留事实，propose 只给可执行动作
+- [x] 同 evaluator HPWL/density/RUDY/timing 四列比较（gp_metrics_compare.py）
+- [x] evaluator 跨设计回归 + 重复运行确定性检查（gp_evaluator_regression.py）
+- [x] 修复 density evaluator int32 网格面积溢出
 
 ## 5. 不做什么
 
