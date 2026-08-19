@@ -383,3 +383,25 @@ local_restart，最多 2-3 轮：
 - ihp130 `start(target_reached)` 在新二进制下应保存 checkpoint，但 v8
   被旧动作缓存命中；已给动作缓存加版本号；
 - aes / picorv32 的密度约束仍无法通过现有局部动作改善。
+
+
+## 5 工具 + 假设验证长程 v10 结果
+
+Agent 自主决定评测时机和假设验证；最终候选必须跑
+`ieda_gp_verify kind=metrics` 并报告 HPWL/density/RUDY/timing。
+
+| PDK | design | 最终 winner | HPWL | 密度/RUDY/timing 结论 |
+|---|---|---|---|---|
+| sky130 | s1238 | raw | 5,957,257 | 可行续跑 +2.69% HPWL，指标全差，raw 保留 |
+| sky130 | apb4 | raw 保留 | 15,715,072 | candidate 可行但 accept 导出 DEF bug，未确认 |
+| sky130 | picorv32 | raw | 234,280,119 | 可行边界≈raw，验证了 density relaxation |
+| sky130 | aes | /tmp/gp_long_aes_v10_7/placement.def | **573,846,319 (-13.7%)** | WNS -51.45 vs -75.81；freq 18.54MHz vs 12.77MHz；RUDY max 差 20%，total 好 14% |
+| nangate45 | gcd | raw | 5,850,034 | parent LG 后 7.62M，raw 全维最优 |
+| asap7 | aes | baseline_restart | **57,987,714 (-0.69%)** | RUDY max/total 改善 |
+| ihp130 | gcd | raw | 620,662,411 | config fingerprint mismatch 导致 local_restart 失败 |
+
+本轮暴露的真实工具问题：
+1. `ieda_gp_session accept` 在 candidate/local_restart 工作目录上会写出输入 DEF；
+2. local_restart 的 target_density 语义与 start 不一致；
+3. `overflow_penalty` 在 schema 暴露但 start 不转发；
+4. ihp130 的 seed start config 和 local_restart config fingerprint 不一致。
