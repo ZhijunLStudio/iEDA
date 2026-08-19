@@ -370,6 +370,46 @@ scope 参数：
 | workdir | 目标文件夹 |
 | checkpoint | restore / accept 的目标 |
 
+## 4c. 假设-验证工作方式
+
+Agent 使用工具的推荐形态是：
+
+```text
+1. 观察
+   用 inspect / diagnose 读取事实。
+
+2. 提出可证伪假设
+   例如：
+   "parent_400 的 5 号 bin 密度 1.66，
+    如果只移动该 bin 及邻居的单元，并设 density_target=0.9，
+    density_overflow 会下降，且 HPWL 增加不超过 X。"
+
+3. 选一个可执行动作
+   从 propose 的 executable_action 中选择，
+   或自己组合 scope / density_target / anneal / iterations。
+
+4. 受控执行
+   candidate：同时得到 local 和 global 两个结果；
+   local_run：只得到 local；
+   local_restart：局部扰动后重新全局恢复。
+
+5. 验证
+   - 便宜：inspect status / delta / trajectory；
+   - 贵：verify metrics / lg。
+   由 Agent 根据不确定性决定验证强度。
+
+6. 接受或拒绝
+   - 接受：把 winner checkpoint 加入 frontier；
+   - 拒绝：保留原 checkpoint，记录失败原因。
+
+7. 更新 frontier
+   保留所有可行 checkpoint；
+   按观察指标修剪；
+   可以回退，也可以从更差的可行解继续探索。
+```
+
+没有固定规则说“必须第 N 步验证”或“只允许差一步”。
+
 ## 5. 成本模型（给 Agent 的参考，不是强制策略）
 
 ```text
