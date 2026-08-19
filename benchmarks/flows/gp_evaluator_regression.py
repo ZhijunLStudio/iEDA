@@ -53,7 +53,7 @@ def check(entry, where):
     elif not finite(den.get("peak_cell_density")) or den["peak_cell_density"] < 0:
         problems.append(f"{where}: density peak invalid {den.get('peak_cell_density')}")
     if not finite(den.get("rudy_max_congestion")) or den["rudy_max_congestion"] < 0:
-        problems.append(f"{where}: rudy max invalid {den.get('rudy_max_congestion')}")
+        problems.append(f"{where}: rudy demand max invalid {den.get('rudy_max_congestion')}")
     if den.get("congestion_model") != "rudy":
         problems.append(f"{where}: congestion model mismatch")
     tim = entry.get("timing") or {}

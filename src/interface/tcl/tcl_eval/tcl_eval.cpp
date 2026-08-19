@@ -244,10 +244,13 @@ unsigned CmdEvalCongestionRun::exec()
     value = ieval::CongestionAPI::getInst()->rudyCongestion(bin_cnt_x, bin_cnt_y, output_path);
   }
 
+  // CongestionEval::calRUDY currently computes RUDY demand density
+  // (sum of per-net HPWL rectangle demand / grid area) WITHOUT dividing by
+  // routing supply. Name the fields demand, not congestion/utilization.
   const std::string json = "{\"model\":\"" + model + "\",\"bin_cnt_x\":" + std::to_string(bin_cnt_x)
                            + ",\"bin_cnt_y\":" + std::to_string(bin_cnt_y)
-                           + ",\"max_congestion\":" + std::to_string(value.max_congestion)
-                           + ",\"total_congestion\":" + std::to_string(value.total_congestion)
+                           + ",\"rudy_demand_max\":" + std::to_string(value.max_congestion)
+                           + ",\"rudy_demand_total\":" + std::to_string(value.total_congestion)
                            + ",\"save_path\":\"" + output_path + "\"}";
   if (!output_path.empty()) {
     const std::string result_file = output_path + "/congestion_result.json";

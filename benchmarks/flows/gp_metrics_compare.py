@@ -89,8 +89,8 @@ def density(def_path: Path, case_root: Path, grid_size: int, foundry_dir: Path):
     if cj.exists():
         try:
             cdata = json.loads(cj.read_text())
-            result["rudy_max_congestion"] = cdata.get("max_congestion")
-            result["rudy_total_congestion"] = cdata.get("total_congestion")
+            result["rudy_demand_max"] = cdata.get("rudy_demand_max")
+            result["rudy_demand_total"] = cdata.get("rudy_demand_total")
             result["congestion_model"] = cdata.get("model")
             result["congestion_bin_cnt"] = (cdata.get("bin_cnt_x"), cdata.get("bin_cnt_y"))
         except Exception:
