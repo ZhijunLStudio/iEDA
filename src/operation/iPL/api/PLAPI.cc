@@ -1888,6 +1888,16 @@ GPRunResult PLAPI::gpFinalizeTerminal(GPRunResult result)
   result.density_penalty = gp_run.density_penalty;
   result.reason = gp_run.reason;
 
+  // A terminal batch must still be resumable: the long-horizon agent chains
+  // local_restart -> start(target_reached) -> another local_restart. Persist
+  // the final solver checkpoint before releasing the session.
+  if (!isNesterovHardFailure(gp_run.outcome)) {
+    const std::string terminal_checkpoint = obtainTargetDir() + "/pl/gp_session_checkpoint.json";
+    if (ipl::saveGPCheckpointFile(terminal_checkpoint, _gp_session_state->session->captureCheckpoint())) {
+      result.checkpoint_path = terminal_checkpoint;
+    }
+  }
+
   _gp_session_state->transaction = PlacerDB::StageTransaction{};
   _gp_session_state->record_offset = 0;
   _gp_session_state.reset();

@@ -128,8 +128,12 @@ def update_state(workdir: Path, extra: dict | None = None, record: dict | None =
         "last_overflow": record.get("overflow"),
         "last_route_util": record.get("route_util"),
     })
-    if record.get("checkpoint"):
-        state["latest_checkpoint"] = record["checkpoint"]
+    terminal_checkpoint = workdir / "pl/gp_session_checkpoint.json"
+    checkpoint_hit = record.get("checkpoint") or record.get("checkpoint_path")
+    if not checkpoint_hit and terminal_checkpoint.exists():
+        checkpoint_hit = str(terminal_checkpoint)
+    if checkpoint_hit:
+        state["latest_checkpoint"] = checkpoint_hit
     if extra:
         state.update(extra)
     state_path.write_text(json.dumps(state, indent=2))
