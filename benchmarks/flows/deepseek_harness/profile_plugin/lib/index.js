@@ -1,7 +1,7 @@
 import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 //#region lib/types/index.js
@@ -16,6 +16,7 @@ import { promisify } from "node:util";
 * @module @deepseek-ai/dsh-tool-ieda-gp
 */
 const execFileAsync = promisify(execFile);
+// reload-marker v2
 const name = "tool-ieda-gp";
 const inject = ["tools"];
 const Config = z.object({
@@ -74,6 +75,7 @@ function commonResultSchema() {
 function asJson(value) {
 	return value;
 }
+const GP_TOOL_VERSION = "2";
 async function cachedRun(workdir, key, source, runner, budget = 128) {
 const dir = resolve(workdir);
 mkdirSync(dir, { recursive: true });
@@ -85,13 +87,13 @@ rows = readFileSync(cacheFile, "utf8").split("\n").filter(Boolean).map((line) =>
 if (rows.length >= budget) {
 return asJson({ ok: false, reason: `gp action budget exhausted (${budget}) in ${dir}`, cached: false });
 }
-const hit = rows.find((row) => row.key === key);
+const hit = rows.find((row) => row.key === GP_TOOL_VERSION + ":" + key);
 if (hit) {
 return { ...hit.result, cached: true };
 }
 const result = await runner();
 if (result && typeof result === "object" && result.ok !== undefined) {
-rows.push({ ts: Date.now(), source, key, result });
+rows.push({ ts: Date.now(), source, key: GP_TOOL_VERSION + ":" + key, result });
 appendFileSync(cacheFile, JSON.stringify(rows[rows.length - 1]) + "\n");
 }
 return result;
@@ -268,3 +270,4 @@ throw new Error("ieda_gp_session: kind must be restore|accept|unfreeze|clear_den
 }));
 }
 export { Config, apply, inject, name };
+// reload-marker-20260819-a
