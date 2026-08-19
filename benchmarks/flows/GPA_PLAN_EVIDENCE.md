@@ -357,3 +357,29 @@ local_restart，最多 2-3 轮：
 - parent accepted: 5,884,828, feasible=false（只做 seed）
 
 最终 winner：top-2 local_restart，相对 raw -0.29%。
+
+
+## 工具全链路修复后的长程 v8 结果
+
+新能力：
+- start/advance/candidate/local_run 的中间 metrics 暴露；
+- 动作去重缓存 + workdir 调用预算（128）；
+- terminal `target_reached` 也会保存 checkpoint；
+- local_restart 返回 parent/local/global 三个 child checkpoint；
+- 允许 Agent 从“当前更差”的 feasible 局部解继续探索一轮。
+
+| PDK | design | raw feasible HPWL | 最终 feasible HPWL | 变化 |
+|---|---|---|---|---|
+| sky130 | s1238 | 5,957,257 | 5,957,257 | raw（另一次两候选实验 -0.29%） |
+| sky130 | apb4 | 15,715,072 | 15,612,372 | -0.65% |
+| sky130 | picorv32 | 234,280,119 | 234,280,119 | raw |
+| sky130 | aes | 665,002,127 | 665,002,127 | local 不可行，raw |
+| nangate45 | gcd | 5,850,034 | 5,813,974 | -0.62% |
+| asap7 | aes | 58,392,975 | 57,887,305 | -0.87% |
+| ihp130 | gcd | 620,662,411 | 617,702,474 | -0.47% |
+
+仍存在的问题：
+- s1238 对 proposal 覆盖规模敏感，模型两次选择不同结果；
+- ihp130 `start(target_reached)` 在新二进制下应保存 checkpoint，但 v8
+  被旧动作缓存命中；已给动作缓存加版本号；
+- aes / picorv32 的密度约束仍无法通过现有局部动作改善。
