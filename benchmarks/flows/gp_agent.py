@@ -151,6 +151,8 @@ def scope_args(args: argparse.Namespace) -> list[str]:
     if args.scope == "region":
         if args.scope_region:
             out += ["-scope_region", "{" + args.scope_region + "}"]
+    if getattr(args, "scope_seed", None) is not None:
+        out += ["-scope_seed", str(args.scope_seed)]
     out += ["-scope_halo_coeff", str(args.halo_coeff), "-scope_halo_hops", str(args.halo_hops)]
     out += ["-scope_density_target", str(args.scope_density_target),
             "-scope_density_ratio", str(args.scope_density_ratio)]
@@ -562,6 +564,7 @@ def main() -> int:
                 (("--scope",), {"choices": ["global", "hotspot", "random", "instances", "region", "longnet"], "default": "global"}),
                 (("--scope-active-ratio",), {"type": float, "default": 0.2}),
                 (("--scope-active-count",), {"type": int, "default": 100}),
+                (("--scope-seed",), {"type": int, "default": 1000}),
                 (("--scope-instances",), {"default": ""}), (("--scope-region",), {"default": ""}),
                 (("--scope-density-target",), {"type": float, "default": 1.0}),
                 (("--scope-density-ratio",), {"type": float, "default": 0.0}),

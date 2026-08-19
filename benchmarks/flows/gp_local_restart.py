@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--scope", default="longnet",
                     choices=["longnet", "hotspot", "random", "region", "instances"])
     ap.add_argument("--scope-active-count", type=int, default=100)
+    ap.add_argument("--scope-seed", type=int)
     ap.add_argument("--scope-active-ratio", type=float, default=0.2)
     ap.add_argument("--scope-region", default="")
     ap.add_argument("--scope-instances", default="")
@@ -87,6 +88,8 @@ def main():
         scope_args += ["--scope-active-count", str(args.scope_active_count)]
     if args.scope == "hotspot":
         scope_args += ["--scope-active-ratio", str(args.scope_active_ratio)]
+    if args.scope_seed is not None:
+        scope_args += ["--scope-seed", str(args.scope_seed)]
     if args.scope == "region" and args.scope_region:
         scope_args += ["--scope-region", args.scope_region]
     if args.scope == "instances" and args.scope_instances:
