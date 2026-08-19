@@ -42,7 +42,7 @@ def hpwl(def_path: Path, macro_lef: Path):
     return int(m.group(1)) if m else None
 
 
-def density(def_path: Path, case_root: Path, grid_size: int):
+def density(def_path: Path, case_root: Path, grid_size: int, foundry_dir: Path):
     work = Path(tempfile.mkdtemp(prefix="gp_density_eval_"))
     tcl = work / "density_eval.tcl"
     tcl.write_text(
@@ -57,7 +57,7 @@ def density(def_path: Path, case_root: Path, grid_size: int):
     env = __import__("os").environ.copy()
     env.update({"CONFIG_DIR": str(case_root / "iEDA_config"), "RESULT_DIR": str(work),
                 "TCL_SCRIPT_DIR": str(case_root / "script"),
-                "FOUNDRY_DIR": str(REPO / "scripts/foundry/sky130"),
+                "FOUNDRY_DIR": str(foundry_dir),
                 "SDC_FILE": str(next(case_root.glob("*.sdc")))})
     p = run([str(IEDa_BIN), "-script", str(tcl)], env=env)
     if p.returncode != 0:
@@ -125,6 +125,7 @@ def main():
     ap.add_argument("--design", required=True)
     ap.add_argument("--case-root", required=True)
     ap.add_argument("--macro-lef", required=True)
+    ap.add_argument("--foundry-dir", default=str(REPO / "scripts/foundry/sky130"))
     ap.add_argument("--grid-size", type=int, default=200)
     ap.add_argument("--no-timing", action="store_true")
     ap.add_argument("--out")
@@ -142,7 +143,7 @@ def main():
             out["placements"][name] = {"def": str(path), "missing": True}
             continue
         entry = {"def": str(path), "hpwl": hpwl(path, macro_lef),
-                 "density": density(path, case_root, args.grid_size)}
+                 "density": density(path, case_root, args.grid_size, Path(args.foundry_dir))}
         if not args.no_timing and TIMING_EVAL_TCL.exists():
             entry["timing"] = timing(path, case_root)
         out["placements"][name] = entry
