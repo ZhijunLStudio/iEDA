@@ -225,6 +225,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         return 1
     state = update_state(workdir, {"case_root": str(case_root), "input_def": str(input_def),
                                    "config": str(config), "foundry_dir": str(foundry)}, record=record)
+    record["checkpoint_path"] = record.get("checkpoint") or state.get("latest_checkpoint")
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
     return 0
 
@@ -282,9 +283,21 @@ def cmd_local_run(args: argparse.Namespace) -> int:
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
+    before = {}
+    try:
+        parent = json.loads(Path(ckpt).read_text())
+        before = {"iteration": parent.get("current_iter"), "hpwl": parent.get("prev_hpwl"),
+                  "overflow": parent.get("sum_overflow")}
+    except Exception:
+        before = None
+    delta = {}
+    if before and record.get("hpwl") is not None and record.get("overflow") is not None:
+        delta = {"hpwl": record["hpwl"] - before["hpwl"],
+                 "overflow": record["overflow"] - before["overflow"]}
     state = update_state(workdir, record=record)
     save_context(state, args, workdir, case_root, input_def, config, foundry)
-    print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
+    print(json.dumps({"ok": True, "state": state, "record": record,
+                      "before": before, "delta": delta}, indent=2))
     return 0
 
 
@@ -418,6 +431,19 @@ def cmd_candidate(args: argparse.Namespace) -> int:
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
+    for side, key in (("local", "candidate_local_checkpoint"), ("global", "candidate_global_checkpoint")):
+        child_path = candidate.get(key)
+        if child_path and Path(child_path).exists():
+            try:
+                child = json.loads(Path(child_path).read_text())
+                candidate[f"{side}_metrics"] = {
+                    "iteration": child.get("current_iter"),
+                    "hpwl": child.get("prev_hpwl"),
+                    "overflow": child.get("sum_overflow"),
+                    "step_length": child.get("final_step_length"),
+                }
+            except Exception:
+                candidate[f"{side}_metrics"] = None
     state = update_state(workdir, {"last_candidate": candidate})
     print(json.dumps({"ok": True, "state": state, "record": record, "candidate": candidate}, indent=2))
     return 0

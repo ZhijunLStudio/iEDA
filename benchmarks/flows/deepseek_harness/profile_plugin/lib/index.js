@@ -74,6 +74,28 @@ function commonResultSchema() {
 function asJson(value) {
 	return value;
 }
+async function cachedRun(workdir, key, source, runner, budget = 128) {
+const dir = resolve(workdir);
+mkdirSync(dir, { recursive: true });
+const cacheFile = join(dir, "gp_agent_cache.jsonl");
+let rows = [];
+try {
+rows = readFileSync(cacheFile, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+} catch (_) {}
+if (rows.length >= budget) {
+return asJson({ ok: false, reason: `gp action budget exhausted (${budget}) in ${dir}`, cached: false });
+}
+const hit = rows.find((row) => row.key === key);
+if (hit) {
+return { ...hit.result, cached: true };
+}
+const result = await runner();
+if (result && typeof result === "object" && result.ok !== undefined) {
+rows.push({ ts: Date.now(), source, key, result });
+appendFileSync(cacheFile, JSON.stringify(rows[rows.length - 1]) + "\n");
+}
+return result;
+}
 function trace(workdir, entry) {
 if (!workdir) return;
 try {
@@ -102,29 +124,36 @@ var IedaGpRuntime = class {
 		const record = readDesigns(this.iedaRoot)[design];
 		if (!record) throw new Error(`unknown design ${JSON.stringify(design)}; known designs: ${knownDesigns(this.iedaRoot).join(", ")}`);
 		const [command, ...rest] = args;
-		const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_agent.py"), [
-			command,
-			"--workdir",
-			resolve(workdir),
-			"--case-root",
-			String(record.case_root),
-			"--input-def",
-			String(inputDef || record.input_def),
-			"--config",
-			String(record.pl_config),
-			"--foundry-dir",
-			String(foundryDir || record.foundry_dir || join(this.iedaRoot, "scripts/foundry/sky130")),
-			...rest
-		]);
-		trace(workdir, { source: "ieda_gp_run", design, args, result: value });
-		return value;
+		const key = JSON.stringify({ design, command, args: rest, inputDef: inputDef || record.input_def, foundryDir: foundryDir || record.foundry_dir });
+		return cachedRun(workdir, key, "ieda_gp_run", async () => {
+			const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_agent.py"), [
+				command,
+				"--workdir",
+				resolve(workdir),
+				"--case-root",
+				String(record.case_root),
+				"--input-def",
+				String(inputDef || record.input_def),
+				"--config",
+				String(record.pl_config),
+				"--foundry-dir",
+				String(foundryDir || record.foundry_dir || join(this.iedaRoot, "scripts/foundry/sky130")),
+				...rest
+			]);
+			trace(workdir, { source: "ieda_gp_run", design, args, result: value });
+			return value;
+		});
 	}
 	async toolbox(args) {
-		const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_toolbox.py"), args);
 		const wi = args.indexOf("--workdir");
 		const workdir = wi >= 0 ? args[wi + 1] : null;
-		trace(workdir, { source: "ieda_gp_observe", args, result: value });
-		return value;
+		if (!workdir) return runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_toolbox.py"), args);
+		const key = JSON.stringify({ args });
+		return cachedRun(workdir, key, "ieda_gp_observe", async () => {
+			const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_toolbox.py"), args);
+			trace(workdir, { source: "ieda_gp_observe", args, result: value });
+			return value;
+		});
 	}
 async fullCompare(design, resultRoot, timing) {
 		if (!readDesigns(this.iedaRoot)[design]) throw new Error(`unknown design ${JSON.stringify(design)}; known designs: ${knownDesigns(this.iedaRoot).join(", ")}`);
@@ -203,7 +232,7 @@ if (k === "start") return agent(args, ["start", "--iterations", String(args.iter
 if (k === "advance") return agent(args, ["advance", "--iterations", String(args.iterations ?? 100), "--report-route-util", String(args.report_route_util ?? 1), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (k === "candidate") return agent(args, ["candidate", "--iterations", String(args.iterations ?? 20), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (k === "local_run") return agent(args, ["local_run", "--iterations", String(args.iterations ?? 10), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
-if (k === "local_restart") { const info = readDesigns(config.iedaRoot)[args.design] || {}; return asJson(await runCli(config.iedaRoot, config.python, config.timeoutMs, join(config.iedaRoot, "benchmarks/flows/gp_local_restart.py"), ["--design", args.design, "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : [], "--case-root", String(info.case_root), "--input-def", String(info.input_def), "--config", String(info.pl_config), "--foundry-dir", String(args.foundry_dir || runtime.foundryDir(args.design)), ...info.lef ? ["--lef", String(info.lef)] : [], ...info.gp_baseline_def ? ["--baseline-def", String(info.gp_baseline_def)] : [], "--scope", args.scope ?? "longnet", "--scope-active-count", String(args.scope_active_count ?? 100), "--scope-active-ratio", String(args.scope_active_ratio ?? 0.2), "--halo-hops", String(args.halo_hops ?? 2), "--halo-coeff", String(args.halo_coeff ?? 0.5), "--overflow-penalty", String(args.overflow_penalty ?? 0.005), "--scope-anneal-ratio", String(args.scope_anneal_ratio ?? 0), "--scope-density-target", String(args.scope_density_target ?? 1), ...args.force_local == 1 ? ["--force-local"] : [], ...args.scope_region ? ["--scope-region", args.scope_region] : [], ...args.scope_instances ? ["--scope-instances", args.scope_instances] : []])); }
+if (k === "local_restart") { const info = readDesigns(config.iedaRoot)[args.design] || {}; const cli = ["--design", args.design, "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : [], "--case-root", String(info.case_root), "--input-def", String(info.input_def), "--config", String(info.pl_config), "--foundry-dir", String(args.foundry_dir || runtime.foundryDir(args.design)), ...info.lef ? ["--lef", String(info.lef)] : [], ...info.gp_baseline_def ? ["--baseline-def", String(info.gp_baseline_def)] : [], "--scope", args.scope ?? "longnet", "--scope-active-count", String(args.scope_active_count ?? 100), "--scope-active-ratio", String(args.scope_active_ratio ?? 0.2), "--halo-hops", String(args.halo_hops ?? 2), "--halo-coeff", String(args.halo_coeff ?? 0.5), "--overflow-penalty", String(args.overflow_penalty ?? 0.005), "--scope-anneal-ratio", String(args.scope_anneal_ratio ?? 0), "--scope-density-target", String(args.scope_density_target ?? 1), ...args.force_local == 1 ? ["--force-local"] : [], ...args.scope_region ? ["--scope-region", args.scope_region] : [], ...args.scope_instances ? ["--scope-instances", args.scope_instances] : []]; const key = JSON.stringify({ kind: "local_restart", design: args.design, checkpoint: args.checkpoint, scope: args.scope, scope_instances: args.scope_instances, scope_region: args.scope_region, scope_density_target: args.scope_density_target, scope_anneal_ratio: args.scope_anneal_ratio, overflow_penalty: args.overflow_penalty, force_local: args.force_local }); return asJson(await cachedRun(args.workdir, key, "ieda_gp_run", async () => await runCli(config.iedaRoot, config.python, config.timeoutMs, join(config.iedaRoot, "benchmarks/flows/gp_local_restart.py"), cli))); }
 if (k === "apply_freeze") return freezeRun(args);
 if (k === "apply_anchor") {
 return asJson({ ok: false, unsupported: true, reason: "per-cell anchor is not implemented; use apply_freeze for strength=1 batch freeze" });
