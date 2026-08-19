@@ -405,3 +405,20 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 2. local_restart 的 target_density 语义与 start 不一致；
 3. `overflow_penalty` 在 schema 暴露但 start 不转发；
 4. ihp130 的 seed start config 和 local_restart config fingerprint 不一致。
+
+
+## v10 winner 全维度表（同一 evaluator，已补齐）
+
+| design | 版本 | HPWL | peak density | mean density | RUDY max | RUDY total | setup WNS(ns) | freq(MHz) |
+|---|---|---|---|---|---|---|---|---|
+| s1238 | raw=winner | 5,957,257 | 0.458522 | 0.458522 | 0.004824 | 3.778444 | -0.04922 | 645.49 |
+| apb4 | raw=winner* | 15,715,072 | 0.366530 | 0.366530 | 0.003046 | 2.337015 | -0.56163 | 485.05 |
+| picorv32 | raw=winner | 234,280,119 | 0.340668 | 0.340668 | 0.003854 | 3.399836 | -15.9233 | 54.28 |
+| aes | agent winner | **573,846,319** | 0.589755 | 0.314884 | 0.005085 | 3.210842 | **-51.449** | **18.54** |
+| aes | raw | 665,002,127 | 0.491452 | 0.350931 | 0.004218 | 3.733800 | -75.812 | 12.77 |
+| nangate45 | raw=winner | 5,850,034 | 0.839014 | 0.839014 | 0.015860 | 4.843156 | n/a | n/a |
+| asap7 | baseline_restart winner | **57,987,714** | 0.471760 | 0.036759 | **0.079383** | **6.886486** | n/a | n/a |
+| asap7 | raw | 58,392,975 | 0.468640 | 0.036759 | 0.081418 | 6.929867 | n/a | n/a |
+| ihp130 | raw=winner | 620,662,411 | 0.560176 | 0.560176 | 0.005540 | 8.388075 | n/a | n/a |
+
+* apb4 候选 feasible，但 accept 导出 DEF bug 未解决，故可验证 winner 仍为 raw。
