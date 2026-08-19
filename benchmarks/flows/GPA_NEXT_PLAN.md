@@ -11,7 +11,7 @@
      `executable_action`；iEDA 不能执行的动作不伪造，返回 unsupported。
 - **分析、比较、选择动作、设置参数、决定接受还是回退：全部属于 Agent**，
   iEDA 内核和 Python 包装都不内置“if density>1.05 then hotspot”之类的规则。
-- 验证也采用真实 Agent 调用六入口工具完成，而不是跑一个写死策略的脚本。
+- 验证也采用真实 Agent 调用五入口工具完成，而不是跑一个写死策略的脚本。
 
 
 工具契约、调用方式、状态模型、成本参考见：
@@ -37,12 +37,11 @@ benchmarks/flows/GPA_TOOL_MANUAL.md
 
 ## 2. 要做的 GP 工具（按 2.0 五分面）
 
-Harness 实际暴露 6 个入口工具，内部用 `kind` 枚举分派；下方详细能力仍按
+Harness 实际暴露 5 个入口工具，内部用 `kind` 枚举分派；下方详细能力仍按
 五分面维护：
 
 ```text
-ieda_gp_inspect    kind: status | checkpoints | grid
-ieda_gp_diagnose   kind: hotspots | longnets | unstable
+ieda_gp_observe     kind: status | checkpoints | grid | hotspots | longnets | unstable | trajectory
 ieda_gp_propose    kind: regions | region_density | freeze | longnet_instances
 ieda_gp_run         kind: start | advance | candidate | local_run
                           | apply_freeze | apply_region_density
@@ -289,9 +288,9 @@ P1：
 
 ```text
 1. ieda_gp_run kind=start                       创建 session
-2. ieda_gp_inspect kind=status                  读指标
-3. ieda_gp_inspect kind=grid                    读逐 bin 密度
-4. ieda_gp_diagnose kind=hotspots / longnets    读事实
+2. ieda_gp_observe kind=status                   读指标
+3. ieda_gp_observe kind=grid                     读逐 bin 密度
+4. ieda_gp_observe kind=hotspots / longnets      读事实
 5. ieda_gp_propose kind=regions / longnet_instances
                                                 iEDA 给出可执行候选
 6. Agent 比较候选，决定 scope 和预算

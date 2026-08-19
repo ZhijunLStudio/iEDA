@@ -183,29 +183,19 @@ return asJson(await runtime.agent(args.design, args.workdir, ["local_run", "--it
 };
 
 ctx.tools.register(defineTool({
-name: "ieda_gp_inspect",
-description: "Inspect GP state. kind: status (current metrics with availability/staleness), checkpoints (all checkpoints), grid (top density bins). workdir is required; checkpoint is optional and defaults to the latest checkpoint.",
-parameters: p({ workdir: { type: "string", required: true }, checkpoint: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" } }),
+name: "ieda_gp_observe",
+description: "Read EDA-side facts (no side effects). kind: status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history). Use top_n=0 for full grid/batch history.",
+parameters: p({ workdir: { type: "string", required: true }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" } }),
 output: out(),
 execute: async (args) => {
 if (args.kind === "status") return toolbox(["status", "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "checkpoints") return toolbox(["checkpoints", "--workdir", resolve(args.workdir)]);
 if (args.kind === "grid") return toolbox(["grid", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 8), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
-throw new Error("ieda_gp_inspect: kind must be status|checkpoints|grid");
-}
-}));
-
-ctx.tools.register(defineTool({
-name: "ieda_gp_diagnose",
-description: "Diagnose GP problems. kind: hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history from gp_experiments.jsonl). Use top_n=0 for the full grid/batch history.",
-parameters: p({ workdir: { type: "string", required: true }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" } }),
-output: out(),
-execute: async (args) => {
 if (args.kind === "hotspots") return toolbox(["hotspots", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "longnets") return toolbox(["longnets", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.def_path ? ["--def-path", args.def_path] : [], ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "unstable") return toolbox(["unstable", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, "--top-n", String(args.top_n ?? 5)]);
 if (args.kind === "trajectory") return toolbox(["trajectory", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 0)]);
-throw new Error("ieda_gp_diagnose: kind must be hotspots|longnets|unstable|trajectory");
+throw new Error("ieda_gp_observe: kind must be status|checkpoints|grid|hotspots|longnets|unstable|trajectory");
 }
 }));
 

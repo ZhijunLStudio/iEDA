@@ -169,24 +169,17 @@ Agent 不得跨单位比较。
 
 ## 3. 工具清单
 
-### 3.1 ieda_gp_inspect：读取状态，无副作用
+### 3.1 ieda_gp_observe：读取 EDA 事实，无副作用
 
 | kind | 输入 | 输出 | 典型耗时 |
 |---|---|---|---|
 | status | workdir, checkpoint? | iteration, hpwl(internal), overflow, peak density, route_util, 单位说明 | <1s |
 | checkpoints | workdir | 全部 checkpoint 列表 | <1s |
 | grid | workdir, checkpoint?, top_n | 前 N 个 bin 的 bbox/density/overflow；top_n=0 全量 | <1s |
-
-### 3.2 ieda_gp_diagnose：只给事实，不给建议
-
-| kind | 输入 | 输出 |
-|---|---|---|
-| hotspots | workdir, checkpoint?, top_n | 热点 bin 坐标、density、overflow_area |
-| longnets | workdir, checkpoint?, top_n, def_path | top net 名、HPWL、pin 数 |
-| unstable | checkpoint_a, checkpoint_b, top_n | 移动最大 cell 及位移 |
-| trajectory | workdir, top_n | gp_experiments.jsonl 的历史记录 |
-
-耗时：秒级。
+| hotspots | workdir, checkpoint?, top_n | 热点 bin 坐标、density、overflow_area | <1s |
+| longnets | workdir, checkpoint?, top_n, def_path | top net 名、HPWL、pin 数 | 秒级 |
+| unstable | checkpoint_a, checkpoint_b, top_n | 移动最大 cell 及位移 | 秒级 |
+| trajectory | workdir, top_n | gp_experiments.jsonl 的历史记录 | 秒级 |
 
 ### 3.3 ieda_gp_propose：只输出可执行候选
 
@@ -268,26 +261,16 @@ overflow <= 0.12
 
 ## 4b. 参数详解
 
-### ieda_gp_inspect
+### ieda_gp_observe
 
 | 参数 | 必填 | 含义 |
 |---|---|---|
-| kind | 是 | 做什么：status / checkpoints / grid |
+| kind | 是 | status / checkpoints / grid / hotspots / longnets / unstable / trajectory |
 | workdir | 是 | 读哪个文件夹 |
-| checkpoint | 否 | 读哪个 checkpoint；缺省用 latest_checkpoint |
-| top_n | 否 | grid 返回前 N 个 bin；0 表示全部 |
-| def_path | 否 | 某些需要网表几何的操作可显式给 DEF |
-
-### ieda_gp_diagnose
-
-| 参数 | 必填 | 含义 |
-|---|---|---|
-| kind | 是 | hotspots / longnets / unstable / trajectory |
-| workdir | 是 | 读哪个文件夹 |
-| checkpoint | 否 | 对哪个 checkpoint 诊断 |
+| checkpoint | 否 | 基于哪个 checkpoint；缺省用 latest_checkpoint |
 | checkpoint_a | 否 | unstable 的比较起点 |
 | checkpoint_b | 否 | unstable 的比较终点 |
-| top_n | 否 | 返回前 N 条 |
+| top_n | 否 | 返回前 N 条；0 表示全部 |
 | def_path | 否 | longnets 需要 DEF 网表 |
 
 ### ieda_gp_propose

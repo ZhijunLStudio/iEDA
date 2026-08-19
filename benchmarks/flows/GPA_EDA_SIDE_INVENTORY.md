@@ -3,7 +3,7 @@
 本文件只描述 EDA 侧（iEDA 内核 + Python CLI + DeepSeek Harness 插件）
 已经完成和正在维护的工作。Agent 的策略不在本文件范围。
 
-## 1. DeepSeek Harness 插件：6 个入口工具
+## 1. DeepSeek Harness 插件：5 个入口工具
 
 注册在：
 
@@ -12,11 +12,10 @@
 benchmarks/flows/deepseek_harness/profile_plugin/lib/index.js
 ```
 
-6 个入口：
+5 个入口：
 
 ```text
-ieda_gp_inspect
-ieda_gp_diagnose
+ieda_gp_observe
 ieda_gp_propose
 ieda_gp_run
 ieda_gp_verify
