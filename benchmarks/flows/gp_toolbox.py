@@ -156,6 +156,7 @@ def design_status(workdir: str | Path, checkpoint: str | None = None) -> dict:
     cp = resolve_checkpoint(workdir, checkpoint)
     cp_path = checkpoint_path(workdir, checkpoint)
     out = checkpoint_metrics(cp, cp_path)
+    out["ok"] = True
     grid = grid_report(workdir)
     if grid:
         out["overflowing_bin_count"] = metric(grid.get("overflowing_bin_count"), True)
