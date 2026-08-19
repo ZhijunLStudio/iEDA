@@ -266,6 +266,110 @@ feasible 当前定义：
 overflow <= 0.12
 ```
 
+## 4b. 参数详解
+
+### ieda_gp_inspect
+
+| 参数 | 必填 | 含义 |
+|---|---|---|
+| kind | 是 | 做什么：status / checkpoints / grid |
+| workdir | 是 | 读哪个文件夹 |
+| checkpoint | 否 | 读哪个 checkpoint；缺省用 latest_checkpoint |
+| top_n | 否 | grid 返回前 N 个 bin；0 表示全部 |
+| def_path | 否 | 某些需要网表几何的操作可显式给 DEF |
+
+### ieda_gp_diagnose
+
+| 参数 | 必填 | 含义 |
+|---|---|---|
+| kind | 是 | hotspots / longnets / unstable / trajectory |
+| workdir | 是 | 读哪个文件夹 |
+| checkpoint | 否 | 对哪个 checkpoint 诊断 |
+| checkpoint_a | 否 | unstable 的比较起点 |
+| checkpoint_b | 否 | unstable 的比较终点 |
+| top_n | 否 | 返回前 N 条 |
+| def_path | 否 | longnets 需要 DEF 网表 |
+
+### ieda_gp_propose
+
+| 参数 | 必填 | 含义 |
+|---|---|---|
+| kind | 是 | regions / region_density / freeze / longnet_instances |
+| workdir | 是 | 读哪个文件夹 |
+| checkpoint | 否 | 基于哪个 checkpoint 提议 |
+| priority | 否 | 当前只有 density 可用 |
+| top_n | 否 | 返回前 N 个候选 |
+| min_cell_count | 否 | region 至少包含多少 cell |
+| max_cell_count | 否 | region 最多包含多少 cell |
+| def_path | 否 | longnet_instances 需要 DEF 网表 |
+| region | 否 | region_density / freeze 的目标矩形 |
+
+### ieda_gp_run
+
+通用执行参数：
+
+| 参数 | 含义 |
+|---|---|
+| kind | start / advance / candidate / local_run / local_restart / apply_freeze / apply_region_density / apply_anchor |
+| design | 用哪个设计 |
+| workdir | 在哪个文件夹运行 |
+| input_def | 指定输入 DEF；start(random_init=0) 可用来接上一轮布局 |
+| foundry_dir | PDK 目录；sky130 可省 |
+| checkpoint | 从哪个 checkpoint 开始 |
+| iterations | 本批跑多少完整迭代 |
+| seed | 随机初始化种子 |
+| random_init | 1 随机初始布局，0 保留当前 DEF 坐标 |
+| target_density | 每个 bin 的密度目标，-1 用配置值 |
+| init_density_penalty | 初始密度惩罚 |
+| min_phi_coef | 密度惩罚最小缩放 |
+| max_phi_coef | 密度惩罚最大缩放 |
+| congestion_effort | 0 关，1 开 |
+| seed_anchor_strength | 0~1，朝初始坐标回拉的强度 |
+| report_route_util | 1 表示 batch 结束算 RUDY |
+| candidate_iterations | local_restart 中 candidate 的迭代数 |
+| restart_iterations | local_restart 中重新 global GP 的迭代数 |
+
+scope 参数：
+
+| 参数 | 含义 |
+|---|---|
+| scope | global / hotspot / random / instances / region / longnet |
+| scope_active_ratio | hotspot 里取多少比例热点 bin |
+| scope_active_count | random / longnet 的 active cell 数 |
+| scope_seed | random scope 的随机种子 |
+| scope_instances | 逗号分隔的 instance 名单 |
+| scope_region | llx lly urx ury |
+| halo_coeff | halo 邻居移动比例 0~1 |
+| halo_hops | halo 扩散几跳 |
+| overflow_penalty | candidate 接受 HPWL/overflow tradeoff 的权重 |
+| scope_density_target | 局部密度目标，1 表示不额外限制 |
+| scope_density_ratio | hotspot 里应用密度目标的比例 |
+| scope_anneal_ratio | 前多少比例迭代用局部 mask，剩余全局修复 |
+| force_local | local_restart 是否强制接受 local child |
+| region | apply_freeze / apply_region_density 的矩形 |
+| strength | apply_anchor 的回拉强度，当前不支持 |
+
+### ieda_gp_verify
+
+| 参数 | 含义 |
+|---|---|
+| kind | delta / lg / metrics |
+| workdir | 输出/输入目录 |
+| checkpoint | lg 的输入 checkpoint |
+| checkpoint_a / checkpoint_b | delta 的两个 checkpoint |
+| def_path | delta 计算 affected nets 时用 |
+| raw_def | metrics 的 raw DEF |
+| candidate_def | metrics 的 candidate DEF |
+| timing | 1 跑 timing，0 跳过 |
+
+### ieda_gp_session
+
+| 参数 | 含义 |
+|---|---|
+| kind | restore / accept / unfreeze / clear_density |
+| workdir | 目标文件夹 |
+| checkpoint | restore / accept 的目标 |
+
 ## 5. 成本模型（给 Agent 的参考，不是强制策略）
 
 ```text
