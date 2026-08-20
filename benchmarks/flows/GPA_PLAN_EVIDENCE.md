@@ -622,3 +622,27 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 - 当前结论：iEDA 已在 HPWL / timing / bins 超过 Innovus；
   rutil max 和 overflow sum 还需更好的 congestion 目标或
   更多轮 hotspot 迭代，点工具已验证可支撑该搜索。
+
+## Round 8：headless Pareto 循环 + congestion nets
+
+- Headless（deepseek-v4-pro/max/极简）完整跑通两候选 Pareto 循环：
+  - A: td0.6/to0.05/cong1, 466 iters target_reached；
+    HPWL 6148253, rutil 2.357, bins 645, rsum 184.04, WNS -0.0338；
+  - B: td0.5/to0.1/cong1, 420 iters target_reached；
+    HPWL 6595040, rutil 2.344, bins 577, rsum 156.91, WNS -0.0769；
+  - 模型裁决：A 是 congestion-HPWL 更好 Pareto 点，
+    B 是 congestion-sum 极限点。
+- congestion_hotspots 新增 congestion_nets：
+  - 找出 HPWL bbox 穿过热点区域的长网；
+  - 返回 net/hpwl/overlap_ratio/instances/scope_instances；
+  - headless 验证：A_region 热点第一网 n95，
+    5 instances：U391,U297,U258,U237,U111。
+- 用 congestion nets 做 local GP：
+  - B + n95 local20：HPWL 6590363, rutil 2.402, bins 579,
+    rsum 155.82, WNS -0.0767；
+  - A_region + n37/n38 尝试无明显 win。
+- td0.45/to0.1/cong1 补充点：
+  HPWL 6875632, rutil 2.427, bins 592, rsum 153.84, WNS -0.0882。
+- 现状：rutil max 与 rsum 的最优 iEDA 点仍未同时超过 Innovus，
+  但 headless 已能自主完成候选生成、执行、同一 evaluator 验证
+  和 Pareto 取舍。
