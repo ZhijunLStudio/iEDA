@@ -646,3 +646,31 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 - 现状：rutil max 与 rsum 的最优 iEDA 点仍未同时超过 Innovus，
   但 headless 已能自主完成候选生成、执行、同一 evaluator 验证
   和 Pareto 取舍。
+
+## Round 9：LUT-RUDY utilization 对齐 solver 目标
+
+- 问题：GP congestion_effort 内部用 LUT-RUDY；
+  verify 默认用 plain RUDY；两者不是同一模型。
+- 修复：
+  - calLUTRUDY 现在同样计算 utilization / overflow bins / overflow sum；
+  - ieda_gp_verify metrics 支持 congestion_model=rudy|lutrudy；
+  - congestion_hotspots 支持 congestion_model=rudy|lutrudy。
+- Headless 验证：
+  - verify lutrudy：raw rutil 2.957816，B rutil 2.546712，
+    B overflow sum 254.863052（接近 Innovus 254.180549）；
+  - congestion_hotspots lutrudy：model=lutrudy，rutil 2.546712，
+    第一 congestion net n95，scope_instances=U391,U297,U258,U237,U111。
+- 更多 feasible 配置点（s1238 plain RUDY）：
+  - td0.5/to0.08/cong1：
+    HPWL 6666913, rutil 2.333612, bins 556, rsum 164.197581；
+  - td0.5/to0.1/cong1（B）：
+    HPWL 6595040, rutil 2.344350, bins 577, rsum 156.91；
+  - td0.6/to0.05/cong1（A）：
+    HPWL 6148253, rutil 2.357432, bins 645, rsum 184.04；
+  - Innovus：HPWL 8053041, rutil 2.034871, bins 622, rsum 133.02。
+- congestion net local 迭代：
+  - B+n95：rsum 155.816；
+  - B+n95+n37：rsum 155.899；
+  - td050to008+n257：rutil 变差。
+  说明单 net local 对 peak 的作用有限，下一步需要
+  solver 侧 peak-congestion 目标或更多 nets 联合局部。
