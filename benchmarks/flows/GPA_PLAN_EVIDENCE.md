@@ -565,3 +565,35 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - restore parent400 -> apply_region_density(scope_density_target=0.5, 20 iter)
     -> metrics verify；
   - ok=true，HPWL 5868709，RUDY util max 2.998856，overflow bins 630。
+
+## Round 6：terminal checkpoint 连续性 + target_overflow + 跨 PDK timing paths
+
+- 修复 terminal checkpoint off-by-one：
+  - 现象：target_reached 后 checkpoint 的 solver.current_iter=391，
+    NesterovPlace.current_iter=390；restore 后再 advance 被
+    "iteration numbers must be strictly increasing" 拒绝。
+  - 修复：terminal break 前记录 _finished_iter=iter_num；
+    checkpoint 两端现在都是 391。
+  - 顺带修 accept：terminal 已提交时 accept 返回 no-op ok，
+    不再让 local_run 失败。
+- 新增 target_overflow 参数：
+  - ieda_gp_run start / placer_run_gp / GPContract / propose gp_config
+    现在都能传 target_overflow；
+  - headless start target_overflow=0.02 congestion_effort=1 验证
+    ok=true, stop_reason=overflow_target_miss, hpwl=6025656,
+    route_util=1.65001。
+- 跨 PDK 同 evaluator timing paths 全部通过：
+  - nangate WNS -1.186381，path slack -1.186381；
+  - asap7 WNS -5.373541，path slack -5.373541；
+  - ihp130 WNS 0.459085，path slack 0.459085；
+  - headless asap7 timing_paths ok=true，与 verify metrics 一致。
+- s1238 配置搜索初步数据：
+  - congestion_effort=1, target_overflow=0.1（390 iters）：
+    HPWL 5974307, rutil 2.6806, bins 596, WNS -0.043843；
+  - congestion_effort=1, target_overflow=0.05（466 iters）：
+    HPWL 6148253, rutil 2.3574, bins 645, WNS -0.033820；
+  - congestion_effort=1, target_overflow=0.02（488 iters）：
+    HPWL 5857391, rutil 2.9993, bins 627, WNS -0.049229；
+  - Innovus 同一 evaluator：HPWL 8053041, rutil 2.0349, bins 622。
+  当前 iEDA 在 HPWL / timing / bins 可超过 Innovus，
+  rutil max 仍未超过，下一轮继续用 Pareto 搜索压低 rutil max。
