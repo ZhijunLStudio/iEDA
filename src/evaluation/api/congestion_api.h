@@ -48,7 +48,8 @@ class CongestionAPI
 
   CongestionValue rudyCongestion(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "",
                                   const std::string& util_save_path = "");
-  CongestionValue lutRudyCongestion(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "");
+  CongestionValue lutRudyCongestion(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "",
+                                      const std::string& util_save_path = "");
   CongestionValue egrCongestion(const std::string& save_path = "");
 
   void evalNetInfo();

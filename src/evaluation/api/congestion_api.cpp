@@ -185,12 +185,13 @@ CongestionValue CongestionAPI::rudyCongestion(int bin_cnt_x, int bin_cnt_y, cons
   return congestion_value;
 }
 
-CongestionValue CongestionAPI::lutRudyCongestion(int bin_cnt_x, int bin_cnt_y, const std::string& save_path)
+CongestionValue CongestionAPI::lutRudyCongestion(int bin_cnt_x, int bin_cnt_y, const std::string& save_path,
+                                                 const std::string& util_save_path)
 {
   CongestionValue congestion_value;
 
   EVAL_CONGESTION_INST->initIDB();
-  congestion_value = EVAL_CONGESTION_INST->calLUTRUDY(bin_cnt_x, bin_cnt_y, save_path);
+  congestion_value = EVAL_CONGESTION_INST->calLUTRUDY(bin_cnt_x, bin_cnt_y, save_path, util_save_path);
   EVAL_CONGESTION_INST->destroyIDB();
 
   return congestion_value;

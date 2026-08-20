@@ -74,7 +74,8 @@ class CongestionEval
 
   CongestionValue calRUDY(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "",
                            const std::string& util_save_path = "");
-  CongestionValue calLUTRUDY(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "");
+  CongestionValue calLUTRUDY(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "",
+                             const std::string& util_save_path = "");
   CongestionValue calEGRCongestion(const std::string& save_path = "");
 
   void evalNetInfo();

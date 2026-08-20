@@ -1127,7 +1127,8 @@ CongestionValue CongestionEval::calRUDY(int bin_cnt_x, int bin_cnt_y, const std:
 
 }
 
-CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const std::string& save_path)
+CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const std::string& save_path,
+                                       const std::string& util_save_path)
 {
   CongestionRegion region = getCongestionRegion();
   CongestionNets nets = getCongestionNets();
@@ -1229,7 +1230,11 @@ CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const s
           overlap_area = (overlap_ux - overlap_lx) * (overlap_uy - overlap_ly);
         }
 
-        density_grid[row][col] += overlap_area * (hor_lutrudy + ver_lutrudy) / grid_area;
+        const double hor_density = overlap_area * hor_lutrudy / grid_area;
+        const double ver_density = overlap_area * ver_lutrudy / grid_area;
+        density_grid[row][col] += hor_density + ver_density;
+        hor_grid[row][col] += hor_density;
+        ver_grid[row][col] += ver_density;
       }
     }
   }
@@ -1252,17 +1257,68 @@ CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const s
 
   double max_congestion = 0.0;
   double total_congestion = 0.0;
+  double max_h_utilization = 0.0;
+  double max_v_utilization = 0.0;
+  double max_utilization = 0.0;
+  double total_utilization = 0.0;
+  int32_t overflow_bin_count = 0;
+  double overflow_util_sum = 0.0;
 
-  for (const auto& row : density_grid) {
-    for (double congestion : row) {
+  const double demand_scale = 4.0;
+  for (size_t row = 0; row < density_grid.size(); ++row) {
+    for (size_t col = 0; col < density_grid[row].size(); ++col) {
+      const double congestion = density_grid[row][col];
       total_congestion += congestion;
       max_congestion = std::max(max_congestion, congestion);
+
+      const double h_util = hor_grid[row][col] * wire_space_h * demand_scale;
+      const double v_util = ver_grid[row][col] * wire_space_v * demand_scale;
+      const double util = std::max(h_util, v_util);
+      max_h_utilization = std::max(max_h_utilization, h_util);
+      max_v_utilization = std::max(max_v_utilization, v_util);
+      max_utilization = std::max(max_utilization, util);
+      total_utilization += util;
+      if (util > 1.0) {
+        overflow_bin_count += 1;
+        overflow_util_sum += util - 1.0;
+      }
     }
   }
 
   CongestionValue result;
   result.max_congestion = max_congestion;
   result.total_congestion = total_congestion;
+  result.max_h_utilization = max_h_utilization;
+  result.max_v_utilization = max_v_utilization;
+  result.max_utilization = max_utilization;
+  result.avg_utilization = density_grid.empty() || density_grid.front().empty()
+                               ? 0.0
+                               : total_utilization / static_cast<double>(density_grid.size() * density_grid.front().size());
+  result.overflow_bin_count = overflow_bin_count;
+  result.overflow_util_sum = overflow_util_sum;
+  result.region_lx = region.lx;
+  result.region_ly = region.ly;
+  result.region_ux = region.ux;
+  result.region_uy = region.uy;
+
+  if (!util_save_path.empty()) {
+    std::ofstream util_file(util_save_path);
+    if (util_file.is_open()) {
+      for (size_t row_index = density_grid.size(); row_index-- > 0;) {
+        const auto& row = density_grid[row_index];
+        for (size_t i = 0; i < row.size(); ++i) {
+          const double util = std::max(hor_grid[row_index][i] * wire_space_h * demand_scale,
+                                       ver_grid[row_index][i] * wire_space_v * demand_scale);
+          util_file << std::fixed << std::setprecision(6) << util;
+          if (i < row.size() - 1) {
+            util_file << ",";
+          }
+        }
+        util_file << "\n";
+      }
+      util_file.close();
+    }
+  }
 
   return result;
 

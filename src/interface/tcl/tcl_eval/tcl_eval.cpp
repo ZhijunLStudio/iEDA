@@ -262,7 +262,7 @@ unsigned CmdEvalCongestionRun::exec()
     util_map_path = output_path + "/rudy_util.csv";
   }
   if (model == "lutrudy") {
-    value = ieval::CongestionAPI::getInst()->lutRudyCongestion(bin_cnt_x, bin_cnt_y, demand_map_path);
+    value = ieval::CongestionAPI::getInst()->lutRudyCongestion(bin_cnt_x, bin_cnt_y, demand_map_path, util_map_path);
   } else {
     value = ieval::CongestionAPI::getInst()->rudyCongestion(bin_cnt_x, bin_cnt_y, demand_map_path, util_map_path);
   }
