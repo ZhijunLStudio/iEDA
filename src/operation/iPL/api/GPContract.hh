@@ -231,6 +231,11 @@ struct GPRunRequest
   // keep the placer config value. Valid range (0,1). Changing it mid-session
   // is not allowed: restart with random_init=false (relinearize) instead.
   float target_density = -1.0F;
+  // kStart only: density-overflow stop threshold override (sum overflow /
+  // total movable area). Negative = keep configured value. Lower thresholds
+  // keep the density objective engaged longer, which also lowers RUDY
+  // congestion in practice.
+  float target_overflow = -1.0F;
   std::string checkpoint_path;      // kResume only: checkpoint JSON to restore from
 
   // Per-batch movement scope (all modes). kGlobal is the default and is

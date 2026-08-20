@@ -1789,6 +1789,11 @@ if (iter_num - _last_perturb_iter > 50 && checkPlateau(50, 0.01)) {
 
 // minimun iteration is 30
   if ((iter_num > 30 && _sum_overflow <= _nes_config.get_target_overflow()) || _stop_placement) {
+    // The terminal check happens AFTER runNextIter(iter_num) already advanced
+    // the Nesterov solver to iter_num. Record it before breaking, otherwise the
+    // checkpoint stores session iter_num-1 with solver iter_num and a later
+    // restore+advance is rejected as a discontinuous iteration.
+    _finished_iter = iter_num;
   if (PRINT_LONG_NET) {
     _long_net_stream << "CURRENT ITERATION: " << iter_num << std::endl;
     _long_net_stream << std::endl;

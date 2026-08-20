@@ -208,6 +208,7 @@ class PLAPI
   // same session lifetime.
   std::unique_ptr<GPSessionState> _gp_session_state;
   GPRunResult _last_gp_run_result;
+  bool _last_terminal_committed = false;
 
   GPRunResult gpRunStart(const GPRunRequest& request);
   GPRunResult gpRunAdvance(const GPRunRequest& request);

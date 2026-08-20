@@ -256,6 +256,9 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
   auto* target_density_option = new TclDoubleOption("-target_density", 1, -1.0);
   addOption(target_density_option);
 
+  auto* target_overflow_option = new TclDoubleOption("-target_overflow", 1, -1.0);
+  addOption(target_overflow_option);
+
   auto* init_density_penalty_option = new TclDoubleOption("-init_density_penalty", 1, -1.0);
   addOption(init_density_penalty_option);
 
@@ -431,6 +434,10 @@ unsigned CmdPlacerRunGP::exec()
   TclOption* target_density_option = getOptionOrArg("-target_density");
   if (target_density_option->is_set_val()) {
     request.target_density = static_cast<float>(target_density_option->getDoubleVal());
+  }
+  TclOption* target_overflow_option = getOptionOrArg("-target_overflow");
+  if (target_overflow_option->is_set_val()) {
+    request.target_overflow = static_cast<float>(target_overflow_option->getDoubleVal());
   }
   TclOption* init_density_penalty_option = getOptionOrArg("-init_density_penalty");
   if (init_density_penalty_option->is_set_val()) {

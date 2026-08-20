@@ -214,6 +214,8 @@ def cmd_start(args: argparse.Namespace) -> int:
         cmd[-1] += f" -seed_anchor_strength {args.seed_anchor_strength}"
     if args.target_density > 0:
         cmd[-1] += f" -target_density {args.target_density}"
+    if args.target_overflow > 0:
+        cmd[-1] += f" -target_overflow {args.target_overflow}"
     if args.init_density_penalty >= 0:
         cmd[-1] += f" -init_density_penalty {args.init_density_penalty}"
     if args.min_phi_coef >= 0:
@@ -572,6 +574,7 @@ def main() -> int:
                 (("--halo-hops",), {"type": int, "default": 2}),
                 (("--scope-anneal-ratio",), {"type": float, "default": 0.0}),
                 (("--target-density",), {"type": float, "default": -1.0}),
+                (("--target-overflow",), {"type": float, "default": -1.0}),
                 (("--init-density-penalty",), {"type": float, "default": -1.0}),
                 (("--min-phi-coef",), {"type": float, "default": -1.0}),
                 (("--max-phi-coef",), {"type": float, "default": -1.0}),

@@ -679,6 +679,13 @@ def propose_config(workdir: str | Path, checkpoint: str | None = None) -> dict:
 
     if not (overflow <= target_overflow + 1e-4):
         candidates.append({
+            "id": "overflow_threshold_down",
+            "hypothesis_fact": f"current overflow {overflow:.4f} is above target {target_overflow:.4f}; a lower stop threshold keeps the density objective engaged longer",
+            "config_override": {"target_overflow": bounded(target_overflow * 0.5, 0.02, 0.5)},
+            "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                  "random_init": 0, "iterations": 100},
+        })
+        candidates.append({
             "id": "density_relief",
             "hypothesis_fact": f"current overflow {overflow:.4f} is above target {target_overflow:.4f}",
             "config_override": {"target_density": bounded(target_density - 0.05, 0.5, 0.95)},

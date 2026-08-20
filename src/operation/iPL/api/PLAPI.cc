@@ -942,8 +942,8 @@ namespace {
 
 bool hasStartConfigOverrides(const GPRunRequest& request)
 {
-  return request.target_density >= 0.0F || request.init_density_penalty >= 0.0F || request.min_phi_coef >= 0.0F
-         || request.max_phi_coef >= 0.0F || request.congestion_effort >= 0;
+  return request.target_density >= 0.0F || request.target_overflow >= 0.0F || request.init_density_penalty >= 0.0F
+         || request.min_phi_coef >= 0.0F || request.max_phi_coef >= 0.0F || request.congestion_effort >= 0;
 }
 
 bool validateStartConfigOverrides(const GPRunRequest& request, std::string* reason)
@@ -951,6 +951,11 @@ bool validateStartConfigOverrides(const GPRunRequest& request, std::string* reas
   const auto& nes_config = PlacerDBInst.get_placer_config()->get_nes_config();
   if (request.target_density >= 0.0F && (request.target_density <= 0.0F || request.target_density >= 1.0F)) {
     *reason = "target_density must be in (0,1)";
+    return false;
+  }
+  if (request.target_overflow >= 0.0F
+      && (!std::isfinite(request.target_overflow) || request.target_overflow <= 0.0F || request.target_overflow > 1.0F)) {
+    *reason = "target_overflow must be in (0,1]";
     return false;
   }
   if (request.init_density_penalty >= 0.0F
@@ -992,6 +997,9 @@ void applyStartConfigOverrides(const GPRunRequest& request)
     // config fingerprint automatically.
     nes_config.set_target_density(request.target_density);
     PlacerDBInst.adaptTargetDensity();
+  }
+  if (request.target_overflow >= 0.0F) {
+    nes_config.set_target_overflow(request.target_overflow);
   }
   if (request.init_density_penalty >= 0.0F) {
     nes_config.set_init_density_penalty(request.init_density_penalty);
@@ -1314,6 +1322,7 @@ GPRunResult PLAPI::gpRunStart(const GPRunRequest& request)
 
   applyStartConfigOverrides(request);
 
+  _last_terminal_committed = false;
   _gp_session_state = std::make_unique<GPSessionState>();
   _gp_session_state->transaction = PlacerDBInst.beginStageTransaction("global_placement");
   if (!_gp_session_state->transaction.active) {
@@ -1421,6 +1430,7 @@ GPRunResult PLAPI::gpRunResume(const GPRunRequest& request)
     }
   };
 
+  _last_terminal_committed = false;
   _gp_session_state = std::make_unique<GPSessionState>();
   _gp_session_state->transaction = PlacerDBInst.beginStageTransaction("global_placement");
   if (!_gp_session_state->transaction.active) {
@@ -1500,6 +1510,7 @@ GPRunResult PLAPI::gpRunRestore(const GPRunRequest& request)
     }
   };
 
+  _last_terminal_committed = false;
   _gp_session_state = std::make_unique<GPSessionState>();
   _gp_session_state->transaction = PlacerDBInst.beginStageTransaction("global_placement");
   if (!_gp_session_state->transaction.active) {
@@ -1898,6 +1909,7 @@ GPRunResult PLAPI::gpFinalizeTerminal(GPRunResult result)
     }
   }
 
+  _last_terminal_committed = result.ok;
   _gp_session_state->transaction = PlacerDB::StageTransaction{};
   _gp_session_state->record_offset = 0;
   _gp_session_state.reset();
@@ -2014,6 +2026,14 @@ GPRunResult PLAPI::gpCommitSession()
 {
   GPRunResult result;
   if (_gp_session_state == nullptr || _gp_session_state->session == nullptr) {
+    if (_last_terminal_committed) {
+      result = _last_gp_run_result;
+      result.ok = true;
+      result.session_active = false;
+      result.reason = "terminal batch already committed; accept is a no-op";
+      _last_gp_run_result = result;
+      return result;
+    }
     result.stop_reason = GPStopReason::kRejected;
     result.reason = "no active gp session to commit";
     _last_gp_run_result = result;
