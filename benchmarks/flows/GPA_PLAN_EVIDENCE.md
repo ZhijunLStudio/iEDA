@@ -543,3 +543,25 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - congestion_effort=1 from parent：100 iter 后 overflow 0.678，route_util 6.84；
   - target_density=0.55 from parent：100 iter 后 overflow 0.691；
   都未达到可行，说明 config 需要继续迭代观察，而不是一次切换解决。
+
+## Round 5：timing_paths 统一 evaluator + apply_region_density 验证
+
+- 修复：timing_paths 之前用 run_sta（0 RC），报告的 slack 是正的；
+  而 verify metrics 用 run_timing_eval HPWL RC，slack 是负的。
+  两者不是同一 evaluator，agent 会拿错误路径做 timing local。
+- 修复后：
+  - run_timing_eval 新增 -path_json / -max_path；
+  - gp_timing_paths.py 读同一个 HPWL RC evaluator 的路径；
+  - GP_TOOL_VERSION 升到 3 使旧缓存失效。
+- Headless 验证：
+  - timing_paths evaluator=run_timing_eval HPWL；
+  - timing_summary.setup_wns=-0.050255；
+  - first path slack=-0.050255，与 verify metrics 完全一致。
+- timing path local_run（11 instance，20 iter）：
+  - DEF HPWL 5874369 vs raw 5957257；
+  - overflow bins 628 vs 654；
+  - setup WNS 基本持平。
+- apply_region_density headless 循环：
+  - restore parent400 -> apply_region_density(scope_density_target=0.5, 20 iter)
+    -> metrics verify；
+  - ok=true，HPWL 5868709，RUDY util max 2.998856，overflow bins 630。
