@@ -235,7 +235,7 @@ throw new Error("ieda_gp_observe: kind must be status|checkpoints|grid|hotspots|
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_propose",
-description: "Propose GP actions without changing state. kind: regions (executable region rectangles), region_density (suggested density target for a region), freeze (cells that would be frozen), longnet_instances (concrete instance sets for the highest-HPWL nets, directly usable as scope=instances). prediction_status is unavailable until a predictor exists.",
+description: "Propose GP actions without changing state. kind: regions (executable region rectangles), region_density (suggested density target for a region), freeze (cells that would be frozen), longnet_instances (concrete instance sets for the highest-HPWL nets, directly usable as scope=instances), gp_config (bounded config/budget candidates with executable start actions). prediction_status is unavailable until a predictor exists.",
 parameters: p({ workdir: { type: "string", required: true }, checkpoint: { type: "string" }, priority: { type: "string" }, top_n: { type: "integer" }, min_cell_count: { type: "integer" }, max_cell_count: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" } }),
 output: out(),
 execute: async (args) => {
@@ -243,7 +243,8 @@ if (args.kind === "regions") return toolbox(["propose_regions", "--workdir", res
 if (args.kind === "region_density") return toolbox(["propose_region_density", "--workdir", resolve(args.workdir), "--region", args.region, ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "freeze") return toolbox(["propose_freeze", "--workdir", resolve(args.workdir), "--region", args.region, ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "longnet_instances") return toolbox(["propose_longnet_instances", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.def_path ? ["--def-path", args.def_path] : [], ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
-throw new Error("ieda_gp_propose: kind must be regions|region_density|freeze|longnet_instances");
+if (args.kind === "gp_config") return toolbox(["propose_config", "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
+throw new Error("ieda_gp_propose: kind must be regions|region_density|freeze|longnet_instances|gp_config");
 }
 }));
 

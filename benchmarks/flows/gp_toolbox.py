@@ -649,6 +649,98 @@ def verify_delta(workdir: str | Path, checkpoint_a: str, checkpoint_b: str,
     }
 
 
+def propose_config(workdir: str | Path, checkpoint: str | None = None) -> dict:
+    """Propose bounded config candidates as executable ieda_gp_run start actions."""
+    cp = resolve_checkpoint(workdir, checkpoint)
+    if not cp:
+        return {"ok": False, "reason": "no checkpoint in workdir; run gp start first"}
+    config_state = cp.get("config_state") or {}
+    overflow = float(cp.get("sum_overflow", float("nan")))
+    hpwl = int(cp.get("cur_hpwl") or cp.get("prev_hpwl") or 0)
+    target_density = float(config_state.get("target_density", 0.8))
+    target_overflow = float(config_state.get("target_overflow", 0.1))
+    init_penalty = float(config_state.get("init_density_penalty", 1e-4))
+    current = {
+        "iteration": cp.get("current_iter"),
+        "hpwl": hpwl,
+        "overflow": overflow,
+        "target_density": target_density,
+        "target_overflow": target_overflow,
+        "init_density_penalty": init_penalty,
+        "is_opt_congestion": bool(config_state.get("is_opt_congestion")),
+        "is_opt_timing": bool(config_state.get("is_opt_timing")),
+    }
+    candidate_input_def = str(Path(workdir) / "placement.def")
+    if not Path(candidate_input_def).exists():
+        candidate_input_def = str(workdir_context(workdir).get("input_def") or "")
+    candidates = []
+    def bounded(v, lo, hi):
+        return round(min(max(v, lo), hi), 4)
+
+    if not (overflow <= target_overflow + 1e-4):
+        candidates.append({
+            "id": "density_relief",
+            "hypothesis_fact": f"current overflow {overflow:.4f} is above target {target_overflow:.4f}",
+            "config_override": {"target_density": bounded(target_density - 0.05, 0.5, 0.95)},
+            "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                  "random_init": 0, "iterations": 20},
+        })
+        if init_penalty > 0:
+            candidates.append({
+                "id": "density_penalty_up",
+                "hypothesis_fact": f"current init_density_penalty is {init_penalty:g}; higher starts spread cells sooner",
+                "config_override": {"init_density_penalty": round(init_penalty * 2.0, 8)},
+                "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                      "random_init": 0, "iterations": 20},
+            })
+    else:
+        candidates.append({
+            "id": "density_allowance",
+            "hypothesis_fact": f"overflow {overflow:.4f} is inside target; allowing higher target density may reduce HPWL",
+            "config_override": {"target_density": bounded(target_density + 0.05, 0.5, 0.95)},
+            "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                  "random_init": 0, "iterations": 20},
+        })
+        if init_penalty > 0:
+            candidates.append({
+                "id": "density_penalty_down",
+                "hypothesis_fact": f"current init_density_penalty is {init_penalty:g}; lower starts ease wirelength at same overflow budget",
+                "config_override": {"init_density_penalty": round(init_penalty * 0.5, 8)},
+                "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                      "random_init": 0, "iterations": 20},
+            })
+    if not config_state.get("is_opt_congestion"):
+        candidates.append({
+            "id": "congestion_effort_on",
+            "hypothesis_fact": "congestion objective is currently off; turn it on and evaluate route_util in the same batch",
+            "config_override": {"congestion_effort": 1},
+            "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                  "random_init": 0, "iterations": 20, "report_route_util": 1},
+        })
+
+    batches = trajectory(workdir, 0).get("batches", [])
+    budget_candidates = []
+    if len(batches) >= 2:
+        first = batches[0].get("hpwl")
+        last = batches[-1].get("hpwl")
+        if isinstance(first, int) and isinstance(last, int) and first > 0:
+            settled = abs(last - first) / float(first) < 0.005
+        else:
+            settled = False
+        if settled:
+            budget_candidates.append({"id": "budget_short", "iterations": 20,
+                                      "hypothesis_fact": "recent HPWL changed less than 0.5%; short probe batches are cheap"})
+        else:
+            budget_candidates.append({"id": "budget_long", "iterations": 100,
+                                      "hypothesis_fact": "recent HPWL is still moving; longer batch avoids frequent checkpoint churn"})
+    else:
+        budget_candidates.append({"id": "budget_default", "iterations": 40,
+                                  "hypothesis_fact": "too little trajectory data; use medium batch"})
+
+    return {"ok": True, "workdir": str(workdir), "checkpoint_path": checkpoint_path(workdir, checkpoint),
+            "current": current, "config_candidates": candidates, "budget_candidates": budget_candidates}
+
+
 def trajectory(workdir: str | Path, top_n: int = 0) -> dict:
     """Return the append-only batch history. Facts only, no verdict or advice."""
     ledger = Path(workdir) / "pl/gp_experiments.jsonl"
@@ -681,7 +773,7 @@ def trajectory(workdir: str | Path, top_n: int = 0) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=["status", "checkpoints", "grid", "hotspots", "longnets", "trajectory", "propose_regions",
-                                        "freeze_instances", "propose_longnet_instances",
+                                        "freeze_instances", "propose_longnet_instances", "propose_config",
                                         "propose_region_density", "propose_freeze", "unstable", "verify_delta"])
     ap.add_argument("--workdir", required=True)
     ap.add_argument("--checkpoint")
@@ -723,6 +815,8 @@ def main() -> int:
     elif args.command == "propose_regions":
         print(json.dumps(propose_regions(args.workdir, args.checkpoint, args.priority, args.top_n,
                                          args.min_cell_count, args.max_cell_count, args.def_path), indent=2))
+    elif args.command == "propose_config":
+        print(json.dumps(propose_config(args.workdir, args.checkpoint), indent=2))
     elif args.command == "propose_region_density":
         print(json.dumps(propose_region_density(args.workdir, args.region, args.checkpoint), indent=2))
     elif args.command == "propose_freeze":
