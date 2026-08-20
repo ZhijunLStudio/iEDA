@@ -264,11 +264,32 @@ def cmd_advance(args: argparse.Namespace) -> int:
     cmd = [f"placer_run_gp -mode resume -checkpoint {shlex.quote(str(ckpt))} -iterations {args.iterations}"]
     if args.report_route_util:
         cmd[-1] += " -report_route_util 1"
+    # def_save exports the committed source database; a resumed session must
+    # commit first. Terminal resumes are already committed (accept is a no-op),
+    # budget resumes are committed here, so the exported DEF is always the
+    # resumed placement and never the input DEF.
+    cmd.append("placer_run_gp -mode accept")
     rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmd, def_save=True)
     record = last_gp_line(out) or last_ledger(workdir)
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
+    # A resumed session may terminate inside its first process without a
+    # source-database writeback; the def_save above can then export the input
+    # DEF. Re-export the latest checkpoint through the restore+accept path,
+    # which is the same path local_run uses and is known to write the resumed
+    # placement.
+    terminal_ckpt = workdir / "pl/gp_session_checkpoint.json"
+    if terminal_ckpt.exists():
+        export_cmds = [
+            f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(terminal_ckpt))}",
+            "placer_run_gp -mode accept",
+        ]
+        rc2, out2, err2 = run_ieda(workdir, case_root, foundry, config, input_def, export_cmds, def_save=True)
+        if rc2 != 0:
+            print(json.dumps({"ok": False, "rc": rc2, "reason": "advance finished but DEF re-export failed",
+                              "stderr_tail": err2[-2000:]}))
+            return 1
     state = update_state(workdir)
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
     return 0

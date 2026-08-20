@@ -1875,6 +1875,13 @@ GPRunResult PLAPI::gpFinalizeTerminal(GPRunResult result)
   _flow_status.global_placement.exhibit = nesterovIterationExhibit(gp_run.iteration_records);
   _flow_status.gp_ran = true;
 
+  // Publish the terminal solver coordinates into the PlacerDB wrapper before
+  // committing. gpRunResume/gpRunRestore may finalize without a budget-boundary
+  // publish, which made the terminal def_save export the input DEF coordinates.
+  _gp_session_state->session->publishPlacement();
+  PlacerDBInst.updateTopoManager();
+  PlacerDBInst.updateGridManager();
+
   const bool stage_success = _flow_status.global_placement.execution_success && _flow_status.global_placement.quality_success;
   if (stage_success) {
     if (!PlacerDBInst.commitStageTransaction(_gp_session_state->transaction)) {
@@ -1882,6 +1889,11 @@ GPRunResult PLAPI::gpFinalizeTerminal(GPRunResult result)
           "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false,
           "global placement could not commit its PlacerDB transaction", gp_run.hpwl, gp_run.hpwl, changed_instance_count);
       _flow_status.global_placement.changed_count = changed_instance_count;
+    } else if (!writeBackSourceDataBase()) {
+      _flow_status.global_placement = PlacementStatusEvaluator::stage(
+          "global_placement", PlacementStatusCode::kGPInvalidMetric, false, false, false,
+          "global placement committed but source database writeback failed", gp_run.hpwl, gp_run.hpwl,
+          changed_instance_count);
     }
   } else if (!PlacerDBInst.rollbackStageTransaction(_gp_session_state->transaction)) {
     _flow_status.global_placement.message += "; failed to rollback global placement transaction";

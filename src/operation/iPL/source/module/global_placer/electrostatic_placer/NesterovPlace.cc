@@ -1998,6 +1998,13 @@ bool NesterovPlace::restoreCheckpoint(const GPStateCheckpoint& checkpoint)
       auto saved = nlohmann::json::parse(checkpoint.config_fingerprint);
       current.erase("timing_hold_slack_guard");
       saved.erase("timing_hold_slack_guard");
+      // Checkpoints written before congestion_effort levels existed have no
+      // congestion_effort_level key. The default level is 1, which is exactly
+      // the legacy LUT-RUDY behavior, so normalize instead of rejecting.
+      if (!saved.contains("congestion_effort_level") && current.value("congestion_effort_level", 1) == 1) {
+        current.erase("congestion_effort_level");
+        _nes_config.set_congestion_effort_level(1);
+      }
       if (current != saved) {
         LOG_ERROR << "[GP checkpoint] config fingerprint mismatch; resume requires the same placer config that saved the checkpoint";
         return false;
