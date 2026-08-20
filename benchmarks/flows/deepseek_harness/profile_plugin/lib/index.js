@@ -233,7 +233,7 @@ throw new Error("ieda_gp_propose: kind must be regions|region_density|freeze|lon
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_run",
-description: "Execute GP actions. kind: start, advance, candidate, local_run, apply_freeze, apply_region_density, local_restart, apply_anchor. local_restart runs one local/global candidate, accepts the local child (set force_local=1 to force it even when the instant verdict is not left_better), then starts a fresh random_init=0 global GP from that placement; it returns def HPWL for both the local restart and a same-budget raw-GP restart baseline.",
+description: "Execute GP actions. kind: start, advance, candidate, local_run, apply_freeze, apply_region_density, local_restart, apply_anchor. local_run restores the checkpoint, applies the scope for N iterations, then ACCEPTS the child and writes placement.def (no separate accept needed). local_restart runs one local/global candidate, accepts the local child (set force_local=1 to force it even when the instant verdict is not left_better), then starts a fresh random_init=0 global GP from that placement; it returns def HPWL for both the local restart and a same-budget raw-GP restart baseline.",
 parameters: p({ design: { type: "string", required: true }, workdir: { type: "string", required: true }, input_def: { type: "string" }, foundry_dir: { type: "string" }, checkpoint: { type: "string" }, iterations: { type: "integer" }, seed: { type: "integer" }, random_init: { type: "integer" }, target_density: { type: "number" }, init_density_penalty: { type: "number" }, min_phi_coef: { type: "number" }, max_phi_coef: { type: "number" }, congestion_effort: { type: "integer" }, seed_anchor_strength: { type: "number" }, report_route_util: { type: "integer" }, scope: { type: "string" }, scope_seed: { type: "integer" }, scope_active_ratio: { type: "number" }, scope_active_count: { type: "integer" }, scope_instances: { type: "string" }, scope_region: { type: "string" }, halo_coeff: { type: "number" }, halo_hops: { type: "integer" }, overflow_penalty: { type: "number" }, scope_density_target: { type: "number" }, scope_density_ratio: { type: "number" }, scope_anneal_ratio: { type: "number" }, candidate_iterations: { type: "integer" }, restart_iterations: { type: "integer" }, force_local: { type: "integer" }, region: { type: "string" }, strength: { type: "number" } }),
 output: out(),
 execute: async (args) => {
@@ -267,12 +267,12 @@ throw new Error("ieda_gp_verify: kind must be delta|lg|metrics");
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_session",
-description: "Manage the GP session state. kind: restore (point workdir at a checkpoint), accept (commit winner and write placement.def), unfreeze (batch-scoped freeze is already cleared), clear_density (batch-scoped density target is already cleared).",
+description: "Manage the GP session state. kind: restore (point workdir at a checkpoint), accept (commit the CURRENT in-memory session and write placement.def; never pass checkpoint), unfreeze (batch-scoped freeze is already cleared), clear_density (batch-scoped density target is already cleared).",
 parameters: p({ design: { type: "string" }, workdir: { type: "string", required: true }, checkpoint: { type: "string" } }),
 output: out(),
 execute: async (args) => {
 if (args.kind === "restore") return restore(args);
-if (args.kind === "accept") return asJson(await runtime.agent(args.design ?? "s1238", args.workdir, ["accept", ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]));
+if (args.kind === "accept") { if (args.checkpoint) return asJson({ ok: false, reason: "accept commits the current in-memory session; checkpoint is ignored. Restore first only if you intend to go back." }); return asJson(await runtime.agent(args.design ?? "s1238", args.workdir, ["accept"])); }
 if (args.kind === "unfreeze" || args.kind === "clear_density") return asJson({ ok: true, note: "batch-scoped state is already cleared", workdir: resolve(args.workdir), checkpoint: args.checkpoint ?? null });
 throw new Error("ieda_gp_session: kind must be restore|accept|unfreeze|clear_density");
 }
