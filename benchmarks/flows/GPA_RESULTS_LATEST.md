@@ -79,10 +79,8 @@ Innovus DEF 已用 `defOut -netlist -unplaced` 重新导出，因此 density / R
 
 ### asap7_aes
 
-> * asap7 的 timing 行标 invalid 的原因：
->   已核对 SDC 与 lib，路径 arc delay 显示 -2147.484 ns = INT32_MIN/1e6；
->   liberty arc 查表本身返回 0.5~12 ns，问题在 iSTA ps 单位传播层。
->   HPWL / density / RUDY 仍有效。
+> asap7 timing 已修复：根因是 iSTA 对 ps 单位 liberty 的 LUT 越界外推，
+> 已改为 clamp 到表边界。修复前 WNS 约 -2146 ns，修复后为合理值。
 
 | 指标 | raw | 最优 agent | agent vs raw | Innovus | agent vs Innovus |
 |---|---|---|---|---|---|
@@ -90,9 +88,9 @@ Innovus DEF 已用 `defOut -netlist -unplaced` 重新导出，因此 density / R
 | peak density | 0.468640 | 0.462444 | -1.322% | 0.236370 | +95.65% |
 | RUDY max | 0.081418 | 0.080320 | -1.349% | 0.033026 | +143.2% |
 | RUDY total | 6.929867 | 6.906416 | -0.338% | 12.555375 | -45.00% |
-| setup WNS (ns) | invalid* | invalid* | - | invalid* | - |
-| hold WNS (ns) | invalid* | invalid* | - | invalid* | - |
-| freq (MHz) | invalid* | invalid* | - | invalid* | - |
+| setup WNS (ns) | -5.373541 | -5.288415 | 变好 0.0851 | -7.391952 | 变好 2.1035 |
+| hold WNS (ns) | -2.061094 | -1.961462 | 变好 0.0996 | -5.114638 | 变好 3.1532 |
+| freq (MHz) | 161.72 | 163.98 | +1.40% | 121.92 | +34.50% |
 
 ### ihp130_gcd
 
@@ -139,8 +137,8 @@ defOut -netlist -unplaced
    - s1238 / aes / picorv32 / apb4 上 iEDA 更好；
    - nangate45 上 iEDA 更好；
    - ihp130 上 iEDA 是正 slack，Innovus 是负 slack；
-   - asap7 timing 绝对值不可用：iSTA 对 ps 单位 liberty 存在
-     sentinel/单位 bug，已标 invalid*；raw/agent/Innovus 相对比较仍可保留。
+   - asap7 timing 已修复：iSTA LUT 越界 clamp；
+     agent 的 setup WNS 和 freq 都优于 raw 和 Innovus。
 
 6. aes 上 agent 的大幅 HPWL / timing 改善
    以 peak density +20% 和 RUDY max +20.6% 为代价。
