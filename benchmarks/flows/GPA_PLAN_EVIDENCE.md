@@ -692,3 +692,25 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 - 结论：工具链已经能自动做 hotspot -> net scope -> verify -> verdict；
   要达到 Innovus 的 rutil 2.035 / rsum 133，还需要
   solver 侧直接优化 peak bin，或显著扩大联合 scope。
+
+## Round 11：solver 侧 congestion_effort level 2
+
+- 新增 congestion_effort=2：
+  - 对穿过 LUT-RUDY util >1 bin 的长网，
+    额外放大其 wirelength gradient（threshold 1.0，factor 0.25）；
+  - 配置进入 config_state / checkpoint fingerprint，
+    可正确 restore。
+- Headless 验证（deepseek-v4-pro/max/极简）：
+  - start td0.5/to0.1/cong2, 600 iters：
+    ok=true, target_reached, end_iteration=420,
+    hpwl=6405350, overflow=0.0999558, route_util=1.5006。
+- 同 evaluator 对比：
+  - plain RUDY：
+    HPWL 6538020, rutil 2.650141, bins 650, rsum 176.40；
+  - LUT-RUDY：
+    HPWL 6538020, rutil 2.762708, bins 876, rsum 281.56。
+- 初步结论：level2 明显降低 solver 内部 LUT-RUDY peak
+  （1.544 -> 1.501），但 plain-RUDY evaluator 峰值反而上升，
+  证明 solver 目标与 plain RUDY evaluator 需要进一步统一。
+  目前保留 level2 作为可复现的 solver knob，
+  level1 仍是 plain RUDY Pareto 上更安全的点。
