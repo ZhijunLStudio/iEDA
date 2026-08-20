@@ -836,3 +836,17 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
     不显式传 foundry_dir；
   - ok=true，model=rudy，rutil=1.696979；
   - 确认从 registry 解析到真实 asap7 foundry。
+
+## Round 22：multi-design headless 总表 + anneal 搜索
+
+- headless 一次 4 design verify（extra_defs 新能力）：
+  s1238 是唯一在部分指标上超过 Innovus 的设计
+  （HPWL -16.7%，bins -9.8%），
+  nangate/asap7/ihp130 当前候选四项均落后。
+- s1238 局部迭代继续：
+  - td050to008 + top3 congestion nets, 60 iter, halo2, anneal0.8：
+    HPWL 6678221, rutil 2.319219, bins 558, rsum 165.048；
+  - 再跑同 scope 40 iter（terminal 1 iter）：
+    HPWL 6686393, rutil 2.314763, bins 557, rsum 165.932；
+  - 相比 round10 点：HPWL/bins/rsum 全面变好，
+    rutil 从 2.293 略升到 2.315。
