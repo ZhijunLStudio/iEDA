@@ -238,10 +238,16 @@ unsigned CmdEvalCongestionRun::exec()
   const std::string model = model_opt && model_opt->getStringVal() ? model_opt->getStringVal() : "rudy";
 
   ieval::CongestionValue value{0.0, 0.0};
+  std::string demand_map_path;
+  std::string util_map_path;
+  if (!output_path.empty()) {
+    demand_map_path = output_path + "/rudy_demand.csv";
+    util_map_path = output_path + "/rudy_util.csv";
+  }
   if (model == "lutrudy") {
-    value = ieval::CongestionAPI::getInst()->lutRudyCongestion(bin_cnt_x, bin_cnt_y, output_path);
+    value = ieval::CongestionAPI::getInst()->lutRudyCongestion(bin_cnt_x, bin_cnt_y, demand_map_path);
   } else {
-    value = ieval::CongestionAPI::getInst()->rudyCongestion(bin_cnt_x, bin_cnt_y, output_path);
+    value = ieval::CongestionAPI::getInst()->rudyCongestion(bin_cnt_x, bin_cnt_y, demand_map_path, util_map_path);
   }
 
   // calRUDY reports both demand density and utilization against the same
@@ -257,6 +263,10 @@ unsigned CmdEvalCongestionRun::exec()
                            + ",\"rudy_utilization_v_max\":" + std::to_string(value.max_v_utilization)
                            + ",\"rudy_overflow_bin_count\":" + std::to_string(value.overflow_bin_count)
                            + ",\"rudy_overflow_util_sum\":" + std::to_string(value.overflow_util_sum)
+                           + ",\"rudy_demand_map_path\":\"" + demand_map_path
+                           + "\",\"rudy_util_map_path\":\"" + util_map_path
+                           + "\",\"region\":[" + std::to_string(value.region_lx) + "," + std::to_string(value.region_ly)
+                           + "," + std::to_string(value.region_ux) + "," + std::to_string(value.region_uy) + "]"
                            + ",\"save_path\":\"" + output_path + "\"}";
   if (!output_path.empty()) {
     const std::string result_file = output_path + "/congestion_result.json";

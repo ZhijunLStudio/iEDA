@@ -23,6 +23,10 @@ struct CongestionValue {
     double avg_utilization = 0.0;
     int32_t overflow_bin_count = 0;
     double overflow_util_sum = 0.0;
+    int32_t region_lx = 0;
+    int32_t region_ly = 0;
+    int32_t region_ux = 0;
+    int32_t region_uy = 0;
 };
 
 struct CongestionPin

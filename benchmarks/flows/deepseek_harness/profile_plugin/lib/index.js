@@ -157,6 +157,23 @@ var IedaGpRuntime = class {
 			return value;
 		});
 	}
+async congestionObserve(design, workdir, defPath, topN, bins, foundryDir) {
+const record = readDesigns(this.iedaRoot)[design] || {};
+const key = JSON.stringify({ design, workdir: resolve(workdir), defPath: defPath || null, topN, bins });
+return cachedRun(workdir, key, "ieda_gp_observe", async () => {
+const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_congestion_observe.py"), [
+"--case-root", String(record.case_root),
+"--def", String(defPath || join(resolve(workdir), "placement.def")),
+"--foundry-dir", String(foundryDir || this.foundryDir(design)),
+"--workdir", resolve(workdir),
+"--bin-cnt-x", String(bins ?? 64),
+"--bin-cnt-y", String(bins ?? 64),
+"--top-n", String(topN ?? 8)
+]);
+trace(workdir, { source: "ieda_gp_observe", args: { design, defPath, topN, bins }, result: value });
+return value;
+});
+}
 async fullCompare(design, resultRoot, timing) {
 		if (!readDesigns(this.iedaRoot)[design]) throw new Error(`unknown design ${JSON.stringify(design)}; known designs: ${knownDesigns(this.iedaRoot).join(", ")}`);
 		return runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("run_ipl_full_compare.py"), [
@@ -184,8 +201,8 @@ return asJson(await runtime.agent(args.design, args.workdir, ["local_run", "--it
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_observe",
-description: "Read EDA-side facts (no side effects). kind: status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history). Use top_n=0 for full grid/batch history.",
-parameters: p({ workdir: { type: "string", required: true }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" } }),
+description: "Read EDA-side facts (no side effects). kind: status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history), congestion_hotspots (runs read-only RUDY evaluator on a DEF and returns overflow regions). Use top_n=0 for full grid/batch history.",
+parameters: p({ workdir: { type: "string", required: true }, design: { type: "string" }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" }, bin_cnt: { type: "integer" } }),
 output: out(),
 execute: async (args) => {
 if (args.kind === "status") return toolbox(["status", "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
@@ -195,7 +212,8 @@ if (args.kind === "hotspots") return toolbox(["hotspots", "--workdir", resolve(a
 if (args.kind === "longnets") return toolbox(["longnets", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.def_path ? ["--def-path", args.def_path] : [], ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "unstable") return toolbox(["unstable", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, "--top-n", String(args.top_n ?? 5)]);
 if (args.kind === "trajectory") return toolbox(["trajectory", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 0)]);
-throw new Error("ieda_gp_observe: kind must be status|checkpoints|grid|hotspots|longnets|unstable|trajectory");
+if (args.kind === "congestion_hotspots") { if (!args.design) return asJson({ ok: false, reason: "congestion_hotspots requires design" }); return asJson(await runtime.congestionObserve(args.design, args.workdir, args.def_path, args.top_n, args.bin_cnt, args.foundry_dir)); }
+throw new Error("ieda_gp_observe: kind must be status|checkpoints|grid|hotspots|longnets|unstable|trajectory|congestion_hotspots");
 }
 }));
 
