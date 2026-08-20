@@ -250,6 +250,9 @@ Agent 不得跨单位比较。
 | density_overflow | 超目标密度的面积 / 总 instance 面积 | 是 |
 | peak_density | 最大 bin 占用率 | 是 |
 | rudy_demand_max | RUDY demand density 最大 | 是，但只是 demand |
+| rudy_utilization_max | RUDY demand / 布线 supply（与 GP route_util 同源）最大值 | 同一 evaluator 可跨工具比较 |
+| rudy_overflow_bin_count | RUDY 利用率 >1 的 bin 数量 | 是，拥挤溢出 bin 数 |
+| rudy_overflow_util_sum | 所有溢出 bin 的 (util-1) 之和 | 是，拥挤溢出总量 |
 | setup_wns | 建立时间最差余量 | 越接近 0 或越正越好 |
 | lg_max_displacement | LG 最大位移 | 是 |
 
