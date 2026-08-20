@@ -79,6 +79,11 @@ Innovus DEF 已用 `defOut -netlist -unplaced` 重新导出，因此 density / R
 
 ### asap7_aes
 
+> * asap7 的 timing 行标 invalid 的原因：
+>   已核对 SDC 与 lib，路径 arc delay 显示 -2147.484 ns = INT32_MIN/1e6；
+>   liberty arc 查表本身返回 0.5~12 ns，问题在 iSTA ps 单位传播层。
+>   HPWL / density / RUDY 仍有效。
+
 | 指标 | raw | 最优 agent | agent vs raw | Innovus | agent vs Innovus |
 |---|---|---|---|---|---|
 | HPWL | 58,392,975 | 57,887,305 | -0.866% | 45,224,840 | +28.00% |
@@ -134,7 +139,8 @@ defOut -netlist -unplaced
    - s1238 / aes / picorv32 / apb4 上 iEDA 更好；
    - nangate45 上 iEDA 更好；
    - ihp130 上 iEDA 是正 slack，Innovus 是负 slack；
-   - asap7 三者都很差，需要核对 SDC / corner。
+   - asap7 timing 绝对值不可用：iSTA 对 ps 单位 liberty 存在
+     sentinel/单位 bug，已标 invalid*；raw/agent/Innovus 相对比较仍可保留。
 
 6. aes 上 agent 的大幅 HPWL / timing 改善
    以 peak density +20% 和 RUDY max +20.6% 为代价。
