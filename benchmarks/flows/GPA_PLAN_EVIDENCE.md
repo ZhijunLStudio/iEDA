@@ -597,3 +597,28 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - Innovus 同一 evaluator：HPWL 8053041, rutil 2.0349, bins 622。
   当前 iEDA 在 HPWL / timing / bins 可超过 Innovus，
   rutil max 仍未超过，下一轮继续用 Pareto 搜索压低 rutil max。
+
+## Round 7：s1238 config Pareto 扫描 + congestion model 选项
+
+- 新增 verify metrics --congestion-model rudy|lutrudy。
+- 从 parent_400 已接受 DEF 出发，congestion_effort=1，
+  random_init=0，扫描 6 组 target_density x target_overflow：
+  td/to   | stop | iter | hpwl     | ov      | route_util(internal)
+  0.5/0.1 | target | 409 | 6415832  | 0.0980  | 1.55609
+  0.55/0.1| target | 404 | 6089153  | 0.0999  | 1.64338
+  0.6/0.1 | target | 391 | 5836600  | 0.0996  | 1.60638
+  0.5/0.05| miss   | 447 | 6515113  | 0.0722  | 1.56543
+  0.55/0.05| target| 478 | 6252205  | 0.0545  | 1.66118
+  0.6/0.05| target | 471 | 6020935  | 0.0487  | 1.59281
+- 同 evaluator RUDY(64 bins)：
+  td50to10: HPWL 6583394, rutil 2.5042, bins 553, rsum 159.81,
+            WNS -0.0767；
+  td60to10: HPWL 5983382, rutil 2.6943, bins 561, rsum 173.26,
+            WNS -0.0374；
+  Innovus : HPWL 8053041, rutil 2.0349, bins 622, rsum 133.02。
+- 继续 hotspot 局部：td50to10 + region local20 后
+  rutil 2.4784, bins 554, rsum 158.16；
+  但 scope_density_target=0.4 第二轮变差。
+- 当前结论：iEDA 已在 HPWL / timing / bins 超过 Innovus；
+  rutil max 和 overflow sum 还需更好的 congestion 目标或
+  更多轮 hotspot 迭代，点工具已验证可支撑该搜索。
