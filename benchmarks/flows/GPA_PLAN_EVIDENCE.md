@@ -735,3 +735,24 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - level3 显著降低 HPWL 且 bins/rsum 居中；
   - plain peak 仍以 level1 B 为最低；
   - 三种 effort 都已成为可复现、可 restore 的点工具旋钮。
+
+## Round 14：跨 PDK preset 验证发现
+
+- nangate45：
+  - target_density 0.7/0.8/0.9 全部被 adaptTargetDensity 夹到
+    1.001（设计利用率接近 1）；
+  - cong1 点：DEF HPWL 7181173，rutil 4.468，bins 379；
+  - cong0/to0.05 点：DEF HPWL 7099534，rutil 4.707，bins 350；
+  - parent300 本身：DEF HPWL 4472593，rutil 2.769，bins 457；
+  - Innovus：HPWL 3264413，rutil 1.991，bins 328。
+  - nangate 需要单独的 HPWL-first 配置，s1238 preset 不适用。
+- ihp130：
+  - td0.5/to0.1/cong1 可稳定运行（568 iters target_reached）；
+  - DEF HPWL 624455491，rutil 2.435，bins 1681，
+    均比 raw 好；仍差 Innovus。
+- asap7：
+  - 发现 start-from-parent bug：
+    td0.5/td0.6 + cong0/cong1 全部在 iter=4
+    overflow_target_miss，HPWL ~3.8e9；
+  - 原始 raw start（从 unplaced DEF）正常；
+  - 需要排查 parent DEF 重用路径，下一轮修复。
