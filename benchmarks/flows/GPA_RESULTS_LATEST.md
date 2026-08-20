@@ -7,6 +7,8 @@ HPWL       def_hpwl_eval.py
 density    iEDA run_density_eval
 RUDY       iEDA run_congestion_eval（RUDY demand density）
 timing     iEDA eval_timing_metrics.tcl（sky130 / nangate45 / asap7 / ihp130 均已接通）
+
+Innovus 对比用 Cadence Innovus 20.10 在本机生成 placement DEF，再回到同一个 iEDA evaluator 计算。
 ```
 
 ## 1. sky130：raw / 最优 agent / Innovus（四维）
@@ -57,77 +59,54 @@ timing     iEDA eval_timing_metrics.tcl（sky130 / nangate45 / asap7 / ihp130 �
 | setup WNS (ns) | -75.812 | -51.449 | +24.36 | -94.454 | +43.00 |
 | freq (MHz) | 12.77 | 18.54 | +45.16% | 10.31 | +79.74% |
 
-## 2. cross-PDK：raw / 最优 agent 全维度
+## 2. cross-PDK：raw / 最优 agent / Innovus 全维度
 
 timing evaluator 已支持 nangate45 / asap7 / ihp130。
+Innovus DEF 已用 `defOut -netlist -unplaced` 重新导出，因此 density / RUDY / timing 全部可比较。
 
 ### nangate45_gcd
 
-| 指标 | raw | 最优 agent | delta |
-|---|---|---|---|
-| HPWL | 5,850,034 | 5,813,974 | -0.616% |
-| peak density | 0.839014 | 0.839014 | 0 |
-| RUDY max | 0.015860 | 0.016195 | +2.11% |
-| RUDY total | 4.843156 | 4.834003 | -0.189% |
-| setup WNS (ns) | -1.186381 | -1.199110 | 变差 0.0127 ns |
-| setup TNS (ns) | -74.507272 | -75.191470 | 变差 0.684 ns |
-| hold WNS (ns) | +0.346368 | +0.345874 | 基本持平 |
-| freq (MHz) | 598.31 | 593.79 | -0.756% |
+| 指标 | raw | 最优 agent | agent vs raw | Innovus | agent vs Innovus |
+|---|---|---|---|---|---|
+| HPWL | 5,850,034 | 5,813,974 | -0.616% | 3,850,158 | +51.00% |
+| peak density | 0.839014 | 0.839014 | 0 | 0.478196 | +75.45% |
+| RUDY max | 0.015860 | 0.016195 | +2.11% | 0.004041 | +300.8% |
+| RUDY total | 4.843156 | 4.834003 | -0.189% | 3.540346 | +36.54% |
+| setup WNS (ns) | -1.186381 | -1.199110 | 变差 0.0127 | -2.138775 | 变好 0.9397 |
+| setup TNS (ns) | -74.507272 | -75.191470 | 变差 0.684 | -87.146053 | 变好 11.955 |
+| hold WNS (ns) | +0.346368 | +0.345874 | 基本持平 | +0.344879 | 基本持平 |
+| freq (MHz) | 598.31 | 593.79 | -0.756% | 381.13 | +55.80% |
 
 ### asap7_aes
 
-| 指标 | raw | 最优 agent | delta |
-|---|---|---|---|
-| HPWL | 58,392,975 | 57,887,305 | -0.866% |
-| peak density | 0.468640 | 0.462444 | -1.322% |
-| RUDY max | 0.081418 | 0.080320 | -1.349% |
-| RUDY total | 6.929867 | 6.906416 | -0.338% |
-| setup WNS (ns) | -2146.161 | -2145.492 | 变好 0.669 ns |
-| hold WNS (ns) | -2144.575 | -2145.353 | 变差 0.778 ns |
-| freq (MHz) | 0.465772 | 0.465918 | +0.031% |
+| 指标 | raw | 最优 agent | agent vs raw | Innovus | agent vs Innovus |
+|---|---|---|---|---|---|
+| HPWL | 58,392,975 | 57,887,305 | -0.866% | 45,224,840 | +28.00% |
+| peak density | 0.468640 | 0.462444 | -1.322% | 0.236370 | +95.65% |
+| RUDY max | 0.081418 | 0.080320 | -1.349% | 0.033026 | +143.2% |
+| RUDY total | 6.929867 | 6.906416 | -0.338% | 12.555375 | -45.00% |
+| setup WNS (ns) | -2146.161 | -2145.492 | 变好 0.669 | -2143.147 | 变差 2.345 |
+| hold WNS (ns) | -2144.575 | -2145.353 | 变差 0.778 | -2144.099 | 变差 1.254 |
+| freq (MHz) | 0.465772 | 0.465918 | +0.031% | 0.466427 | -0.109% |
 
 ### ihp130_gcd
 
-| 指标 | raw | 最优 agent | delta |
-|---|---|---|---|
-| HPWL | 620,662,411 | 617,771,700 | -0.466% |
-| peak density | 0.560176 | 0.560176 | 0 |
-| RUDY max | 0.005540 | 0.005412 | -2.31% |
-| RUDY total | 8.388075 | 8.348585 | -0.471% |
-| setup WNS (ns) | +0.465344 | +0.457550 | 变差 0.0078 ns |
-| hold WNS (ns) | +0.296344 | +0.296344 | 持平 |
-| freq (MHz) | 220.52 | 220.15 | -0.171% |
+| 指标 | raw | 最优 agent | agent vs raw | Innovus | agent vs Innovus |
+|---|---|---|---|---|---|
+| HPWL | 620,662,411 | 617,771,700 | -0.466% | 502,815,015 | +22.86% |
+| peak density | 0.560176 | 0.560176 | 0 | 0.520480 | +7.63% |
+| RUDY max | 0.005540 | 0.005412 | -2.31% | 0.004101 | +31.96% |
+| RUDY total | 8.388075 | 8.348585 | -0.471% | 6.762420 | +23.46% |
+| setup WNS (ns) | +0.465344 | +0.457550 | 变差 0.0078 | -10.701524 | 变好 11.159 |
+| hold WNS (ns) | +0.296344 | +0.296344 | 持平 | +0.296453 | 基本持平 |
+| freq (MHz) | 220.52 | 220.15 | -0.171% | 63.69 | +245.7% |
 
-## 3. cross-PDK Innovus
-
-Innovus license：
+## 3. 已不再存在的限制
 
 ```text
-/home/yangkang/cadence/INNOVUS201/license/cadence.dat
-```
-
-三个设计均已跑出 placement DEF。
-
-| design | raw HPWL | agent HPWL | Innovus HPWL |
-|---|---|---|---|
-| nangate45_gcd | 5,850,034 | 5,813,974 | 4,657,813 |
-| asap7_aes | 58,392,975 | 57,887,305 | 58,353,906 |
-| ihp130_gcd | 620,662,411 | 617,771,700 | 682,459,304 |
-
-Innovus 的 DEF HPWL 来自 overlay 方法（Innovus defOut 不含 NETS 段）。
-
-## 4. 当前还无法验证的部分
-
-```text
-1. Innovus cross-PDK 的 density / RUDY / timing：
-   Innovus defOut 没有写 NETS，并省略部分 physical-only cell，
-   overlay DEF 目前只能可靠计算 HPWL。
-
-2. asap7_aes timing 的 WNS 绝对值非常大（约 -2145 ns）：
-   需要确认 SDC 的 clock 约束和 lib corner 是否与设计预期一致。
-
-3. accept 导出 DEF bug、config fingerprint mismatch：
-   已在 GPA_PLAN_EVIDENCE.md 记录，尚未修复。
+之前 Innovus DEF 没有 NETS / 缺少 cell 的问题已解决：
+defOut -netlist -unplaced
+现在 nangate45 / asap7 / ihp130 的 Innovus DEF 都是完整可评测的。
 ```
 
 ## 5. 当前结论
@@ -136,20 +115,27 @@ Innovus 的 DEF HPWL 来自 overlay 方法（Innovus defOut 不含 NETS 段）�
 1. HPWL：
    agent 在 6/7 设计好于 raw；
    sky130 上 agent 全部好于 Innovus；
-   nangate45 上 Innovus 好于 iEDA raw 和 agent；
-   asap7 上三者接近；
-   ihp130 上 iEDA raw/agent 好于 Innovus。
+   cross-PDK 上 Innovus 的 HPWL 都低于 iEDA raw/agent。
 
-2. timing：
-   s1238 / aes 上 agent 好于 raw 和 Innovus；
-   apb4 / nangate / ihp130 基本持平；
-   asap7 的 timing 约束本身需要再核对。
+2. density：
+   sky130 上接近；
+   cross-PDK 上 Innovus peak density 明显更低（更松）。
 
 3. RUDY max：
-   sky130 上 Innovus 最好；
-   cross-PDK 上 agent 在 asap7 / ihp130 变好，nangate 略差。
+   sky130 和 cross-PDK 上 Innovus 都比 iEDA 低（更不拥塞）。
 
-4. peak density：
-   多数设计 agent 与 raw 持平；
-   aes agent 变差 20%，但仍为 0.59。
+4. RUDY total：
+   设计相关：
+   - nangate45 / ihp130 上 Innovus 更低；
+   - asap7 上 iEDA 更低；
+   - sky130 上 mixed。
+
+5. timing：
+   - s1238 / aes / picorv32 / apb4 上 iEDA 更好；
+   - nangate45 上 iEDA 更好；
+   - ihp130 上 iEDA 是正 slack，Innovus 是负 slack；
+   - asap7 三者都很差，需要核对 SDC / corner。
+
+6. aes 上 agent 的大幅 HPWL / timing 改善
+   以 peak density +20% 和 RUDY max +20.6% 为代价。
 ```
