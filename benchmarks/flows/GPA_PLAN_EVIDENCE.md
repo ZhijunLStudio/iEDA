@@ -850,3 +850,20 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
     HPWL 6686393, rutil 2.314763, bins 557, rsum 165.932；
   - 相比 round10 点：HPWL/bins/rsum 全面变好，
     rutil 从 2.293 略升到 2.315。
+
+## Round 23：asap7 / ihp130 timing-local 尝试
+
+- asap7 advance 候选 timing path local60：
+  HPWL 57898698（raw 58392975），rutil 1.697852，
+  WNS -5.38601；仅小幅改善 HPWL。
+- asap7 从 raw placed 重新 start 到 target：
+  HPWL 57987714，rutil 1.844663，bins 14。
+- ihp130 region td0.8 候选 timing path local60：
+  HPWL 618169446，rutil 2.839，bins 1739，rsum 832.31，
+  明显更差。
+- ihp130 contract local_restart 点：
+  HPWL 617866974，feasible overflow0.0989，
+  parent HPWL 580534124（不可行 overflow0.238）。
+- 结论：asap7 / ihp130 目前没有单一动作能同时
+  逼近 Innovus 的 HPWL 和 congestion；
+  需要更根本的 GP 目标调整或不同初始解。
