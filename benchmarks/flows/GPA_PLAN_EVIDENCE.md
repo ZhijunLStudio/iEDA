@@ -811,3 +811,15 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 - 回归：
   - ipl_gp_session_test --scenario validate：rc=0；
   - gp_tool_contract_test 超时被打断，待下一轮重跑。
+
+## Round 18：contract 回归部分通过
+
+- gp_tool_contract_test 已修 nangate/asap7 foundry_dir。
+- 单 case 运行结果：
+  - s1238：ok=true，problems=[]；
+  - nangate45_gcd：ok=true，problems=[]；
+  - ihp130_gcd：ok=true，problems=[]；
+  - asap7_aes：跑到 local_restart 后进程超时未打印 summary，
+    待下一轮用更长 timeout 重跑。
+- 说明 local_restart 的信息契约（HPWL 同单位）在
+  sky130/nangate45/ihp130 成立。
