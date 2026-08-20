@@ -496,3 +496,26 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - Innovus WNS -7.3920 ns，freq 121.92 MHz；
   - s1238 WNS 基本不变（-0.0503 vs -0.0492）；
   - nangate WNS 不变（-1.186381）。
+
+## Round 3：RUDY utilization + congestion_hotspots + accept 契约
+
+- C++ 层：
+  - run_congestion_eval 现在输出 rudy_utilization_max/avg/h/v、
+    rudy_overflow_bin_count、rudy_overflow_util_sum；
+  - 同时写 rudy_demand.csv 和 rudy_util.csv；
+  - 利用率 supply 与 GP route_util 同源（LEF track count）。
+- Python / Harness 层：
+  - 新增 gp_congestion_observe.py；
+  - ieda_gp_observe kind=congestion_hotspots 返回
+    top overflow bins、merged executable regions、region 字符串；
+  - 可用 scope_region 字符串直接喂给 ieda_gp_run local_run。
+- Headless 验证（deepseek-v4-pro/max/极简）：
+  - congestion_hotspots 调用 ok:true；
+  - s1238 raw：util_max 1.919、overflow bins 157、首 region
+    22348 24832 24832 27315。
+- 真实 agent 循环：
+  - restore parent_400 -> accept -> congestion_hotspots ->
+    local_run(region,20) -> verify；
+  - local_run 内部 HPWL -20102，candidate DEF HPWL 5861083；
+  - 发现 session accept 带 checkpoint 会意外回滚 parent，
+    已改为结构化拒绝 checkpoint。
