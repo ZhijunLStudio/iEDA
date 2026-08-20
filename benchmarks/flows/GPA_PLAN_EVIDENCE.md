@@ -482,3 +482,17 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 | ihp130 | peak density | 0.560176 | 0.560176 | 0 |
 | ihp130 | RUDY max | 0.005540 | 0.005412 | -2.31% |
 | ihp130 | RUDY total | 8.388075 | 8.348585 | -0.471% |
+
+
+## Round 2：iSTA ps 单位 bug 修复
+
+- 现象：asap7 timing WNS -2146 ns，路径每个 cell delay 出现 -2147.484 ns。
+- 根因：asap7 liberty 时间单位是 1ps；slew/load 越界后 LUT 线性外推
+  产生巨大负 delay，随后污染所有传播值。
+- 修复：LibTable::findValue 对两轴都 clamp 到表边界，不再外推。
+- 验证：
+  - asap7 raw WNS -2146.16 ns -> -5.3735 ns；
+  - agent WNS -5.2884 ns，freq 163.98 MHz；
+  - Innovus WNS -7.3920 ns，freq 121.92 MHz；
+  - s1238 WNS 基本不变（-0.0503 vs -0.0492）；
+  - nangate WNS 不变（-1.186381）。
