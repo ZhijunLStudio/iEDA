@@ -56,7 +56,7 @@
     "case_root": "/tmp/asap7_aes",
     "input_def": "/tmp/asap7_aes/asap7_aes_initial.def",
     "pl_config": "/tmp/asap7_aes/pl_clean_config.json",
-    "foundry_dir": "/home/lizhijun/work/iEDA.ai/scripts/foundry/sky130",
+    "foundry_dir": "/mnt/usb20t/PCL-155/home/dengqinyi/iFlow/foundry/asap7",
     "pdk": "asap7",
     "lef": "/mnt/usb20t/PCL-155/home/dengqinyi/iFlow/foundry/asap7/lef/asap7sc7p5t_27_R_1x_201211.lef",
     "gp_baseline_def": "/tmp/gp_asap7/placement.def"
