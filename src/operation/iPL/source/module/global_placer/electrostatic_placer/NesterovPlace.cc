@@ -1926,10 +1926,15 @@ GPStateCheckpoint NesterovPlace::captureCheckpoint() const
   checkpoint.instance_names.reserve(_placable_inst_list.size());
   checkpoint.instance_density_coords.reserve(_placable_inst_list.size());
   checkpoint.instance_density_scales.reserve(_placable_inst_list.size());
-  for (auto* n_inst : _placable_inst_list) {
+  const bool capture_solver_positions = _cur_position_list.size() == _placable_inst_list.size();
+  for (size_t i = 0; i < _placable_inst_list.size(); ++i) {
+    auto* n_inst = _placable_inst_list[i];
     checkpoint.instance_names.push_back(n_inst->get_name());
-    checkpoint.instance_density_coords.push_back(n_inst->get_density_center_coordi());
-    checkpoint.instance_density_scales.push_back(n_inst->get_density_scale());
+    checkpoint.instance_density_coords.push_back(capture_solver_positions ? _cur_position_list[i]
+                                                                          : n_inst->get_density_center_coordi());
+    checkpoint.instance_density_scales.push_back(capture_solver_positions && _cur_density_scale_list.size() == _placable_inst_list.size()
+                                                     ? _cur_density_scale_list[i]
+                                                     : n_inst->get_density_scale());
   }
 
   checkpoint.solver = _nes_database->_nesterov_solver->captureState();
@@ -2076,10 +2081,19 @@ bool NesterovPlace::restoreCheckpoint(const GPStateCheckpoint& checkpoint)
 
   _nes_database->_nesterov_solver->restoreState(checkpoint.solver);
 
+  const bool has_solver_positions = checkpoint.cur_position_list.size() == _placable_inst_list.size();
+  const bool has_solver_scales = checkpoint.cur_density_scale_list.size() == _placable_inst_list.size();
   for (size_t i = 0; i < _placable_inst_list.size(); ++i) {
-    Point<int32_t> density_coord = checkpoint.instance_density_coords[i];
+    // The solver positions are the authoritative coordinates at the saved
+    // iteration. instance_density_coords is a lagging observation copy and can
+    // be stale for terminal/candidate checkpoints, which made accept export
+    // the pre-session DEF.
+    Point<int32_t> density_coord = has_solver_positions ? checkpoint.cur_position_list[i]
+                                                        : checkpoint.instance_density_coords[i];
     _placable_inst_list[i]->updateDensityCenterLocation(density_coord);
-    _placable_inst_list[i]->set_density_scale(checkpoint.instance_density_scales[i]);
+    const float density_scale = has_solver_scales ? checkpoint.cur_density_scale_list[i]
+                                                  : checkpoint.instance_density_scales[i];
+    _placable_inst_list[i]->set_density_scale(density_scale);
   }
 
   _solve_setup_done = true;
