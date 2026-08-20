@@ -272,7 +272,7 @@ throw new Error("ieda_gp_run: kind must be start|advance|candidate|local_run|app
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_verify",
-description: "Verify GP results. kind: delta (metric delta between checkpoints), lg (read-only LG oracle), metrics (same-evaluator HPWL/density/RUDY/timing across raw DEF and candidate DEF). For metrics set timing=0 to skip timing on PDKs without the timing evaluator. congestion_effort=2 enables the experimental peak-bin congestion gradient penalty.",
+description: "Verify GP results. kind: delta (metric delta between checkpoints), lg (read-only LG oracle), metrics (same-evaluator HPWL/density/RUDY/timing across raw DEF and candidate DEF). For metrics set timing=0 to skip timing on PDKs without the timing evaluator. congestion_effort=2 enables the experimental LUT peak-bin penalty; congestion_effort=3 optimizes plain RUDY (same model as verify metrics default).",
 parameters: p({ design: { type: "string" }, workdir: { type: "string", required: true }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, def_path: { type: "string" }, raw_def: { type: "string" }, candidate_def: { type: "string" }, timing: { type: "integer" }, congestion_model: { type: "string" } }),
 output: out(),
 execute: async (args) => {

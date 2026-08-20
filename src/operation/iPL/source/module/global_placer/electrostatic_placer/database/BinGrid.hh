@@ -83,7 +83,7 @@ class BinGrid
   void updateBinGrid(std::vector<NesInstance*>& nInst_list, int32_t thread_num);
   void updataOverflowArea(std::vector<NesInstance*>& nInst_list, int32_t thread_num);
 
-  void evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num);
+  void evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num, bool plain_rudy = false);
   void evalRouteCap(int32_t thread_num);
   void evalRouteUtil();
   void plotRouteCap();
@@ -271,7 +271,7 @@ inline void BinGrid::updataOverflowArea(std::vector<NesInstance*>& nInst_list, i
   _overflow_area_wofiller = overflow_area_wofiller;
 }
 
-inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num)
+inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num, bool plain_rudy)
 {
   _grid_manager->clearRUDY();
   int wire_space_h = _bin_size_y / (_route_cap_h / _bin_cnt_y);
@@ -331,7 +331,15 @@ inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int
     } else {
       l_ness = 0.5;
     }
-    l_ness = netWiringDistributionMapWeight(pin_num, aspect_ratio, l_ness);
+    // plain RUDY mode: the same model as the evaluator used by
+    // ieda_gp_verify metrics(congestion_model=rudy). LUT-based wire
+    // distribution and Gaussian blur are deliberately skipped so the solver
+    // optimizes exactly the metric the agent compares against.
+    if (plain_rudy) {
+      l_ness = 1.0;
+    } else {
+      l_ness = netWiringDistributionMapWeight(pin_num, aspect_ratio, l_ness);
+    }
 
     std::vector<Grid*> overlap_grid_list;
     _grid_manager->obtainOverlapGridList(overlap_grid_list, net_shape);

@@ -1603,8 +1603,10 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
                                                                      _nes_config.get_min_wirelength_force_bar(),
                                                                      _nes_config.get_thread_num());
         } else {
-          // LUT-RUDY based congestion-driven optimization.
-          _nes_database->_bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num());
+          // Congestion-driven optimization. Level 3 uses plain RUDY (no LUT
+          // weight, no Gaussian blur), the same model as the verify evaluator.
+          const bool plain_rudy = _nes_config.getCongestionEffortLevel() >= 3;
+          _nes_database->_bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num(), plain_rudy);
           _nes_database->_bin_grid->fastGaussianBlur();
           _nes_database->_bin_grid->evalRouteUtil();
           // Congestion shapes the wirelength force directly. Density-scale
