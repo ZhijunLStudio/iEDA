@@ -674,3 +674,21 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - td050to008+n257：rutil 变差。
   说明单 net local 对 peak 的作用有限，下一步需要
   solver 侧 peak-congestion 目标或更多 nets 联合局部。
+
+## Round 10：congestion-net union headless 循环
+
+- Headless 全链路：
+  congestion_hotspots(rudy,64 bins) -> 取前 3 个 congestion nets
+  -> union 14 instances -> local_run(60 iters, anneal 0.5)
+  -> verify metrics(rudy)。
+- 结果：
+  - peak rutil 2.333612 -> 2.293105（-1.7%）；
+  - overflow bins 556 -> 561（+0.9%）；
+  - overflow sum 164.20 -> 168.39（+2.6%）；
+  - 模型判定：不值得保留，热点只是转移，不是消散。
+- 当前 s1238 plain RUDY 最佳可行点：
+  td0.5/to0.08/cong1 + top3 congestion-net local60：
+  HPWL 6704993, rutil 2.293105, bins 561, rsum 168.39。
+- 结论：工具链已经能自动做 hotspot -> net scope -> verify -> verdict；
+  要达到 Innovus 的 rutil 2.035 / rsum 133，还需要
+  solver 侧直接优化 peak bin，或显著扩大联合 scope。
