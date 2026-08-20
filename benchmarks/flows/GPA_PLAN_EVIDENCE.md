@@ -519,3 +519,27 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - local_run 内部 HPWL -20102，candidate DEF HPWL 5861083；
   - 发现 session accept 带 checkpoint 会意外回滚 parent，
     已改为结构化拒绝 checkpoint。
+
+## Round 4：timing_paths + propose gp_config
+
+- 新增 gp_timing_paths.py：
+  - 运行只读 iSTA，读 .rpt.json；
+  - 返回 worst paths 的 endpoint/slack/freq/start/end point；
+  - 每条 path 附 scope_instances 字符串，可直接用于
+    ieda_gp_run local_run scope=instances。
+- ieda_gp_observe 新 kind：timing_paths。
+  Headless 验证 ok:true，s1238 首个 path：
+  endpoint DFF_12/Q_reg:D，slack 0.225，
+  11 个 instance 的 scope_instances 字符串。
+- ieda_gp_propose 新 kind：gp_config。
+  基于 checkpoint config_state + trajectory 给出：
+  - density_relief / density_penalty_up
+  - congestion_effort_on
+  - budget candidates
+  每个 candidate 都是 executable start action
+  （input_def=workdir/placement.def, random_init=0）。
+  Headless 验证 ok:true。
+- 快速配置实验（直接调用，非 agent）：
+  - congestion_effort=1 from parent：100 iter 后 overflow 0.678，route_util 6.84；
+  - target_density=0.55 from parent：100 iter 后 overflow 0.691；
+  都未达到可行，说明 config 需要继续迭代观察，而不是一次切换解决。
