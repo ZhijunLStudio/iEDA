@@ -31,7 +31,7 @@ def parse_def(path):
         m = re.match(r"\s*-\s+(\S+)", line)
         if m:
             cur = m.group(1); nets[cur] = []
-        elif cur:
+        if cur:
             for pin in re.finditer(r"\(\s*([^\s()]+)\s+([^\s()]+)\s*\)", line):
                 nets[cur].append((pin.group(1), pin.group(2)))
     return design, comps, ports, nets

@@ -100,3 +100,41 @@ timing     iEDA eval_timing_metrics.tcl（仅 sky130）
    - cross-PDK 缺 Innovus DEF 和 timing evaluator；
    - accept 导出 DEF bug、config fingerprint mismatch。
 ```
+
+
+## 4. cross-PDK timing（同一 timing evaluator，本次补齐）
+
+### nangate45_gcd
+
+| 版本 | HPWL | setup WNS | setup TNS | hold WNS | freq |
+|---|---|---|---|---|---|
+| raw | 5,850,034 | -1.186 ns | -74.507 ns | +0.346 ns | 598.31 MHz |
+| agent | 5,813,974 | -1.199 ns | -75.191 ns | +0.346 ns | 593.79 MHz |
+
+### asap7_aes
+
+| 版本 | HPWL | setup WNS | hold WNS | freq |
+|---|---|---|---|---|
+| raw | 58,392,975 | -2146.16 ns | -2144.58 ns | 0.466 MHz |
+| agent | 57,887,305 | -2145.49 ns | -2145.35 ns | 0.466 MHz |
+
+### ihp130_gcd
+
+| 版本 | HPWL | setup WNS | hold WNS | freq |
+|---|---|---|---|---|
+| raw | 620,662,411 | +0.465 ns | +0.296 ns | 220.52 MHz |
+| agent | 617,771,700 | +0.458 ns | +0.296 ns | 220.15 MHz |
+
+## 5. cross-PDK Innovus（本机 license 已找到并跑完）
+
+Innovus license 来自 `/home/yangkang/cadence/INNOVUS201/license/cadence.dat`。
+
+| design | raw HPWL | agent HPWL | Innovus HPWL | 说明 |
+|---|---|---|---|---|
+| nangate45_gcd | 5,850,034 | 5,813,974 | 4,657,813 | Innovus DEF 无 NETS，用 input DEF 网表 overlay |
+| asap7_aes | 58,392,975 | 57,887,305 | 58,353,906 | 同上 |
+| ihp130_gcd | 620,662,411 | 617,771,700 | 682,459,304 | 同上 |
+
+注意：Innovus defOut 没有写 NETS，且会省略部分 physical-only cell，
+所以 Innovus 的 density/RUDY/timing 仍不能直接用 overlay DEF 跑；
+上表 Innovus 只有 HPWL，是当前可验证范围。
