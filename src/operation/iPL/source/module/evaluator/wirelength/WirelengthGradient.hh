@@ -47,7 +47,7 @@ class WirelengthGradient
 
   virtual void updateWirelengthForce(float coeff_x, float coeff_y, float min_force_bar, int32_t thread_num) = 0;
   virtual Point<float> obtainWirelengthGradient(int32_t inst_id, float coeff_x, float coeff_y) = 0;
-  virtual void updateWirelengthForceDirect(float coeff_x, float coeff_y, float min_force_bar, int32_t thread_num, GridManager* grid_manager) = 0;
+  virtual void updateWirelengthForceDirect(float coeff_x, float coeff_y, float min_force_bar, int32_t thread_num, GridManager* grid_manager, int32_t congestion_effort_level = 1) = 0;
 
   // Debug
   virtual void waWLAnalyzeForDebug(float coeff_x, float coeff_y) = 0;

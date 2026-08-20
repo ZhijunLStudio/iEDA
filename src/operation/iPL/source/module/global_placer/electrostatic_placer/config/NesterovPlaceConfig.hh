@@ -70,6 +70,7 @@ class NesterovPlaceConfig
     bool is_opt_max_wirelength = false;
     bool is_opt_timing = false;
     bool is_opt_congestion = false;
+    int32_t congestion_effort_level = 1;
     int32_t max_net_wirelength = -1;
     int32_t global_padding = 0;
     std::vector<float> opt_overflow_list;
@@ -103,6 +104,7 @@ class NesterovPlaceConfig
     state.is_opt_max_wirelength = _is_opt_max_wirelength;
     state.is_opt_timing = _is_opt_timing;
     state.is_opt_congestion = _is_opt_congestion;
+    state.congestion_effort_level = _congestion_effort_level;
     state.max_net_wirelength = _max_net_wirelength;
     state.global_padding = _global_padding;
     state.opt_overflow_list = _opt_overflow_list;
@@ -133,6 +135,7 @@ class NesterovPlaceConfig
     _is_opt_max_wirelength = state.is_opt_max_wirelength;
     _is_opt_timing = state.is_opt_timing;
     _is_opt_congestion = state.is_opt_congestion;
+    _congestion_effort_level = state.congestion_effort_level;
     _max_net_wirelength = state.max_net_wirelength;
     _global_padding = state.global_padding;
     _opt_overflow_list = state.opt_overflow_list;
@@ -161,6 +164,7 @@ class NesterovPlaceConfig
   bool isOptMaxWirelength() const { return _is_opt_max_wirelength;}
   bool isOptTiming() const { return _is_opt_timing;}
   bool isOptCongestion() const { return _is_opt_congestion;}
+  int32_t getCongestionEffortLevel() const { return _congestion_effort_level;}
   int32_t get_max_net_wirelength() const { return _max_net_wirelength;}
   int32_t get_global_padding() const { return _global_padding; }
   const std::vector<float>& get_opt_overflow_list() const { return _opt_overflow_list; }
@@ -253,6 +257,7 @@ class NesterovPlaceConfig
   void set_is_opt_max_wirelength(bool flag) { _is_opt_max_wirelength = flag;}
   void set_is_opt_timing(bool flag) { _is_opt_timing = flag; }
   void set_is_opt_congestion(bool flag) { _is_opt_congestion = flag;}
+  void set_congestion_effort_level(int32_t level) { _congestion_effort_level = level;}
   void set_max_net_wirelength(int32_t max_wirelength) { _max_net_wirelength = max_wirelength;}
   void set_global_padding(int32_t padding) { _global_padding = padding; }
   void add_opt_target_overflow(float overflow) { _opt_overflow_list.push_back(overflow);}
@@ -296,6 +301,7 @@ class NesterovPlaceConfig
 
   // about congestion.
   bool _is_opt_congestion = false;
+  int32_t _congestion_effort_level = 1;
 
   // about opt target overflow list
   std::vector<float> _opt_overflow_list;

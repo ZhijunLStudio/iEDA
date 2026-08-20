@@ -978,8 +978,8 @@ bool validateStartConfigOverrides(const GPRunRequest& request, std::string* reas
     *reason = "phi coefficients must satisfy 0 < min_phi_coef <= max_phi_coef";
     return false;
   }
-  if (request.congestion_effort > 1) {
-    *reason = "congestion_effort must be 0 or 1";
+  if (request.congestion_effort > 2) {
+    *reason = "congestion_effort must be 0, 1 or 2";
     return false;
   }
   return true;
@@ -1011,7 +1011,8 @@ void applyStartConfigOverrides(const GPRunRequest& request)
     nes_config.set_max_phi_coef(request.max_phi_coef);
   }
   if (request.congestion_effort >= 0) {
-    nes_config.set_is_opt_congestion(request.congestion_effort == 1);
+    nes_config.set_is_opt_congestion(request.congestion_effort > 0);
+    nes_config.set_congestion_effort_level(request.congestion_effort == 0 ? 1 : request.congestion_effort);
   }
 }
 

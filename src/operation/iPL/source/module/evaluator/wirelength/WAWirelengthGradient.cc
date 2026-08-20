@@ -227,7 +227,7 @@ void WAWirelengthGradient::updateWirelengthForce(float coeff_x, float coeff_y, f
   }
 }
 
-void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coeff_y, float min_force_bar, int32_t thread_num, GridManager* grid_manager)
+void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coeff_y, float min_force_bar, int32_t thread_num, GridManager* grid_manager, int32_t congestion_effort_level)
 {
   if (grid_manager == nullptr) {
     return;
@@ -287,6 +287,17 @@ void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coef
 
     double a = 1 + (f_x - f_y);
     double b = 1 - (f_x - f_y) * 1.5;
+
+    // congestion_effort=2: amplify the wirelength gradient of nets whose
+    // bbox crosses an over-congested RUDY bin (local util > 1). This shrinks
+    // exactly those net bboxes and attacks the evaluator-visible peak bin,
+    // which level-1 (directional reweighting only) leaves mostly untouched.
+    if (congestion_effort_level >= 2) {
+      const float over_util = std::max(0.0F, std::max(bin_util_h_max, bin_util_v_max) - 1.0F);
+      const double penalty = 1.0 + 0.25 * over_util;
+      a *= penalty;
+      b *= penalty;
+    }
  
     float net_expminsum_x, net_expmaxsum_x, net_expminsum_y, net_expmaxsum_y;
     float net_x_expminsum_x, net_x_expmaxsum_x, net_y_expminsum_y, net_y_expmaxsum_y;

@@ -1622,7 +1622,8 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
           auto grid_manager = _nes_database->_bin_grid->get_grid_manager();
           _nes_database->_wirelength_gradient->updateWirelengthForceDirect(_nes_database->_wirelength_coef, _nes_database->_wirelength_coef,
                                                                            _nes_config.get_min_wirelength_force_bar(),
-                                                                           _nes_config.get_thread_num(), grid_manager);
+                                                                           _nes_config.get_thread_num(), grid_manager,
+                                                                           _nes_config.getCongestionEffortLevel());
         }
       }
 
@@ -1974,6 +1975,7 @@ std::string NesterovPlace::computeConfigFingerprint() const
       {"is_opt_max_wirelength", _nes_config.isOptMaxWirelength()},
       {"is_opt_timing", _nes_config.isOptTiming()},
       {"is_opt_congestion", _nes_config.isOptCongestion()},
+      {"congestion_effort_level", _nes_config.getCongestionEffortLevel()},
       {"max_net_wirelength", _nes_config.get_max_net_wirelength()},
       {"global_padding", _nes_config.get_global_padding()},
       {"opt_overflow_list", _nes_config.get_opt_overflow_list()},
@@ -2647,6 +2649,7 @@ void to_json(nlohmann::json& json_obj, const NesterovPlaceConfig::State& state)
                             {"is_opt_max_wirelength", state.is_opt_max_wirelength},
                             {"is_opt_timing", state.is_opt_timing},
                             {"is_opt_congestion", state.is_opt_congestion},
+                            {"congestion_effort_level", state.congestion_effort_level},
                             {"max_net_wirelength", state.max_net_wirelength},
                             {"global_padding", state.global_padding},
                             {"opt_overflow_list", state.opt_overflow_list},
@@ -2676,6 +2679,7 @@ void from_json(const nlohmann::json& json_obj, NesterovPlaceConfig::State& state
   state.is_opt_max_wirelength = json_obj.at("is_opt_max_wirelength").get<bool>();
   state.is_opt_timing = json_obj.at("is_opt_timing").get<bool>();
   state.is_opt_congestion = json_obj.at("is_opt_congestion").get<bool>();
+  state.congestion_effort_level = json_obj.value("congestion_effort_level", 1);
   state.max_net_wirelength = json_obj.at("max_net_wirelength").get<int32_t>();
   state.global_padding = json_obj.at("global_padding").get<int32_t>();
   state.opt_overflow_list = json_obj.at("opt_overflow_list").get<std::vector<float>>();
