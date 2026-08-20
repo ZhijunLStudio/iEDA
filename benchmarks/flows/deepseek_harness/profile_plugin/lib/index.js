@@ -157,9 +157,9 @@ var IedaGpRuntime = class {
 			return value;
 		});
 	}
-async congestionObserve(design, workdir, defPath, topN, bins, foundryDir) {
+async congestionObserve(design, workdir, defPath, topN, bins, foundryDir, model) {
 const record = readDesigns(this.iedaRoot)[design] || {};
-const key = JSON.stringify({ design, workdir: resolve(workdir), defPath: defPath || null, topN, bins });
+const key = JSON.stringify({ design, workdir: resolve(workdir), defPath: defPath || null, topN, bins, model });
 return cachedRun(workdir, key, "ieda_gp_observe", async () => {
 const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_congestion_observe.py"), [
 "--case-root", String(record.case_root),
@@ -168,9 +168,10 @@ const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.scri
 "--workdir", resolve(workdir),
 "--bin-cnt-x", String(bins ?? 64),
 "--bin-cnt-y", String(bins ?? 64),
-"--top-n", String(topN ?? 8)
+"--top-n", String(topN ?? 8),
+				"--model", String(model ?? "rudy")
 ]);
-trace(workdir, { source: "ieda_gp_observe", args: { design, defPath, topN, bins }, result: value });
+trace(workdir, { source: "ieda_gp_observe", args: { design, defPath, topN, bins, model }, result: value });
 return value;
 });
 }
@@ -217,7 +218,7 @@ return asJson(await runtime.agent(args.design, args.workdir, ["local_run", "--it
 ctx.tools.register(defineTool({
 name: "ieda_gp_observe",
 description: "Read EDA-side facts (no side effects). kind: status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history), congestion_hotspots (runs read-only RUDY evaluator on a DEF and returns overflow regions), timing_paths (runs the SAME run_timing_eval HPWL evaluator used by verify metrics, and returns worst paths with scope_instances). Use top_n=0 for full grid/batch history.",
-parameters: p({ workdir: { type: "string", required: true }, design: { type: "string" }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" }, bin_cnt: { type: "integer" } }),
+parameters: p({ workdir: { type: "string", required: true }, design: { type: "string" }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" }, bin_cnt: { type: "integer" }, congestion_model: { type: "string" } }),
 output: out(),
 execute: async (args) => {
 if (args.kind === "status") return toolbox(["status", "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
@@ -227,7 +228,7 @@ if (args.kind === "hotspots") return toolbox(["hotspots", "--workdir", resolve(a
 if (args.kind === "longnets") return toolbox(["longnets", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.def_path ? ["--def-path", args.def_path] : [], ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "unstable") return toolbox(["unstable", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, "--top-n", String(args.top_n ?? 5)]);
 if (args.kind === "trajectory") return toolbox(["trajectory", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 0)]);
-if (args.kind === "congestion_hotspots") { if (!args.design) return asJson({ ok: false, reason: "congestion_hotspots requires design" }); return asJson(await runtime.congestionObserve(args.design, args.workdir, args.def_path, args.top_n, args.bin_cnt, args.foundry_dir)); }
+if (args.kind === "congestion_hotspots") { if (!args.design) return asJson({ ok: false, reason: "congestion_hotspots requires design" }); return asJson(await runtime.congestionObserve(args.design, args.workdir, args.def_path, args.top_n, args.bin_cnt, args.foundry_dir, args.congestion_model)); }
 if (args.kind === "timing_paths") { if (!args.design) return asJson({ ok: false, reason: "timing_paths requires design" }); return asJson(await runtime.timingObserve(args.design, args.workdir, args.def_path, args.top_n, args.foundry_dir)); }
 throw new Error("ieda_gp_observe: kind must be status|checkpoints|grid|hotspots|longnets|unstable|trajectory|congestion_hotspots|timing_paths");
 }

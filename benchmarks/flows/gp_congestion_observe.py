@@ -212,6 +212,7 @@ def main():
     ap.add_argument("--bin-cnt-x", type=int, default=64)
     ap.add_argument("--bin-cnt-y", type=int, default=64)
     ap.add_argument("--top-n", type=int, default=8)
+    ap.add_argument("--model", choices=["rudy", "lutrudy"], default="rudy")
     args = ap.parse_args()
 
     case_root = Path(args.case_root)
@@ -227,7 +228,7 @@ def main():
         f"source {shlex.quote(str(case_root / 'script/DB_script/db_path_setting.tcl'))}\n"
         f"source {shlex.quote(str(case_root / 'script/DB_script/db_init_lef.tcl'))}\n"
         f"def_init -path {shlex.quote(str(args.def_path))}\n"
-        f"run_congestion_eval -model rudy -bin_cnt_x {args.bin_cnt_x} -bin_cnt_y {args.bin_cnt_y} -eval_output_path {shlex.quote(str(work))}\n"
+        f"run_congestion_eval -model {args.model} -bin_cnt_x {args.bin_cnt_x} -bin_cnt_y {args.bin_cnt_y} -eval_output_path {shlex.quote(str(work))}\n"
         "flow_exit\n")
     env = __import__("os").environ.copy()
     env.update({"CONFIG_DIR": str(case_root / "iEDA_config"), "RESULT_DIR": str(work),
@@ -264,6 +265,7 @@ def main():
         "ok": True,
         "def": str(Path(args.def_path).resolve()),
         "region": region,
+        "model": args.model,
         "bin_cnt": [args.bin_cnt_x, args.bin_cnt_y],
         "rudy_demand_max": summary.get("rudy_demand_max"),
         "rudy_demand_total": summary.get("rudy_demand_total"),
