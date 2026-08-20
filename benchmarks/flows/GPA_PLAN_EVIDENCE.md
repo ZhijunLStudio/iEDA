@@ -756,3 +756,25 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
     overflow_target_miss，HPWL ~3.8e9；
   - 原始 raw start（从 unplaced DEF）正常；
   - 需要排查 parent DEF 重用路径，下一轮修复。
+
+## Round 15：asap7 start/advance 修复
+
+- 修复 1：旧 checkpoint 没有 congestion_effort_level key，
+  fingerprint 被误判 mismatch；现在缺 key 且 current=1 时归一化兼容。
+- 修复 2：resume/advance 的 terminal def_save 会导出 input DEF；
+  cmd_advance 现在在 advance 结束后用 restore+accept 重新导出
+  最新 checkpoint 的 placement.def。
+- 修复 3：designs.json 的 asap7 foundry_dir 之前误写 sky130，
+  已改为真实 asap7 foundry。
+- 验证：
+  - 旧 asap7 parent checkpoint 现在可 accept；
+  - advance parent400 -> 432 iters target_reached；
+  - headless advance + verify：
+    candidate HPWL 57668240（raw 58392975），
+    rutil 1.697845，bins 16；
+  - placement.def 不再等于 raw input（md5 不同）。
+- 重要使用方式：
+  - 继续一个 mid-state checkpoint 用 ieda_gp_run advance，
+    不要用 start(input_def=parent DEF) relinearize；
+  - asap7 上 start-from-parent 仍可能 early miss，
+    而 advance 稳定收敛。
