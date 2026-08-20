@@ -42,7 +42,7 @@ def hpwl(def_path: Path, macro_lef: Path):
     return int(m.group(1)) if m else None
 
 
-def density(def_path: Path, case_root: Path, grid_size: int, foundry_dir: Path):
+def density(def_path: Path, case_root: Path, grid_size: int, foundry_dir: Path, congestion_model: str = "rudy"):
     work = Path(tempfile.mkdtemp(prefix="gp_density_eval_"))
     tcl = work / "density_eval.tcl"
     tcl.write_text(
@@ -52,7 +52,7 @@ def density(def_path: Path, case_root: Path, grid_size: int, foundry_dir: Path):
         f"source {shlex.quote(str(case_root / 'script/DB_script/db_init_lef.tcl'))}\n"
         f"def_init -path {shlex.quote(str(def_path))}\n"
         f"run_density_eval -eval_output_path {shlex.quote(str(work))} -grid_size {grid_size} -stage place\n"
-        f"run_congestion_eval -model rudy -bin_cnt_x 64 -bin_cnt_y 64 -eval_output_path {shlex.quote(str(work))}\n"
+        f"run_congestion_eval -model {congestion_model} -bin_cnt_x 64 -bin_cnt_y 64 -eval_output_path {shlex.quote(str(work))}\n"
         f"flow_exit\n")
     env = __import__("os").environ.copy()
     env.update({"CONFIG_DIR": str(case_root / "iEDA_config"), "RESULT_DIR": str(work),
@@ -133,6 +133,7 @@ def main():
     ap.add_argument("--macro-lef", required=True)
     ap.add_argument("--foundry-dir", default=str(REPO / "scripts/foundry/sky130"))
     ap.add_argument("--grid-size", type=int, default=200)
+    ap.add_argument("--congestion-model", choices=["rudy", "lutrudy"], default="rudy")
     ap.add_argument("--no-timing", action="store_true")
     ap.add_argument("--out")
     ap.add_argument("defs", nargs="+")
@@ -149,7 +150,7 @@ def main():
             out["placements"][name] = {"def": str(path), "missing": True}
             continue
         entry = {"def": str(path), "hpwl": hpwl(path, macro_lef),
-                 "density": density(path, case_root, args.grid_size, Path(args.foundry_dir))}
+                 "density": density(path, case_root, args.grid_size, Path(args.foundry_dir), args.congestion_model)}
         if not args.no_timing and TIMING_EVAL_TCL.exists():
             entry["timing"] = timing(path, case_root, Path(args.foundry_dir))
         out["placements"][name] = entry
