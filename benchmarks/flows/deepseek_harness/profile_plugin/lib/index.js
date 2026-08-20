@@ -174,6 +174,21 @@ trace(workdir, { source: "ieda_gp_observe", args: { design, defPath, topN, bins 
 return value;
 });
 }
+async timingObserve(design, workdir, defPath, maxPath, foundryDir) {
+const record = readDesigns(this.iedaRoot)[design] || {};
+const key = JSON.stringify({ design, workdir: resolve(workdir), defPath: defPath || null, maxPath });
+return cachedRun(workdir, key, "ieda_gp_observe", async () => {
+const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_timing_paths.py"), [
+"--case-root", String(record.case_root),
+"--def", String(defPath || join(resolve(workdir), "placement.def")),
+"--foundry-dir", String(foundryDir || this.foundryDir(design)),
+"--workdir", resolve(workdir),
+"--max-path", String(maxPath ?? 3)
+]);
+trace(workdir, { source: "ieda_gp_observe", args: { design, defPath, maxPath }, result: value });
+return value;
+});
+}
 async fullCompare(design, resultRoot, timing) {
 		if (!readDesigns(this.iedaRoot)[design]) throw new Error(`unknown design ${JSON.stringify(design)}; known designs: ${knownDesigns(this.iedaRoot).join(", ")}`);
 		return runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("run_ipl_full_compare.py"), [
@@ -201,7 +216,7 @@ return asJson(await runtime.agent(args.design, args.workdir, ["local_run", "--it
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_observe",
-description: "Read EDA-side facts (no side effects). kind: status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history), congestion_hotspots (runs read-only RUDY evaluator on a DEF and returns overflow regions). Use top_n=0 for full grid/batch history.",
+description: "Read EDA-side facts (no side effects). kind: status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history), congestion_hotspots (runs read-only RUDY evaluator on a DEF and returns overflow regions), timing_paths (runs read-only iSTA on a DEF and returns worst paths with scope_instances). Use top_n=0 for full grid/batch history.",
 parameters: p({ workdir: { type: "string", required: true }, design: { type: "string" }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" }, bin_cnt: { type: "integer" } }),
 output: out(),
 execute: async (args) => {
@@ -213,7 +228,8 @@ if (args.kind === "longnets") return toolbox(["longnets", "--workdir", resolve(a
 if (args.kind === "unstable") return toolbox(["unstable", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, "--top-n", String(args.top_n ?? 5)]);
 if (args.kind === "trajectory") return toolbox(["trajectory", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 0)]);
 if (args.kind === "congestion_hotspots") { if (!args.design) return asJson({ ok: false, reason: "congestion_hotspots requires design" }); return asJson(await runtime.congestionObserve(args.design, args.workdir, args.def_path, args.top_n, args.bin_cnt, args.foundry_dir)); }
-throw new Error("ieda_gp_observe: kind must be status|checkpoints|grid|hotspots|longnets|unstable|trajectory|congestion_hotspots");
+if (args.kind === "timing_paths") { if (!args.design) return asJson({ ok: false, reason: "timing_paths requires design" }); return asJson(await runtime.timingObserve(args.design, args.workdir, args.def_path, args.top_n, args.foundry_dir)); }
+throw new Error("ieda_gp_observe: kind must be status|checkpoints|grid|hotspots|longnets|unstable|trajectory|congestion_hotspots|timing_paths");
 }
 }));
 
