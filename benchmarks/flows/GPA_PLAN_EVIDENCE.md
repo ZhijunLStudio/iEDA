@@ -714,3 +714,24 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   证明 solver 目标与 plain RUDY evaluator 需要进一步统一。
   目前保留 level2 作为可复现的 solver knob，
   level1 仍是 plain RUDY Pareto 上更安全的点。
+
+## Round 12：congestion_effort=3（plain RUDY solver 目标）
+
+- 新增 congestion_effort=3：
+  - solver 的 RUDY demand 用 plain RUDY weight（无 LUT 表），
+    与 ieda_gp_verify metrics(congestion_model=rudy) 一致；
+  - 保留 Gaussian blur 以维持数值稳定；
+  - peak-bin gradient penalty factor=0.1。
+- Headless 验证：
+  - start td0.5/to0.1/cong3, 600 iters：
+    ok=true, target_reached, end_iteration=420,
+    hpwl=6417520, overflow=0.0998012, route_util=1.61169。
+- 同 evaluator（plain RUDY）：
+  cong3 td0.5/to0.1：
+    HPWL 6569824, rutil 2.388049, bins 587, rsum 160.233107；
+  对比 level1 B：
+    HPWL 6595040, rutil 2.344350, bins 577, rsum 156.91。
+- 结论：
+  - level3 显著降低 HPWL 且 bins/rsum 居中；
+  - plain peak 仍以 level1 B 为最低；
+  - 三种 effort 都已成为可复现、可 restore 的点工具旋钮。
