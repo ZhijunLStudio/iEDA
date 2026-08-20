@@ -74,7 +74,7 @@ def split_def_blocks(section_text):
     blocks = []
     cur = None
     for line in section_text.splitlines():
-        if re.match(r"\s*-\s+", line):
+        if re.match(r"\s*-+\s+", line):
             if cur is not None:
                 blocks.append(cur)
             cur = [line]
@@ -95,7 +95,7 @@ def parse_def(path, macros):
     section = text[text.find("COMPONENTS") : text.find("END COMPONENTS")]
     for block in split_def_blocks(section):
         joined = " ".join(block)
-        mn = re.match(r"\s*-\s+(\S+)\s+(\S+)", joined)
+        mn = re.match(r"\s*-+\s+(\S+)\s+(\S+)", joined)
         if not mn:
             continue
         name = mn.group(1).replace("\\/", "/")
@@ -109,7 +109,7 @@ def parse_def(path, macros):
     section = text[text.find("PINS") : text.find("END PINS")]
     for block in split_def_blocks(section):
         joined = " ".join(block)
-        mn = re.match(r"\s*-\s+(\S+)\s+", joined)
+        mn = re.match(r"\s*-+\s+(\S+)\s+", joined)
         if not mn:
             continue
         mp = re.search(r"(?:PLACED|FIXED)\s*\(\s*([-\d]+)\s+([-\d]+)\s*\)\s*([A-Z]+)", joined)
@@ -117,7 +117,9 @@ def parse_def(path, macros):
             pins[mn.group(1)] = (int(mp.group(1)), int(mp.group(2)), mp.group(3))
 
     # NETS: keep only connectivity lines, strip routed geometry.
-    section = text[text.find("NETS") : text.find("END NETS")]
+    nets_start = re.search(r"\nNETS\s", text)
+    nets_end = text.find("END NETS")
+    section = text[nets_start.end() - len("NETS") - 1 : nets_end] if nets_start and nets_end > nets_start.end() else text[text.find("\nNETS ") : nets_end]
     cleaned = []
     for line in section.splitlines():
         s = line.strip()

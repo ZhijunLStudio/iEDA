@@ -100,13 +100,13 @@ def density(def_path: Path, case_root: Path, grid_size: int, foundry_dir: Path):
     return result
 
 
-def timing(def_path: Path, case_root: Path):
+def timing(def_path: Path, case_root: Path, foundry_dir: Path):
     work = Path(tempfile.mkdtemp(prefix="gp_timing_eval_"))
     env = __import__("os").environ.copy()
     env.update({"INPUT_DEF": str(def_path), "RESULT_DIR": str(work),
                 "CONFIG_DIR": str(case_root / "iEDA_config"),
                 "TCL_SCRIPT_DIR": str(case_root / "script"),
-                "FOUNDRY_DIR": str(REPO / "scripts/foundry/sky130"),
+                "FOUNDRY_DIR": str(foundry_dir),
                 "SDC_FILE": str(next(case_root.glob("*.sdc")))})
     p = run([str(IEDa_BIN), "-script", str(TIMING_EVAL_TCL)], env=env, timeout=1800)
     tj = work / "timing_result.json"
@@ -145,7 +145,7 @@ def main():
         entry = {"def": str(path), "hpwl": hpwl(path, macro_lef),
                  "density": density(path, case_root, args.grid_size, Path(args.foundry_dir))}
         if not args.no_timing and TIMING_EVAL_TCL.exists():
-            entry["timing"] = timing(path, case_root)
+            entry["timing"] = timing(path, case_root, Path(args.foundry_dir))
         out["placements"][name] = entry
         print(json.dumps({"design": args.design, "placement": name, **entry}, indent=2), flush=True)
     if args.out:
