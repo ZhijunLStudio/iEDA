@@ -34,23 +34,21 @@ def instance_of(node_name: str):
 
 
 def extract_paths(report: dict, max_paths: int):
-    summary = report.get("summary") or []
-    detail = report.get("detail") or []
     paths = []
-    for meta, path in zip(summary, detail[:max_paths]):
+    for path in report.get("paths", [])[:max_paths]:
         instances = []
-        for node in path.get("detail") or []:
+        for node in path.get("nodes") or []:
             inst = instance_of(node.get("name", ""))
             if inst and inst not in instances:
                 instances.append(inst)
+        nodes = path.get("nodes") or []
         paths.append({
-            "endpoint": meta.get("endpoint"),
-            "delay_type": meta.get("delay_type"),
-            "slack": meta.get("slack"),
-            "path_delay": meta.get("path_delay"),
-            "freq_mhz": meta.get("freq"),
-            "start_point": path.get("start_point"),
-            "end_point": path.get("end_point"),
+            "endpoint": path.get("endpoint"),
+            "slack": path.get("slack"),
+            "arrive_time": path.get("arrive_time"),
+            "require_time": path.get("require_time"),
+            "start_point": nodes[0].get("name") if nodes else None,
+            "end_point": nodes[-1].get("name") if nodes else None,
             "instance_count": len(instances),
             "scope_instances": ",".join(instances),
             "instances": instances,
@@ -74,6 +72,7 @@ def main():
     if not sdc.exists():
         sdc = next(case_root.glob("*.sdc"))
     tcl = work / "gp_timing_paths.tcl"
+    path_json = work / "timing_paths.json"
     tcl.write_text(
         "if {![info exists ::env(INPUT_DEF)] || $::env(INPUT_DEF) eq \"\"} { error \"Missing INPUT_DEF\" }\n"
         "if {![info exists ::env(RESULT_DIR)] || $::env(RESULT_DIR) eq \"\"} { error \"Missing RESULT_DIR\" }\n"
@@ -84,8 +83,8 @@ def main():
         "source $::env(TCL_SCRIPT_DIR)/DB_script/db_init_sdc.tcl\n"
         "source $::env(TCL_SCRIPT_DIR)/DB_script/db_init_lef.tcl\n"
         "def_init -path $::env(INPUT_DEF)\n"
-        "run_sta\n"
-        f"report_timing -max_path {args.max_path} -json\n"
+        "run_timing_eval -eval_output_path $::env(RESULT_DIR) -routing_type HPWL "
+        f"-path_json {shlex.quote(str(path_json))} -max_path {args.max_path}\n"
         "flow_exit\n")
     env = os.environ.copy()
     env.update({"INPUT_DEF": str(args.def_path), "RESULT_DIR": str(work),
@@ -99,22 +98,30 @@ def main():
         print(json.dumps({"ok": False, "rc": proc.returncode, "stderr_tail": proc.stderr[-2000:]}))
         return 1
     report = None
-    sta_dir = work / "sta"
-    if sta_dir.exists():
-        for candidate in sta_dir.glob("*.rpt.json"):
-            try:
-                report = json.loads(candidate.read_text())
-                break
-            except Exception:
-                continue
+    if path_json.exists():
+        try:
+            report = json.loads(path_json.read_text())
+        except Exception:
+            report = None
     if report is None:
-        print(json.dumps({"ok": False, "reason": "iSTA ran but produced no .rpt.json", "workdir": str(work)}))
+        print(json.dumps({"ok": False, "reason": "timing evaluator ran but produced no timing_paths.json", "workdir": str(work)}))
         return 1
+    timing_summary = {}
+    tj = work / "timing_result.json"
+    if tj.exists():
+        try:
+            data = json.loads(tj.read_text())
+            clock = (data.get("HPWL", {}).get("clock_timings") or [{}])
+            timing_summary = clock[0] if clock else {}
+        except Exception:
+            pass
     paths = extract_paths(report, args.max_path)
     print(json.dumps({
         "ok": True,
+        "evaluator": "run_timing_eval HPWL",
         "def": str(Path(args.def_path).resolve()),
-        "report": str(sta_dir),
+        "timing_summary": timing_summary,
+        "path_json": str(path_json),
         "path_count": len(paths),
         "paths": paths,
         "cost": {"elapsed_s": -1.0, "cacheable": True},

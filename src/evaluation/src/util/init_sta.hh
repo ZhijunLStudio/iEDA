@@ -236,6 +236,8 @@ class InitSTA
   void saveTimingPowerBenchmark();
   void evalTiming(const std::string& routing_type, const bool& rt_done = false);
 
+  std::string getTimingPathsJson(unsigned max_path) const;
+
   std::map<std::string, std::map<std::string, std::map<std::string, double>>> getTiming() const { return _timing; }
   std::map<std::string, std::map<std::string, double>> getPower() const { return _power; }
 

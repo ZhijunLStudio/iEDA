@@ -31,6 +31,7 @@
 #include "density_io.h"
 #include "congestion_api.h"
 #include "init_egr.h"
+#include "init_sta.hh"
 
 using namespace ieval;
 
@@ -77,9 +78,13 @@ CmdEvalTimingRun::CmdEvalTimingRun(const char* cmd_name) : TclCmd(cmd_name)
   auto* path_option = new TclStringOption(TCL_OUTPUT_PATH, 1, nullptr);
   auto* output_path_option = new TclStringOption("-eval_output_path", 1, nullptr);
   auto* route_type_option = new TclStringOption("-routing_type", 1, "HPWL");
+  auto* path_json_option = new TclStringOption("-path_json", 1, nullptr);
+  auto* max_path_option = new TclIntOption("-max_path", 1, 3);
   addOption(output_path_option);
   addOption(path_option);
   addOption(route_type_option);
+  addOption(path_json_option);
+  addOption(max_path_option);
 }
 
 unsigned CmdEvalTimingRun::check()
@@ -101,9 +106,13 @@ unsigned CmdEvalTimingRun::exec()
   TclOption* path_option = getOptionOrArg(TCL_OUTPUT_PATH);
   TclOption* output_path_option = getOptionOrArg("-eval_output_path");
   TclOption* route_type_option = getOptionOrArg("-routing_type");
+  TclOption* path_json_option = getOptionOrArg("-path_json");
+  TclOption* max_path_option = getOptionOrArg("-max_path");
   const auto path = path_option->getStringVal() != nullptr ? path_option->getStringVal() : "";
   const auto output_path = output_path_option->getStringVal() != nullptr ? output_path_option->getStringVal() : "";
   const auto route_type = route_type_option->getStringVal() != nullptr ? route_type_option->getStringVal() : "HPWL";
+  const std::string path_json = path_json_option->getStringVal() != nullptr ? path_json_option->getStringVal() : "";
+  const auto max_path = max_path_option->getIntVal();
   std::cout << "[Evaluate Timing] path = " << path << std::endl;
   std::cout << "[Evaluate Timing] output_path = " << output_path << std::endl;
   std::cout << "[Evaluate Timing] route_type = " << route_type << std::endl;
@@ -111,6 +120,14 @@ unsigned CmdEvalTimingRun::exec()
   EvalTiming::runTimingEval(route_type);
   EvalTiming::setOutputPath(output_path);
   EvalTiming::printTimingResult();
+  if (!path_json.empty()) {
+    std::ofstream path_file(path_json);
+    if (path_file.is_open()) {
+      path_file << ieval::InitSTA::getInst()->getTimingPathsJson(static_cast<unsigned>(max_path)) << std::endl;
+      path_file.close();
+      std::cout << "Timing path JSON saved to " << path_json << std::endl;
+    }
+  }
   std::cout << path << std::endl;
 
   return 1;

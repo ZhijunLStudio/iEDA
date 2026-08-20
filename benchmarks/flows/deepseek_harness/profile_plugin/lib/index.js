@@ -75,7 +75,7 @@ function commonResultSchema() {
 function asJson(value) {
 	return value;
 }
-const GP_TOOL_VERSION = "2";
+const GP_TOOL_VERSION = "3";
 async function cachedRun(workdir, key, source, runner, budget = 128) {
 const dir = resolve(workdir);
 mkdirSync(dir, { recursive: true });
@@ -216,7 +216,7 @@ return asJson(await runtime.agent(args.design, args.workdir, ["local_run", "--it
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_observe",
-description: "Read EDA-side facts (no side effects). kind: status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history), congestion_hotspots (runs read-only RUDY evaluator on a DEF and returns overflow regions), timing_paths (runs read-only iSTA on a DEF and returns worst paths with scope_instances). Use top_n=0 for full grid/batch history.",
+description: "Read EDA-side facts (no side effects). kind: status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history), congestion_hotspots (runs read-only RUDY evaluator on a DEF and returns overflow regions), timing_paths (runs the SAME run_timing_eval HPWL evaluator used by verify metrics, and returns worst paths with scope_instances). Use top_n=0 for full grid/batch history.",
 parameters: p({ workdir: { type: "string", required: true }, design: { type: "string" }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" }, bin_cnt: { type: "integer" } }),
 output: out(),
 execute: async (args) => {
