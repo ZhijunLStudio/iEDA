@@ -255,7 +255,7 @@ parameters: p({ design: { type: "string", required: true }, workdir: { type: "st
 output: out(),
 execute: async (args) => {
 const k = args.kind;
-if (k === "start") return agent(args, ["start", "--iterations", String(args.iterations ?? 20), "--seed", String(args.seed ?? 1000), "--random-init", String(args.random_init ?? 1), "--seed-anchor-strength", String(args.seed_anchor_strength ?? 0), "--target-density", String(args.target_density ?? -1), ...args.init_density_penalty != null ? ["--init-density-penalty", String(args.init_density_penalty)] : [], ...args.min_phi_coef != null ? ["--min-phi-coef", String(args.min_phi_coef)] : [], ...args.max_phi_coef != null ? ["--max-phi-coef", String(args.max_phi_coef)] : [], "--congestion-effort", String(args.congestion_effort ?? -1), "--report-route-util", String(args.report_route_util ?? 1)]);
+if (k === "start") return agent(args, ["start", "--iterations", String(args.iterations ?? 20), "--seed", String(args.seed ?? 1000), "--random-init", String(args.random_init ?? 1), "--seed-anchor-strength", String(args.seed_anchor_strength ?? 0), "--target-density", String(args.target_density ?? -1), ...args.init_density_penalty != null ? ["--init-density-penalty", String(args.init_density_penalty)] : [], ...args.min_phi_coef != null ? ["--min-phi-coef", String(args.min_phi_coef)] : [], ...args.max_phi_coef != null ? ["--max-phi-coef", String(args.max_phi_coef)] : [], "--congestion-effort", String(args.congestion_effort ?? -1), "--overflow-penalty", String(args.overflow_penalty ?? 0), "--report-route-util", String(args.report_route_util ?? 1)]);
 if (k === "advance") return agent(args, ["advance", "--iterations", String(args.iterations ?? 100), "--report-route-util", String(args.report_route_util ?? 1), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (k === "candidate") return agent(args, ["candidate", "--iterations", String(args.iterations ?? 20), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (k === "local_run") return agent(args, ["local_run", "--iterations", String(args.iterations ?? 10), ...scopeArgs(args), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
@@ -265,7 +265,7 @@ if (k === "apply_anchor") {
 return asJson({ ok: false, unsupported: true, reason: "per-cell anchor is not implemented; use apply_freeze for strength=1 batch freeze" });
 }
 if (k === "apply_region_density") return agent(args, ["local_run", "--iterations", String(args.iterations ?? 10), "--scope", "region", "--scope-region", args.region, "--scope-density-target", String(args.scope_density_target ?? 1), "--scope-density-ratio", "1", "--halo-hops", String(args.halo_hops ?? 1), "--halo-coeff", String(args.halo_coeff ?? 0.5), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
-throw new Error("ieda_gp_run: kind must be start|advance|candidate|local_run|apply_freeze|apply_region_density|apply_anchor");
+throw new Error("ieda_gp_run: kind must be start|advance|candidate|local_run|apply_freeze|apply_region_density|local_restart|apply_anchor");
 }
 }));
 
