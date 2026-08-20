@@ -778,3 +778,22 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
     不要用 start(input_def=parent DEF) relinearize；
   - asap7 上 start-from-parent 仍可能 early miss，
     而 advance 稳定收敛。
+
+## Round 16：跨 PDK advance 路径验证
+
+- nangate45 parent300 -> advance 600：
+  target_reached，301-393 iters；
+  导出 DEF HPWL 5837679（raw 5850034）；
+  rutil 5.155，bins 284。
+  对比 parent300 DEF HPWL 4472593，rutil 2.769，bins 457。
+  parent（不可行 mid-state）在 DEF 指标上仍优于 feasible advance 点。
+- ihp130 parent400 -> advance 600：
+  target_reached，401-473 iters；
+  DEF HPWL 619921396，rutil 2.651，bins 1728。
+  旧 parent DEF 原为 unplaced，重新 accept 后 HPWL 580534124，
+  rutil 3.168，bins 1551。
+- 结论：
+  - advance DEF 导出修复在 nangate/ihp130 同样有效；
+  - feasible 点不一定 Pareto 优于不可行 parent，
+    工具必须同时返回 feasibility 和同一 evaluator DEF 指标，
+    agent 才能正确取舍（当前 status 已返回两者）。
