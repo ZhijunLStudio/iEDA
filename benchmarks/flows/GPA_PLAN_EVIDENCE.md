@@ -823,3 +823,16 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
     待下一轮用更长 timeout 重跑。
 - 说明 local_restart 的信息契约（HPWL 同单位）在
   sky130/nangate45/ihp130 成立。
+
+## Round 20：contract 全部通过 + headless registry foundry
+
+- gp_tool_contract_test 单 case 全绿：
+  - s1238：ok=true；
+  - nangate45_gcd：ok=true；
+  - ihp130_gcd：ok=true；
+  - asap7_aes：ok=true（r19 后台 3600s timeout 完成）。
+- headless 验证 asap7 foundry registry：
+  - ieda_gp_observe congestion_hotspots design=asap7_aes
+    不显式传 foundry_dir；
+  - ok=true，model=rudy，rutil=1.696979；
+  - 确认从 registry 解析到真实 asap7 foundry。
