@@ -797,3 +797,17 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - feasible 点不一定 Pareto 优于不可行 parent，
     工具必须同时返回 feasibility 和同一 evaluator DEF 指标，
     agent 才能正确取舍（当前 status 已返回两者）。
+
+## Round 17：不可行 parent 的局部修复前沿 + 回归
+
+- nangate45 parent300 局部 region 全部 diverge（target_density
+  被夹到 1.001，physical utilization 接近 1），
+  说明该设计没有密度余量，需要 HPWL-first 且不能靠 local GP。
+- ihp130 parent400 局部动作：
+  - region plain：HPWL 580780561，rutil 3.0548，bins 1552；
+  - region td0.8：HPWL 580892926，rutil 3.0232，bins 1553；
+  - hotspot 0.2：HPWL 593333042，rutil 3.1018，bins 1623。
+  都只是 Pareto 移动，未形成 dominant 点。
+- 回归：
+  - ipl_gp_session_test --scenario validate：rc=0；
+  - gp_tool_contract_test 超时被打断，待下一轮重跑。
