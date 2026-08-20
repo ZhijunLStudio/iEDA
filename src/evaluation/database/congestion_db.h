@@ -15,8 +15,14 @@
 namespace ieval {
 
 struct CongestionValue {
-    double max_congestion;
-    double total_congestion;
+    double max_congestion = 0.0;
+    double total_congestion = 0.0;
+    double max_h_utilization = 0.0;
+    double max_v_utilization = 0.0;
+    double max_utilization = 0.0;
+    double avg_utilization = 0.0;
+    int32_t overflow_bin_count = 0;
+    double overflow_util_sum = 0.0;
 };
 
 struct CongestionPin

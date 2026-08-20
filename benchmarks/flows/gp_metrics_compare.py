@@ -91,6 +91,12 @@ def density(def_path: Path, case_root: Path, grid_size: int, foundry_dir: Path):
             cdata = json.loads(cj.read_text())
             result["rudy_demand_max"] = cdata.get("rudy_demand_max")
             result["rudy_demand_total"] = cdata.get("rudy_demand_total")
+            result["rudy_utilization_max"] = cdata.get("rudy_utilization_max")
+            result["rudy_utilization_avg"] = cdata.get("rudy_utilization_avg")
+            result["rudy_utilization_h_max"] = cdata.get("rudy_utilization_h_max")
+            result["rudy_utilization_v_max"] = cdata.get("rudy_utilization_v_max")
+            result["rudy_overflow_bin_count"] = cdata.get("rudy_overflow_bin_count")
+            result["rudy_overflow_util_sum"] = cdata.get("rudy_overflow_util_sum")
             result["congestion_model"] = cdata.get("model")
             result["congestion_bin_cnt"] = (cdata.get("bin_cnt_x"), cdata.get("bin_cnt_y"))
         except Exception:

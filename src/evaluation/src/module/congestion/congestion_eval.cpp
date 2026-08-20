@@ -19,6 +19,8 @@
 #include <stdexcept>
 
 #include "general_ops.h"
+#include "IdbLayer.h"
+#include "IdbTrackGrid.h"
 #include "idm.h"
 #include "init_egr.h"
 #include "init_idb.h"
@@ -110,6 +112,34 @@ std::optional<std::vector<int32_t>> readOverflowValues(const std::string& rt_dir
     return std::nullopt;
   }
   return values;
+}
+
+std::pair<int, int> routeTrackCapacities()
+{
+  int route_cap_h = 0;
+  int route_cap_v = 0;
+  auto* layout = dmInst->get_idb_layout();
+  auto* layers = layout ? layout->get_layers() : nullptr;
+  if (!layers) {
+    return {route_cap_h, route_cap_v};
+  }
+  const int route_layer_num = layers->get_routing_layers_number();
+  for (int i = 0; i < route_layer_num; ++i) {
+    auto* layer = dynamic_cast<IdbLayerRouting*>(layers->find_routing_layer(i));
+    if (!layer) {
+      continue;
+    }
+    auto* prefer_track = layer->get_prefer_track_grid();
+    if (!prefer_track) {
+      continue;
+    }
+    if (layer->is_horizontal()) {
+      route_cap_h += static_cast<int>(prefer_track->get_track_num());
+    } else {
+      route_cap_v += static_cast<int>(prefer_track->get_track_num());
+    }
+  }
+  return {route_cap_h, route_cap_v};
 }
 
 std::optional<std::string> overflowFileName(const std::string& stage, const std::string& overflow_type)
@@ -925,9 +955,18 @@ CongestionValue CongestionEval::calRUDY(int bin_cnt_x, int bin_cnt_y, const std:
   CongestionNets nets = getCongestionNets();
 
   std::vector<std::vector<double>> density_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
+  std::vector<std::vector<double>> hor_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
+  std::vector<std::vector<double>> ver_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
 
   double grid_size_x = static_cast<double>(region.ux - region.lx) / bin_cnt_x;
   double grid_size_y = static_cast<double>(region.uy - region.ly) / bin_cnt_y;
+
+  const auto [route_cap_h, route_cap_v] = routeTrackCapacities();
+  // Same supply model as the global placer's RUDY congestion observation:
+  // horizontal demand is multiplied by (bin_height / horizontal tracks per
+  // bin) and compared against the bin area as capacity.
+  const double wire_space_h = route_cap_h > 0 ? grid_size_y / (static_cast<double>(route_cap_h) / bin_cnt_y) : 0.0;
+  const double wire_space_v = route_cap_v > 0 ? grid_size_x / (static_cast<double>(route_cap_v) / bin_cnt_x) : 0.0;
 
   for (const auto& net : nets) {
     int32_t start_row = bin_cnt_y - 1;
@@ -993,7 +1032,11 @@ CongestionValue CongestionEval::calRUDY(int bin_cnt_x, int bin_cnt_y, const std:
           overlap_area = (overlap_ux - overlap_lx) * (overlap_uy - overlap_ly);
         }
 
-        density_grid[row][col] += overlap_area * (hor_rudy + ver_rudy) / grid_area;
+        const double hor_density = overlap_area * hor_rudy / grid_area;
+        const double ver_density = overlap_area * ver_rudy / grid_area;
+        density_grid[row][col] += hor_density + ver_density;
+        hor_grid[row][col] += hor_density;
+        ver_grid[row][col] += ver_density;
       }
     }
   }
@@ -1016,18 +1059,46 @@ CongestionValue CongestionEval::calRUDY(int bin_cnt_x, int bin_cnt_y, const std:
 
   double max_congestion = 0.0;
   double total_congestion = 0.0;
-  
-  for (const auto& row : density_grid) {
-    for (double congestion : row) {
+  double max_h_utilization = 0.0;
+  double max_v_utilization = 0.0;
+  double max_utilization = 0.0;
+  double total_utilization = 0.0;
+  int32_t overflow_bin_count = 0;
+  double overflow_util_sum = 0.0;
+
+  const double demand_scale = 4.0;
+  for (size_t row = 0; row < density_grid.size(); ++row) {
+    for (size_t col = 0; col < density_grid[row].size(); ++col) {
+      const double congestion = density_grid[row][col];
       total_congestion += congestion;
       max_congestion = std::max(max_congestion, congestion);
+
+      const double h_util = hor_grid[row][col] * wire_space_h * demand_scale;
+      const double v_util = ver_grid[row][col] * wire_space_v * demand_scale;
+      const double util = std::max(h_util, v_util);
+      max_h_utilization = std::max(max_h_utilization, h_util);
+      max_v_utilization = std::max(max_v_utilization, v_util);
+      max_utilization = std::max(max_utilization, util);
+      total_utilization += util;
+      if (util > 1.0) {
+        overflow_bin_count += 1;
+        overflow_util_sum += util - 1.0;
+      }
     }
   }
-  
+
   CongestionValue result;
   result.max_congestion = max_congestion;
   result.total_congestion = total_congestion;
-  
+  result.max_h_utilization = max_h_utilization;
+  result.max_v_utilization = max_v_utilization;
+  result.max_utilization = max_utilization;
+  result.avg_utilization = density_grid.empty() || density_grid.front().empty()
+                               ? 0.0
+                               : total_utilization / static_cast<double>(density_grid.size() * density_grid.front().size());
+  result.overflow_bin_count = overflow_bin_count;
+  result.overflow_util_sum = overflow_util_sum;
+
   return result;
 
 }
@@ -1038,9 +1109,18 @@ CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const s
   CongestionNets nets = getCongestionNets();
 
   std::vector<std::vector<double>> density_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
+  std::vector<std::vector<double>> hor_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
+  std::vector<std::vector<double>> ver_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
 
   double grid_size_x = static_cast<double>(region.ux - region.lx) / bin_cnt_x;
   double grid_size_y = static_cast<double>(region.uy - region.ly) / bin_cnt_y;
+
+  const auto [route_cap_h, route_cap_v] = routeTrackCapacities();
+  // Same supply model as the global placer's RUDY congestion observation:
+  // horizontal demand is multiplied by (bin_height / horizontal tracks per
+  // bin) and compared against the bin area as capacity.
+  const double wire_space_h = route_cap_h > 0 ? grid_size_y / (static_cast<double>(route_cap_h) / bin_cnt_y) : 0.0;
+  const double wire_space_v = route_cap_v > 0 ? grid_size_x / (static_cast<double>(route_cap_v) / bin_cnt_x) : 0.0;
 
   for (const auto& net : nets) {
     int32_t start_row = bin_cnt_y - 1;
@@ -1148,18 +1228,46 @@ CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const s
 
   double max_congestion = 0.0;
   double total_congestion = 0.0;
-  
-  for (const auto& row : density_grid) {
-    for (double congestion : row) {
+  double max_h_utilization = 0.0;
+  double max_v_utilization = 0.0;
+  double max_utilization = 0.0;
+  double total_utilization = 0.0;
+  int32_t overflow_bin_count = 0;
+  double overflow_util_sum = 0.0;
+
+  const double demand_scale = 4.0;
+  for (size_t row = 0; row < density_grid.size(); ++row) {
+    for (size_t col = 0; col < density_grid[row].size(); ++col) {
+      const double congestion = density_grid[row][col];
       total_congestion += congestion;
       max_congestion = std::max(max_congestion, congestion);
+
+      const double h_util = hor_grid[row][col] * wire_space_h * demand_scale;
+      const double v_util = ver_grid[row][col] * wire_space_v * demand_scale;
+      const double util = std::max(h_util, v_util);
+      max_h_utilization = std::max(max_h_utilization, h_util);
+      max_v_utilization = std::max(max_v_utilization, v_util);
+      max_utilization = std::max(max_utilization, util);
+      total_utilization += util;
+      if (util > 1.0) {
+        overflow_bin_count += 1;
+        overflow_util_sum += util - 1.0;
+      }
     }
   }
-  
+
   CongestionValue result;
   result.max_congestion = max_congestion;
   result.total_congestion = total_congestion;
-  
+  result.max_h_utilization = max_h_utilization;
+  result.max_v_utilization = max_v_utilization;
+  result.max_utilization = max_utilization;
+  result.avg_utilization = density_grid.empty() || density_grid.front().empty()
+                               ? 0.0
+                               : total_utilization / static_cast<double>(density_grid.size() * density_grid.front().size());
+  result.overflow_bin_count = overflow_bin_count;
+  result.overflow_util_sum = overflow_util_sum;
+
   return result;
 }
 

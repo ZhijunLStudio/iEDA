@@ -244,13 +244,19 @@ unsigned CmdEvalCongestionRun::exec()
     value = ieval::CongestionAPI::getInst()->rudyCongestion(bin_cnt_x, bin_cnt_y, output_path);
   }
 
-  // CongestionEval::calRUDY currently computes RUDY demand density
-  // (sum of per-net HPWL rectangle demand / grid area) WITHOUT dividing by
-  // routing supply. Name the fields demand, not congestion/utilization.
+  // calRUDY reports both demand density and utilization against the same
+  // track-count supply model the global placer uses for its route-util
+  // observation. Utilization > 1 means a bin is over its routing supply.
   const std::string json = "{\"model\":\"" + model + "\",\"bin_cnt_x\":" + std::to_string(bin_cnt_x)
                            + ",\"bin_cnt_y\":" + std::to_string(bin_cnt_y)
                            + ",\"rudy_demand_max\":" + std::to_string(value.max_congestion)
                            + ",\"rudy_demand_total\":" + std::to_string(value.total_congestion)
+                           + ",\"rudy_utilization_max\":" + std::to_string(value.max_utilization)
+                           + ",\"rudy_utilization_avg\":" + std::to_string(value.avg_utilization)
+                           + ",\"rudy_utilization_h_max\":" + std::to_string(value.max_h_utilization)
+                           + ",\"rudy_utilization_v_max\":" + std::to_string(value.max_v_utilization)
+                           + ",\"rudy_overflow_bin_count\":" + std::to_string(value.overflow_bin_count)
+                           + ",\"rudy_overflow_util_sum\":" + std::to_string(value.overflow_util_sum)
                            + ",\"save_path\":\"" + output_path + "\"}";
   if (!output_path.empty()) {
     const std::string result_file = output_path + "/congestion_result.json";
