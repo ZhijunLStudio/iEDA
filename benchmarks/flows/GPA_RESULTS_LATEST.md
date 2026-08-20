@@ -85,9 +85,9 @@ Innovus DEF 已用 `defOut -netlist -unplaced` 重新导出，因此 density / R
 | peak density | 0.468640 | 0.462444 | -1.322% | 0.236370 | +95.65% |
 | RUDY max | 0.081418 | 0.080320 | -1.349% | 0.033026 | +143.2% |
 | RUDY total | 6.929867 | 6.906416 | -0.338% | 12.555375 | -45.00% |
-| setup WNS (ns) | -2146.161 | -2145.492 | 变好 0.669 | -2143.147 | 变差 2.345 |
-| hold WNS (ns) | -2144.575 | -2145.353 | 变差 0.778 | -2144.099 | 变差 1.254 |
-| freq (MHz) | 0.465772 | 0.465918 | +0.031% | 0.466427 | -0.109% |
+| setup WNS (ns) | invalid* | invalid* | - | invalid* | - |
+| hold WNS (ns) | invalid* | invalid* | - | invalid* | - |
+| freq (MHz) | invalid* | invalid* | - | invalid* | - |
 
 ### ihp130_gcd
 
