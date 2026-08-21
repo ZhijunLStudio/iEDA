@@ -1095,3 +1095,19 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   overflow_target_miss 时 verdict=right_better（保留 parent/global）。
 - 最新 s1238 会话仍在跑，当前 24 calls，
   失败均为模型编排（空 workdir、region 不 overlap、缺 region）。
+
+## 新目标 Round 11：观察缓存陈旧性 bug
+
+- 直接验证时发现：
+  之前对空 workdir 调 status 的失败结果被 cachedRun 缓存，
+  后来 full 已经写完 checkpoint，
+  再调 status 仍返回 cached=true 的旧失败。
+- 已修复：
+  1. toolbox 类观察命令（status/checkpoints/grid/hotspots/
+     trajectory/propose_*）不再缓存；
+  2. congestion_hotspots / timing_paths 的缓存 key
+     加入实际 DEF 路径 + mtime，
+     placement.def 变化后缓存自动失效。
+- 回归：
+  同一 workdir 再次 status 返回当前真实状态：
+  iteration=443、effective_config、peak_bin_density 等。
