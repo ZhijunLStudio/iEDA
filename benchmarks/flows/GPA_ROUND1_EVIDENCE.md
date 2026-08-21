@@ -148,6 +148,38 @@ checkpoint=start 等），无 traceback。
 - HPWL/WNS/hold/freq 超过两个 baseline；congestion 受结构性
   fixed-macro 角落聚集限制，会话记录 Pareto 备选点（HPWL 17.4M/20 bins/max 5.76）。
 
+### Round 2 新增工具修复
+
+- **context clobbering bug（重要）**：插件对所有 run 命令都传
+  record.input_def/pl_config，导致从 Innovus DEF 起步的会话在下一次
+  restore/local_run 时被 registry 默认 DEF 覆盖 → "config fingerprint or
+  design topology mismatch"。已修：只有 start 建立 context，其余命令继承
+  workdir 保存的 input_def/config。修复后 ihp130 timing 会话的
+  local_run（32 active + 1321 halo）成功执行。
+- local timing-path repair 实测：WNS -1.148 → -1.156（微劣），
+  hold +0.302 不变；印证 Round-25 结论：scope=instances 局部动作对
+  ihp130 关键路径作用有限，timing 主要靠 GP 内 timing_effort 权重。
+- timing 权重更新计数修正（stdout+stderr）。
+- opt_overflow_list 扩展到 [0.10..0.30] 六档；实测 6 次更新后
+  WNS -1.196（比 4 档的 -1.148 差）→ 更新次数不是越多越好，
+  说明权重更新的"最后几档"在当前 hold guard 下反向。
+
+### ihp130 timing 配置扫描（timing=1，Innovus DEF 起点，seed=42）
+
+| 配置 | defHPWL | RUDYmax | bins | rsum | WNS | freq |
+|---|---|---|---|---|---|---|
+| cong3, 4 档阈值, to=0.1, 440it | 444,180,470 | 1.551 | 782 | 132.08 | **-1.148** | **162.6** |
+| cong3, 6 档阈值, to=0.08, 457it | 446,410,740 | 1.584 | 776 | 129.0 | -1.196 | 161.4 |
+| cong1, 6 档, 388it | 443,195,931 | 1.711 | 847 | 157.14 | -1.154 | 162.5 |
+| cong2, 6 档, 468it | 446,866,310 | 1.714 | 772 | 132.18 | -1.223 | 160.7 |
+| Innovus | 502,815,015 | 2.171 | 1099 | 245.28 | -1.024 | 166.0 |
+
+- cong3 + 4 档阈值（[0.15..0.30]）仍是 best：HPWL + 3 项 congestion 全超
+  Innovus，WNS 距 Innovus 0.124ns、freq 差 3.4MHz。
+- 6 档阈值/更多更新反而劣化 WNS（hold guard 反向效应）；
+  cong1/cong2 的拥塞差、timing 也差。
+- 正在跑 seed=1000/2000 验证 trajectory 变化。
+
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
