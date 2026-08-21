@@ -386,6 +386,19 @@ checkpoint=start 等），无 traceback。
   (2.056,142.06) 与 (2.393,124.29) 是当前工具可达的 Pareto 两端，
   Innovus (2.035,133.02) 严格优于两者——s1238 剩余 1%/7% 缺口
   为求解器级能力，点工具层已穷尽。
+## 4.14 Round 9：local_congestion nets 模式 + s1238 强吸引子终证
+
+- 新工具：local_congestion scope=instances 模式——用缓存 map 里的
+  congestion_nets（穿过热 bin 的 net 的实例锥）做 scope=instances 疏散，
+  而不是搬热 bin 里那几只 cell；gp_congestion_observe 同步落盘
+  congestion_nets.json（提交 d126c9c）。
+- s1238 终证：nets 锥疏散、region 疏散、任意参数组合，从 anchor 族
+  任意近邻状态出发都确定性收敛到同一吸引子
+  （7,533,348 / 2.056 / 616 / 142.06，md5 级一致）；rsum-124 点
+  （2.393/570/124.29）只是该盆地的另一端点。Innovus (2.035, 133.02)
+  严格占优且不在可达盆内——s1238 的局部动作空间已穷尽。
+- asap7 gen-3 会话运行中（13+ 调用，正在用 local_congestion/
+  propose congestion 探索 anchor 族之外的组合）。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
