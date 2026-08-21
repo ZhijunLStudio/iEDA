@@ -266,18 +266,26 @@ def cmd_start(args: argparse.Namespace) -> int:
         cmd[-1] += f" -congestion_effort {args.congestion_effort}"
     if args.report_route_util:
         cmd[-1] += " -report_route_util 1"
-    timing_config = config
-    if getattr(args, "timing", 0) == 1:
+    run_config = config
+    wants_timing = getattr(args, "timing", 0) == 1
+    wants_bins = getattr(args, "bin_cnt", -1) > 0
+    if wants_timing or wants_bins:
         try:
             cfg_data = json.loads(config.read_text())
             pl = cfg_data.get("PL", cfg_data)
-            pl["is_timing_effort"] = 1
-            pl.setdefault("GP", {}).setdefault("Nesterov", {})["opt_overflow_list"] = [0.15, 0.20, 0.25, 0.30]
-            timing_config = workdir / "pl_timing_override.json"
-            timing_config.write_text(json.dumps(cfg_data, indent=2))
+            if wants_timing:
+                pl["is_timing_effort"] = 1
+                pl.setdefault("GP", {}).setdefault("Nesterov", {})["opt_overflow_list"] = [0.15, 0.20, 0.25, 0.30]
+            if wants_bins:
+                dens = pl.setdefault("GP", {}).setdefault("Density", {})
+                dens["is_adaptive_bin"] = 0
+                dens["bin_cnt_x"] = args.bin_cnt
+                dens["bin_cnt_y"] = args.bin_cnt
+            run_config = workdir / "pl_derived_config.json"
+            run_config.write_text(json.dumps(cfg_data, indent=2))
         except Exception:
-            timing_config = config
-    rc, out, err = run_ieda(workdir, case_root, foundry, timing_config, input_def, cmd, def_save=True)
+            run_config = config
+    rc, out, err = run_ieda(workdir, case_root, foundry, run_config, input_def, cmd, def_save=True)
     record = last_gp_line(out) or last_ledger(workdir)
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
@@ -292,13 +300,13 @@ def cmd_start(args: argparse.Namespace) -> int:
             f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(terminal_ckpt))}",
             "placer_run_gp -mode accept",
         ]
-        rc2, out2, err2 = run_ieda(workdir, case_root, foundry, timing_config, input_def, export_cmds, def_save=True)
+        rc2, out2, err2 = run_ieda(workdir, case_root, foundry, run_config, input_def, export_cmds, def_save=True)
         if rc2 != 0:
             print(json.dumps({"ok": False, "rc": rc2, "reason": "start finished but DEF re-export failed",
                               "stderr_tail": err2[-2000:]}))
             return 1
     extra = {"case_root": str(case_root), "input_def": str(input_def),
-             "config": str(timing_config), "foundry_dir": str(foundry)}
+             "config": str(run_config), "foundry_dir": str(foundry)}
     lef = resolve_lef(foundry, getattr(args, "lef", None) or state.get("lef"))
     if lef is not None:
         extra["lef"] = str(lef)
@@ -310,6 +318,8 @@ def cmd_start(args: argparse.Namespace) -> int:
     if getattr(args, "timing", 0) == 1:
         record["timing_effort"] = True
         record["timing_weight_updates"] = out.count("Update netweight for timing improvement")
+    if getattr(args, "bin_cnt", -1) > 0:
+        record["bin_cnt_override"] = args.bin_cnt
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
     return 0
 
@@ -719,6 +729,7 @@ def main() -> int:
                 (("--congestion-effort",), {"type": int, "default": -1}),
                 (("--report-route-util",), {"type": int, "default": 1}),
                 (("--timing",), {"type": int, "default": 0}),
+                (("--bin-cnt",), {"type": int, "default": -1}),
                 (("--overflow-penalty",), {"type": float, "default": 0.0}),
             ]:
                 sp.add_argument(*args_, **kwargs)
