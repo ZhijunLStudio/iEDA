@@ -477,6 +477,15 @@ def cmd_candidate(args: argparse.Namespace) -> int:
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
+    if not candidate and record.get("stop_reason") == "target_reached":
+        terminal_cp = workdir / "pl/gp_session_checkpoint.json"
+        if terminal_cp.exists():
+            candidate = {
+                "candidate_verdict": "left_better",
+                "candidate_local_checkpoint": str(terminal_cp),
+                "candidate_global_checkpoint": str(ckpt),
+                "terminal_local": True,
+            }
     for side, key in (("local", "candidate_local_checkpoint"), ("global", "candidate_global_checkpoint")):
         child_path = candidate.get(key)
         if child_path and Path(child_path).exists():
