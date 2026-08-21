@@ -74,3 +74,23 @@
 - 以上指标来自 session log 中成功返回的同 evaluator metrics。
   会话被主动停止以释放资源，完整 tool call log 保留在
   /tmp/dsh-headless-gp/sessions/ 的 session.jsonl.zstd。
+
+## 最终收尾会话（s1238，最新插件代码）
+
+- 44 次工具调用，手动停止。
+- 失败 2 次，全部是模型编排：
+  - 空 workdir 调 status；
+  - region 不 overlap GP bin。
+- 插件级错误：0。
+- 该会话中 agent 实际产出的候选：
+  - HPWL 5,892,200（Innovus 8,053,041）
+  - RUDY max 2.077（Innovus 2.035）
+  - overflow bins 612（Innovus 622）
+  - overflow sum 188.4（Innovus 133.0）
+  证明点工具能支撑完整观察-提议-运行-验证循环。
+
+## 最终状态
+
+- 插件问题清单已闭环。
+- 剩余问题均为模型编排。
+- 目标完成。
