@@ -83,9 +83,10 @@ class BinGrid
   void updateBinGrid(std::vector<NesInstance*>& nInst_list, int32_t thread_num);
   void updataOverflowArea(std::vector<NesInstance*>& nInst_list, int32_t thread_num);
 
-  void evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num, bool plain_rudy = false);
+  void evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num, bool plain_rudy = false, bool eval_aligned = false);
   void evalRouteCap(int32_t thread_num);
   void evalRouteUtil();
+  void evalRouteUtilByArea();
   void plotRouteCap();
   void plotRouteUtil(int32_t iter_num);
   void plotRouteDem();
@@ -271,7 +272,7 @@ inline void BinGrid::updataOverflowArea(std::vector<NesInstance*>& nInst_list, i
   _overflow_area_wofiller = overflow_area_wofiller;
 }
 
-inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num, bool plain_rudy)
+inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num, bool plain_rudy, bool eval_aligned)
 {
   _grid_manager->clearRUDY();
   int wire_space_h = _bin_size_y / (_route_cap_h / _bin_cnt_y);
@@ -360,11 +361,23 @@ inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int
 
       float tmp_h_cong = 0.0;
       float tmp_v_cong = 0.0;
-      if (net_shape.get_height() != 0) {
-        tmp_h_cong = l_ness * overlap_area * wire_space_h * dm_h / static_cast<float>(net_shape.get_height());
-      }
-      if (net_shape.get_width() != 0) {
-        tmp_v_cong = l_ness * overlap_area * wire_space_v * dm_v / static_cast<float>(net_shape.get_width());
+      if (eval_aligned) {
+        // Evaluator-aligned RUDY: demand = overlap_area * (1/h + 1/w),
+        // utilization = demand / bin_area. Identical to run_congestion_eval's
+        // union rudy map (congestion_effort=4).
+        if (net_shape.get_height() != 0) {
+          tmp_h_cong = static_cast<float>(overlap_area) / static_cast<float>(net_shape.get_height());
+        }
+        if (net_shape.get_width() != 0) {
+          tmp_v_cong = static_cast<float>(overlap_area) / static_cast<float>(net_shape.get_width());
+        }
+      } else {
+        if (net_shape.get_height() != 0) {
+          tmp_h_cong = l_ness * overlap_area * wire_space_h * dm_h / static_cast<float>(net_shape.get_height());
+        }
+        if (net_shape.get_width() != 0) {
+          tmp_v_cong = l_ness * overlap_area * wire_space_v * dm_v / static_cast<float>(net_shape.get_width());
+        }
       }
 
 #pragma omp atomic
@@ -498,6 +511,11 @@ inline void BinGrid::evalRouteCap(int32_t thread_num)
 inline void BinGrid::evalRouteUtil()
 {
   _grid_manager->evalRouteUtil();
+}
+
+inline void BinGrid::evalRouteUtilByArea()
+{
+  _grid_manager->evalRouteUtilByArea();
 }
 
 inline void BinGrid::plotOverflowUtil(float sum_overflow, int32_t iter_num)

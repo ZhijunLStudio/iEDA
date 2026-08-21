@@ -153,6 +153,7 @@ class GridManager
   float get_v_util_max() const {return _v_util_max;}
   float get_h_util_sum() const {return _h_util_sum;}
   float get_v_util_sum() const {return _v_util_sum;}
+  float getUnionUtilMax() const {return _union_util_max;}
 
   // function.
   void obtainOverlapGridList(std::vector<Grid*>& grid_list, Rectangle<int32_t>& rect);
@@ -166,6 +167,7 @@ class GridManager
   void clearRUDY();
   void initRouteCap(int32_t h_cap, int32_t v_cap);
   void evalRouteUtil();
+  void evalRouteUtilByArea();
   void plotRouteCap();
   void plotRouteDem();
   void plotRouteUtil(int32_t iter_num);
@@ -191,6 +193,7 @@ class GridManager
   float _v_util_max = 0.f;
   float _h_util_sum = 0.f;
   float _v_util_sum = 0.f;
+  float _union_util_max = 0.f;
 
   std::vector<std::vector<Grid>> _grid_2d_list;
 

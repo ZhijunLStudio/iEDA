@@ -1604,11 +1604,18 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
                                                                      _nes_config.get_thread_num());
         } else {
           // Congestion-driven optimization. Level 3 uses plain RUDY (no LUT
-          // weight, no Gaussian blur), the same model as the verify evaluator.
+          // weight). Level 4 uses the verify evaluator's own model: demand
+          // density per bin area, no route-cap normalization, no Gaussian
+          // blur, union max - the same numbers as run_congestion_eval.
           const bool plain_rudy = _nes_config.getCongestionEffortLevel() >= 3;
-          _nes_database->_bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num(), plain_rudy);
-          _nes_database->_bin_grid->fastGaussianBlur();
-          _nes_database->_bin_grid->evalRouteUtil();
+          const bool eval_aligned = _nes_config.getCongestionEffortLevel() >= 4;
+          _nes_database->_bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num(), plain_rudy, eval_aligned);
+          if (!eval_aligned) {
+            _nes_database->_bin_grid->fastGaussianBlur();
+            _nes_database->_bin_grid->evalRouteUtil();
+          } else {
+            _nes_database->_bin_grid->evalRouteUtilByArea();
+          }
           // Congestion shapes the wirelength force directly. Density-scale
           // inflation was removed here: repeated inflation had positive
           // feedback and drove the solver to 3-7x overflow on real designs.
@@ -1673,7 +1680,9 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
   _final_step_length = solver->get_next_steplength();
   _final_gradient_norm = _nes_database->_wirelength_grad_sum + _nes_database->_density_grad_sum;
   if (_nes_config.isOptCongestion()) {
-    _final_route_util = std::max(_nes_database->_grid_manager->get_h_util_max(), _nes_database->_grid_manager->get_v_util_max());
+    _final_route_util = _nes_config.getCongestionEffortLevel() >= 4
+                            ? _nes_database->_grid_manager->getUnionUtilMax()
+                            : std::max(_nes_database->_grid_manager->get_h_util_max(), _nes_database->_grid_manager->get_v_util_max());
   }
   recordIteration(iter_num, _sum_overflow, _prev_hpwl, _final_step_length, _final_gradient_norm, _final_route_util, _is_add_quad_penalty,
                   iter_entropy_injected);
@@ -2391,7 +2400,7 @@ void NesterovPlace::evaluateRouteUtilObservation()
     return;
   }
   bin_grid->evalRouteCap(_nes_config.get_thread_num());
-  bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num());
+  bin_grid->evalRouteDem(_nes_database->_topology_manager->get_network_list(), _nes_config.get_thread_num(), false, false);
   bin_grid->fastGaussianBlur();
   bin_grid->evalRouteUtil();
   _final_route_util = std::max(_nes_database->_grid_manager->get_h_util_max(),

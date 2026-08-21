@@ -835,13 +835,21 @@ def propose_config(workdir: str | Path, checkpoint: str | None = None) -> dict:
                                   "random_init": 0, "iterations": 20, "report_route_util": 1},
         })
     effort = int(config_state.get("congestion_effort_level") or 0)
-    if config_state.get("is_opt_congestion") and effort < 3:
+    if config_state.get("is_opt_congestion") and effort < 4:
         candidates.append({
             "id": f"congestion_effort_up_{effort + 1}",
-            "hypothesis_fact": f"congestion effort is {effort}; effort {effort + 1} adds a stronger RUDY peak penalty in the solver objective",
+            "hypothesis_fact": f"congestion effort is {effort}; effort {effort + 1} strengthens the congestion objective (level 4 uses the verify evaluator's own RUDY model, pair with bin_cnt=64)",
             "config_override": {"congestion_effort": effort + 1},
             "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
                                   "random_init": 0, "iterations": 100, "report_route_util": 1},
+        })
+    if not config_state.get("is_opt_congestion") or effort < 4:
+        candidates.append({
+            "id": "congestion_effort_4_evaluator",
+            "hypothesis_fact": "effort 4 optimizes the verify evaluator's exact RUDY model (demand density per bin area, union max, no blur); pair with bin_cnt=64 to match the 64x64 verify grid",
+            "config_override": {"congestion_effort": 4, "bin_cnt": 64},
+            "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                  "random_init": 0, "iterations": 400, "congestion_effort": 4, "bin_cnt": 64, "report_route_util": 1},
         })
     if not config_state.get("is_opt_timing"):
         candidates.append({

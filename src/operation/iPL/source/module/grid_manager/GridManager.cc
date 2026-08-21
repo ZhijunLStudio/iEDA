@@ -173,6 +173,45 @@ void GridManager::initRouteCap(int32_t h_cap, int32_t v_cap)
   }  
 }
 
+void GridManager::evalRouteUtilByArea()
+{
+  // Evaluator-aligned utilization: demand density per bin area, union max.
+  // This matches run_congestion_eval's rudy_utilization_max (union map).
+  _h_util_max = 0.0f;
+  _v_util_max = 0.0f;
+  _h_util_sum = 0.0f;
+  _v_util_sum = 0.0f;
+  _union_util_max = 0.0f;
+#pragma omp parallel for num_threads(_thread_num)
+  for (int32_t i = 0; i < _grid_cnt_y; i++) {
+    for (int32_t j = 0; j < _grid_cnt_x; j++) {
+      const auto& grid = _grid_2d_list[i][j];
+      int64_t bin_area = (grid.shape.get_ur_x() - grid.shape.get_ll_x())
+                         * (grid.shape.get_ur_y() - grid.shape.get_ll_y());
+      if (bin_area <= 0) {
+        continue;
+      }
+      _grid_2d_list[i][j].h_util = grid.h_cong / static_cast<float>(bin_area);
+      _grid_2d_list[i][j].v_util = grid.v_cong / static_cast<float>(bin_area);
+      float union_util = _grid_2d_list[i][j].h_util + _grid_2d_list[i][j].v_util;
+      #pragma omp critical
+      {
+          if (_grid_2d_list[i][j].h_util > _h_util_max) {
+              _h_util_max = _grid_2d_list[i][j].h_util;
+          }
+          if (_grid_2d_list[i][j].v_util > _v_util_max) {
+              _v_util_max = _grid_2d_list[i][j].v_util;
+          }
+          if (union_util > _union_util_max) {
+              _union_util_max = union_util;
+          }
+          _h_util_sum += _grid_2d_list[i][j].h_util;
+          _v_util_sum += _grid_2d_list[i][j].v_util;
+      }
+    }
+  }
+}
+
 void GridManager::evalRouteUtil()
 {
   _h_util_max = 0.0f;
