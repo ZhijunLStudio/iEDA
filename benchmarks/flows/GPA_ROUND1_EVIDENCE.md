@@ -70,6 +70,25 @@ checkpoint=start 等），无 traceback。
 - 目前最有效的仍是 agent 循环：effort=1 + 便宜的 congestion_hotspots
   复查 + region 疏散局部动作（把 verify RUDYmax 从 2.768 压到 2.207）。
 
+## 4.5 nangate 会话最终结果（同 evaluator，含 timing）
+
+| 指标 | raw | candidate | innovus |
+|---|---|---|---|
+| HPWL | 5,850,034 | 3,910,596 | 3,264,413 |
+| RUDY max | 5.149 | 2.720 | 1.991 |
+| bins | 289 | 362 | 328 |
+| rsum | 330.65 | 176.10 | 100.39 |
+| WNS ns | -1.186 | -1.178 | -1.207 |
+| freq MHz | 598.3 | 601.2 | 590.8 |
+
+- 对 raw：4/5 超过（bins 除外）；对 Innovus：WNS 超过，其余仍短。
+- 关键发现（会话报告）：nangate45 的 registry 输入 DEF die 利用率
+  0.839，而 Innovus DEF 为 0.772——Innovus 用了更大的 die，不是同口径
+  起点。handover 的 2,775,743 最优候选正是从 Innovus DEF（同 die）
+  起步所得。下轮应把 Innovus-die 输入 DEF 注册为 preset。
+- 会话自创的有效手段：seed_anchor_strength=0.01 + 单步 advance 扫谷底
+  （4.53M→4.06M→3.91M），tool 的 anchor 旋钮被正确组合使用。
+
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
