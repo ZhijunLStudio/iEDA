@@ -1038,3 +1038,23 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   从 gp_agent_trace.jsonl 推断；
   推不出来才返回结构化错误。
 - 三轮会话仍在跑，最新失败已经全部是模型编排问题。
+
+## 新目标 Round 6：直接回归验证 + region 参数别名
+
+- 又发现 apply_region_density 只认 `region`，
+  schema 同时暴露 `region` 和 `scope_region`，
+  模型/调用者传 scope_region 时 Tcl 收到 undefined。
+  已修复：参数统一归一化，
+  region 或 scope_region 都可。
+- 直接工具回归：
+  1. ieda_gp_run candidate 在 ihp130 terminal 场景：
+     candidate 不再是 {}，
+     返回 candidate_verdict=left_better、
+     terminal_local=true、local/global metrics。
+  2. ieda_gp_run apply_region_density 不带 design：
+     design 从 trace 推断成功；
+     scope_region 传 "0 0 41180 41350" 不再出现 undefined，
+     成功执行 1 步 local region density。
+- 三个开放目标会话仍运行：
+  ihp130 83 calls，nangate 73 calls，asap7 63 calls。
+  自最新插件版本后没有新的插件级错误。
