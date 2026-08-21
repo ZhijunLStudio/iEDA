@@ -351,6 +351,41 @@ checkpoint=start 等），无 traceback。
 - s1238 同配方逼近：anchor+effort4 后 7,533,348 / 2.056 / 616 / 142.06 /
   -0.120 / 617.1 —— 5/6（RUDYmax 差 1%、rsum 差 6.8%），为 s1238 迄今
   最优点；后续疏散在该状态上反复发散或劣化，rollback 已修（私有副本）。
+## 4.13 Round 8：asap7 anchor 家族 + s1238 固定点测绘
+
+### asap7（Innovus-DEF anchor 家族，effort4+bin64）
+
+| anchor | defHPWL | verify RUDYmax | bins | rsum |
+|---|---|---|---|---|
+| 0.1 | 45,051,840 | 0.773 | 0 | 0 |
+| 0.3 | 43,297,776 | 0.791 | 0 | 0 |
+| 0.5 | 41,694,997 | 0.803 | 0 | 0 |
+| 0.7 | 36,932,804 | 0.912 | 0 | 0 |
+| Innovus | 45,224,840 | 0.706 | 0 | 0 |
+
+- anchor 越低越接近 Innovus（rudy_max→0.77 底线，HPWL→45.2M），
+  rudy_max 收敛不到 0.706（GP 的 WL 目标仍会轻微聚集）。
+- anchor0.5 全维度：HPWL 41.7M ✓ / rudy_max 0.803 ✗ / bins=rsum=0 ✓ /
+  WNS -7.532 ✗（Innovus -7.392）/ freq 119.9 ✗；anchor+timing=1 的 6 次
+  权重更新没有改善 WNS（与 ihp130 同类的 in-GP STA 乐观问题）。
+- 结论：asap7 的 Innovus rudy_max 0.706/WNS -7.392 组合在当前 GP 能力
+  下不可同时超越；gen-1 会话点（37.7M/2.492/51/21.85/-5.236/165.4）
+  保持 asap7 的 HPWL/WNS/freq 最优，anchor 家族提供 bins/rsum=0 的
+  另一 Pareto 端。
+
+### s1238 固定点测绘（anchor+effort4 族，确定性收敛）
+
+| 点 | defHPWL | verify RUDYmax | bins | rsum |
+|---|---|---|---|---|
+| anchor1（150it） | 7,533,348 | 2.056 | 616 | 142.06 |
+| anchor2（+二遍 anchor 400it） | 7,407,426 | 2.393 | 570 | **124.29** |
+| anchor2 + 疏散（任何参数） | 7,533,348 | 2.056 | 616 | 142.06 |
+| Innovus | 8,053,041 | 2.035 | 622 | 133.02 |
+
+- 疏散从任何近邻状态都收敛回同一吸引子（md5 级一致）；
+  (2.056,142.06) 与 (2.393,124.29) 是当前工具可达的 Pareto 两端，
+  Innovus (2.035,133.02) 严格优于两者——s1238 剩余 1%/7% 缺口
+  为求解器级能力，点工具层已穷尽。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
