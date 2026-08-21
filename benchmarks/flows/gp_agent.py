@@ -916,8 +916,10 @@ def cmd_apply_anchor(args: argparse.Namespace) -> int:
                           "stderr_tail": err[-1200:]}))
         return 1
     state = update_state(workdir, record=record)
-    lef = resolve_lef(foundry, input_def)
-    def_hpwl = def_hpwl_of(workdir / "placement.def", lef)
+    def_hpwl = record.get("def_hpwl")
+    if def_hpwl is None:
+        lef = resolve_lef(foundry, input_def)
+        def_hpwl = def_hpwl_of(workdir / "placement.def", lef)
     print(json.dumps({"ok": True, "state": state, "record": record,
                       "def_hpwl": def_hpwl, "anchor_strength": strength}, indent=2))
     return 0
