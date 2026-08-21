@@ -1058,3 +1058,14 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 - 三个开放目标会话仍运行：
   ihp130 83 calls，nangate 73 calls，asap7 63 calls。
   自最新插件版本后没有新的插件级错误。
+
+## 新目标 Round 7：scope_effect 可见性
+
+- nangate 会话的模型说 "local scope machinery isn't engaging"，
+  但工具结果里没有 scope_effect 数据，模型无法判断
+  active / halo / context 实际写入了多少。
+- 已修复：gp_agent.py 解析 C++ stdout 的
+  `scope_effect active=... halo=... context=... context_moved=... max_displacement=...`，
+  local_run / candidate 的 record 现在返回该结构。
+- 这是点工具信息完备性问题，不是模型能力问题。
+- 三个开放目标会话仍在运行。
