@@ -1083,3 +1083,15 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 - 为确保“最新 JS 代码”也被开放目标会话验证，
   又启动一个全新的 s1238 会话
   （goal_s1238，3600s timeout，最新插件代码）。
+
+## 新目标 Round 9：candidate 终止原因扩展
+
+- asap7 会话暴露：
+  candidate 局部分支 stop_reason=overflow_target_miss 时，
+  同样没有 candidate_verdict/local/global 输出，
+  candidate={}，local_restart stage=candidate 失败。
+- 已修复：
+  fallback 覆盖 target_reached 和 overflow_target_miss；
+  overflow_target_miss 时 verdict=right_better（保留 parent/global）。
+- 最新 s1238 会话仍在跑，当前 24 calls，
+  失败均为模型编排（空 workdir、region 不 overlap、缺 region）。
