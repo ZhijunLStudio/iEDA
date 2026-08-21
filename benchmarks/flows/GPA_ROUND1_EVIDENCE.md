@@ -477,6 +477,15 @@ checkpoint=start 等），无 traceback。
   幅度 ~0.1），但连续拉回互相打架；s1238 的旧吸引子 (2.056,142.06)
   仍是当前最优。新 binary 的 dbu 校准 penalty 使固定点略劣于旧
   （2.165 vs 2.056），后续可在 effort4 penalty 系数上回退。
+## 4.19 Round 17：effort4 penalty 系数扫描（单调性实证）
+
+- s1238 anchor 固定点对 penalty 系数单调：0.05→2.165、0.01→2.125、
+  0→2.085（rudy_max），rsum 同步 144.6→139.2→140.4。
+- nangate 6/6 全胜发生在 dbu 校准前（utils 0.003 量级、penalty 从未触发
+  ≈ 系数 0），与扫描结论一致 → 系数定为 0（提交 024ad50）。
+- 零系数点 + apply_anchor：2.085→2.068（rsum 140.4→144.6 交换）。
+- s1238 记录仍为 (2.056,142.06)（rollback 重导出的偶发状态），Innovus
+  (2.035,133.02) 仍严格占优。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
