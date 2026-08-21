@@ -57,27 +57,39 @@ def latest_checkpoint(workdir: str | Path) -> str | None:
     return best[1] if best else None
 
 
-def resolve_checkpoint(workdir: str | Path, checkpoint: str | None) -> dict:
-    if checkpoint:
-        cp = Path(checkpoint)
-        if not cp.exists():
-            raise ValueError(f"checkpoint does not exist: {checkpoint}")
-        data = load_json(cp)
-        if data is None:
-            raise ValueError(f"checkpoint is not valid JSON: {checkpoint}")
-        return data
-    cp = latest_checkpoint(workdir)
-    if not cp:
-        raise ValueError(f"no checkpoint in workdir {workdir}; run gp_start first")
+def _checkpoint_data(cp: str) -> dict:
     data = load_json(cp)
     if data is None:
-        raise ValueError(f"latest checkpoint is not valid JSON: {cp}")
+        raise ValueError(f"checkpoint is not valid JSON: {cp}")
     return data
 
 
+def resolve_checkpoint(workdir: str | Path, checkpoint: str | None) -> dict:
+    """Resolve a checkpoint reference: a path, or the symbols latest/start."""
+    if checkpoint and checkpoint not in ("latest", "current", "start", "first", "oldest"):
+        cp = Path(checkpoint)
+        if not cp.exists():
+            raise ValueError(f"checkpoint does not exist: {checkpoint}")
+        return _checkpoint_data(str(cp))
+    if checkpoint in ("start", "first", "oldest"):
+        items = checkpoint_list(workdir)
+        if not items:
+            raise ValueError(f"no checkpoints in workdir {workdir}; run gp start first")
+        return _checkpoint_data(items[0]["checkpoint"])
+    cp = latest_checkpoint(workdir)
+    if not cp:
+        raise ValueError(f"no checkpoint in workdir {workdir}; run gp start first")
+    return _checkpoint_data(cp)
+
+
 def checkpoint_path(workdir: str | Path, checkpoint: str | None) -> str:
-    if checkpoint:
+    if checkpoint and checkpoint not in ("latest", "current", "start", "first", "oldest"):
         return str(Path(checkpoint))
+    if checkpoint in ("start", "first", "oldest"):
+        items = checkpoint_list(workdir)
+        if not items:
+            raise ValueError(f"no checkpoints in workdir {workdir}")
+        return items[0]["checkpoint"]
     cp = latest_checkpoint(workdir)
     if not cp:
         raise ValueError(f"no checkpoint in workdir {workdir}")
@@ -132,16 +144,26 @@ def grid_report(workdir: str | Path, checkpoint: str | None = None) -> dict | No
 def checkpoint_list(workdir: str | Path) -> list[dict]:
     root = Path(workdir)
     items: list[dict] = []
-    for path in sorted(root.glob("*.json")):
+    seen: set[str] = set()
+    for path in sorted(list(root.glob("*.json")) + list(root.rglob("*.json"))):
+        rel = str(path.relative_to(root))
+        if "archive/" in rel or "_lg_verify" in rel:
+            continue
         name = path.name
-        if name in ("gp_agent_state.json", "search.json"):
+        if name in ("gp_agent_state.json", "search.json", "gp_metrics_compare.json",
+                    "gp_full_metrics.json", "timing_paths.json", "congestion_result.json",
+                    "result.json"):
+            continue
+        key = str(path)
+        if key in seen:
             continue
         data = load_json(path)
         if not data or "current_iter" not in data:
             continue
+        seen.add(key)
         items.append({
             "checkpoint": str(path),
-            "name": name,
+            "name": rel,
             "iteration": data.get("current_iter"),
             "hpwl": data.get("prev_hpwl"),
             "overflow": data.get("sum_overflow"),
@@ -613,6 +635,9 @@ def freeze_instances(workdir: str | Path, region: str, checkpoint: str | None = 
 
 def diagnose_unstable_region(workdir: str | Path, checkpoint_a: str | None, checkpoint_b: str | None,
                              top_n: int = 5) -> dict:
+    if not checkpoint_a and not checkpoint_b:
+        checkpoint_a = "start"
+        checkpoint_b = "latest"
     a = resolve_checkpoint(workdir, checkpoint_a)
     b = resolve_checkpoint(workdir, checkpoint_b)
     na, nb = a.get("instance_names") or [], b.get("instance_names") or []
