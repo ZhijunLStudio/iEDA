@@ -1,7 +1,7 @@
 import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { execFile } from "node:child_process";
-import { appendFileSync, readFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, readFileSync, mkdirSync, existsSync, copyFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 //#region lib/types/index.js
