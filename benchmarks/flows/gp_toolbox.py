@@ -153,10 +153,25 @@ def checkpoint_list(workdir: str | Path) -> list[dict]:
 
 
 def design_status(workdir: str | Path, checkpoint: str | None = None) -> dict:
-    cp = resolve_checkpoint(workdir, checkpoint)
+    try:
+        cp = resolve_checkpoint(workdir, checkpoint)
+    except Exception as error:
+        return {"ok": False, "workdir": str(workdir), "reason": str(error),
+                "hint": "run kind=start or kind=full first"}
     cp_path = checkpoint_path(workdir, checkpoint)
     out = checkpoint_metrics(cp, cp_path)
     out["ok"] = True
+    config_state = cp.get("config_state") or {}
+    out["effective_config"] = {
+        "target_density": config_state.get("target_density"),
+        "target_overflow": config_state.get("target_overflow"),
+        "init_density_penalty": config_state.get("init_density_penalty"),
+        "is_opt_congestion": bool(config_state.get("is_opt_congestion")),
+        "congestion_effort_level": config_state.get("congestion_effort_level", 1),
+        "is_opt_timing": bool(config_state.get("is_opt_timing")),
+        "bin_cnt_x": config_state.get("bin_cnt_x"),
+        "bin_cnt_y": config_state.get("bin_cnt_y"),
+    }
     grid = grid_report(workdir)
     if grid:
         out["overflowing_bin_count"] = metric(grid.get("overflowing_bin_count"), True)

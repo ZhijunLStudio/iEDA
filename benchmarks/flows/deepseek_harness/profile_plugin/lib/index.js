@@ -75,7 +75,7 @@ function commonResultSchema() {
 function asJson(value) {
 	return value;
 }
-const GP_TOOL_VERSION = "3";
+const GP_TOOL_VERSION = "4";
 async function cachedRun(workdir, key, source, runner, budget = 128) {
 const dir = resolve(workdir);
 mkdirSync(dir, { recursive: true });
@@ -104,6 +104,32 @@ try {
 mkdirSync(resolve(workdir), { recursive: true });
 appendFileSync(join(resolve(workdir), "gp_agent_trace.jsonl"), JSON.stringify({ ts: Date.now(), ...entry }) + "\n");
 } catch (_) {}
+}
+function inferDesignFromTrace(workdir) {
+try {
+const path = join(resolve(workdir), "gp_agent_trace.jsonl");
+if (!existsSync(path)) return null;
+const rows = readFileSync(path, "utf8").trim().split("\n").filter(Boolean);
+for (let i = rows.length - 1; i >= 0; i--) {
+try { const row = JSON.parse(rows[i]); if (row.design) return String(row.design); } catch (_) {}
+}
+} catch (_) {}
+return null;
+}
+function archiveRunArtifacts(workdir) {
+const root = resolve(workdir);
+const placement = join(root, "placement.def");
+if (!existsSync(placement)) return null;
+const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+const target = join(root, "archive", stamp);
+try {
+mkdirSync(target, { recursive: true });
+for (const name of ["placement.def", "gp_agent_state.json", "gp_metrics_compare.json", "pl/gp_session_checkpoint.json", "pl/gp_experiments.jsonl", "pl/gp_grid_report.json"]) {
+const src = join(root, name);
+if (existsSync(src)) copyFileSync(src, join(target, name));
+}
+return target;
+} catch (_) { return null; }
 }
 /** One shared execution context for every registered tool. */
 var IedaGpRuntime = class {
@@ -229,8 +255,8 @@ if (args.kind === "hotspots") return toolbox(["hotspots", "--workdir", resolve(a
 if (args.kind === "longnets") return toolbox(["longnets", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.def_path ? ["--def-path", args.def_path] : [], ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "unstable") return toolbox(["unstable", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, "--top-n", String(args.top_n ?? 5)]);
 if (args.kind === "trajectory") return toolbox(["trajectory", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 0)]);
-if (args.kind === "congestion_hotspots") { if (!args.design) return asJson({ ok: false, reason: "congestion_hotspots requires design" }); return asJson(await runtime.congestionObserve(args.design, args.workdir, args.def_path, args.top_n, args.bin_cnt, args.foundry_dir, args.congestion_model)); }
-if (args.kind === "timing_paths") { if (!args.design) return asJson({ ok: false, reason: "timing_paths requires design" }); return asJson(await runtime.timingObserve(args.design, args.workdir, args.def_path, args.top_n, args.foundry_dir)); }
+if (args.kind === "congestion_hotspots") { const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "congestion_hotspots requires design" }); return asJson(await runtime.congestionObserve(design, args.workdir, args.def_path, args.top_n, args.bin_cnt, args.foundry_dir, args.congestion_model)); }
+if (args.kind === "timing_paths") { const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "timing_paths requires design" }); return asJson(await runtime.timingObserve(design, args.workdir, args.def_path, args.top_n, args.foundry_dir)); }
 throw new Error("ieda_gp_observe: kind must be designs|status|checkpoints|grid|hotspots|longnets|unstable|trajectory|congestion_hotspots|timing_paths");
 }
 }));
@@ -257,6 +283,7 @@ parameters: p({ design: { type: "string", required: true }, workdir: { type: "st
 output: out(),
 execute: async (args) => {
 const k = args.kind;
+if (k === "full" || k === "start" || k === "local_run" || k === "candidate" || k === "apply_region_density" || k === "apply_freeze" || k === "local_restart") archiveRunArtifacts(args.workdir);
 if (k === "start") return agent(args, ["start", "--iterations", String(args.iterations ?? 20), "--seed", String(args.seed ?? 1000), "--random-init", String(args.random_init ?? 1), "--seed-anchor-strength", String(args.seed_anchor_strength ?? 0), "--target-density", String(args.target_density ?? -1), "--target-overflow", String(args.target_overflow ?? -1), ...args.init_density_penalty != null ? ["--init-density-penalty", String(args.init_density_penalty)] : [], ...args.min_phi_coef != null ? ["--min-phi-coef", String(args.min_phi_coef)] : [], ...args.max_phi_coef != null ? ["--max-phi-coef", String(args.max_phi_coef)] : [], "--congestion-effort", String(args.congestion_effort ?? -1), "--overflow-penalty", String(args.overflow_penalty ?? 0), "--report-route-util", String(args.report_route_util ?? 1)]);
 if (k === "full") { const info = readDesigns(config.iedaRoot)[args.design] || {}; const runResult = await agent(args, ["start", "--iterations", String(args.iterations ?? 200), "--seed", String(args.seed ?? 1000), "--random-init", String(args.random_init ?? 1), "--target-density", String(args.target_density ?? -1), "--target-overflow", String(args.target_overflow ?? -1), "--congestion-effort", String(args.congestion_effort ?? -1), "--report-route-util", String(args.report_route_util ?? 1)]); if (!runResult.ok) return asJson(runResult); mkdirSync(resolve(args.workdir), { recursive: true }); const outFile = join(resolve(args.workdir), "gp_full_metrics.json"); const candidateDef = join(resolve(args.workdir), "placement.def"); const baselineDef = info.gp_baseline_def; if (!baselineDef) return asJson({ ok: true, run: runResult, metrics: { ok: false, reason: "registry has no gp_baseline_def" } }); const cmd = [join(config.iedaRoot, "benchmarks/flows/gp_metrics_compare.py"), "--design", args.design, "--case-root", String(info.case_root), "--macro-lef", String(info.lef || join(config.iedaRoot, "scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef")), "--foundry-dir", String(runtime.foundryDir(args.design)), "--congestion-model", String(args.congestion_model ?? "rudy"), ...args.timing === 0 ? ["--no-timing"] : [], "--out", outFile, "raw=" + baselineDef, "candidate=" + candidateDef, ...info.innovus_def ? ["innovus=" + info.innovus_def] : []]; const metricRun = await runCli(config.iedaRoot, config.python, config.timeoutMs, cmd[0], cmd.slice(1)); try { const metrics = JSON.parse(readFileSync(outFile, "utf8")); return asJson({ ok: true, run: runResult, metrics }); } catch (_) { return asJson({ ok: false, reason: "full run finished but metrics parse failed", run: runResult, stdout_tail: metricRun.stdout ? String(metricRun.stdout).slice(-4000) : null }); } }
 if (k === "advance") return agent(args, ["advance", "--iterations", String(args.iterations ?? 100), "--report-route-util", String(args.report_route_util ?? 1), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
@@ -280,7 +307,7 @@ output: out(),
 execute: async (args) => {
 if (args.kind === "delta") return toolbox(["verify_delta", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, ...args.def_path ? ["--def-path", args.def_path] : []]);
 if (args.kind === "lg") return asJson(await runtime.agent(args.design ?? "s1238", args.workdir, ["verify_lg", ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]));
-if (args.kind === "metrics") { const info = readDesigns(config.iedaRoot)[args.design] || {}; mkdirSync(resolve(args.workdir), { recursive: true }); const outFile = join(resolve(args.workdir), "gp_metrics_compare.json"); const extraDefs = String(args.extra_defs ?? "").split(";").map((s) => s.trim()).filter(Boolean); const cmd = [join(config.iedaRoot, "benchmarks/flows/gp_metrics_compare.py"), "--design", args.design, "--case-root", String(info.case_root), "--macro-lef", String(info.lef || join(config.iedaRoot, "scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef")), "--foundry-dir", String(runtime.foundryDir(args.design)), "--congestion-model", String(args.congestion_model ?? "rudy"), ...args.timing === 0 ? ["--no-timing"] : [], "--out", outFile, ...args.raw_def ? ["raw=" + args.raw_def] : [], ...args.candidate_def ? ["candidate=" + args.candidate_def] : [], ...extraDefs]; const runResult = await runCli(config.iedaRoot, config.python, config.timeoutMs, cmd[0], cmd.slice(1)); try { const parsed = JSON.parse(readFileSync(outFile, "utf8")); return asJson({ ok: true, metrics_file: outFile, ...parsed }); } catch (error) { return asJson({ ok: false, reason: "metrics evaluator produced no valid JSON", metrics_file: outFile, stdout_tail: runResult.stdout ? String(runResult.stdout).slice(-4000) : null, stderr_tail: runResult.stderr_tail || null }); } }
+if (args.kind === "metrics") { if (!args.raw_def && !args.candidate_def && !String(args.extra_defs ?? "").trim()) return asJson({ ok: false, reason: "metrics requires raw_def, candidate_def or extra_defs" }); const info = readDesigns(config.iedaRoot)[args.design] || {}; mkdirSync(resolve(args.workdir), { recursive: true }); const outFile = join(resolve(args.workdir), "gp_metrics_compare.json"); const extraDefs = String(args.extra_defs ?? "").split(";").map((s) => s.trim()).filter(Boolean); const cmd = [join(config.iedaRoot, "benchmarks/flows/gp_metrics_compare.py"), "--design", args.design, "--case-root", String(info.case_root), "--macro-lef", String(info.lef || join(config.iedaRoot, "scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef")), "--foundry-dir", String(runtime.foundryDir(args.design)), "--congestion-model", String(args.congestion_model ?? "rudy"), ...args.timing === 0 ? ["--no-timing"] : [], "--out", outFile, ...args.raw_def ? ["raw=" + args.raw_def] : [], ...args.candidate_def ? ["candidate=" + args.candidate_def] : [], ...extraDefs]; const runResult = await runCli(config.iedaRoot, config.python, config.timeoutMs, cmd[0], cmd.slice(1)); try { const parsed = JSON.parse(readFileSync(outFile, "utf8")); return asJson({ ok: true, metrics_file: outFile, ...parsed }); } catch (error) { return asJson({ ok: false, reason: "metrics evaluator produced no valid JSON", metrics_file: outFile, stdout_tail: runResult.stdout ? String(runResult.stdout).slice(-4000) : null, stderr_tail: runResult.stderr_tail || null }); } }
 throw new Error("ieda_gp_verify: kind must be delta|lg|metrics");
 }
 }));
