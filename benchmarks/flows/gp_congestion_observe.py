@@ -179,6 +179,22 @@ def hotspots(util_rows, region, bin_cnt_x, bin_cnt_y, top_n):
                          "llx": int(x), "lly": int(y),
                          "urx": int(min(x + size_x, ux)), "ury": int(min(y + size_y, uy))})
     bins.sort(key=lambda b: -b["utilization"])
+    # Sub-1.0 fallback: when no bin overflows, seed the congestion-net cone
+    # from the hottest bins anyway - designs like asap7 (Innovus-level
+    # spreading, rudy_max ~0.77) still have a demand peak worth shortening.
+    if not bins:
+        all_bins = []
+        for r, row in enumerate(util_rows):
+            y = ly + (bin_cnt_y - 1 - r) * size_y
+            for c, util in enumerate(row):
+                if util <= 0.0:
+                    continue
+                x = lx + c * size_x
+                all_bins.append({"row": r, "col": c, "utilization": util,
+                                 "llx": int(x), "lly": int(y),
+                                 "urx": int(min(x + size_x, ux)), "ury": int(min(y + size_y, uy))})
+        all_bins.sort(key=lambda b: -b["utilization"])
+        bins = all_bins[: top_n]
     selected = bins[:top_n]
     # Merge adjacent overflow bins into executable rectangles.
     merged = []
@@ -212,6 +228,7 @@ def main():
     ap.add_argument("--bin-cnt-x", type=int, default=64)
     ap.add_argument("--bin-cnt-y", type=int, default=64)
     ap.add_argument("--top-n", type=int, default=8)
+    ap.add_argument("--lef")
     ap.add_argument("--model", choices=["rudy", "lutrudy"], default="rudy")
     args = ap.parse_args()
 
@@ -257,7 +274,7 @@ def main():
         mm = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mm)
         macros, _ = mm.parse_lef(str(case_root / "script/DB_script/db_path_setting.tcl")) if False else (None, None)
-        lef_candidates = sorted(Path(args.foundry_dir).rglob("*merged*.lef")) or sorted(Path(args.foundry_dir).rglob("*.lef"))
+        lef_candidates = [Path(args.lef)] if args.lef and Path(args.lef).exists() else (sorted(Path(args.foundry_dir).rglob("*merged*.lef")) or sorted(Path(args.foundry_dir).rglob("*.lef")))
         if lef_candidates:
             macros, _ = mm.parse_lef(str(lef_candidates[0]))
             congestion_nets = def_net_instances(Path(args.def_path), macros, regions[0]["bbox"])[: args.top_n]

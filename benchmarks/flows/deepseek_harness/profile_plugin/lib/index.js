@@ -215,7 +215,8 @@ const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.scri
 "--bin-cnt-x", String(bins ?? 64),
 "--bin-cnt-y", String(bins ?? 64),
 "--top-n", String(topN ?? 8),
-				"--model", String(model ?? "rudy")
+				"--lef", String(record.lef || join(this.iedaRoot, "scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef")),
+"--model", String(model ?? "rudy")
 ]);
 trace(workdir, { source: "ieda_gp_observe", args: { design, defPath, topN, bins, model }, result: value });
 return value;
