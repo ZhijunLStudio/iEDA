@@ -161,16 +161,18 @@ var IedaGpRuntime = class {
 		const key = JSON.stringify({ design, command, args: rest, inputDef: inputDef || record.input_def, foundryDir: foundryDir || record.foundry_dir });
 		return cachedRun(workdir, key, "ieda_gp_run", async () => {
 			const lef = record.lef || join(this.iedaRoot, "scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef");
+			// Only start establishes the input_def/config context; every other
+			// command must inherit the workdir's saved context, otherwise a
+			// session started from an alternate DEF (e.g. Innovus DEF) breaks
+			// on the next restore with a topology mismatch.
+			const isStart = command === "start";
 			const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_agent.py"), [
 				command,
 				"--workdir",
 				resolve(workdir),
 				"--case-root",
 				String(record.case_root),
-				"--input-def",
-				String(inputDef || record.input_def),
-				"--config",
-				String(record.pl_config),
+				...isStart ? ["--input-def", String(inputDef || record.input_def), "--config", String(record.pl_config)] : [],
 				"--foundry-dir",
 				String(foundryDir || record.foundry_dir || join(this.iedaRoot, "scripts/foundry/sky130")),
 				"--lef",
