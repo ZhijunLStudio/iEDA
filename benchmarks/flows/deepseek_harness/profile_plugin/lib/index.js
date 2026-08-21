@@ -248,6 +248,7 @@ parameters: p({ workdir: { type: "string" }, design: { type: "string" }, checkpo
 output: out(),
 execute: async (args) => {
 if (args.kind === "designs") return asJson({ ok: true, designs: readDesigns(config.iedaRoot) });
+if (!args.workdir) return asJson({ ok: false, reason: args.kind + " requires workdir (except kind=designs)" });
 if (args.kind === "status") return toolbox(["status", "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "checkpoints") return toolbox(["checkpoints", "--workdir", resolve(args.workdir)]);
 if (args.kind === "grid") return toolbox(["grid", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 8), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
