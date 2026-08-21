@@ -1,7 +1,7 @@
 import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { execFile } from "node:child_process";
-import { appendFileSync, readFileSync, mkdirSync, existsSync, copyFileSync } from "node:fs";
+import { appendFileSync, readFileSync, mkdirSync, existsSync, copyFileSync, statSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { promisify } from "node:util";
 //#region lib/types/index.js
@@ -179,21 +179,19 @@ var IedaGpRuntime = class {
 	async toolbox(args) {
 		const wi = args.indexOf("--workdir");
 		const workdir = wi >= 0 ? args[wi + 1] : null;
-		if (!workdir) return runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_toolbox.py"), args);
-		const key = JSON.stringify({ args });
-		return cachedRun(workdir, key, "ieda_gp_observe", async () => {
-			const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_toolbox.py"), args);
-			trace(workdir, { source: "ieda_gp_observe", args, result: value });
-			return value;
-		});
+		const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_toolbox.py"), args);
+		if (workdir) trace(workdir, { source: "ieda_gp_observe", args, result: value });
+		return value;
 	}
 async congestionObserve(design, workdir, defPath, topN, bins, foundryDir, model) {
 const record = readDesigns(this.iedaRoot)[design] || {};
-const key = JSON.stringify({ design, workdir: resolve(workdir), defPath: defPath || null, topN, bins, model });
+const actualDef = defPath || join(resolve(workdir), "placement.def");
+const defStamp = existsSync(actualDef) ? statSync(actualDef).mtimeMs : "missing";
+const key = JSON.stringify({ design, workdir: resolve(workdir), defPath: actualDef, defStamp, topN, bins, model });
 return cachedRun(workdir, key, "ieda_gp_observe", async () => {
 const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_congestion_observe.py"), [
 "--case-root", String(record.case_root),
-"--def", String(defPath || join(resolve(workdir), "placement.def")),
+"--def", actualDef,
 "--foundry-dir", String(foundryDir || this.foundryDir(design)),
 "--workdir", resolve(workdir),
 "--bin-cnt-x", String(bins ?? 64),
@@ -207,11 +205,13 @@ return value;
 }
 async timingObserve(design, workdir, defPath, maxPath, foundryDir) {
 const record = readDesigns(this.iedaRoot)[design] || {};
-const key = JSON.stringify({ design, workdir: resolve(workdir), defPath: defPath || null, maxPath });
+const actualDef = defPath || join(resolve(workdir), "placement.def");
+const defStamp = existsSync(actualDef) ? statSync(actualDef).mtimeMs : "missing";
+const key = JSON.stringify({ design, workdir: resolve(workdir), defPath: actualDef, defStamp, maxPath });
 return cachedRun(workdir, key, "ieda_gp_observe", async () => {
 const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_timing_paths.py"), [
 "--case-root", String(record.case_root),
-"--def", String(defPath || join(resolve(workdir), "placement.def")),
+"--def", actualDef,
 "--foundry-dir", String(foundryDir || this.foundryDir(design)),
 "--workdir", resolve(workdir),
 "--max-path", String(maxPath ?? 3)
