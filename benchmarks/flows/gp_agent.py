@@ -49,6 +49,8 @@ def write_tcl(workdir: Path, case_root: Path, foundry_dir: Path, config: Path, i
         f"""flow_init -config {shlex.quote(str(case_root / 'iEDA_config/flow_config.json'))}\n"""
         f"""db_init -config {shlex.quote(str(case_root / 'iEDA_config/db_default_config.json'))} -output_dir_path {shlex.quote(str(workdir))}\n"""
         f"""source {shlex.quote(str(case_root / 'script/DB_script/db_path_setting.tcl'))}\n"""
+        f"""source {shlex.quote(str(case_root / 'script/DB_script/db_init_lib.tcl'))}\n"""
+        f"""source {shlex.quote(str(case_root / 'script/DB_script/db_init_sdc.tcl'))}\n"""
         f"""source {shlex.quote(str(case_root / 'script/DB_script/db_init_lef.tcl'))}\n"""
         f"""def_init -path {shlex.quote(str(input_def))}\n"""
         f"""init_pl -config {shlex.quote(str(config))}\n"""
