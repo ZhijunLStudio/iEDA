@@ -410,6 +410,42 @@ checkpoint=start 等），无 traceback。
   集中，缩短穿线 net 只搬移需求不降低峰值。
 - asap7 anchor 族 rudy_max 底线确认为 0.77（Innovus 0.706 不可达）；
   gen-3 会话继续探索。
+## 4.16 Round 14：asap7 gen-3 收尾（4/5）+ apply_anchor 落地（会话点名需求）
+
+### asap7 gen-3 最终报告（4/5 vs Innovus，五指标）
+
+| 指标 | candidate | Innovus |
+|---|---|---|
+| HPWL | 43,219,910 | 45,224,840 ✅ |
+| RUDYmax | 0.7696 | 0.7058 ❌ +9% |
+| bins | 0 | 0 ✅持平 |
+| rsum | 0 | 0 ✅持平 |
+| WNS | -5.816 | -7.392 ✅ +1.576ns |
+| freq | 150.9 | 121.9 ✅ |
+
+- 会话配方：anchor0.3+effort2+to0.002（100it）+ 最差 5 条时序路径锥修复。
+- 会话点名缺失工具：apply_anchor（"把热区细胞拉回 Innovus 位置这一最对症
+  手段不可用"）——本轮实现。
+
+### apply_anchor 落地（提交 5fa3f66）
+
+- 新 scope 原语：-scope_anchor_strength X (0,1]——in-scope Active 细胞的
+  移动按 (1-X) 围绕会话锚点坐标（session start 时捕获的 input-DEF 位置）
+  缩放；X=1 即冻结在锚点。
+- 锚点坐标随 checkpoint 持久化（新增字段 + 旧 checkpoint 兼容回退），
+  restore 之后锚点仍是原始 Innovus 位置。
+- 工具层：ieda_gp_run kind=apply_anchor（strength/region/instances，
+  发散自动回滚）；修复 Tcl option 未注册导致的 SEGV。
+- asap7 实测：机制正确（锚点持久化验证通过），但热区细胞拉回对 0.77 峰值
+  无改善（峰值由穿线 net 需求主导，非本地 cell 主导）——工具已交付，
+  留待会话在适用场景（如宏相邻区域、局部密度异常）使用。
+
+### 其他会话进展（运行中）
+- apb4（75 calls）：15.66M/1.427/63/9.28/-0.544/489.2——HPWL/WNS/freq 领先，
+  rudy_max 差 2%、rsum 差 24%。
+- picorv32（42 calls）：232.1M/1.8/424/78.76/-4.172/149.9 六项全超 Innovus 的
+  点仍在 session 手中，继续打磨中。
+- aes（30 calls）：887.7M/1.741/740/127.9（HPWL 已 -23% 领先）。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
