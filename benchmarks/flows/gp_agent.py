@@ -735,11 +735,11 @@ def cmd_local_congestion(args: argparse.Namespace) -> int:
                 record = last_gp_line(out) or last_ledger(workdir)
                 if rc != 0:
                     rc_rb, _out_rb, _err_rb = rollback()
-                    print(json.dumps({"ok": False, "rc": rc, "rolled_back": rc_rb == 0,
-                                      "completed_evacuations": len(results),
-                                      "reason": "congestion-net cone step failed; workdir rolled back to the pre-call checkpoint",
-                                      "stderr_tail": err[-1200:]}))
-                    return 1
+                    ckpt = original_ckpt
+                    results.append({"round": rnd + 1, "kind": "instances", "net": target["label"],
+                                    "failed": True, "rolled_back": rc_rb == 0,
+                                    "reason": "net-cone step failed"})
+                    continue
                 results.append({"round": rnd + 1, "kind": "instances", "net": target["label"],
                                 "instance_count": len(target["instances"]),
                                 "hpwl": record.get("hpwl"), "overflow": record.get("overflow"),
@@ -772,12 +772,15 @@ def cmd_local_congestion(args: argparse.Namespace) -> int:
                 retried = True
             record = last_gp_line(out) or last_ledger(workdir)
             if rc != 0:
+                # A diverged advance can rewrite the live checkpoint; restore
+                # the clean pre-call state and continue with the remaining
+                # regions instead of aborting the whole batch.
                 rc_rb, _out_rb, _err_rb = rollback()
-                print(json.dumps({"ok": False, "rc": rc, "rolled_back": rc_rb == 0,
-                                  "completed_evacuations": len(results),
-                                  "reason": "evacuation round failed" + (" (after gentle retry)" if retried else "") + "; workdir rolled back to the pre-call checkpoint",
-                                  "stderr_tail": err[-1200:]}))
-                return 1
+                ckpt = original_ckpt
+                results.append({"round": rnd + 1, "kind": "region", "region": rect,
+                                "failed": True, "rolled_back": rc_rb == 0,
+                                "reason": "evacuation diverged" + (" (after gentle retry)" if retried else "")})
+                continue
             results.append({"round": rnd + 1, "kind": "region", "region": rect,
                             "gentle_retry": retried,
                             "hpwl": record.get("hpwl"), "overflow": record.get("overflow"),
@@ -790,7 +793,9 @@ def cmd_local_congestion(args: argparse.Namespace) -> int:
     record["def_hpwl"] = def_hpwl_of(workdir / "placement.def", lef)
     if record.get("def_hpwl") is not None:
         record["def_hpwl_unit"] = "def"
+    failed_steps = sum(1 for x in results if x.get("failed"))
     print(json.dumps({"ok": True, "rounds": rounds, "targets": len(targets),
+                      "failed_steps": failed_steps,
                       "evacuations": results, "state": state, "record": record}, indent=2))
     return 0
 
