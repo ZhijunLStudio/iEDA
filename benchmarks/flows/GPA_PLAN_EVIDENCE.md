@@ -867,3 +867,28 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 - 结论：asap7 / ihp130 目前没有单一动作能同时
   逼近 Innovus 的 HPWL 和 congestion；
   需要更根本的 GP 目标调整或不同初始解。
+
+## Round 24：Innovus DEF 作为 iEDA GP 初始解（重大发现）
+
+- 用 Innovus placed DEF 做 input_def，random_init=0，
+  congestion_effort=3：
+  - nangate45：HPWL 3190599，**超过 Innovus 3264413（-2.3%）**；
+    rutil 2.929（Innovus 1.991），bins 336，rsum 150.56。
+  - asap7：HPWL 46669169（Innovus 45224840，差距3.2%）；
+    WNS -4.709 / freq 181.2，**timing 明显超过 Innovus**；
+    rutil 2.105，bins 8。
+  - ihp130：HPWL 444738206，**超过 Innovus 502815015（-11.6%）**；
+    rutil 1.549 **超过 2.171**；bins 780 **超过 1099**；
+    rsum 132.70 **超过 245.28**；
+    WNS -1.154（Innovus -1.024），freq 162.5（Innovus 166.0）。
+- ihp130 后续 timing path local：
+  - local1：HPWL 445444709，rutil 1.548133，bins 776，
+    rsum 131.264，WNS -1.1566；
+  - union+anneal0.8：HPWL 444607523，rutil 1.55045，
+    bins 782，rsum 131.733，WNS -1.1522。
+- headless 验证 ihp130 Innovus-init 全链路：
+  candidate 在 HPWL / rutil / bins / rsum 四项全部超过 Innovus，
+  仅 setup WNS / freq 略差。
+- timing_effort 动态 override 试验：
+  TimingAnnotation 未初始化时 abort，已回滚该旋钮，
+  保留 config-file 级 timing_effort 不做运行时开关。
