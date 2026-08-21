@@ -1065,8 +1065,11 @@ def propose_timing(workdir: str | Path, checkpoint: str | None = None, top_n: in
             "proposals": proposals}
 
 
-def experiments(workdir: str | Path, top_n: int = 40) -> dict:
-    """Aggregate already-computed results into an action→metric table + Pareto view."""
+def experiments(workdir: str | Path, top_n: int = 40, extra_workdirs: str | None = None) -> dict:
+    """Aggregate already-computed results into an action→metric table + Pareto view.
+
+    extra_workdirs (comma-separated) merges other sessions' traces for
+    cross-session Pareto memory; every row carries its origin workdir."""
     root = Path(workdir)
     rows: list[dict] = []
     trace_path = root / "gp_agent_trace.jsonl"
@@ -1116,7 +1119,53 @@ def experiments(workdir: str | Path, top_n: int = 40) -> dict:
                 "rsum": dens.get("rudy_overflow_util_sum"),
                 "wns": tim.get("setup_wns_ns"), "freq": tim.get("suggest_freq_mhz"),
             })
+    if extra_workdirs:
+        for extra in [Path(p) for p in str(extra_workdirs).split(",") if p.strip()]:
+            if extra == root or not extra.exists():
+                continue
+            et = extra / "gp_agent_trace.jsonl"
+            if et.exists():
+                for raw in et.read_text(errors="ignore").splitlines():
+                    if not raw.strip():
+                        continue
+                    try:
+                        entry = json.loads(raw)
+                    except Exception:
+                        continue
+                    if entry.get("source") != "ieda_gp_run":
+                        continue
+                    res = entry.get("result") or {}
+                    if not res.get("ok"):
+                        continue
+                    rec = res.get("record") or {}
+                    args = entry.get("args") or []
+                    rows.append({
+                        "workdir": str(extra),
+                        "ts": entry.get("ts"),
+                        "kind": args[0] if args else None,
+                        "mode": rec.get("mode"),
+                        "stop_reason": rec.get("stop_reason"),
+                        "hpwl_solver": rec.get("hpwl"),
+                        "def_hpwl": rec.get("def_hpwl"),
+                        "overflow": rec.get("overflow"),
+                        "route_util": rec.get("route_util"),
+                        "checkpoint": rec.get("checkpoint_path"),
+                    })
+            for mfile in sorted(extra.glob("archive/*/gp_metrics_compare.json")):
+                data = load_json(mfile)
+                if not data:
+                    continue
+                for label, p in (data.get("placements") or {}).items():
+                    dens = p.get("density") or {}
+                    tim = p.get("timing") or {}
+                    archived.append({"workdir": str(extra), "archive": mfile.parent.name, "label": label,
+                                     "hpwl": p.get("hpwl"),
+                                     "rudy_max": dens.get("rudy_utilization_max"),
+                                     "bins": dens.get("rudy_overflow_bin_count"),
+                                     "rsum": dens.get("rudy_overflow_util_sum"),
+                                     "wns": tim.get("setup_wns_ns"), "freq": tim.get("suggest_freq_mhz")})
     rows.sort(key=lambda x: x.get("ts") or 0)
+    total_actions = len(rows)
     pareto = []
     for r in rows:
         if r.get("def_hpwl") is None or r.get("route_util") is None:
@@ -1132,7 +1181,8 @@ def experiments(workdir: str | Path, top_n: int = 40) -> dict:
             pareto.append(r)
     if top_n and top_n > 0:
         rows = rows[-top_n:]
-    return {"ok": True, "workdir": str(workdir), "action_count": len(rows),
+    return {"ok": True, "workdir": str(workdir), "action_count": total_actions,
+            "workdirs_scanned": [str(Path(workdir))] + [str(Path(p)) for p in str(extra_workdirs or "").split(",") if p.strip()],
             "recent_actions": rows, "pareto_actions": pareto, "archive_metrics": archived}
 
 
@@ -1143,6 +1193,7 @@ def main() -> int:
                                         "propose_region_density", "propose_freeze", "unstable", "verify_delta",
                                         "propose_timing", "experiments"])
     ap.add_argument("--workdir", required=True)
+    ap.add_argument("--workdirs")
     ap.add_argument("--checkpoint")
     ap.add_argument("--checkpoint-a")
     ap.add_argument("--checkpoint-b")
@@ -1178,7 +1229,7 @@ def main() -> int:
     elif args.command == "propose_timing":
         print(json.dumps(propose_timing(args.workdir, args.checkpoint, args.top_n), indent=2))
     elif args.command == "experiments":
-        print(json.dumps(experiments(args.workdir, args.top_n), indent=2))
+        print(json.dumps(experiments(args.workdir, args.top_n, args.workdirs), indent=2))
     elif args.command == "propose_longnet_instances":
         print(json.dumps(propose_longnet_instances(args.workdir, args.checkpoint, args.top_n, args.def_path), indent=2))
     elif args.command == "freeze_instances":
