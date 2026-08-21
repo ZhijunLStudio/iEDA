@@ -277,7 +277,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             pl = cfg_data.get("PL", cfg_data)
             if wants_timing:
                 pl["is_timing_effort"] = 1
-                pl.setdefault("GP", {}).setdefault("Nesterov", {})["opt_overflow_list"] = [0.15, 0.20, 0.25, 0.30]
+                pl.setdefault("GP", {}).setdefault("Nesterov", {})["opt_overflow_list"] = [0.10, 0.12, 0.15, 0.20, 0.25, 0.30]
             if wants_bins:
                 dens = pl.setdefault("GP", {}).setdefault("Density", {})
                 dens["is_adaptive_bin"] = 0
