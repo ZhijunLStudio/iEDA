@@ -54,6 +54,10 @@ async function runCli(iedaRoot, python, timeoutMs, script, args) {
 		}
 	} catch (error) {
 		const err = error;
+		try {
+			const parsed = JSON.parse(err.stdout ?? "");
+			if (parsed && typeof parsed === "object") return parsed;
+		} catch {}
 		return {
 			ok: false,
 			rc: typeof err.code === "number" ? err.code : 1,
