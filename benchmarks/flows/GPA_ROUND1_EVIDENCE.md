@@ -211,6 +211,22 @@ checkpoint=start 等），无 traceback。
    单段 RC（log wire_length/cap/res），对齐外部 HPWL evaluator；
    再把 wns>0 的硬截断改为基于 slack 裕量的连续 criticality
    （避免 STA 一旦偏乐观整个 feature 完全失效）。
+### ihp130 target_overflow 扫描（cong3, Innovus DEF 起点, seed 42）
+
+| target_overflow | iters | defHPWL | RUDYmax | bins | rsum | WNS | freq |
+|---|---|---|---|---|---|---|---|
+| 0.10 | 440 | 444.2M | 1.551 | 782 | 132.08 | -1.148 | 162.6 |
+| 0.12 | 424 | 441.9M | 1.566 | 799 | 134.45 | -1.141 | 162.8 |
+| 0.15 | 405 | 438.9M | 1.652 | 765 | 136.52 | -1.132 | 163.1 |
+| 0.20 | 378 | 431.3M | 1.620 | 802 | 152.95 | -1.073 | 164.7 |
+| 0.25 | 358 | 421.7M | 1.869 | 829 | 177.70 | -1.036 | 165.7 |
+| Innovus | - | 502.8M | 2.171 | 1099 | 245.28 | -1.024 | 166.0 |
+
+- 单调趋势：target_overflow 越大（越少扩散）WNS/freq 越接近 Innovus，
+  HPWL 越低，RUDYmax/rsum 升高但仍全面低于 Innovus。
+- to=0.25 时 WNS -1.036 距 -1.024 仅 0.012ns、freq 165.7 vs 166.0；
+  正在跑 to=0.30/0.35 找 crossover 点——若 WNS/freq 越过而
+  rutil 仍 < 2.171、HPWL 仍 < 502.8M，ihp130 即达成全方位超过。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
