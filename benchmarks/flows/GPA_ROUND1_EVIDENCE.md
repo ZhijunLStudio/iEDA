@@ -320,6 +320,20 @@ checkpoint=start 等），无 traceback。
   能力（密度扩散质量 + 直接 over-util 惩罚项），不是工具编排问题。
 - 已启动第二代开放会话（s1238/nangate，携带已知配方：effort1+疏散、
   Innovus-die 起点、target_overflow 扫描、effort4/bin_cnt64）。
+## 4.11 Round 7：aligned RUDY 单位校准 + 膨胀原型结论
+
+- 发现并修复单位错位：aligned demand 少了 ×dbu 因子，内部 util 只有
+  0.003 量级（verify 是 2.15），导致 effort4 的 penalty/inflation 阈值
+  （>1.0）从未触发——此前 effort4 的"固定点不敏感"即由此而来。
+  修复后内部 h/v max = 2.35/2.92，与 verify 同量级。
+- 激活后的行为：super-linear penalty（×5.5）与 density-scale 膨胀
+  （cap 1.4）都导致密度发散（overflow 0.1→1.2，40 iters 内崩溃式退化）。
+- 隔离实验：只留 gentle penalty（1+0.05×over_util, cap 1.5）、移除膨胀——
+  密度稳定（ov 0.162）但 verify 2.417/638/191.9 不优于起点。
+- 最终交付（de281be）：dbu 校准 + gentle penalty 保留；膨胀原型删除
+  并注释指向本记录。结论：in-loop 拥塞目标会破坏密度收敛平衡，
+  s1238/nangate/asap7 的 rsum 缺口需要的是密度-拥塞联合目标的重构
+  （超出点工具迭代范围），工具层保持 effort1+疏散 recipe 为当前最优。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
