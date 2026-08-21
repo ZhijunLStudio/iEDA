@@ -183,6 +183,25 @@ def design_status(workdir: str | Path, checkpoint: str | None = None) -> dict:
     out["checkpoint_list"] = [x["name"] for x in checkpoint_list(workdir)[-20:]]
     out["timing_stale"] = out["timing_iter"] != out["iteration"]
     out["rudy_stale"] = out["rudy_iter"] != out["iteration"]
+    # DEF-level HPWL of the exported placement (same evaluator as verify metrics)
+    try:
+        placed = Path(workdir) / "placement.def"
+        state = workdir_context(workdir)
+        lef = state.get("lef")
+        if placed.exists() and lef and Path(str(lef)).exists():
+            import subprocess as _sp
+            import sys as _sys
+            from pathlib import Path as _P
+            repo = _P(__file__).resolve().parents[2]
+            proc = _sp.run([_sys.executable, str(repo / "benchmarks/flows/def_hpwl_eval.py"),
+                            str(lef), str(placed)], cwd=repo, stdout=_sp.PIPE,
+                           stderr=_sp.DEVNULL, text=True, timeout=600)
+            m = re.search(r"HPWL=(\d+)", proc.stdout or "")
+            if m:
+                out["def_hpwl"] = metric(int(m.group(1)), True)
+                out["def_hpwl_unit"] = "def"
+    except Exception:
+        out["def_hpwl"] = metric(None, False, "def_hpwl eval failed; run a GP action first to record lef")
     out["metric_units"] = {
         "hpwl": "gp_internal_solver_hpwl",
         "overflow": "gp_internal_density_overflow_ratio",
