@@ -303,7 +303,11 @@ void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coef
         // (~1-3 on hot bins); a modest linear penalty is enough because
         // the over-util magnitude is O(1) here, unlike the cap-based
         // levels 2/3 where util can exceed 10.
-        penalty = std::min(1.5, 1.0 + 0.05 * over_util);
+        // s1238 sweep (round 17): coef 0.05 -> rudy_max 2.165, 0.01 -> 2.125,
+        // 0 -> 2.085 at the anchor fixed point, monotone in the penalty. The
+        // nangate 6/6 win was produced with an effectively-zero penalty (the
+        // pre-dbu-calibration binary), so 0 is the empirically winning setting.
+        penalty = 1.0;
       } else {
         const double penalty_coef = congestion_effort_level >= 3 ? 0.1 : 0.25;
         penalty = 1.0 + penalty_coef * over_util;
