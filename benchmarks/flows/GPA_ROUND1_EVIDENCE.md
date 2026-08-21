@@ -334,6 +334,23 @@ checkpoint=start 等），无 traceback。
   并注释指向本记录。结论：in-loop 拥塞目标会破坏密度收敛平衡，
   s1238/nangate/asap7 的 rsum 缺口需要的是密度-拥塞联合目标的重构
   （超出点工具迭代范围），工具层保持 effort1+疏散 recipe 为当前最优。
+## 4.12 Round 7 收尾：★ nangate 第二代会话达成 5/5 全胜 Innovus（独立复验）
+
+| 指标 | raw | candidate（/tmp/my_goal2_nangate/placement.def） | Innovus | vs Innovus |
+|---|---|---|---|---|
+| HPWL | 5,850,034 | 2,768,159 | 3,264,413 | -15% ✅ |
+| RUDY max | 5.149 | 1.896 | 1.991 | -4.8% ✅ |
+| bins | 289 | 232 | 328 | ✅ |
+| rsum | 330.66 | 75.66 | 100.39 | -25% ✅ |
+| WNS ns | -1.186 | -1.197 | -1.207 | +10.4ps ✅ |
+| freq MHz | 598.3 | 594.5 | 590.8 | ✅ |
+
+- 配方（会话自发现 + 我独立复验）：start input_def=innovus_placed.def,
+  random_init=0, seed_anchor_strength=0.5, congestion_effort=4, bin_cnt=64,
+  iterations=150 → 局部关键路径锥修复。第二个全面超过 Innovus 的设计。
+- s1238 同配方逼近：anchor+effort4 后 7,533,348 / 2.056 / 616 / 142.06 /
+  -0.120 / 617.1 —— 5/6（RUDYmax 差 1%、rsum 差 6.8%），为 s1238 迄今
+  最优点；后续疏散在该状态上反复发散或劣化，rollback 已修（私有副本）。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
