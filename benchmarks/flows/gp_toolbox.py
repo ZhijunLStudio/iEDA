@@ -851,4 +851,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except Exception as error:
+        print(json.dumps({"ok": False, "error": str(error),
+                          "reason": "gp_toolbox command failed before producing a result"}, indent=2))
+        raise SystemExit(1)
