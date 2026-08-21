@@ -288,6 +288,7 @@ parameters: p({ design: { type: "string" }, workdir: { type: "string", required:
 output: out(),
 execute: async (args) => {
 if (!args.design) { const inferred = inferDesignFromTrace(args.workdir); if (inferred) args = { ...args, design: inferred }; }
+if (args.region && !args.scope_region) args = { ...args, scope_region: args.region };
 const k = args.kind;
 if (!args.design && k !== "apply_anchor" && k !== "unfreeze" && k !== "clear_density") return asJson({ ok: false, reason: k + " requires design (or a previous ieda_gp_run trace in workdir)" });
 if (k === "full" || k === "start" || k === "local_run" || k === "candidate" || k === "apply_region_density" || k === "apply_freeze" || k === "local_restart") archiveRunArtifacts(args.workdir);
@@ -302,7 +303,7 @@ if (k === "apply_freeze") return freezeRun(args);
 if (k === "apply_anchor") {
 return asJson({ ok: false, unsupported: true, reason: "per-cell anchor is not implemented; use apply_freeze for strength=1 batch freeze" });
 }
-if (k === "apply_region_density") return agent(args, ["local_run", "--iterations", String(args.iterations ?? 10), "--scope", "region", "--scope-region", args.region, "--scope-density-target", String(args.scope_density_target ?? 1), "--scope-density-ratio", "1", "--halo-hops", String(args.halo_hops ?? 1), "--halo-coeff", String(args.halo_coeff ?? 0.5), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
+if (k === "apply_region_density") return agent(args, ["local_run", "--iterations", String(args.iterations ?? 10), "--scope", "region", "--scope-region", args.scope_region, "--scope-density-target", String(args.scope_density_target ?? 1), "--scope-density-ratio", "1", "--halo-hops", String(args.halo_hops ?? 1), "--halo-coeff", String(args.halo_coeff ?? 0.5), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 throw new Error("ieda_gp_run: kind must be full|start|advance|candidate|local_run|apply_freeze|apply_region_density|local_restart|apply_anchor");
 }
 }));
