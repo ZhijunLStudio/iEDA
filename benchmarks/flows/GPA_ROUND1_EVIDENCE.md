@@ -180,6 +180,18 @@ checkpoint=start 等），无 traceback。
   cong1/cong2 的拥塞差、timing 也差。
 - 正在跑 seed=1000/2000 验证 trajectory 变化。
 
+### timing 权重"更新但不生效"之谜（下轮 C++ 方向）
+
+- 证据：cong3 Innovus-init 的 placement 在 timing on/off、
+  4 档/6 档/窗口化阈值下 **bit-identical**（hpwl 433,658,002 完全一致），
+  尽管 updateTimingNetWeight 被计数到 2-6 次、in-GP STA 成功运行
+  （144s/次）。
+- 疑点：printNesterovDatabase 显示 "Set NetWeight Num : 0"——
+  更新后的权重没有落到任何 net，或权重梯度对该设计轨迹无影响。
+- 下轮：在 updateTimingNetWeight 里记录 nonzero delta/centrality 分布，
+  对照 in-GP iSTA 与外部 run_timing_eval 的 slack 是否一致；
+  若 in-GP centrality 退化（全 0），定位 in-GP STA 的 RC/clock 初始化差异。
+
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
