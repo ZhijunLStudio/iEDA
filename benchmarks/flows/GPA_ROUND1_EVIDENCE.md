@@ -261,6 +261,36 @@ checkpoint=start 等），无 traceback。
   局部疏散原语（Python 侧读缓存 rudy_util.csv → 选 top overflow bin
   → scope=region 疏散循环），把 s1238 会话证明有效的手工循环
   变成工具内建的 local_congestion 动作。
+## 4.8 Round 4：local_congestion 原语 + 状态指纹缓存 + s1238 Pareto 推进
+
+### 新工具能力（已推送 e01eb85）
+
+- ieda_gp_run kind=local_congestion：读 verify-RUDY 缓存的 map，
+  取 top overflow bins 合并成 region（自动扩到 GP bin 尺度），
+  循环 scope=region 疏散；divergence 自动 gentle retry；失败自动
+  rollback 到调用前 checkpoint；调用前自动刷新 congestion map
+  （按 DEF mtime 缓存，便宜）。
+- 修复 run 缓存 soundness bug：缓存 key 只含参数不含状态，
+  同一参数列表在不同起始 placement 上会命中陈旧结果。现在
+  state-dependent 命令（advance/local_run/candidate/local_congestion/
+  accept）的 key 含 checkpoint 路径+mtime 与 placement.def mtime；
+  start/full 含 input_def+mtime。
+
+### s1238 实测（工具循环：global spread → local_congestion）
+
+| 点 | defHPWL | verify RUDYmax | bins | rsum | 说明 |
+|---|---|---|---|---|---|
+| 会话 final | 5,934,445 | 2.207 | 573 | 171.85 | effort1 to0.1 + 2 次手工疏散 |
+| B（+lc 3轮） | 6,049,835 | **2.027** | 578 | 165.06 | RUDYmax 首破 2.035 |
+| C（td0.5 全局） | 6,549,526 | 2.153 | 567 | **156.16** | rsum/bins 最优 |
+| td0.45/to0.08 | 6,947,156 | 2.149 | 582 | 163.49 | 更散反而更差（非单调） |
+| Innovus | 8,053,041 | 2.035 | 622 | 133.02 | - |
+
+- 疏散对 RUDYmax 有效（2.207→2.027）、全局扩散对 rsum 有效
+  （171.85→156.16），但二者不可兼得且 rsum 对 td 非单调——
+  verify RUDY 与 GP 内部模型的结构性校准差仍未闭合；
+  s1238 现为 4/6（HPWL/bins/WNS/freq），RUDYmax 差 0.12、
+  rsum 差 23。C++ 拥塞校准是唯一剩余路径。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
