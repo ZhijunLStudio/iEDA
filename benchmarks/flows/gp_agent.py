@@ -609,6 +609,143 @@ def cmd_candidate(args: argparse.Namespace) -> int:
     return 0
 
 
+def read_rudy_map(workdir: Path) -> tuple[list[list[float]], dict]:
+    """Read the cached RUDY map written by observe kind=congestion_hotspots."""
+    util_path = workdir / "rudy_util.csv"
+    if not util_path.exists():
+        raise ValueError("no rudy_util.csv in workdir; run observe kind=congestion_hotspots first (cached per DEF)")
+    rows = []
+    for line in util_path.read_text().splitlines():
+        vals = [float(t) for t in line.split(",") if t.strip() != ""]
+        if vals:
+            rows.append(vals)
+    summary_path = workdir / "congestion_result.json"
+    summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
+    return rows, summary
+
+
+def congestion_regions(workdir: Path, top_bins: int, threshold: float) -> list[dict]:
+    """Top overflowing bins of the TRUE verify-RUDY map, merged into rects."""
+    rows, summary = read_rudy_map(workdir)
+    region = summary.get("region")
+    if not region or len(region) < 4:
+        raise ValueError("congestion_result.json has no usable region")
+    bin_x = int(summary.get("bin_cnt_x") or 64)
+    bin_y = int(summary.get("bin_cnt_y") or 64)
+    lx, ly, ux, uy = region[:4]
+    size_x = (ux - lx) / bin_x
+    size_y = (uy - ly) / bin_y
+    bins = []
+    for r, row in enumerate(rows):
+        y = ly + (bin_y - 1 - r) * size_y
+        for c, util in enumerate(row):
+            if util <= threshold:
+                continue
+            x = lx + c * size_x
+            bins.append({"row": r, "col": c, "utilization": util,
+                         "llx": int(x), "lly": int(y),
+                         "urx": int(min(x + size_x, ux)), "ury": int(min(y + size_y, uy))})
+    bins.sort(key=lambda b: -b["utilization"])
+    selected = bins[: max(1, top_bins)]
+    merged: list[dict] = []
+    used: set[int] = set()
+    for i, b in enumerate(selected):
+        if i in used:
+            continue
+        rect = [b["llx"], b["lly"], b["urx"], b["ury"]]
+        changed = True
+        while changed:
+            changed = False
+            for j, c in enumerate(selected):
+                if j in used or i == j:
+                    continue
+                if not (rect[2] >= c["llx"] and rect[0] <= c["urx"] and rect[3] >= c["lly"] and rect[1] <= c["ury"]):
+                    continue
+                rect[0] = min(rect[0], c["llx"]); rect[1] = min(rect[1], c["lly"])
+                rect[2] = max(rect[2], c["urx"]); rect[3] = max(rect[3], c["ury"])
+                used.add(j); changed = True
+        pad_x = int(size_x)
+        pad_y = int(size_y)
+        rect[0] = max(int(lx), rect[0] - pad_x); rect[1] = max(int(ly), rect[1] - pad_y)
+        rect[2] = min(int(ux), rect[2] + pad_x); rect[3] = min(int(uy), rect[3] + pad_y)
+        merged.append({"utilization": b["utilization"], "region": f"{rect[0]} {rect[1]} {rect[2]} {rect[3]}"})
+    return merged
+
+
+def cmd_local_congestion(args: argparse.Namespace) -> int:
+    """Verify-RUDY-driven evacuation: pick the top overflow bins of the TRUE
+    evaluator's cached map and run scope=region evacuations. This is the tool
+    form of the loop the s1238 session proved (2.768 -> 2.207 RUDY max)."""
+    workdir, case_root, input_def, config, foundry = require_context(args)
+    try:
+        regions = congestion_regions(workdir, args.top_bins, args.congestion_threshold)
+    except ValueError as error:
+        print(json.dumps({"ok": False, "reason": str(error)}))
+        return 1
+    if not regions:
+        print(json.dumps({"ok": False, "reason": "no bins above the congestion threshold in the cached RUDY map"}))
+        return 1
+    rounds = max(1, args.rounds)
+    results = []
+    ckpt = resolve_checkpoint(args, workdir)
+    original_ckpt = ckpt
+    def rollback():
+        cmds = [
+            f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(original_ckpt))}",
+            "placer_run_gp -mode accept",
+        ]
+        return run_ieda(workdir, case_root, foundry, config, input_def, cmds, def_save=True)
+
+    for rnd in range(rounds):
+        for region in regions:
+            rect = region["region"]
+            cmds = [
+                f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
+                f"placer_run_gp -mode advance -iterations {args.iterations} -report_route_util 1 "
+                f"-scope region -scope_region {{{rect}}} -scope_density_target {args.density_target} "
+                f"-scope_density_ratio 1 -scope_halo_coeff {args.halo_coeff} -scope_halo_hops {args.halo_hops}",
+                "placer_run_gp -mode accept",
+            ]
+            rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmds, def_save=True)
+            retried = False
+            if rc != 0 and "diverged" in (out + err):
+                # One-RUDY-bin evacuations can trigger a local density-penalty
+                # spike; retry once with a gentler target before giving up.
+                cmds_gentle = [
+                    f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
+                    f"placer_run_gp -mode advance -iterations {args.iterations} -report_route_util 1 "
+                    f"-scope region -scope_region {{{rect}}} -scope_density_target 0.8 "
+                    f"-scope_density_ratio 0.5 -scope_halo_coeff {args.halo_coeff} -scope_halo_hops 2",
+                    "placer_run_gp -mode accept",
+                ]
+                rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmds_gentle, def_save=True)
+                retried = True
+            record = last_gp_line(out) or last_ledger(workdir)
+            if rc != 0:
+                rc_rb, _out_rb, _err_rb = rollback()
+                print(json.dumps({"ok": False, "rc": rc, "rolled_back": rc_rb == 0,
+                                  "completed_evacuations": len(results),
+                                  "reason": "evacuation round failed" + (" (after gentle retry)" if retried else "") + "; workdir rolled back to the pre-call checkpoint",
+                                  "stderr_tail": err[-1200:]}))
+                return 1
+            results.append({"round": rnd + 1, "region": rect,
+                            "peak_utilization": region["utilization"],
+                            "gentle_retry": retried,
+                            "hpwl": record.get("hpwl"), "overflow": record.get("overflow"),
+                            "route_util": record.get("route_util")})
+            ckpt = workdir / "pl/gp_session_checkpoint.json"
+            if not ckpt.exists():
+                ckpt = resolve_checkpoint(args, workdir)
+    state = update_state(workdir, record=record)
+    lef = resolve_lef(foundry, getattr(args, "lef", None) or state.get("lef"))
+    record["def_hpwl"] = def_hpwl_of(workdir / "placement.def", lef)
+    if record.get("def_hpwl") is not None:
+        record["def_hpwl_unit"] = "def"
+    print(json.dumps({"ok": True, "rounds": rounds, "regions": len(regions),
+                      "evacuations": results, "state": state, "record": record}, indent=2))
+    return 0
+
+
 def cmd_restore(args: argparse.Namespace) -> int:
     """Point the workdir at an existing checkpoint without running iEDA."""
     workdir = Path(args.workdir)
@@ -692,7 +829,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for name, fn in [("start", cmd_start), ("advance", cmd_advance), ("local_run", cmd_local_run),
-                     ("candidate", cmd_candidate), ("verify_lg", cmd_verify_lg), ("restore", cmd_restore),
+                     ("candidate", cmd_candidate), ("local_congestion", cmd_local_congestion),
+                     ("verify_lg", cmd_verify_lg), ("restore", cmd_restore),
                      ("accept", cmd_accept), ("compare", cmd_compare), ("status", cmd_status)]:
         sp = sub.add_parser(name)
         if name in ("start", "advance", "candidate"):
@@ -706,7 +844,7 @@ def main() -> int:
                 pass
     # Simpler: attach common options to every parser manually.
     for sp in parser._subparsers._group_actions[0].choices.values():
-        if sp.prog.endswith(("start", "advance", "local_run", "candidate")):
+        if sp.prog.endswith(("start", "advance", "local_run", "candidate", "local_congestion")):
             for args_, kwargs in [
                 (("--workdir",), {"required": True}),
                 (("--case-root",), {}), (("--input-def",), {}), (("--config",), {}),
@@ -734,6 +872,10 @@ def main() -> int:
                 (("--report-route-util",), {"type": int, "default": 1}),
                 (("--timing",), {"type": int, "default": 0}),
                 (("--bin-cnt",), {"type": int, "default": -1}),
+                (("--rounds",), {"type": int, "default": 2}),
+                (("--top-bins",), {"type": int, "default": 3}),
+                (("--congestion-threshold",), {"type": float, "default": 1.0}),
+                (("--density-target",), {"type": float, "default": 0.5}),
                 (("--overflow-penalty",), {"type": float, "default": 0.0}),
             ]:
                 sp.add_argument(*args_, **kwargs)
@@ -752,7 +894,8 @@ def main() -> int:
             sp.add_argument("--lef")
     args = parser.parse_args()
     return {"start": cmd_start, "advance": cmd_advance, "local_run": cmd_local_run,
-            "candidate": cmd_candidate, "verify_lg": cmd_verify_lg, "restore": cmd_restore,
+            "candidate": cmd_candidate, "local_congestion": cmd_local_congestion,
+            "verify_lg": cmd_verify_lg, "restore": cmd_restore,
             "accept": cmd_accept, "compare": cmd_compare, "status": cmd_status}[args.command](args)
 
 
