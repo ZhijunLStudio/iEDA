@@ -505,6 +505,17 @@ checkpoint=start 等），无 traceback。
   advance/restore 报 "no checkpoint" 的幽灵成功。
 - 修复：start（含 full 的 start）绕过 run 缓存，每次真实执行（提交 ba24f10）。
 - aes 会话 46 调用继续攻坚（67.6k 设计单次 run 数分钟）。
+## 4.22 Round 20：胜局复现性检查 + aes 监测
+
+- 当前 binary（penalty 0 + apply_anchor + 锚点持久化）复现 nangate 配方
+  第一阶段（anchor0.5+effort4+bin64+150it）：2,945,719 / 2.005 / 283 /
+  85.33——与夺冠时的 E150（2.89M/1.91/232/78.7）接近但不完全一致
+  （累计的求解器改动有微小轨迹漂移）；完整配方（+关键路径锥修复）
+  的最终 DEF 已归档，为复验基准。
+- 结论：胜利产物以归档 DEF + compare JSON 为准（可复现性有漂移，
+  结果本身独立复验过）。
+- aes 会话 52 调用（67.6k 设计单动作数分钟）：651.6M/2.632/569/197.1/
+  WNS -7.381/101.2——HPWL/WNS/freq 已领先，拥塞仍在攻坚。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
