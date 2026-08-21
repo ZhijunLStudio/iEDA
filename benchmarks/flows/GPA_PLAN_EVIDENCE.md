@@ -1021,3 +1021,20 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   nangate45 candidate HPWL 2,879,411（raw 4,472,593，Innovus 3,264,413）；
   asap7 candidate HPWL 51,956,062（raw 58,392,975）；
   ihp130 candidate HPWL 413,884,099（raw 620,662,411）。
+
+## 新目标 Round 5：从会话中再发现两个点工具问题
+
+- 问题 1：candidate 局部分支提前 target_reached 时，
+  C++ 不打印 candidate_verdict/local/global，
+  Python 得到 candidate={}，
+  导致 local_restart 在 stage=candidate 失败。
+  已修复：terminal candidate 回退到
+  pl/gp_session_checkpoint.json + parent checkpoint，
+  verdict=left_better，并标记 terminal_local。
+- 问题 2：apply_region_density / apply_freeze 等
+  依赖已有 workdir 的动作必须显式 design，
+  模型漏传时被 schema 拒绝。
+  已修复：ieda_gp_run 任何 kind 在缺 design 时
+  从 gp_agent_trace.jsonl 推断；
+  推不出来才返回结构化错误。
+- 三轮会话仍在跑，最新失败已经全部是模型编排问题。
