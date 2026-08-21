@@ -6,8 +6,8 @@
 ## 结论
 
 deepseek-harness + @ieda-ai/dsh-tool-ieda-gp 在 4 个 PDK 的开放目标会话与
-自主实验中达成：**2 个设计全面超过 Innovus（6/6），2 个设计 5/6 与 3/6**，
-全部会话插件级错误为 0。
+自主实验中达成：**3 个设计全面超过 Innovus（6/6，独立复验通过），
+其余设计 5/6、4/5、4/6**，全部会话插件级错误为 0。
 
 ## 全胜设计
 
@@ -37,6 +37,20 @@ deepseek-harness + @ieda-ai/dsh-tool-ieda-gp 在 4 个 PDK 的开放目标会话
 
 配方：Innovus DEF 起步 + seed_anchor_strength=0.5 + effort4 + bin_cnt 64
 （第二代会话自发现，独立复验通过）+ 关键路径锥局部修复。
+
+### picorv32（6/6，sky130，大设计 ~26.5k cells）
+
+| 指标 | candidate | Innovus |
+|---|---|---|
+| HPWL | 232,106,315 | 308,691,343 |
+| RUDY max | 1.800 | 1.951 |
+| bins | 424 | 637 |
+| rsum | 78.76 | 98.37 |
+| WNS | -4.172 | -4.201 |
+| freq | 149.9 | 149.2 |
+
+配方（会话自发现，独立复验通过）：raw baseline DEF 起步 +
+congestion_effort=1 + 400 迭代 + random_init=0，一步达成且确定性复现。
 
 ## 未达成设计（结构性缺口）
 

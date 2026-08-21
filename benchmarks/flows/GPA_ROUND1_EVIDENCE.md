@@ -446,6 +446,27 @@ checkpoint=start 等），无 traceback。
 - picorv32（42 calls）：232.1M/1.8/424/78.76/-4.172/149.9 六项全超 Innovus 的
   点仍在 session 手中，继续打磨中。
 - aes（30 calls）：887.7M/1.741/740/127.9（HPWL 已 -23% 领先）。
+## 4.17 Round 15：★ picorv32 第三个全胜（6/6，独立复验）
+
+| 指标 | raw | candidate（/tmp/my_goal3_picorv32/placement.def） | Innovus | vs Innovus |
+|---|---|---|---|---|
+| HPWL | 234,280,119 | 232,106,315 | 308,691,343 | -24.8% ✅ |
+| RUDY max | 2.261 | 1.800 | 1.951 | ✅ |
+| bins | 508 | 424 | 637 | ✅ |
+| rsum | 105.0 | 78.76 | 98.37 | ✅ |
+| WNS ns | -4.191 | -4.172 | -4.201 | ✅ |
+| freq MHz | 149.5 | 149.9 | 149.2 | ✅ |
+
+- 配方（会话自发现，独立复验通过）：raw DEF 起步 + congestion_effort=1 +
+  400 iters + random_init=0——一步达成、seed 无关、确定性复现。
+- 已归档进 gp_wins_artifacts.tar.gz（picorv32_win.def + compare json）。
+
+### apb4 会话收尾（4/6 vs Innovus）
+
+- 最终 15,655,115 / 1.427 / 63 / 9.28 / -0.544 / 489.2：HPWL/WNS/TNS/freq
+  领先、bins 持平、rudy_max +2%、rsum +24%。
+- 会话实证：36.6% 低利用率设计，RUDY 峰值来自 IO 边沿网与高扇出网；
+  HPWL<15.7M 与 rsum<7.46 在 GP 目标结构下互斥（crossover 在 15.7M 附近）。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
