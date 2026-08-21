@@ -89,6 +89,65 @@ checkpoint=start 等），无 traceback。
 - 会话自创的有效手段：seed_anchor_strength=0.01 + 单步 advance 扫谷底
   （4.53M→4.06M→3.91M），tool 的 anchor 旋钮被正确组合使用。
 
+## 4.6 Round 2 关键进展（2026-08-21 深夜）
+
+### 修复两个"timing 无效"根因（此前困扰多轮的谜题）
+
+1. **derived config 写入 bug**：workdir 未 mkdir 导致 pl_derived_config.json
+   写入静默失败，GP 实际用 base config 跑（timing 从未开启），
+   而 record 还谎报 timing_effort=true。已修（mkdir + 诚实 record）。
+2. **计数 bug**：timing 更新日志走 stderr，旧代码只数 stdout → 恒 0。
+   已修（stdout+stderr）。
+   修复后 ihp130 timing=1 实测 **timing_weight_updates=2/60 iters**，
+   机制确认工作——"config timing_effort 无效"正式结案。
+
+### 修复后的 ihp130 timing+cong 结果（同 evaluator）
+
+| 指标 | raw | candidate（timing1+cong3, 440it） | innovus |
+|---|---|---|---|
+| HPWL | 620,662,411 | 444,180,470 | 502,815,015 |
+| RUDY max | 2.655 | **1.551** | 2.171 |
+| bins | 1728 | 782 | 1099 |
+| rsum | 784.41 | 132.08 | 245.28 |
+| WNS ns | +0.459 | -1.148 | -1.024 |
+| freq MHz | 220.2 | 162.6 | 166.0 |
+
+- HPWL + 全部 3 项 congestion 超过 Innovus；
+- WNS 从 handover 候选 -1.394 / Round-24 -1.154 改善到 **-1.148**，
+  距 Innovus 只差 0.124ns、freq 差 3.4MHz。
+- 正在跑 refinement：6 档 opt_overflow_list [0.10..0.30] +
+  target_overflow 0.08 + 800it。
+
+### nangate 同 die（公平口径）结果
+
+| 指标 | raw | candidate（Innovus-DEF init, cong3, 342it） | innovus |
+|---|---|---|---|
+| HPWL | 5,850,034 | **3,180,729** | 3,264,413 |
+| RUDY max | 5.149 | 2.947 | 1.991 |
+| bins | 289 | **323** | 328 |
+| rsum | 330.65 | 152.29 | 100.39 |
+| WNS ns | -1.186 | **-1.192** | -1.207 |
+| freq MHz | 598.3 | **596.3** | 590.8 |
+
+- 同 die 起点下 HPWL/bins/WNS/freq 四项超过 Innovus，
+  证明"nangate HPWL 落后"主要是 die 口径问题，不是 GP 能力问题。
+- 剩余缺口集中在 RUDY max / rsum（C++ 校准方向不变）。
+
+### asap7 会话最终结果
+
+| 指标 | raw | candidate | innovus |
+|---|---|---|---|
+| HPWL | 58,392,975 | **37,735,561** | 45,224,840 |
+| RUDY max | 1.697 | 2.492 | 0.706 |
+| bins | 16 | 51 | 0 |
+| rsum | 4.47 | 21.85 | 0 |
+| WNS ns | -5.374 | **-5.236** | -7.392 |
+| hold WNS | -2.061 | **-1.166** | -5.115 |
+| freq MHz | 161.7 | **165.4** | 121.9 |
+
+- HPWL/WNS/hold/freq 超过两个 baseline；congestion 受结构性
+  fixed-macro 角落聚集限制，会话记录 Pareto 备选点（HPWL 17.4M/20 bins/max 5.76）。
+
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
