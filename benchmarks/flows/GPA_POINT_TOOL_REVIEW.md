@@ -56,3 +56,21 @@
   local_restart 消费。
 - 最新代码开放目标会话中插件级错误为 0。
 - 剩余失败均为 agent 编排/模型能力，不是插件问题。
+
+## 会话最终统计（停止时）
+
+- ihp130_gcd：117 calls，其中 verify metrics 28 次；
+  最佳 HPWL candidate 242,844,371；
+  最佳 rutil candidate 1.91393（HPWL 441,197,013）。
+- nangate45_gcd：106 calls，其中 verify metrics 26 次；
+  最佳 HPWL candidate 1,416,468；
+  最佳 rutil candidate 2.929964（HPWL 2,493,578）。
+- asap7_aes：88 calls，其中 verify metrics 12 次；
+  最佳 HPWL candidate 26,392,043；
+  最佳 rutil candidate 1.696979（HPWL 58,392,975）。
+- s1238（最新插件代码）：27 calls，其中 verify metrics 8 次；
+  最佳 HPWL candidate 3,046,808；
+  最佳 rutil candidate 2.415218（HPWL 6,587,537）。
+- 以上指标来自 session log 中成功返回的同 evaluator metrics。
+  会话被主动停止以释放资源，完整 tool call log 保留在
+  /tmp/dsh-headless-gp/sessions/ 的 session.jsonl.zstd。
