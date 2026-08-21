@@ -3110,6 +3110,19 @@ void NesterovPlace::updateTimingNetWeight()
       n_net->set_weight(cur_netweight);
     }
   }
+  int32_t nonzero_delta_net_cnt = 0;
+  float max_delta_weight = 0.0F;
+  for (size_t i = 0; i < nNet_list.size(); i++) {
+    if (fabs(nNet_list[i]->get_weight() - 1.0F) >= 1e-5) {
+      ++nonzero_delta_net_cnt;
+      max_delta_weight = std::max(max_delta_weight, fabs(nNet_list[i]->get_weight() - 1.0F));
+    }
+  }
+  LOG_INFO << "[NesterovSolve] timing update diagnostics: max_centrality=" << cur_max_centrality
+           << " nets_with_weight_change=" << nonzero_delta_net_cnt
+           << " max_weight_delta=" << max_delta_weight
+           << " hold_limited=" << hold_limited_net_count
+           << " late_wns=" << timing_annotation->get_late_wns();
   if (hold_limited_net_count > 0) {
     LOG_INFO << "[NesterovSolve] timing hold guard limited " << hold_limited_net_count << " nets.";
   }
