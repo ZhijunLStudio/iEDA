@@ -974,3 +974,30 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - target_density 传 1；
   - 反复 accept 已经 terminal 的会话；
   这些由模型自身修复，插件需要给结构化错误而不是 traceback。
+
+## 新目标 Round 3：最新插件重启三轮开放目标会话
+
+- 又发现并修复：
+  1. full 分支中 `design` 变量未定义，
+     导致 asap7/nangate 会话 ieda_gp_run full
+     报 `Error: design is not defined`。
+     已定义 design 并前置校验。
+  2. archive 保存 `pl/gp_session_checkpoint.json` 时
+     目标 pl/ 目录不存在，导致 checkpoint 归档失败。
+     已自动创建 dirname。
+  3. gp_toolbox.py 未捕获异常时输出 Python traceback；
+     已统一为 `{"ok":false,"reason":...}` 结构化错误。
+- 直接工具 smoke（不经模型）：
+  ieda_gp_run full design=s1238 iterations=20 timing=0
+  返回 ok=true，raw/candidate/innovus 三路 metrics 正常。
+  第二次 start 触发 archive，确认 placement.def、
+  pl/gp_session_checkpoint.json 等已归档。
+- 三个开放目标会话（最新插件）运行中：
+  - ihp130：28 次调用，失败4，主要是
+    metrics 缺 design（无 trace）与 status 空 workdir；
+  - nangate：27 次调用，失败3；
+  - asap7：28 次调用，失败11，其中多为模型错误
+    （checkpoint=cp1、无 region 调 region_density、
+    空 workdir 调 propose/advance），插件均返回了结构化错误。
+- 结论：点工具层面 crash/undefined/traceback 问题已清零，
+  剩余失败基本是 agent 编排（模型能力）问题。
