@@ -51,7 +51,14 @@
     "pdk": "nangate45",
     "lef": "/mnt/usb20t/PCL-167/data3/taosimin/OpenROAD/test/Nangate45/Nangate45_stdcell.lef",
     "gp_baseline_def": "/tmp/gp_nangate45_direct/placement.def",
-    "innovus_def": "/tmp/nangate45_gcd/innovus_placed.def"
+    "innovus_def": "/tmp/nangate45_gcd/innovus_placed.def",
+    "alt_input_defs": [
+      {
+        "label": "innovus_die",
+        "path": "/tmp/nangate45_gcd/innovus_placed.def",
+        "note": "same die as Innovus (util 0.772 vs registry input 0.839); start with random_init=0, congestion_effort=3 reproduces HPWL 3.19M"
+      }
+    ]
   },
   "asap7_aes": {
     "case_root": "/tmp/asap7_aes",
@@ -61,7 +68,14 @@
     "pdk": "asap7",
     "lef": "/mnt/usb20t/PCL-155/home/dengqinyi/iFlow/foundry/asap7/lef/asap7sc7p5t_27_R_1x_201211.lef",
     "gp_baseline_def": "/tmp/gp_asap7/placement.def",
-    "innovus_def": "/tmp/asap7_aes/innovus_placed.def"
+    "innovus_def": "/tmp/asap7_aes/innovus_placed.def",
+    "alt_input_defs": [
+      {
+        "label": "innovus_die",
+        "path": "/tmp/asap7_aes/innovus_placed.def",
+        "note": "Innovus placement as GP seed; start with random_init=0 keeps its die/utilization context"
+      }
+    ]
   },
   "ihp130_gcd": {
     "case_root": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd",
@@ -71,6 +85,13 @@
     "pdk": "ihp130",
     "lef": "/home/lizhijun/work/iEDA/scripts/foundry/ihp130/ihp-sg13g2/libs.ref/sg13g2_stdcell/lef/sg13g2_stdcell.lef",
     "gp_baseline_def": "/tmp/gp_ihp130_gcd/placement.def",
-    "innovus_def": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/innovus_placed.def"
+    "innovus_def": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/innovus_placed.def",
+    "alt_input_defs": [
+      {
+        "label": "innovus_die",
+        "path": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/innovus_placed.def",
+        "note": "Innovus placement as GP seed; Round-24 recipe: random_init=0 + congestion_effort=3 -> HPWL 444.7M, rutil 1.549"
+      }
+    ]
   }
 }
