@@ -92,7 +92,7 @@ def last_gp_line(out: str) -> dict:
             m = mm
     if not m:
         return {}
-    return {
+    record = {
         "mode": m.group(1).split(",")[0].split()[-1],
         "stop_reason": m.group(2),
         "start_iteration": int(m.group(3)),
@@ -101,6 +101,16 @@ def last_gp_line(out: str) -> dict:
         "overflow": float(m.group(6)),
         "route_util": float(m.group(7)),
     }
+    effect = re.search(r"scope_effect active=(\d+) halo=(\d+) context=(\d+) context_moved=(\d+) max_displacement=([0-9.eE+-]+)", out)
+    if effect:
+        record["scope_effect"] = {
+            "active_written": int(effect.group(1)),
+            "halo_written": int(effect.group(2)),
+            "context_written": int(effect.group(3)),
+            "context_moved": int(effect.group(4)),
+            "max_displacement": float(effect.group(5)),
+        }
+    return record
 
 
 def last_ledger(workdir: Path) -> dict:
