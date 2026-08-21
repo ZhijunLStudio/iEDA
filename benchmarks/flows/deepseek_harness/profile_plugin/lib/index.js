@@ -80,7 +80,8 @@ function asJson(value) {
 	return value;
 }
 const GP_TOOL_VERSION = "4";
-async function cachedRun(workdir, key, source, runner, budget = 128) {
+async function cachedRun(workdir, key, source, runner, budget) {
+if (budget === undefined) budget = source === "ieda_gp_run" ? 128 : 4000;
 const dir = resolve(workdir);
 mkdirSync(dir, { recursive: true });
 const cacheFile = join(dir, "gp_agent_cache.jsonl");
@@ -88,8 +89,9 @@ let rows = [];
 try {
 rows = readFileSync(cacheFile, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
 } catch (_) {}
-if (rows.length >= budget) {
-return asJson({ ok: false, reason: `gp action budget exhausted (${budget}) in ${dir}`, cached: false });
+const sourceRows = rows.filter((row) => row.source === source).length;
+if (sourceRows >= budget) {
+return asJson({ ok: false, reason: source === "ieda_gp_run" ? `gp run-action budget exhausted (${budget} unique actions) in ${dir}; reuse identical arguments to hit the cache, or start a fresh workdir` : `gp ${source} cache full (${budget} entries) in ${dir}`, cached: false });
 }
 const hit = rows.find((row) => row.key === GP_TOOL_VERSION + ":" + key);
 if (hit) {
@@ -158,6 +160,7 @@ var IedaGpRuntime = class {
 		const [command, ...rest] = args;
 		const key = JSON.stringify({ design, command, args: rest, inputDef: inputDef || record.input_def, foundryDir: foundryDir || record.foundry_dir });
 		return cachedRun(workdir, key, "ieda_gp_run", async () => {
+			const lef = record.lef || join(this.iedaRoot, "scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef");
 			const value = await runCli(this.iedaRoot, this.python, this.timeoutMs, this.script("gp_agent.py"), [
 				command,
 				"--workdir",
@@ -170,6 +173,8 @@ var IedaGpRuntime = class {
 				String(record.pl_config),
 				"--foundry-dir",
 				String(foundryDir || record.foundry_dir || join(this.iedaRoot, "scripts/foundry/sky130")),
+				"--lef",
+				lef,
 				...rest
 			]);
 			trace(workdir, { source: "ieda_gp_run", design, args, result: value });
@@ -247,7 +252,7 @@ return asJson(await runtime.agent(args.design, args.workdir, ["local_run", "--it
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_observe",
-description: "Read EDA-side facts (no side effects). kind: designs (list registered design/PDK presets), status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history), congestion_hotspots (runs read-only RUDY evaluator on a DEF and returns overflow regions), timing_paths (runs the SAME run_timing_eval HPWL evaluator used by verify metrics, and returns worst paths with scope_instances). Use top_n=0 for full grid/batch history.",
+description: "Read EDA-side facts (no side effects). kind: designs (list registered design/PDK presets), status (current metrics with availability/units), checkpoints (all checkpoints), grid (raw top density bins), hotspots (density hotspots), longnets (highest-HPWL nets), unstable (most-moved cells between checkpoint_a and checkpoint_b), trajectory (append-only batch history), experiments (aggregated action->metric table + Pareto view from this workdir's trace and archives), congestion_hotspots (runs read-only RUDY evaluator on a DEF and returns overflow regions; same evaluator as verify metrics, cached per DEF mtime - use it as the cheap post-action congestion check), timing_paths (runs the SAME run_timing_eval HPWL evaluator used by verify metrics, and returns worst paths with scope_instances; cached per DEF mtime - use it as the cheap post-action timing check). Use top_n=0 for full grid/batch history.",
 parameters: p({ workdir: { type: "string" }, design: { type: "string" }, checkpoint: { type: "string" }, checkpoint_a: { type: "string" }, checkpoint_b: { type: "string" }, top_n: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" }, bin_cnt: { type: "integer" }, congestion_model: { type: "string" } }),
 output: out(),
 execute: async (args) => {
@@ -260,15 +265,16 @@ if (args.kind === "hotspots") return toolbox(["hotspots", "--workdir", resolve(a
 if (args.kind === "longnets") return toolbox(["longnets", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.def_path ? ["--def-path", args.def_path] : [], ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "unstable") return toolbox(["unstable", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, "--top-n", String(args.top_n ?? 5)]);
 if (args.kind === "trajectory") return toolbox(["trajectory", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 0)]);
+if (args.kind === "experiments") return toolbox(["experiments", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 40)]);
 if (args.kind === "congestion_hotspots") { const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "congestion_hotspots requires design" }); return asJson(await runtime.congestionObserve(design, args.workdir, args.def_path, args.top_n, args.bin_cnt, args.foundry_dir, args.congestion_model)); }
 if (args.kind === "timing_paths") { const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "timing_paths requires design" }); return asJson(await runtime.timingObserve(design, args.workdir, args.def_path, args.top_n, args.foundry_dir)); }
-throw new Error("ieda_gp_observe: kind must be designs|status|checkpoints|grid|hotspots|longnets|unstable|trajectory|congestion_hotspots|timing_paths");
+throw new Error("ieda_gp_observe: kind must be designs|status|checkpoints|grid|hotspots|longnets|unstable|trajectory|experiments|congestion_hotspots|timing_paths");
 }
 }));
 
 ctx.tools.register(defineTool({
 name: "ieda_gp_propose",
-description: "Propose GP actions without changing state. kind: regions (executable region rectangles), region_density (suggested density target for a region), freeze (cells that would be frozen), longnet_instances (concrete instance sets for the highest-HPWL nets, directly usable as scope=instances), gp_config (bounded config/budget candidates with executable start actions). prediction_status is unavailable until a predictor exists.",
+description: "Propose GP actions without changing state. kind: regions (priority=density|longnet|congestion; every region carries executable_action and density_target_options), region_density (suggested density target options for a region), freeze (cells that would be frozen; carries the complement scope_instances), longnet_instances (concrete instance sets for the highest-HPWL nets, directly usable as scope=instances), timing (instance sets for the worst timing paths from the cached iSTA report; run observe kind=timing_paths first), gp_config (bounded config/budget candidates with executable start actions). prediction_status is unavailable until a predictor exists.",
 parameters: p({ workdir: { type: "string", required: true }, checkpoint: { type: "string" }, priority: { type: "string" }, top_n: { type: "integer" }, min_cell_count: { type: "integer" }, max_cell_count: { type: "integer" }, def_path: { type: "string" }, region: { type: "string" } }),
 output: out(),
 execute: async (args) => {
@@ -276,8 +282,9 @@ if (args.kind === "regions") return toolbox(["propose_regions", "--workdir", res
 if (args.kind === "region_density") { if (!args.region) return asJson({ ok: false, reason: "region_density requires region 'llx lly urx ury'" }); return toolbox(["propose_region_density", "--workdir", resolve(args.workdir), "--region", args.region, ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]); }
 if (args.kind === "freeze") { if (!args.region) return asJson({ ok: false, reason: "freeze requires region 'llx lly urx ury'" }); return toolbox(["propose_freeze", "--workdir", resolve(args.workdir), "--region", args.region, ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]); }
 if (args.kind === "longnet_instances") return toolbox(["propose_longnet_instances", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 5), ...args.def_path ? ["--def-path", args.def_path] : [], ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
+if (args.kind === "timing") return toolbox(["propose_timing", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 3), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "gp_config") return toolbox(["propose_config", "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
-throw new Error("ieda_gp_propose: kind must be regions|region_density|freeze|longnet_instances|gp_config");
+throw new Error("ieda_gp_propose: kind must be regions|region_density|freeze|longnet_instances|timing|gp_config");
 }
 }));
 
@@ -316,7 +323,7 @@ output: out(),
 execute: async (args) => {
 if (args.kind === "delta") return toolbox(["verify_delta", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, ...args.def_path ? ["--def-path", args.def_path] : []]);
 if (args.kind === "lg") { const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "lg requires design (or a previous ieda_gp_run trace in workdir)" }); return asJson(await runtime.agent(design, args.workdir, ["verify_lg", ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []])); }
-if (args.kind === "metrics") { if (!args.raw_def && !args.candidate_def && !String(args.extra_defs ?? "").trim()) return asJson({ ok: false, reason: "metrics requires raw_def, candidate_def or extra_defs" }); const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "metrics requires design (or a previous ieda_gp_run trace in workdir)" }); const info = readDesigns(config.iedaRoot)[design] || {}; mkdirSync(resolve(args.workdir), { recursive: true }); const outFile = join(resolve(args.workdir), "gp_metrics_compare.json"); const extraDefs = String(args.extra_defs ?? "").split(";").map((s) => s.trim()).filter(Boolean); const cmd = [join(config.iedaRoot, "benchmarks/flows/gp_metrics_compare.py"), "--design", design, "--case-root", String(info.case_root), "--macro-lef", String(info.lef || join(config.iedaRoot, "scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef")), "--foundry-dir", String(runtime.foundryDir(design)), "--congestion-model", String(args.congestion_model ?? "rudy"), ...args.timing === 0 ? ["--no-timing"] : [], "--out", outFile, ...args.raw_def ? ["raw=" + args.raw_def] : [], ...args.candidate_def ? ["candidate=" + args.candidate_def] : [], ...extraDefs]; const runResult = await runCli(config.iedaRoot, config.python, config.timeoutMs, cmd[0], cmd.slice(1)); try { const parsed = JSON.parse(readFileSync(outFile, "utf8")); return asJson({ ok: true, metrics_file: outFile, ...parsed }); } catch (error) { return asJson({ ok: false, reason: "metrics evaluator produced no valid JSON", metrics_file: outFile, stdout_tail: runResult.stdout ? String(runResult.stdout).slice(-4000) : null, stderr_tail: runResult.stderr_tail || null }); } }
+if (args.kind === "metrics") { if (!args.raw_def && !args.candidate_def && !String(args.extra_defs ?? "").trim()) return asJson({ ok: false, reason: "metrics requires raw_def, candidate_def or extra_defs" }); const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "metrics requires design (or a previous ieda_gp_run trace in workdir)" }); const info = readDesigns(config.iedaRoot)[design] || {}; const extraDefs = String(args.extra_defs ?? "").split(";").map((s) => s.trim()).filter(Boolean); const defStamp = (spec) => { const eq = spec.indexOf("="); const label = eq >= 0 ? spec.slice(0, eq) : spec; const p = eq >= 0 ? spec.slice(eq + 1) : spec; return [label, !p ? "missing" : (existsSync(p) ? statSync(p).mtimeMs : "missing")]; }; const defs = []; if (args.raw_def) defs.push(["raw", ...defStamp(args.raw_def)]); if (args.candidate_def) defs.push(["candidate", ...defStamp(args.candidate_def)]); for (const s of extraDefs) defs.push(defStamp(s)); const model = String(args.congestion_model ?? "rudy"); const timing = args.timing === 0 ? 0 : 1; const key = JSON.stringify({ design, defs, model, timing }); return cachedRun(resolve(args.workdir), key, "ieda_gp_verify", async () => { mkdirSync(resolve(args.workdir), { recursive: true }); const outFile = join(resolve(args.workdir), "gp_metrics_compare.json"); const cmd = [join(config.iedaRoot, "benchmarks/flows/gp_metrics_compare.py"), "--design", design, "--case-root", String(info.case_root), "--macro-lef", String(info.lef || join(config.iedaRoot, "scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef")), "--foundry-dir", String(runtime.foundryDir(design)), "--congestion-model", model, ...timing === 0 ? ["--no-timing"] : [], "--out", outFile, ...args.raw_def ? ["raw=" + args.raw_def] : [], ...args.candidate_def ? ["candidate=" + args.candidate_def] : [], ...extraDefs]; const runResult = await runCli(config.iedaRoot, config.python, config.timeoutMs, cmd[0], cmd.slice(1)); try { const parsed = JSON.parse(readFileSync(outFile, "utf8")); return asJson({ ok: true, metrics_file: outFile, ...parsed }); } catch (error) { return asJson({ ok: false, reason: "metrics evaluator produced no valid JSON", metrics_file: outFile, stdout_tail: runResult.stdout ? String(runResult.stdout).slice(-4000) : null, stderr_tail: runResult.stderr_tail || null }); } }, 4000); }
 throw new Error("ieda_gp_verify: kind must be delta|lg|metrics");
 }
 }));

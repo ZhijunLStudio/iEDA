@@ -35,6 +35,34 @@ IEDa_BIN = Path(os.environ.get("IEDA_BIN", REPO_ROOT / "build/bin/iEDA"))
 PLV_CASES_ROOT = Path(os.environ.get("PLV_CASES_ROOT", "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases"))
 
 
+def resolve_lef(foundry_dir: Path, explicit: str | None = None) -> Path | None:
+    """Resolve the macro LEF used for DEF-level HPWL evaluation."""
+    if explicit:
+        p = Path(explicit)
+        if p.exists():
+            return p
+    for cand in (Path(foundry_dir) / "lef/sky130_fd_sc_hd_merged.lef",
+                 Path(foundry_dir) / "lef" / "sky130_fd_sc_hd_merged.lef"):
+        if cand.exists():
+            return cand
+    hits = sorted(Path(foundry_dir).rglob("*merged*.lef")) or sorted(Path(foundry_dir).rglob("*.lef"))
+    return hits[0] if hits else None
+
+
+def def_hpwl_of(def_path: Path, lef: Path | None) -> int | None:
+    """Same-evaluator DEF-level HPWL (def_hpwl_eval.py). Cheap: pure python."""
+    if lef is None or not Path(def_path).exists():
+        return None
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "benchmarks/flows/def_hpwl_eval.py"), str(lef), str(def_path)],
+            cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=600)
+        m = re.search(r"HPWL=(\d+)", proc.stdout or "")
+        return int(m.group(1)) if m else None
+    except Exception:
+        return None
+
+
 def parse_bool(value: str | bool) -> bool:
     if isinstance(value, bool):
         return value
@@ -258,9 +286,16 @@ def cmd_start(args: argparse.Namespace) -> int:
             print(json.dumps({"ok": False, "rc": rc2, "reason": "start finished but DEF re-export failed",
                               "stderr_tail": err2[-2000:]}))
             return 1
-    state = update_state(workdir, {"case_root": str(case_root), "input_def": str(input_def),
-                                   "config": str(config), "foundry_dir": str(foundry)}, record=record)
+    extra = {"case_root": str(case_root), "input_def": str(input_def),
+             "config": str(config), "foundry_dir": str(foundry)}
+    lef = resolve_lef(foundry, getattr(args, "lef", None) or state.get("lef"))
+    if lef is not None:
+        extra["lef"] = str(lef)
+    state = update_state(workdir, extra, record=record)
     record["checkpoint_path"] = record.get("checkpoint") or state.get("latest_checkpoint")
+    record["def_hpwl"] = def_hpwl_of(workdir / "placement.def", lef)
+    if record.get("def_hpwl") is not None:
+        record["def_hpwl_unit"] = "def"
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
     return 0
 
@@ -318,6 +353,12 @@ def cmd_advance(args: argparse.Namespace) -> int:
                               "stderr_tail": err2[-2000:]}))
             return 1
     state = update_state(workdir)
+    lef = resolve_lef(foundry, getattr(args, "lef", None) or state.get("lef"))
+    if lef is not None and state.get("lef") != str(lef):
+        state = update_state(workdir, {"lef": str(lef)})
+    record["def_hpwl"] = def_hpwl_of(workdir / "placement.def", lef)
+    if record.get("def_hpwl") is not None:
+        record["def_hpwl_unit"] = "def"
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
     return 0
 
@@ -331,7 +372,7 @@ def cmd_local_run(args: argparse.Namespace) -> int:
         return 1
     cmds = [
         f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
-        f"placer_run_gp -mode advance -iterations {args.iterations} " + " ".join(scope_args(args)),
+        f"placer_run_gp -mode advance -iterations {args.iterations} -report_route_util 1 " + " ".join(scope_args(args)),
         "placer_run_gp -mode accept",
     ]
     rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmds, def_save=True)
@@ -343,15 +384,23 @@ def cmd_local_run(args: argparse.Namespace) -> int:
     try:
         parent = json.loads(Path(ckpt).read_text())
         before = {"iteration": parent.get("current_iter"), "hpwl": parent.get("prev_hpwl"),
-                  "overflow": parent.get("sum_overflow")}
+                  "overflow": parent.get("sum_overflow"), "route_util": parent.get("final_route_util")}
     except Exception:
         before = None
     delta = {}
     if before and record.get("hpwl") is not None and record.get("overflow") is not None:
         delta = {"hpwl": record["hpwl"] - before["hpwl"],
                  "overflow": record["overflow"] - before["overflow"]}
+        if before.get("route_util") is not None and record.get("route_util") is not None:
+            delta["route_util"] = record["route_util"] - before["route_util"]
     state = update_state(workdir, record=record)
     save_context(state, args, workdir, case_root, input_def, config, foundry)
+    lef = resolve_lef(foundry, getattr(args, "lef", None) or state.get("lef"))
+    if lef is not None and state.get("lef") != str(lef):
+        state = update_state(workdir, {"lef": str(lef)})
+    record["def_hpwl"] = def_hpwl_of(workdir / "placement.def", lef)
+    if record.get("def_hpwl") is not None:
+        record["def_hpwl_unit"] = "def"
     print(json.dumps({"ok": True, "state": state, "record": record,
                       "before": before, "delta": delta}, indent=2))
     return 0
@@ -506,6 +555,7 @@ def cmd_candidate(args: argparse.Namespace) -> int:
                     "hpwl": child.get("prev_hpwl"),
                     "overflow": child.get("sum_overflow"),
                     "step_length": child.get("final_step_length"),
+                    "route_util": child.get("final_route_util"),
                 }
             except Exception:
                 candidate[f"{side}_metrics"] = None
@@ -650,6 +700,9 @@ def main() -> int:
             sp.add_argument("--overflow-penalty", type=float, default=0.0)
         elif sp.prog.endswith("status"):
             sp.add_argument("--workdir", required=True)
+    for sp in parser._subparsers._group_actions[0].choices.values():
+        if not any(a.dest == "lef" for a in sp._actions):
+            sp.add_argument("--lef")
     args = parser.parse_args()
     return {"start": cmd_start, "advance": cmd_advance, "local_run": cmd_local_run,
             "candidate": cmd_candidate, "verify_lg": cmd_verify_lg, "restore": cmd_restore,

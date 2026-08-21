@@ -453,6 +453,9 @@ def propose_regions(workdir: str | Path, checkpoint: str | None = None, priority
         return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
                 "iteration": cp.get("current_iter"), "priority": priority, "regions": regions}
 
+    if priority == "congestion":
+        return propose_congestion_regions(workdir, checkpoint, top_n)
+
     grid = grid_report(workdir)
     if not grid:
         return {"ok": False, "reason": "gp_grid_report.json missing"}
@@ -485,6 +488,8 @@ def propose_regions(workdir: str | Path, checkpoint: str | None = None, priority
             hot = max(group, key=lambda b: b.get("overflow_area", 0))
             bbox = (hot["ll_x"], hot["ll_y"], hot["ur_x"], hot["ur_y"])
             active = instance_points_in_bbox(f"{bbox[0]} {bbox[1]} {bbox[2]} {bbox[3]}", names, coords)
+        peak = max(b.get("density", 0.0) for b in group)
+        suggested = max(0.6, min(1.0, round(1.0 / peak, 2))) if peak > 0 else 1.0
         region = {
             "id": f"region-{gi + 1}",
             "kind": "density",
@@ -493,8 +498,18 @@ def propose_regions(workdir: str | Path, checkpoint: str | None = None, priority
             "active_cell_count": len(active),
             "halo_cell_count": 0,
             "density_overflow": max(b.get("overflow_area", 0) for b in group),
+            "peak_density": peak,
             "score": max(b.get("overflow_area", 0) for b in group),
             "reason": f"merged {len(group)} connected high-overflow bins",
+            "density_target_options": [t for t in (0.6, 0.7, 0.8, 0.9, 1.0) if t >= suggested - 1e-9],
+            "executable_action": {
+                "tool": "ieda_gp_run",
+                "kind": "local_run",
+                "scope": "region",
+                "scope_region": f"{bbox[0]} {bbox[1]} {bbox[2]} {bbox[3]}",
+                "scope_density_target": suggested,
+                "checkpoint": checkpoint_path(workdir, checkpoint),
+            },
             "prediction_status": "unavailable",
         }
         regions.append(region)
@@ -522,6 +537,14 @@ def propose_region_density(workdir: str | Path, region: str, checkpoint: str | N
             "iteration": cp.get("current_iter"), "region": region,
             "overlapping_bins": len(overlap), "peak_density": peak,
             "suggested_density_target": suggested,
+            "density_target_options": [t for t in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0) if t >= suggested - 1e-9],
+            "core_target_density_reference": (cp.get("config_state") or {}).get("target_density"),
+            "executable_action": {
+                "tool": "ieda_gp_run",
+                "kind": "apply_region_density",
+                "region": region,
+                "scope_density_target": suggested,
+            },
             "prediction_status": "unavailable"}
 
 
@@ -530,9 +553,18 @@ def propose_freeze(workdir: str | Path, region: str, checkpoint: str | None = No
     names = cp.get("instance_names") or []
     coords = cp.get("instance_density_coords") or []
     active = instance_points_in_bbox(region, names, coords)
+    inside = {name for name, _xy in active}
+    outside = [name for name in names if name not in inside]
     return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
             "iteration": cp.get("current_iter"), "region": region,
-            "cells_in_region": len(active), "freeze_cell_count": len(active),
+            "cells_in_region": len(inside), "freeze_cell_count": len(inside),
+            "active_outside_cell_count": len(outside),
+            "scope_instances": ",".join(outside),
+            "executable_action": {
+                "tool": "ieda_gp_run",
+                "kind": "apply_freeze",
+                "region": region,
+            },
             "prediction_status": "unavailable"}
 
 
@@ -792,11 +824,210 @@ def trajectory(workdir: str | Path, top_n: int = 0) -> dict:
     return {"ok": True, "workdir": str(workdir), "batch_count": len(rows), "batches": rows}
 
 
+def propose_congestion_regions(workdir: str | Path, checkpoint: str | None = None, top_n: int = 5) -> dict:
+    """Regions from the cached RUDY utilization map (written by observe congestion_hotspots)."""
+    cp = resolve_checkpoint(workdir, checkpoint)
+    summary = load_json(Path(workdir) / "congestion_result.json") or {}
+    util_path = Path(workdir) / "rudy_util.csv"
+    if not util_path.exists():
+        return {"ok": False, "reason": "no rudy_util.csv in workdir; run observe kind=congestion_hotspots first (cached per DEF)"}
+    rows = []
+    for line in util_path.read_text().splitlines():
+        vals = [float(t) for t in line.split(",") if t.strip() != ""]
+        if vals:
+            rows.append(vals)
+    region = summary.get("region")
+    if not region or len(region) < 4:
+        return {"ok": False, "reason": "congestion_result.json has no usable region"}
+    bin_x = int(summary.get("bin_cnt_x") or 64)
+    bin_y = int(summary.get("bin_cnt_y") or 64)
+    lx, ly, ux, uy = region[:4]
+    size_x = (ux - lx) / bin_x
+    size_y = (uy - ly) / bin_y
+    bins = []
+    for r, row in enumerate(rows):
+        y = ly + (bin_y - 1 - r) * size_y
+        for c, util in enumerate(row):
+            if util <= 1.0:
+                continue
+            x = lx + c * size_x
+            bins.append({"row": r, "col": c, "utilization": util,
+                         "llx": int(x), "lly": int(y), "urx": int(min(x + size_x, ux)), "ury": int(min(y + size_y, uy))})
+    bins.sort(key=lambda b: -b["utilization"])
+    selected = bins[: max(1, top_n)]
+    merged: list[dict] = []
+    used: set[int] = set()
+    for i, b in enumerate(selected):
+        if i in used:
+            continue
+        rect = [b["llx"], b["lly"], b["urx"], b["ury"]]
+        changed = True
+        while changed:
+            changed = False
+            for j, c in enumerate(selected):
+                if j in used or i == j:
+                    continue
+                if not (rect[2] >= c["llx"] and rect[0] <= c["urx"] and rect[3] >= c["lly"] and rect[1] <= c["ury"]):
+                    continue
+                rect[0] = min(rect[0], c["llx"]); rect[1] = min(rect[1], c["lly"])
+                rect[2] = max(rect[2], c["urx"]); rect[3] = max(rect[3], c["ury"])
+                used.add(j); changed = True
+        merged.append({"bbox": rect, "utilization": b["utilization"],
+                       "region": f"{rect[0]} {rect[1]} {rect[2]} {rect[3]}"})
+    regions = []
+    for m in merged:
+        regions.append({
+            "id": f"congestion-{len(regions) + 1}",
+            "kind": "congestion",
+            "bbox": m["region"],
+            "peak_utilization": m["utilization"],
+            "density_target_options": [0.6, 0.7, 0.8, 0.9, 1.0],
+            "executable_action": {
+                "tool": "ieda_gp_run", "kind": "local_run", "scope": "region",
+                "scope_region": m["region"], "scope_density_target": 0.8,
+                "checkpoint": checkpoint_path(workdir, checkpoint),
+            },
+            "prediction_status": "unavailable",
+        })
+    return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
+            "iteration": cp.get("current_iter"), "priority": "congestion",
+            "bin_cnt": (bin_x, bin_y),
+            "rudy_utilization_max": summary.get("rudy_utilization_max"),
+            "regions": regions}
+
+
+def propose_timing(workdir: str | Path, checkpoint: str | None = None, top_n: int = 3) -> dict:
+    """Timing-path instance proposals from the cached iSTA report (observe timing_paths)."""
+    tp = load_json(Path(workdir) / "timing_paths.json")
+    if not tp:
+        return {"ok": False, "reason": "timing_paths.json missing; run observe kind=timing_paths first (cached per DEF)"}
+    paths = tp.get("paths") or []
+    try:
+        cp_path = checkpoint_path(workdir, checkpoint)
+    except Exception:
+        cp_path = None
+    def instance_of(node_name: str) -> str | None:
+        name = str(node_name).split("(")[0].strip()
+        if ":" not in name:
+            return None
+        inst = name.split(":", 1)[0].strip()
+        if not inst or inst.upper() == "PIN":
+            return None
+        return inst
+
+    proposals = []
+    selected_instances: list[str] = []
+    seen: set[str] = set()
+    for i, p in enumerate(paths[: max(1, top_n)]):
+        insts: list[str] = []
+        for node in p.get("nodes") or []:
+            inst = instance_of((node or {}).get("name", ""))
+            if inst and inst not in insts:
+                insts.append(inst)
+        for inst in p.get("instances") or []:
+            if inst and inst not in insts:
+                insts.append(inst)
+        for inst in insts:
+            if inst not in seen:
+                seen.add(inst)
+                selected_instances.append(inst)
+        action: dict = {
+            "tool": "ieda_gp_run", "kind": "local_run", "scope": "instances",
+            "scope_instances": ",".join(selected_instances),
+        }
+        if cp_path:
+            action["checkpoint"] = cp_path
+        proposals.append({
+            "id": f"timing-path-top-{i + 1}",
+            "endpoint": p.get("endpoint"),
+            "slack_ns": p.get("slack"),
+            "instance_count": len(selected_instances),
+            "instances": list(selected_instances),
+            "executable_action": action,
+            "prediction_status": "unavailable",
+        })
+    return {"ok": True, "timing_summary": tp.get("timing_summary"),
+            "path_count": len(paths), "checkpoint_path": cp_path,
+            "proposals": proposals}
+
+
+def experiments(workdir: str | Path, top_n: int = 40) -> dict:
+    """Aggregate already-computed results into an action→metric table + Pareto view."""
+    root = Path(workdir)
+    rows: list[dict] = []
+    trace_path = root / "gp_agent_trace.jsonl"
+    if trace_path.exists():
+        for raw in trace_path.read_text(errors="ignore").splitlines():
+            if not raw.strip():
+                continue
+            try:
+                entry = json.loads(raw)
+            except Exception:
+                continue
+            if entry.get("source") != "ieda_gp_run":
+                continue
+            res = entry.get("result") or {}
+            if not res.get("ok"):
+                continue
+            rec = res.get("record") or {}
+            args = entry.get("args") or []
+            rows.append({
+                "ts": entry.get("ts"),
+                "kind": args[0] if args else None,
+                "args": args,
+                "mode": rec.get("mode"),
+                "iterations": (rec.get("start_iteration"), rec.get("end_iteration")),
+                "stop_reason": rec.get("stop_reason"),
+                "hpwl_solver": rec.get("hpwl"),
+                "def_hpwl": rec.get("def_hpwl"),
+                "overflow": rec.get("overflow"),
+                "route_util": rec.get("route_util"),
+                "scope_effect": rec.get("scope_effect"),
+                "checkpoint": rec.get("checkpoint_path"),
+            })
+    archived = []
+    for mfile in sorted(root.glob("archive/*/gp_metrics_compare.json")):
+        data = load_json(mfile)
+        if not data:
+            continue
+        stamp = mfile.parent.name
+        for label, p in (data.get("placements") or {}).items():
+            dens = p.get("density") or {}
+            tim = p.get("timing") or {}
+            archived.append({
+                "archive": stamp, "label": label, "def": p.get("def"),
+                "hpwl": p.get("hpwl"),
+                "rudy_max": dens.get("rudy_utilization_max"),
+                "bins": dens.get("rudy_overflow_bin_count"),
+                "rsum": dens.get("rudy_overflow_util_sum"),
+                "wns": tim.get("setup_wns_ns"), "freq": tim.get("suggest_freq_mhz"),
+            })
+    rows.sort(key=lambda x: x.get("ts") or 0)
+    pareto = []
+    for r in rows:
+        if r.get("def_hpwl") is None or r.get("route_util") is None:
+            continue
+        dominated = False
+        for q in rows:
+            if q is r or q.get("def_hpwl") is None or q.get("route_util") is None:
+                continue
+            if q["def_hpwl"] <= r["def_hpwl"] and q["route_util"] <= r["route_util"]                     and (q["def_hpwl"] < r["def_hpwl"] or q["route_util"] < r["route_util"]):
+                dominated = True
+                break
+        if not dominated:
+            pareto.append(r)
+    if top_n and top_n > 0:
+        rows = rows[-top_n:]
+    return {"ok": True, "workdir": str(workdir), "action_count": len(rows),
+            "recent_actions": rows, "pareto_actions": pareto, "archive_metrics": archived}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=["status", "checkpoints", "grid", "hotspots", "longnets", "trajectory", "propose_regions",
                                         "freeze_instances", "propose_longnet_instances", "propose_config",
-                                        "propose_region_density", "propose_freeze", "unstable", "verify_delta"])
+                                        "propose_region_density", "propose_freeze", "unstable", "verify_delta",
+                                        "propose_timing", "experiments"])
     ap.add_argument("--workdir", required=True)
     ap.add_argument("--checkpoint")
     ap.add_argument("--checkpoint-a")
@@ -830,6 +1061,10 @@ def main() -> int:
         print(json.dumps(diagnose_longnets(args.workdir, args.checkpoint, args.top_n, args.def_path), indent=2))
     elif args.command == "trajectory":
         print(json.dumps(trajectory(args.workdir, args.top_n), indent=2))
+    elif args.command == "propose_timing":
+        print(json.dumps(propose_timing(args.workdir, args.checkpoint, args.top_n), indent=2))
+    elif args.command == "experiments":
+        print(json.dumps(experiments(args.workdir, args.top_n), indent=2))
     elif args.command == "propose_longnet_instances":
         print(json.dumps(propose_longnet_instances(args.workdir, args.checkpoint, args.top_n, args.def_path), indent=2))
     elif args.command == "freeze_instances":
