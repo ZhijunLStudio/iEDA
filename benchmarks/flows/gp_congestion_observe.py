@@ -261,6 +261,8 @@ def main():
         if lef_candidates:
             macros, _ = mm.parse_lef(str(lef_candidates[0]))
             congestion_nets = def_net_instances(Path(args.def_path), macros, regions[0]["bbox"])[: args.top_n]
+    with open(work / "congestion_nets.json", "w") as _cf:
+        json.dump({"def": str(Path(args.def_path).resolve()), "regions": regions, "congestion_nets": congestion_nets}, _cf, indent=2)
     print(json.dumps({
         "ok": True,
         "def": str(Path(args.def_path).resolve()),

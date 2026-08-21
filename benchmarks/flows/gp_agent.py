@@ -677,14 +677,33 @@ def cmd_local_congestion(args: argparse.Namespace) -> int:
     evaluator's cached map and run scope=region evacuations. This is the tool
     form of the loop the s1238 session proved (2.768 -> 2.207 RUDY max)."""
     workdir, case_root, input_def, config, foundry = require_context(args)
-    try:
-        regions = congestion_regions(workdir, args.top_bins, args.congestion_threshold)
-    except ValueError as error:
-        print(json.dumps({"ok": False, "reason": str(error)}))
-        return 1
-    if not regions:
-        print(json.dumps({"ok": False, "reason": "no bins above the congestion threshold in the cached RUDY map"}))
-        return 1
+    targets: list[dict] = []
+    if getattr(args, "scope", "region") == "instances":
+        # Congestion-net cones: the nets crossing the hot bins (the demand
+        # peaks are made by nets, not by the few cells inside the bin).
+        nets_path = Path(workdir) / "congestion_nets.json"
+        if not nets_path.exists():
+            print(json.dumps({"ok": False, "reason": "no congestion_nets.json in workdir; run observe kind=congestion_hotspots first (cached per DEF)"}))
+            return 1
+        nets_data = json.loads(nets_path.read_text())
+        nets = (nets_data.get("congestion_nets") or [])[: max(1, args.top_bins)]
+        for net in nets:
+            insts = [x for x in (net.get("instances") or []) if x]
+            if insts:
+                targets.append({"kind": "instances", "label": str(net.get("net")), "instances": insts})
+        if not targets:
+            print(json.dumps({"ok": False, "reason": "congestion_nets.json has no usable instance sets"}))
+            return 1
+    else:
+        try:
+            regions = congestion_regions(workdir, args.top_bins, args.congestion_threshold)
+        except ValueError as error:
+            print(json.dumps({"ok": False, "reason": str(error)}))
+            return 1
+        if not regions:
+            print(json.dumps({"ok": False, "reason": "no bins above the congestion threshold in the cached RUDY map"}))
+            return 1
+        targets = [{"kind": "region", "label": r["region"], "region": r["region"]} for r in regions]
     rounds = max(1, args.rounds)
     results = []
     ckpt = resolve_checkpoint(args, workdir)
@@ -702,8 +721,34 @@ def cmd_local_congestion(args: argparse.Namespace) -> int:
         return run_ieda(workdir, case_root, foundry, config, input_def, cmds, def_save=True)
 
     for rnd in range(rounds):
-        for region in regions:
-            rect = region["region"]
+        for target in targets:
+            if target["kind"] == "instances":
+                cmds = [
+                    f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
+                    f"placer_run_gp -mode advance -iterations {args.iterations} -report_route_util 1 "
+                    f"-scope instances -scope_instances {{{','.join(target['instances'])}}} "
+                    f"-scope_halo_coeff {args.halo_coeff} -scope_halo_hops {args.halo_hops}",
+                    "placer_run_gp -mode accept",
+                ]
+                retried = False
+                rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmds, def_save=True)
+                record = last_gp_line(out) or last_ledger(workdir)
+                if rc != 0:
+                    rc_rb, _out_rb, _err_rb = rollback()
+                    print(json.dumps({"ok": False, "rc": rc, "rolled_back": rc_rb == 0,
+                                      "completed_evacuations": len(results),
+                                      "reason": "congestion-net cone step failed; workdir rolled back to the pre-call checkpoint",
+                                      "stderr_tail": err[-1200:]}))
+                    return 1
+                results.append({"round": rnd + 1, "kind": "instances", "net": target["label"],
+                                "instance_count": len(target["instances"]),
+                                "hpwl": record.get("hpwl"), "overflow": record.get("overflow"),
+                                "route_util": record.get("route_util")})
+                ckpt = workdir / "pl/gp_session_checkpoint.json"
+                if not ckpt.exists():
+                    ckpt = resolve_checkpoint(args, workdir)
+                continue
+            rect = target["region"]
             cmds = [
                 f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
                 f"placer_run_gp -mode advance -iterations {args.iterations} -report_route_util 1 "
@@ -733,8 +778,7 @@ def cmd_local_congestion(args: argparse.Namespace) -> int:
                                   "reason": "evacuation round failed" + (" (after gentle retry)" if retried else "") + "; workdir rolled back to the pre-call checkpoint",
                                   "stderr_tail": err[-1200:]}))
                 return 1
-            results.append({"round": rnd + 1, "region": rect,
-                            "peak_utilization": region["utilization"],
+            results.append({"round": rnd + 1, "kind": "region", "region": rect,
                             "gentle_retry": retried,
                             "hpwl": record.get("hpwl"), "overflow": record.get("overflow"),
                             "route_util": record.get("route_util")})
@@ -746,7 +790,7 @@ def cmd_local_congestion(args: argparse.Namespace) -> int:
     record["def_hpwl"] = def_hpwl_of(workdir / "placement.def", lef)
     if record.get("def_hpwl") is not None:
         record["def_hpwl_unit"] = "def"
-    print(json.dumps({"ok": True, "rounds": rounds, "regions": len(regions),
+    print(json.dumps({"ok": True, "rounds": rounds, "targets": len(targets),
                       "evacuations": results, "state": state, "record": record}, indent=2))
     return 0
 
