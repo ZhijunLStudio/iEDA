@@ -399,6 +399,17 @@ checkpoint=start 等），无 traceback。
   严格占优且不在可达盆内——s1238 的局部动作空间已穷尽。
 - asap7 gen-3 会话运行中（13+ 调用，正在用 local_congestion/
   propose congestion 探索 anchor 族之外的组合）。
+## 4.15 Round 10：congestion-net 提取修复 + asap7 sub-1.0 攻防
+
+- 修复 congestion-net 提取两个问题：① LEF 选择用 registry lef 而非
+  foundry 目录第一个 lef（asap7 目录第一个 lef 无宏 → nets 恒空）；
+  ② 无 overflow bin（util<1.0）时回退用 top util bins 做 net 锥种子
+  （asap7 anchor 族正是这种 sub-1.0 拥塞）。提交 5a5de5a。
+- asap7 net 锥疏散实测：anchor-0.2 点上 6 步 net 锥（n13005 等），
+  rudy_max 0.776→0.783（微劣）——asap7 的 0.77 峰来自宏区的需求
+  集中，缩短穿线 net 只搬移需求不降低峰值。
+- asap7 anchor 族 rudy_max 底线确认为 0.77（Innovus 0.706 不可达）；
+  gen-3 会话继续探索。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
