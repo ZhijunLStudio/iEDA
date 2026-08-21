@@ -245,6 +245,22 @@ checkpoint=start 等），无 traceback。
   不过度扩散的前提下优化 HPWL/拥塞，WNS 只牺牲 36ps 仍优于 Innovus。
 - to=0.35 的 rsum（249.8）略超 Innovus（245.3），不是全域赢家；
   to=0.3 是 crossover 最优档。
+### s1238/nangate 更深拥塞推进（to 降低 + 继续扩散）结果：反向
+
+| 实验 | defHPWL | verify RUDYmax | bins | rsum | 内部 rutil |
+|---|---|---|---|---|---|
+| s1238 best（effort1, to=0.1 + 疏散） | 5,934,445 | 2.207 | 573 | 171.85 | - |
+| s1238 push（effort2, to=0.05, 482it） | 6,203,894 | 2.544 | 650 | 195.93 | 1.58 |
+| nangate same-die best | 3,180,729 | 2.947 | 323 | 152.29 | - |
+| nangate push（effort2, to=0.08, 341it） | 3,446,662 | 3.316 | 260 | 140.40 | 2.01 |
+
+- 内部 rutil 改善（1.58/2.01）没有转化为 verify RUDY 改善——
+  再次实证 GP 内部拥塞模型与 verify RUDY 校准不一致；
+  单纯加强拥塞项不能闭合 s1238/nangate/asap7 的 RUDY gap。
+- 下轮必须做 C++ 拥塞校准，或新增基于 verify RUDY map 的
+  局部疏散原语（Python 侧读缓存 rudy_util.csv → 选 top overflow bin
+  → scope=region 疏散循环），把 s1238 会话证明有效的手工循环
+  变成工具内建的 local_congestion 动作。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
