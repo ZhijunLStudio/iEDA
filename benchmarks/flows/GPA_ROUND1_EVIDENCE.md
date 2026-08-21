@@ -497,6 +497,14 @@ checkpoint=start 等），无 traceback。
   ——HPWL/WNS/freq 超 Innovus，拥塞三项在盆地底部波动。
 - s1238 结论定稿：工具层（anchor/疏散/penalty/pull-repair 全组合）已穷尽，
   剩余 2%/3% 缺口为求解器景观属性。
+## 4.21 Round 19：start 缓存幽灵成功修复（会话反馈闭环）
+
+- s1238 gen-2 报告反馈："cached start 不更新会话 checkpoint（需换 seed
+  强制重跑）"——根因：start 不在 state-dependent 列表里，缓存命中直接返回
+  旧 record 而 iEDA 进程未运行 → workdir 没有 checkpoint → 后续
+  advance/restore 报 "no checkpoint" 的幽灵成功。
+- 修复：start（含 full 的 start）绕过 run 缓存，每次真实执行（提交 ba24f10）。
+- aes 会话 46 调用继续攻坚（67.6k 设计单次 run 数分钟）。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
