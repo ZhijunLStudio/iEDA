@@ -299,7 +299,11 @@ void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coef
       // the force: a linear term alone leaves the fixed point unchanged.
       double penalty = 1.0;
       if (congestion_effort_level >= 4) {
-        penalty = 1.0 + 0.5 * over_util + 1.0 * over_util * over_util;
+        // The aligned util scale is the evaluator's demand density
+        // (~1-3 on hot bins); a modest linear penalty is enough because
+        // the over-util magnitude is O(1) here, unlike the cap-based
+        // levels 2/3 where util can exceed 10.
+        penalty = std::min(1.5, 1.0 + 0.05 * over_util);
       } else {
         const double penalty_coef = congestion_effort_level >= 3 ? 0.1 : 0.25;
         penalty = 1.0 + penalty_coef * over_util;

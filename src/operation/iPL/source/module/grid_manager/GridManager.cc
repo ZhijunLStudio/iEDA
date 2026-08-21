@@ -173,10 +173,14 @@ void GridManager::initRouteCap(int32_t h_cap, int32_t v_cap)
   }  
 }
 
-void GridManager::evalRouteUtilByArea()
+void GridManager::evalRouteUtilByArea(int32_t dbu_unit)
 {
   // Evaluator-aligned utilization: demand density per bin area, union max.
   // This matches run_congestion_eval's rudy_utilization_max (union map).
+  // The evaluator computes in microns; multiply the dbu-space demand by the
+  // database unit so the values land on the same scale (otherwise the
+  // >1.0 overflow thresholds never trigger).
+  const float unit_scale = static_cast<float>(dbu_unit > 0 ? dbu_unit : 1000);
   _h_util_max = 0.0f;
   _v_util_max = 0.0f;
   _h_util_sum = 0.0f;
@@ -191,8 +195,8 @@ void GridManager::evalRouteUtilByArea()
       if (bin_area <= 0) {
         continue;
       }
-      _grid_2d_list[i][j].h_util = grid.h_cong / static_cast<float>(bin_area);
-      _grid_2d_list[i][j].v_util = grid.v_cong / static_cast<float>(bin_area);
+      _grid_2d_list[i][j].h_util = grid.h_cong * unit_scale / static_cast<float>(bin_area);
+      _grid_2d_list[i][j].v_util = grid.v_cong * unit_scale / static_cast<float>(bin_area);
       float union_util = _grid_2d_list[i][j].h_util + _grid_2d_list[i][j].v_util;
       #pragma omp critical
       {

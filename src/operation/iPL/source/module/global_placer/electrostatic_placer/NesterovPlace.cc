@@ -1614,11 +1614,11 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
             _nes_database->_bin_grid->fastGaussianBlur();
             _nes_database->_bin_grid->evalRouteUtil();
           } else {
-            _nes_database->_bin_grid->evalRouteUtilByArea();
+            _nes_database->_bin_grid->evalRouteUtilByArea(_nes_database->_placer_db->get_layout()->get_database_unit());
           }
-          // Congestion shapes the wirelength force directly. Density-scale
-          // inflation was removed here: repeated inflation had positive
-          // feedback and drove the solver to 3-7x overflow on real designs.
+          // NOTE: a density-scale inflation for over-util bins was prototyped
+          // here (see GPA_ROUND1_EVIDENCE.md 4.10) but destabilized density
+          // convergence; the aligned force reweighting alone is shipped.
           iter_entropy_injected = true;
           // _nes_database->_bin_grid->plotOverflowUtil(_sum_overflow, iter_num);
 

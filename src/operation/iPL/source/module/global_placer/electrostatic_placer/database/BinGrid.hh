@@ -86,7 +86,7 @@ class BinGrid
   void evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num, bool plain_rudy = false, bool eval_aligned = false);
   void evalRouteCap(int32_t thread_num);
   void evalRouteUtil();
-  void evalRouteUtilByArea();
+  void evalRouteUtilByArea(int32_t dbu_unit);
   void plotRouteCap();
   void plotRouteUtil(int32_t iter_num);
   void plotRouteDem();
@@ -513,9 +513,9 @@ inline void BinGrid::evalRouteUtil()
   _grid_manager->evalRouteUtil();
 }
 
-inline void BinGrid::evalRouteUtilByArea()
+inline void BinGrid::evalRouteUtilByArea(int32_t dbu_unit)
 {
-  _grid_manager->evalRouteUtilByArea();
+  _grid_manager->evalRouteUtilByArea(dbu_unit);
 }
 
 inline void BinGrid::plotOverflowUtil(float sum_overflow, int32_t iter_num)

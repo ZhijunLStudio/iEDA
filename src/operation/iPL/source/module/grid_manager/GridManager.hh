@@ -167,7 +167,7 @@ class GridManager
   void clearRUDY();
   void initRouteCap(int32_t h_cap, int32_t v_cap);
   void evalRouteUtil();
-  void evalRouteUtilByArea();
+  void evalRouteUtilByArea(int32_t dbu_unit);
   void plotRouteCap();
   void plotRouteDem();
   void plotRouteUtil(int32_t iter_num);
