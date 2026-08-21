@@ -47,7 +47,7 @@
     "case_root": "/tmp/nangate45_gcd",
     "input_def": "/tmp/nangate45_gcd/gcd_nangate45.def",
     "pl_config": "/tmp/nangate45_gcd/pl_clean_config.json",
-    "foundry_dir": "/home/lizhijun/work/iEDA.ai/scripts/foundry/sky130",
+    "foundry_dir": "/mnt/usb20t/PCL-167/data3/taosimin/OpenROAD/test/Nangate45",
     "pdk": "nangate45",
     "lef": "/mnt/usb20t/PCL-167/data3/taosimin/OpenROAD/test/Nangate45/Nangate45_stdcell.lef",
     "gp_baseline_def": "/tmp/gp_nangate45_direct/placement.def"
