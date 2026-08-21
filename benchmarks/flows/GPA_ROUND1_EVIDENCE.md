@@ -307,6 +307,19 @@ checkpoint=start 等），无 traceback。
   但 effort4 的固定点尚未超过 effort1+疏散 recipe（2.207/171.85）。
   剩余差距在 force shaping：penalty 已加到 0.5×over_util 仍收敛到同一点，
   说明需要对 >1.0 的 bin 施加更强的局部推力（或直接加拥塞梯度项）。
+## 4.10 Round 6：effort-4 force 扫描 + 疏散深挖 + 第二代会话
+
+- effort4 + super-linear penalty（0.5×over_util + 1.0×over_util²）扫描：
+  td 0.6/0.7 从会话 best、td 0.5 从 raw——verify 结果全部劣于
+  effort1+疏散 recipe（2.207/573/171.85），固定点对 penalty 不敏感。
+- 疏散深挖（td0.5 点上 4 轮×3 bin）：rudy_max 2.153→2.116 但
+  rsum 156→165、bins 567→590——溢出质量守恒式转移，疏散无法同时
+  降 max 和 sum；**s1238 的 rsum<133 需要求解器级的全局扩散质量**，
+  点工具层已到能力边界。
+- 结论修正：s1238/nangate/asap7 的剩余拥塞缺口属于 C++ 求解器
+  能力（密度扩散质量 + 直接 over-util 惩罚项），不是工具编排问题。
+- 已启动第二代开放会话（s1238/nangate，携带已知配方：effort1+疏散、
+  Innovus-die 起点、target_overflow 扫描、effort4/bin_cnt64）。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
