@@ -1069,3 +1069,17 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   local_run / candidate 的 record 现在返回该结构。
 - 这是点工具信息完备性问题，不是模型能力问题。
 - 三个开放目标会话仍在运行。
+
+## 新目标 Round 8：会话统计与最新版清洁验证
+
+- 三个会话当前统计：
+  ihp130：92 calls / 91 results，ok 82，fail 9；
+  asap7：68 calls / 67 results，ok 51，fail 16；
+  nangate：81 calls / 80 results，ok 67，fail 13。
+- 所有 fail 都可归因于：
+  模型在空 workdir 上先调 observe/propose、
+  无效 checkpoint 标签、region 不 overlap、缺参数。
+  这些已由插件返回结构化原因。
+- 为确保“最新 JS 代码”也被开放目标会话验证，
+  又启动一个全新的 s1238 会话
+  （goal_s1238，3600s timeout，最新插件代码）。
