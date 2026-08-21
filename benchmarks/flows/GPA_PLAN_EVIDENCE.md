@@ -1001,3 +1001,23 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
     空 workdir 调 propose/advance），插件均返回了结构化错误。
 - 结论：点工具层面 crash/undefined/traceback 问题已清零，
   剩余失败基本是 agent 编排（模型能力）问题。
+
+## 新目标 Round 4：点工具错误出口最终收敛
+
+- runCli 在 Python 命令 rc!=0 时不再返回
+  `Command failed ...` 大段文本，
+  而是优先解析 stdout 里的结构化 JSON 返回。
+- 直接 smoke：
+  ieda_gp_propose regions 对空 workdir 现在返回：
+  {ok:false, error:"no checkpoint ... run gp_start first"}
+  不再出现 traceback / Command failed。
+- 三轮最新会话进行中，点工具层面剩余失败：
+  - 空 workdir 调用（模型编排）；
+  - checkpoint=cp1 无效标签（模型编排）；
+  - region_density 不传 region（模型编排）；
+  - region 与任何 GP bin 不 overlap（模型给了错误坐标）。
+  这些错误现在全部是简短结构化原因。
+- 会话中模型已产生有意义的中间结果：
+  nangate45 candidate HPWL 2,879,411（raw 4,472,593，Innovus 3,264,413）；
+  asap7 candidate HPWL 51,956,062（raw 58,392,975）；
+  ihp130 candidate HPWL 413,884,099（raw 620,662,411）。
