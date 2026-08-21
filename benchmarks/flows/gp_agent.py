@@ -321,7 +321,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         record["def_hpwl_unit"] = "def"
     if getattr(args, "timing", 0) == 1:
         record["timing_effort"] = derived_applied
-        record["timing_weight_updates"] = out.count("Update netweight for timing improvement") if derived_applied else None
+        record["timing_weight_updates"] = (out + err).count("Update netweight for timing improvement") if derived_applied else None
     if getattr(args, "bin_cnt", -1) > 0:
         record["bin_cnt_override"] = args.bin_cnt if derived_applied else None
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
