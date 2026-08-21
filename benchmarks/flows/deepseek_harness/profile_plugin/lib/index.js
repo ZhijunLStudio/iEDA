@@ -2,7 +2,7 @@ import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { execFile } from "node:child_process";
 import { appendFileSync, readFileSync, mkdirSync, existsSync, copyFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, dirname } from "node:path";
 import { promisify } from "node:util";
 //#region lib/types/index.js
 /**
@@ -126,7 +126,7 @@ try {
 mkdirSync(target, { recursive: true });
 for (const name of ["placement.def", "gp_agent_state.json", "gp_metrics_compare.json", "pl/gp_session_checkpoint.json", "pl/gp_experiments.jsonl", "pl/gp_grid_report.json"]) {
 const src = join(root, name);
-if (existsSync(src)) copyFileSync(src, join(target, name));
+if (existsSync(src)) { const dest = join(target, name); mkdirSync(dirname(dest), { recursive: true }); copyFileSync(src, dest); }
 }
 return target;
 } catch (_) { return null; }
