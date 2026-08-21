@@ -892,3 +892,24 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
 - timing_effort 动态 override 试验：
   TimingAnnotation 未初始化时 abort，已回滚该旋钮，
   保留 config-file 级 timing_effort 不做运行时开关。
+
+## Round 25：ihp130 timing 追赶尝试
+
+- 基础 candidate（Innovus-init + cong3）vs Innovus：
+  HPWL 444738206 vs 502815015 ✅
+  rutil 1.549 vs 2.171 ✅
+  bins 780 vs 1099 ✅
+  rsum 132.70 vs 245.28 ✅
+  WNS -1.1536 vs -1.0237 ❌
+  freq 162.51 vs 166.01 ❌
+- timing path local 多轮：
+  - local1 WNS -1.1566；
+  - union+anneal WNS -1.1522；
+  - local3 WNS -1.1528；
+  未能超过 Innovus WNS。
+- config-file timing_effort 尝试：
+  - 修 gp_agent.py：flow 现在 source db_init_lib/db_init_sdc；
+  - timing_effort=1 可初始化，不再 abort；
+  - 但 opt_overflow_list 空时 timing net-weight 不触发；
+  - 显式 opt_overflow_list=[0.05,0.08,0.1] 后结果仍相同，
+    timing 目标在当前库/SDC 下未改变路径。
