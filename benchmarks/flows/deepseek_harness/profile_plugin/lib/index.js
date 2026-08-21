@@ -170,7 +170,8 @@ var IedaGpRuntime = class {
 			? { checkpoint: cpPath, checkpointMtime: stamp(cpPath), placementMtime: stamp(join(resolve(workdir), "placement.def")) }
 			: { inputDef: inputDef || record.input_def, inputDefMtime: stamp(inputDef || record.input_def) };
 		const key = JSON.stringify({ design, command, args: rest, inputDef: inputDef || record.input_def, foundryDir: foundryDir || record.foundry_dir, stateFp });
-		return cachedRun(workdir, key, "ieda_gp_run", async () => {
+		const isStartCommand = command === "start";
+		const runNow = async () => {
 			const lef = record.lef || join(this.iedaRoot, "scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef");
 			// Only start establishes the input_def/config context; every other
 			// command must inherit the workdir's saved context, otherwise a
@@ -192,7 +193,12 @@ var IedaGpRuntime = class {
 			]);
 			trace(workdir, { source: "ieda_gp_run", design, args, result: value });
 			return value;
-		});
+		};
+		// start (re)establishes the session checkpoint: a cached hit would
+		// return a phantom success without the checkpoint existing, which
+		// breaks every follow-up advance/restore (s1238 gen-2 hit this).
+		if (isStartCommand) return await runNow();
+		return cachedRun(workdir, key, "ieda_gp_run", runNow);
 	}
 	async toolbox(args) {
 		const wi = args.indexOf("--workdir");
