@@ -377,8 +377,21 @@ def cmd_advance(args: argparse.Namespace) -> int:
     return 0
 
 
+def validate_scope(args: argparse.Namespace) -> str | None:
+    scope = args.scope
+    if scope == "region" and not (args.scope_region or "").strip():
+        return "scope=region requires scope_region 'llx lly urx ury'"
+    if scope == "instances" and not (args.scope_instances or "").strip():
+        return "scope=instances requires scope_instances 'inst1,inst2,...'"
+    return None
+
+
 def cmd_local_run(args: argparse.Namespace) -> int:
     """Apply a scope for N iterations WITHOUT a global control branch."""
+    scope_error = validate_scope(args)
+    if scope_error:
+        print(json.dumps({"ok": False, "reason": scope_error}))
+        return 1
     workdir, case_root, input_def, config, foundry = require_context(args)
     ckpt = resolve_checkpoint(args, workdir)
     if not ckpt or not Path(ckpt).exists():
@@ -532,6 +545,10 @@ def parse_candidate_stdout(out: str) -> dict:
 
 
 def cmd_candidate(args: argparse.Namespace) -> int:
+    scope_error = validate_scope(args)
+    if scope_error:
+        print(json.dumps({"ok": False, "reason": scope_error}))
+        return 1
     workdir, case_root, input_def, config, foundry = require_context(args)
     ckpt = resolve_checkpoint(args, workdir)
     if not ckpt or not Path(ckpt).exists():
