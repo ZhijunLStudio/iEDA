@@ -74,11 +74,11 @@ def resolve_checkpoint(workdir: str | Path, checkpoint: str | None) -> dict:
     if checkpoint in ("start", "first", "oldest"):
         items = checkpoint_list(workdir)
         if not items:
-            raise ValueError(f"no checkpoints in workdir {workdir}; run gp start first")
+            raise ValueError(f"no checkpoints in workdir {workdir}; run ieda_gp_run kind=start or kind=full first")
         return _checkpoint_data(items[0]["checkpoint"])
     cp = latest_checkpoint(workdir)
     if not cp:
-        raise ValueError(f"no checkpoint in workdir {workdir}; run gp start first")
+        raise ValueError(f"no checkpoint in workdir {workdir}; run ieda_gp_run kind=start or kind=full first")
     return _checkpoint_data(cp)
 
 
@@ -179,7 +179,7 @@ def design_status(workdir: str | Path, checkpoint: str | None = None) -> dict:
         cp = resolve_checkpoint(workdir, checkpoint)
     except Exception as error:
         return {"ok": False, "workdir": str(workdir), "reason": str(error),
-                "hint": "run kind=start or kind=full first"}
+                "hint": "run ieda_gp_run kind=start or kind=full first, then observe again"}
     cp_path = checkpoint_path(workdir, checkpoint)
     out = checkpoint_metrics(cp, cp_path)
     out["ok"] = True
