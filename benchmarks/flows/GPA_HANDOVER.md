@@ -462,3 +462,217 @@ GPA_POINT_TOOL_REVIEW.md   点工具最终复盘
 5. asap7 建议从 Innovus DEF 初始解方向继续。
 6. 所有优化都用同 evaluator 表格记录，
    不要混用不同 congestion model。
+
+## 8.5 怎么启动会话
+
+### A. Web 会话（最常用）
+
+```text
+1. 新开一个 Web 对话。
+2. 模型选 deepseek-v4-pro。
+3. reasoningEffort 选 max。
+4. 权限 preset 选 danger-full-access。
+5. 直接粘贴下面的“大目标提示词”。
+6. 不用 export，不用命令行。
+```
+
+### B. headless 会话
+
+```bash
+export PATH=/home/lizhijun/.npm-global/bin:$PATH
+export DSH_HOME=/tmp/dsh-headless-gp
+cd /home/lizhijun
+
+dsh --profile headless "这里写大目标提示词"
+```
+
+或者把提示词写文件：
+
+```bash
+cat > /tmp/my_goal.txt <<'EOF'
+我的目标是：...
+EOF
+
+dsh --profile headless "$(cat /tmp/my_goal.txt)"
+```
+
+## 8.6 发什么目标
+
+### 完整 GP 一句话
+
+```text
+你只能调用 ieda_gp_run。
+调用 ieda_gp_run kind=full design=s1238 workdir=/tmp/my_gp_01 iterations=600 timing=1 congestion_model=rudy。
+报告 raw / candidate / innovus 的 HPWL、RUDY max、overflow bins、overflow sum、setup WNS。
+```
+
+### 开放多目标（让 agent 自己拆解）
+
+```text
+我的目标是：对 s1238（sky130）做 GP 优化，
+尽量全面超过 baseline 和 Innovus：
+HPWL、RUDY utilization max、overflow bins、
+overflow sum、setup WNS。
+
+规则：
+1. 只允许使用：
+   ieda_gp_observe
+   ieda_gp_propose
+   ieda_gp_run
+   ieda_gp_verify
+   ieda_gp_session
+2. 不允许使用 bash、文件工具或其他工具。
+3. 工作目录：/tmp/my_goal_01。
+4. 迭代轮数不设上限。
+5. 每一轮你自己决定 observe 什么、propose 什么、
+   跑 full / start / local / candidate 等动作，然后 verify。
+6. 只保留你能解释的、Pareto 上不劣化的结果。
+7. 直到你认为继续迭代没有合理收益时，自己停止。
+8. 停止时说明你的判断依据。
+
+最后给我：
+- raw / candidate / innovus 全维度对比表
+- 你实际执行的每一步工具调用和参数
+- 每一步后你观察到的变化
+- 你选择停止的原因
+```
+
+如果希望 agent 不要无限跑，把第 7 条改成：
+
+```text
+当你完成至少一轮完整 GP 和验证后，
+如果连续两次局部动作没有实质改善，就停止并写最终报告。
+```
+
+### 其他设计直接替换前两行
+
+```text
+s1238        sky130
+apb4_timer   sky130
+picorv32     sky130
+aes          sky130
+nangate45_gcd nangate45
+asap7_aes    asap7
+ihp130_gcd   ihp130
+```
+
+例如：
+
+```text
+对 ihp130_gcd（ihp130）做 GP 优化
+```
+
+## 8.7 会话怎么检查
+
+headless 会话日志：
+
+```text
+/tmp/dsh-headless-gp/sessions/--home-lizhijun--/<session-id>/session.jsonl.zstd
+```
+
+解压查看：
+
+```bash
+zstd -dc /tmp/dsh-headless-gp/sessions/--home-lizhijun--/<session-id>/session.jsonl.zstd | less
+```
+
+统计工具调用：
+
+```bash
+python3 - <<'PY'
+import subprocess, json
+f = "/tmp/dsh-headless-gp/sessions/--home-lizhijun--/<session-id>/session.jsonl.zstd"
+for line in subprocess.run(["zstd", "-dc", f], capture_output=True, text=True).stdout.splitlines():
+    try:
+        d = json.loads(line)
+    except Exception:
+        continue
+    if d.get("type") == "tool/call":
+        print(d["seq"], d["data"]["name"], d["data"].get("arguments"))
+PY
+```
+
+Web 会话日志：
+
+```text
+/home/lizhijun/.dsh/sessions/--home-lizhijun-work-iEDA.ai--/<session-id>/session.jsonl.zstd
+```
+
+## 8.8 headless profile 如果 /tmp 被清空
+
+```bash
+export PATH=/home/lizhijun/.npm-global/bin:$PATH
+
+mkdir -p /tmp/dsh-headless-gp/profiles/headless
+
+cat > /tmp/dsh-headless-gp/settings.yaml <<'EOF'
+agent-default-model:
+  provider: deepseek-official
+  model: deepseek-v4-pro
+  reasoningEffort: max
+permission:
+  defaultPreset: danger-full-access
+EOF
+
+cat > /tmp/dsh-headless-gp/profiles/headless/package.json <<'EOF'
+{
+  "name": "dsh-profile-headless",
+  "private": true,
+  "dependencies": {
+    "@ieda-ai/dsh-tool-ieda-gp": "link:/home/lizhijun/work/iEDA.ai/benchmarks/flows/deepseek_harness/profile_plugin"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-headless",
+        "@ieda-ai/dsh-tool-ieda-gp"
+      ]
+    }
+  }
+}
+EOF
+
+cat > /tmp/dsh-headless-gp/profiles/headless/cordis.patch.yml <<'EOF'
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: tool-web
+  disabled: true
+- id: web-search-deepseek
+  disabled: true
+- id: tool-str-replace-editor
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-ralph
+  disabled: true
+- id: skill
+  disabled: true
+- id: skill-filesystem
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-subagent-report
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-goal
+  disabled: true
+EOF
+```
