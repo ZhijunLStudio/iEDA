@@ -192,6 +192,25 @@ checkpoint=start 等），无 traceback。
   对照 in-GP iSTA 与外部 run_timing_eval 的 slack 是否一致；
   若 in-GP centrality 退化（全 0），定位 in-GP STA 的 RC/clock 初始化差异。
 
+## 4.7 ihp130 timing 权重 no-op 的完整诊断链（Round 3，已插桩实证）
+
+1. 插桩（b671de5，logging-only）：每次 timing 更新打印
+   max_centrality / nets_with_weight_change / max_weight_delta /
+   late_wns。实测：max_centrality=0、weight_change=0、late_wns=+1.34。
+2. 代码根因一（行为层）：get_node_criticality 里
+   if (wns > 0) return 0.0f; —— in-GP STA 报 WNS 为正，
+   所有 net criticality/centrality = 0 → 权重恒不更新。
+3. 代码根因二（模型层）：同一 placement（Innovus DEF），
+   in-GP STA（InitSTA::updateTiming，pin-pair HPWL RC）报 +1.34ns，
+   外部 run_timing_eval（HPWL）报 -1.024ns —— in-GP RC 模型比
+   外部乐观约 2.4ns（wire_length/dbu 换算或 pin-pair 分段差异待查）。
+4. 反证：s1238 上 timing mode 有效（外部 WNS 0.063→0.133，
+   HPWL 代价 0.09%~1.35% 说明权重非零）——in-GP STA 在 sky130 上
+   尚能给出负 WNS，ihp130 上则整体偏正。
+5. 下轮修复顺序：先查 InitSTA::updateTiming 的 dbu_unit 取值与
+   单段 RC（log wire_length/cap/res），对齐外部 HPWL evaluator；
+   再把 wns>0 的硬截断改为基于 slack 裕量的连续 criticality
+   （避免 STA 一旦偏乐观整个 feature 完全失效）。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
