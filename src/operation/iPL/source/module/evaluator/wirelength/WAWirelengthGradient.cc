@@ -294,7 +294,11 @@ void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coef
     // which level-1 (directional reweighting only) leaves mostly untouched.
     if (congestion_effort_level >= 2) {
       const float over_util = std::max(0.0F, std::max(bin_util_h_max, bin_util_v_max) - 1.0F);
-      const double penalty = 1.0 + (congestion_effort_level >= 3 ? 0.1 : 0.25) * over_util;
+      // Level 4 optimizes the verify evaluator's exact RUDY scale; the
+      // penalty is stronger because the aligned util values are demand
+      // densities in the same unit as the evaluator's overflow (>1.0).
+      const double penalty_coef = congestion_effort_level >= 4 ? 0.5 : (congestion_effort_level >= 3 ? 0.1 : 0.25);
+      const double penalty = 1.0 + penalty_coef * over_util;
       a *= penalty;
       b *= penalty;
     }
