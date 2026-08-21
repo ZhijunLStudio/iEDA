@@ -229,7 +229,7 @@ def load_workdir_context(args: argparse.Namespace) -> tuple[Path, Path, Path, Pa
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
     case_root = Path(args.case_root or state.get("case_root"))
     input_def = Path(args.input_def or state.get("input_def"))
-    config = Path(args.config or state.get("config"))
+    config = Path(state.get("config") or args.config)
     foundry = Path(args.foundry_dir or state.get("foundry_dir", REPO_ROOT / "scripts/foundry/sky130"))
     return workdir, case_root, input_def, config, foundry
 
@@ -266,7 +266,18 @@ def cmd_start(args: argparse.Namespace) -> int:
         cmd[-1] += f" -congestion_effort {args.congestion_effort}"
     if args.report_route_util:
         cmd[-1] += " -report_route_util 1"
-    rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmd, def_save=True)
+    timing_config = config
+    if getattr(args, "timing", 0) == 1:
+        try:
+            cfg_data = json.loads(config.read_text())
+            pl = cfg_data.get("PL", cfg_data)
+            pl["is_timing_effort"] = 1
+            pl.setdefault("GP", {}).setdefault("Nesterov", {})["opt_overflow_list"] = [0.15, 0.20, 0.25, 0.30]
+            timing_config = workdir / "pl_timing_override.json"
+            timing_config.write_text(json.dumps(cfg_data, indent=2))
+        except Exception:
+            timing_config = config
+    rc, out, err = run_ieda(workdir, case_root, foundry, timing_config, input_def, cmd, def_save=True)
     record = last_gp_line(out) or last_ledger(workdir)
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
@@ -281,13 +292,13 @@ def cmd_start(args: argparse.Namespace) -> int:
             f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(terminal_ckpt))}",
             "placer_run_gp -mode accept",
         ]
-        rc2, out2, err2 = run_ieda(workdir, case_root, foundry, config, input_def, export_cmds, def_save=True)
+        rc2, out2, err2 = run_ieda(workdir, case_root, foundry, timing_config, input_def, export_cmds, def_save=True)
         if rc2 != 0:
             print(json.dumps({"ok": False, "rc": rc2, "reason": "start finished but DEF re-export failed",
                               "stderr_tail": err2[-2000:]}))
             return 1
     extra = {"case_root": str(case_root), "input_def": str(input_def),
-             "config": str(config), "foundry_dir": str(foundry)}
+             "config": str(timing_config), "foundry_dir": str(foundry)}
     lef = resolve_lef(foundry, getattr(args, "lef", None) or state.get("lef"))
     if lef is not None:
         extra["lef"] = str(lef)
@@ -296,6 +307,9 @@ def cmd_start(args: argparse.Namespace) -> int:
     record["def_hpwl"] = def_hpwl_of(workdir / "placement.def", lef)
     if record.get("def_hpwl") is not None:
         record["def_hpwl_unit"] = "def"
+    if getattr(args, "timing", 0) == 1:
+        record["timing_effort"] = True
+        record["timing_weight_updates"] = out.count("Update netweight for timing improvement")
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
     return 0
 
@@ -483,7 +497,7 @@ def cmd_verify_lg(args: argparse.Namespace) -> int:
         try:
             hpwl_proc = subprocess.run(
                 [sys.executable, str(REPO_ROOT / "benchmarks/flows/def_hpwl_eval.py"),
-                 str(Path(foundry) / "lef/sky130_fd_sc_hd_merged.lef"), str(lg_def)],
+                 str(resolve_lef(foundry, getattr(args, "lef", None)) or Path(foundry) / "lef/sky130_fd_sc_hd_merged.lef"), str(lg_def)],
                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
             m = re.search(r"HPWL=(\d+)", hpwl_proc.stdout)
             if m:
@@ -687,6 +701,7 @@ def main() -> int:
                 (("--max-phi-coef",), {"type": float, "default": -1.0}),
                 (("--congestion-effort",), {"type": int, "default": -1}),
                 (("--report-route-util",), {"type": int, "default": 1}),
+                (("--timing",), {"type": int, "default": 0}),
                 (("--overflow-penalty",), {"type": float, "default": 0.0}),
             ]:
                 sp.add_argument(*args_, **kwargs)

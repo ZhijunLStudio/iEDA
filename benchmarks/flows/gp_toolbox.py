@@ -771,6 +771,48 @@ def propose_config(workdir: str | Path, checkpoint: str | None = None) -> dict:
             "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
                                   "random_init": 0, "iterations": 20, "report_route_util": 1},
         })
+    effort = int(config_state.get("congestion_effort_level") or 0)
+    if config_state.get("is_opt_congestion") and effort < 3:
+        candidates.append({
+            "id": f"congestion_effort_up_{effort + 1}",
+            "hypothesis_fact": f"congestion effort is {effort}; effort {effort + 1} adds a stronger RUDY peak penalty in the solver objective",
+            "config_override": {"congestion_effort": effort + 1},
+            "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                  "random_init": 0, "iterations": 100, "report_route_util": 1},
+        })
+    if not config_state.get("is_opt_timing"):
+        candidates.append({
+            "id": "timing_effort_on",
+            "hypothesis_fact": "timing objective is off; turning it on updates net weights from iSTA slacks (opt_overflow_list [0.15,0.20,0.25,0.30] is applied automatically)",
+            "config_override": {"timing": 1},
+            "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                  "random_init": 0, "iterations": 100, "timing": 1, "report_route_util": 1},
+        })
+    phi_min = float(config_state.get("min_phi_coef") or 0.0)
+    phi_max = float(config_state.get("max_phi_coef") or 0.0)
+    if phi_max > 0 and phi_max < 0.99:
+        candidates.append({
+            "id": "phi_coef_up",
+            "hypothesis_fact": f"max_phi_coef is {phi_max}; raising it keeps the density penalty from growing too fast",
+            "config_override": {"max_phi_coef": round(min(0.99, phi_max + 0.05), 3)},
+            "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                  "random_init": 0, "iterations": 100, "report_route_util": 1},
+        })
+    if phi_min > 0:
+        candidates.append({
+            "id": "phi_coef_down",
+            "hypothesis_fact": f"min_phi_coef is {phi_min}; lowering it lets the density penalty shrink further in late iterations",
+            "config_override": {"min_phi_coef": round(max(0.5, phi_min - 0.05), 3)},
+            "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                                  "random_init": 0, "iterations": 100, "report_route_util": 1},
+        })
+    candidates.append({
+        "id": "seed_anchor_0.5",
+        "hypothesis_fact": "seed_anchor_strength 0.5 anchors every cell halfway to the input DEF positions; useful when the input DEF already has a good property (e.g. an Innovus placement)",
+        "config_override": {"seed_anchor_strength": 0.5},
+        "executable_action": {"tool": "ieda_gp_run", "kind": "start", "input_def": candidate_input_def,
+                              "random_init": 0, "iterations": 100, "seed_anchor_strength": 0.5, "report_route_util": 1},
+    })
 
     batches = trajectory(workdir, 0).get("batches", [])
     budget_candidates = []
