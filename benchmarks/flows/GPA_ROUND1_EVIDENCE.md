@@ -467,6 +467,16 @@ checkpoint=start 等），无 traceback。
   领先、bins 持平、rudy_max +2%、rsum +24%。
 - 会话实证：36.6% 低利用率设计，RUDY 峰值来自 IO 边沿网与高扇出网；
   HPWL<15.7M 与 rsum<7.46 在 GP 目标结构下互斥（crossover 在 15.7M 附近）。
+## 4.18 Round 16：apply_anchor 首战 s1238（有方向性改善）
+
+- s1238 新 anchor 会话（新 binary，effort4+bin64+anchor0.5）固定点
+  2.165/671/144.57；对热 bin 区域一次 apply_anchor（strength 0.5，15it）→
+  **2.061/666/141.81**——三项拥塞指标全部改善（rudy_max -0.104）。
+- 第二轮对移动后的新热点拉回 → 2.100（打地鼠退化，按守卫停止）。
+- 结论：apply_anchor 工具机制正确且对 s1238 类热 bin 有效（单次改善
+  幅度 ~0.1），但连续拉回互相打架；s1238 的旧吸引子 (2.056,142.06)
+  仍是当前最优。新 binary 的 dbu 校准 penalty 使固定点略劣于旧
+  （2.165 vs 2.056），后续可在 effort4 penalty 系数上回退。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
