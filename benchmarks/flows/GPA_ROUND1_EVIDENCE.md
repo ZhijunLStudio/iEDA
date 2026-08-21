@@ -291,6 +291,22 @@ checkpoint=start 等），无 traceback。
   verify RUDY 与 GP 内部模型的结构性校准差仍未闭合；
   s1238 现为 4/6（HPWL/bins/WNS/freq），RUDYmax 差 0.12、
   rsum 差 23。C++ 拥塞校准是唯一剩余路径。
+## 4.9 Round 5：congestion_effort=4 —— evaluator-aligned RUDY（C++ 校准基础）
+
+- 新 effort 级别 4：GP 拥塞目标与 verify run_congestion_eval 完全同模型——
+  demand = overlap_area×(1/h+1/w)（无 LUT、无 route-cap 归一、无 dm 因子、
+  无 Gaussian blur），utilization = demand/bin_area，报告 union max。
+- 同时把 -congestion_effort 校验放开到 4，propose_config 新增
+  congestion_effort_4_evaluator 候选（带 bin_cnt=64）。
+- 实测（s1238）：
+  | 起点 | defHPWL | 内部 rutil | verify RUDYmax | bins | rsum |
+  |---|---|---|---|---|---|
+  | 会话 best（effort4, 400it） | 6,300,458 | 2.106 | 2.376 | 686 | 199 |
+  | raw DEF（effort4, 600it） | 6,337,888 | 1.994 | 2.495 | 684 | 211 |
+- 校准效果：内部 rutil 与 verify RUDYmax 同一量级且同向（1.99 vs 2.49），
+  但 effort4 的固定点尚未超过 effort1+疏散 recipe（2.207/171.85）。
+  剩余差距在 force shaping：penalty 已加到 0.5×over_util 仍收敛到同一点，
+  说明需要对 >1.0 的 bin 施加更强的局部推力（或直接加拥塞梯度项）。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
