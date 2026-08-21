@@ -486,6 +486,17 @@ checkpoint=start 等），无 traceback。
 - 零系数点 + apply_anchor：2.085→2.068（rsum 140.4→144.6 交换）。
 - s1238 记录仍为 (2.056,142.06)（rollback 重导出的偶发状态），Innovus
   (2.035,133.02) 仍严格占优。
+## 4.20 Round 18：s1238 pull-repair 循环——盆地底部测绘完成
+
+- apply_anchor ↔ global repair 交替循环（每轮 pull 后 20-30 iters 全局修复）：
+  rsum 轨迹 144.6→139.9→140.1→**136.9**→136.0→137.7→139.9，
+  rudy_max 同步 2.068→2.075→2.139→2.072→2.102→2.270→2.267。
+- 盆地底部确认：**rsum 下限 ≈136（rudy_max ≈2.10）**；Innovus
+  (2.035,133.02) 严格占优且不在可达盆地内。
+- 终态全维度：7,615,413 / 2.267 / 673 / 139.87 / WNS -0.121 / 616.8
+  ——HPWL/WNS/freq 超 Innovus，拥塞三项在盆地底部波动。
+- s1238 结论定稿：工具层（anchor/疏散/penalty/pull-repair 全组合）已穷尽，
+  剩余 2%/3% 缺口为求解器景观属性。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
