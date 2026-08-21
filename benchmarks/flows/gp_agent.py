@@ -688,7 +688,12 @@ def cmd_local_congestion(args: argparse.Namespace) -> int:
     rounds = max(1, args.rounds)
     results = []
     ckpt = resolve_checkpoint(args, workdir)
-    original_ckpt = ckpt
+    # Snapshot the pre-call checkpoint to a private copy: a failed advance can
+    # rewrite the live checkpoint in place, and the rollback must restore the
+    # exact pre-call state, not the diverged one.
+    original_ckpt = workdir / "pl/rollback_checkpoint.json"
+    import shutil as _shutil
+    _shutil.copy2(ckpt, original_ckpt)
     def rollback():
         cmds = [
             f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(original_ckpt))}",
