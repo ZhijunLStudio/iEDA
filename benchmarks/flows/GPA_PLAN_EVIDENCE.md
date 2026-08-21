@@ -953,3 +953,24 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   nangate45_gcd：42 次调用，已出现
   verify metrics / congestion_hotspots / full / advance 循环。
   等会话结束后继续分析。
+
+## 新目标 Round 2：第二轮会话继续暴露的插件问题
+
+- `ieda_gp_verify kind=lg` 不带 design 时同样硬编码 s1238，
+  nangate 会话的 LG 用了 s1238 数据。
+  已改为 trace 推断 design。
+- agent 传入 target_density=1.0，C++ 端拒绝并返回
+  "target_density must be in (0,1)"，但插件没有前置校验，
+  agent 在错误发生后才学习。
+  已加 start/full 前置校验：
+  target_density / target_overflow 必须 (0,1) 或 -1。
+- 会话状态：
+  - ihp130 开放目标会话仍在运行，31+ 次调用；
+  - nangate45 开放目标会话仍在运行，44+ 次调用；
+  - asap7 开放目标会话刚启动。
+- 模型编排问题（不属于插件问题，仅记录）：
+  - 空 workdir 先调 status/checkpoints；
+  - 不传 design / raw_def / candidate_def；
+  - target_density 传 1；
+  - 反复 accept 已经 terminal 的会话；
+  这些由模型自身修复，插件需要给结构化错误而不是 traceback。
