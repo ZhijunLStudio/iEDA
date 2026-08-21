@@ -487,11 +487,11 @@ def cmd_candidate(args: argparse.Namespace) -> int:
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
-    if not candidate and record.get("stop_reason") == "target_reached":
+    if not candidate and record.get("stop_reason") in ("target_reached", "overflow_target_miss"):
         terminal_cp = workdir / "pl/gp_session_checkpoint.json"
         if terminal_cp.exists():
             candidate = {
-                "candidate_verdict": "left_better",
+                "candidate_verdict": "left_better" if record.get("stop_reason") == "target_reached" else "right_better",
                 "candidate_local_checkpoint": str(terminal_cp),
                 "candidate_global_checkpoint": str(ckpt),
                 "terminal_local": True,
