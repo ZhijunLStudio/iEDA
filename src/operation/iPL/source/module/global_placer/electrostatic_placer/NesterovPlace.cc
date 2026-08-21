@@ -1471,6 +1471,33 @@ void NesterovPlace::setupNesterovSolve()
   _solve_setup_done = true;
 }
 
+void NesterovPlace::applyAnchorScope(float strength)
+{
+  // In-scope Active cells (movement coeff 1) get re-anchored: their frozen
+  // base becomes the session anchor coordinate (the input-DEF position when
+  // the session started with seed_anchor_strength>0, otherwise the current
+  // position) and their movement is scaled by (1-strength) around it.
+  // strength=1 freezes them at the anchor; strength=0 is a no-op.
+  if (_move_coeff_list.empty()) {
+    return;
+  }
+  const float clamped = std::clamp(strength, 0.0F, 1.0F);
+  const size_t n = _move_coeff_list.size();
+  _anchor_frozen_coord_list.resize(n);
+  _anchor_frozen_valid.assign(n, 0);
+  for (size_t i = 0; i < n; i++) {
+    if (_move_coeff_list[i] < 0.999F) {
+      continue;  // halo/context keep their existing frozen bases
+    }
+    Point<int32_t> anchor = (!_seed_anchor_coord_list.empty() && i < _seed_anchor_coord_list.size())
+                                ? _seed_anchor_coord_list[i]
+                                : _placable_inst_list[i]->get_density_center_coordi();
+    _anchor_frozen_coord_list[i] = anchor;
+    _anchor_frozen_valid[i] = 1;
+    _move_coeff_list[i] = 1.0F - clamped;
+  }
+}
+
 GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
 {
   if (!_solve_setup_done) {
@@ -1494,6 +1521,8 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
       _frozen_coord_list[i] = _placable_inst_list[i]->get_density_center_coordi();
     }
   }
+  _anchor_frozen_valid.clear();
+  _anchor_frozen_coord_list.clear();
 
   Rectangle<int32_t> core_shape = _nes_database->_placer_db->get_layout()->get_core_shape();
 
@@ -1539,14 +1568,17 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
             next_coordi = _frozen_coord_list[i];
             next_slp_coordi = _frozen_coord_list[i];
           } else if (coeff < 1.0F) {
-            next_coordi.set_x(_frozen_coord_list[i].get_x()
-                              + static_cast<int32_t>(coeff * (next_coordi.get_x() - _frozen_coord_list[i].get_x())));
-            next_coordi.set_y(_frozen_coord_list[i].get_y()
-                              + static_cast<int32_t>(coeff * (next_coordi.get_y() - _frozen_coord_list[i].get_y())));
-            next_slp_coordi.set_x(_frozen_coord_list[i].get_x()
-                                  + static_cast<int32_t>(coeff * (next_slp_coordi.get_x() - _frozen_coord_list[i].get_x())));
-            next_slp_coordi.set_y(_frozen_coord_list[i].get_y()
-                                  + static_cast<int32_t>(coeff * (next_slp_coordi.get_y() - _frozen_coord_list[i].get_y())));
+            const Point<int32_t>& frozen_base = (!_anchor_frozen_valid.empty() && _anchor_frozen_valid[i] != 0)
+                                                    ? _anchor_frozen_coord_list[i]
+                                                    : _frozen_coord_list[i];
+            next_coordi.set_x(frozen_base.get_x()
+                              + static_cast<int32_t>(coeff * (next_coordi.get_x() - frozen_base.get_x())));
+            next_coordi.set_y(frozen_base.get_y()
+                              + static_cast<int32_t>(coeff * (next_coordi.get_y() - frozen_base.get_y())));
+            next_slp_coordi.set_x(frozen_base.get_x()
+                                  + static_cast<int32_t>(coeff * (next_slp_coordi.get_x() - frozen_base.get_x())));
+            next_slp_coordi.set_y(frozen_base.get_y()
+                                  + static_cast<int32_t>(coeff * (next_slp_coordi.get_y() - frozen_base.get_y())));
           }
         }
 
@@ -1920,6 +1952,8 @@ GPStateCheckpoint NesterovPlace::captureCheckpoint() const
   checkpoint.overflow_record_list = _overflow_record_list;
   checkpoint.hpwl_record_list = _hpwl_record_list;
   checkpoint.iteration_records = _iteration_records;
+  checkpoint.seed_anchor_strength = _seed_anchor_strength;
+  checkpoint.seed_anchor_coord_list = _seed_anchor_coord_list;
   checkpoint.wirelength_coef = _nes_database->_wirelength_coef;
   checkpoint.density_penalty = _nes_database->_density_penalty;
   checkpoint.is_diverged = _nes_database->_is_diverged;
@@ -2069,6 +2103,10 @@ bool NesterovPlace::restoreCheckpoint(const GPStateCheckpoint& checkpoint)
   _cur_position_list = checkpoint.cur_position_list;
   _best_density_scale_list = checkpoint.best_density_scale_list;
   _cur_density_scale_list = checkpoint.cur_density_scale_list;
+  if (!checkpoint.seed_anchor_coord_list.empty()) {
+    _seed_anchor_strength = checkpoint.seed_anchor_strength;
+    _seed_anchor_coord_list = checkpoint.seed_anchor_coord_list;
+  }
 
   _nes_database->_wirelength_coef = checkpoint.wirelength_coef;
   _nes_database->_density_penalty = checkpoint.density_penalty;
@@ -2773,6 +2811,8 @@ void to_json(nlohmann::json& json_obj, const GPStateCheckpoint& checkpoint)
       {"config_state", checkpoint.config_state},
       {"config_state_valid", checkpoint.config_state_valid},
       {"max_phi_coef", checkpoint.max_phi_coef},
+      {"seed_anchor_strength", checkpoint.seed_anchor_strength},
+      {"seed_anchor_coord_list", checkpoint.seed_anchor_coord_list},
       {"instance_names", checkpoint.instance_names},
       {"instance_density_coords", checkpoint.instance_density_coords},
       {"instance_density_scales", checkpoint.instance_density_scales},
@@ -2818,6 +2858,14 @@ void from_json(const nlohmann::json& json_obj, GPStateCheckpoint& checkpoint)
   checkpoint.config_state = json_obj.value("config_state", NesterovPlaceConfig::State{});
   checkpoint.config_state_valid = json_obj.value("config_state_valid", false);
   checkpoint.max_phi_coef = json_obj.at("max_phi_coef").get<float>();
+  // Optional fields: checkpoints written by binaries without the anchor
+  // persistence default to 0/empty, which restores the legacy behavior.
+  if (json_obj.contains("seed_anchor_strength")) {
+    checkpoint.seed_anchor_strength = json_obj.at("seed_anchor_strength").get<float>();
+  }
+  if (json_obj.contains("seed_anchor_coord_list")) {
+    checkpoint.seed_anchor_coord_list = json_obj.at("seed_anchor_coord_list").get<std::vector<Point<int32_t>>>();
+  }
   checkpoint.instance_names = json_obj.at("instance_names").get<std::vector<std::string>>();
   checkpoint.instance_density_coords = json_obj.at("instance_density_coords").get<std::vector<Point<int32_t>>>();
   checkpoint.instance_density_scales = json_obj.at("instance_density_scales").get<std::vector<float>>();

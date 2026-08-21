@@ -292,6 +292,9 @@ CmdPlacerRunGP::CmdPlacerRunGP(const char* cmd_name) : TclCmd(cmd_name)
   auto* scope_anneal_ratio_option = new TclDoubleOption("-scope_anneal_ratio", 1, 0.0);
   addOption(scope_anneal_ratio_option);
 
+  auto* scope_anchor_strength_option = new TclDoubleOption("-scope_anchor_strength", 1, 0.0);
+  addOption(scope_anchor_strength_option);
+
   auto* scope_seed_option = new TclIntOption("-scope_seed", 1, 1000);
   addOption(scope_seed_option);
 
@@ -492,6 +495,10 @@ unsigned CmdPlacerRunGP::exec()
   TclOption* scope_anneal_ratio_option = getOptionOrArg("-scope_anneal_ratio");
   if (scope_anneal_ratio_option->is_set_val()) {
     request.scope_anneal_ratio = static_cast<float>(scope_anneal_ratio_option->getDoubleVal());
+  }
+  TclOption* scope_anchor_option = getOptionOrArg("-scope_anchor_strength");
+  if (scope_anchor_option->is_set_val()) {
+    request.scope_anchor_strength = static_cast<float>(scope_anchor_option->getDoubleVal());
   }
   TclOption* scope_seed_option = getOptionOrArg("-scope_seed");
   if (scope_seed_option->is_set_val()) {

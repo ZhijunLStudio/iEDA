@@ -249,6 +249,10 @@ struct GPRunRequest
   // remaining iterations run with a cleared mask (global repair) so the halo
   // and context can re-settle before the checkpoint boundary.
   float scope_anneal_ratio = 0.0F;
+  // (0,1]: in-scope Active cells are re-anchored toward the session-anchor
+  // coordinates (the input-DEF positions captured at session start). 1.0
+  // freezes them there; 0.5 lets them move half the solver delta around it.
+  float scope_anchor_strength = 0.0F;
   uint32_t scope_seed = 1000;        // kRandom: reproducible Active-set shuffle seed
   std::vector<std::string> scope_instance_names;  // kInstances: seed instance names
   bool scope_region_set = false;       // kRegion: physical rectangle seed

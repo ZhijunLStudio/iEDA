@@ -197,6 +197,9 @@ def scope_args(args: argparse.Namespace) -> list[str]:
     out += ["-scope_density_target", str(args.scope_density_target),
             "-scope_density_ratio", str(args.scope_density_ratio)]
     out += ["-scope_anneal_ratio", str(getattr(args, "scope_anneal_ratio", 0.0))]
+    anchor_strength = getattr(args, "scope_anchor_strength", 0.0)
+    if anchor_strength > 0.0:
+        out += ["-scope_anchor_strength", str(anchor_strength)]
     return out
 
 
@@ -215,6 +218,7 @@ def common_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope-active-count", type=int, default=100)
     p.add_argument("--scope-instances", default="")
     p.add_argument("--scope-region", default="")
+    p.add_argument("--scope-anchor-strength", type=float, default=0.0)
     p.add_argument("--halo-coeff", type=float, default=0.5)
     p.add_argument("--halo-hops", type=int, default=2)
     p.add_argument("--target-density", type=float, default=-1.0)
@@ -871,6 +875,54 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_apply_anchor(args: argparse.Namespace) -> int:
+    """Re-anchor in-scope Active cells toward the session-anchor coordinates
+    (the input-DEF positions captured at session start): movement is scaled by
+    (1 - scope_anchor_strength) around those positions. The session's own
+    evidence asked for this: pulling hot-region cells back toward the Innovus
+    positions is the most targeted fix for sub-1.0 RUDY peaks."""
+    scope_error = validate_scope(args)
+    if scope_error:
+        print(json.dumps({"ok": False, "reason": scope_error}))
+        return 1
+    strength = args.scope_anchor_strength
+    if not (0.0 < strength <= 1.0):
+        print(json.dumps({"ok": False, "reason": "scope_anchor_strength must be in (0,1]"}))
+        return 1
+    workdir, case_root, input_def, config, foundry = require_context(args)
+    ckpt = resolve_checkpoint(args, workdir)
+    if not ckpt or not Path(ckpt).exists():
+        print(json.dumps({"ok": False, "reason": "no checkpoint; run start first"}))
+        return 1
+    original_ckpt = workdir / "pl/rollback_checkpoint.json"
+    import shutil as _shutil
+    _shutil.copy2(ckpt, original_ckpt)
+    cmds = [
+        f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(ckpt))}",
+        f"placer_run_gp -mode advance -iterations {args.iterations} -report_route_util 1 "
+        + " ".join(scope_args(args)),
+        "placer_run_gp -mode accept",
+    ]
+    rc, out, err = run_ieda(workdir, case_root, foundry, config, input_def, cmds, def_save=True)
+    record = last_gp_line(out) or last_ledger(workdir)
+    if rc != 0:
+        cmds_rb = [
+            f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(original_ckpt))}",
+            "placer_run_gp -mode accept",
+        ]
+        rc_rb, _out_rb, _err_rb = run_ieda(workdir, case_root, foundry, config, input_def, cmds_rb, def_save=True)
+        print(json.dumps({"ok": False, "rc": rc, "rolled_back": rc_rb == 0,
+                          "reason": "apply_anchor diverged; workdir rolled back to the pre-call checkpoint",
+                          "stderr_tail": err[-1200:]}))
+        return 1
+    state = update_state(workdir, record=record)
+    lef = resolve_lef(foundry, input_def)
+    def_hpwl = def_hpwl_of(workdir / "placement.def", lef)
+    print(json.dumps({"ok": True, "state": state, "record": record,
+                      "def_hpwl": def_hpwl, "anchor_strength": strength}, indent=2))
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir)
     state_path = workdir / "gp_agent_state.json"
@@ -884,6 +936,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     for name, fn in [("start", cmd_start), ("advance", cmd_advance), ("local_run", cmd_local_run),
                      ("candidate", cmd_candidate), ("local_congestion", cmd_local_congestion),
+                     ("apply_anchor", cmd_apply_anchor),
                      ("verify_lg", cmd_verify_lg), ("restore", cmd_restore),
                      ("accept", cmd_accept), ("compare", cmd_compare), ("status", cmd_status)]:
         sp = sub.add_parser(name)
@@ -898,7 +951,7 @@ def main() -> int:
                 pass
     # Simpler: attach common options to every parser manually.
     for sp in parser._subparsers._group_actions[0].choices.values():
-        if sp.prog.endswith(("start", "advance", "local_run", "candidate", "local_congestion")):
+        if sp.prog.endswith(("start", "advance", "local_run", "candidate", "local_congestion", "apply_anchor")):
             for args_, kwargs in [
                 (("--workdir",), {"required": True}),
                 (("--case-root",), {}), (("--input-def",), {}), (("--config",), {}),
@@ -917,6 +970,7 @@ def main() -> int:
                 (("--halo-coeff",), {"type": float, "default": 0.5}),
                 (("--halo-hops",), {"type": int, "default": 2}),
                 (("--scope-anneal-ratio",), {"type": float, "default": 0.0}),
+                (("--scope-anchor-strength",), {"type": float, "default": 0.0}),
                 (("--target-density",), {"type": float, "default": -1.0}),
                 (("--target-overflow",), {"type": float, "default": -1.0}),
                 (("--init-density-penalty",), {"type": float, "default": -1.0}),
@@ -949,6 +1003,7 @@ def main() -> int:
     args = parser.parse_args()
     return {"start": cmd_start, "advance": cmd_advance, "local_run": cmd_local_run,
             "candidate": cmd_candidate, "local_congestion": cmd_local_congestion,
+            "apply_anchor": cmd_apply_anchor,
             "verify_lg": cmd_verify_lg, "restore": cmd_restore,
             "accept": cmd_accept, "compare": cmd_compare, "status": cmd_status}[args.command](args)
 

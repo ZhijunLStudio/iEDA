@@ -1050,6 +1050,11 @@ bool validateGPRunScope(const GPRunRequest& request, std::string* reason)
     *reason = "seed_anchor_strength must be in [0,1]";
     return false;
   }
+  if (!std::isfinite(request.scope_anchor_strength) || request.scope_anchor_strength < 0.0F
+      || request.scope_anchor_strength > 1.0F) {
+    *reason = "scope_anchor_strength must be in [0,1]";
+    return false;
+  }
   switch (request.scope_mode) {
     case GPRunScopeMode::kGlobal:
       return true;
@@ -1136,6 +1141,9 @@ bool applyGPRunScope(NesterovPlace& session, const GPRunRequest& request, std::s
   if (!ok) {
     *reason = "unknown gp scope mode";
     return false;
+  }
+  if (request.scope_anchor_strength > 0.0F) {
+    session.applyAnchorScope(request.scope_anchor_strength);
   }
   if (request.scope_density_target < 1.0F
       && request.scope_mode != GPRunScopeMode::kHotspot

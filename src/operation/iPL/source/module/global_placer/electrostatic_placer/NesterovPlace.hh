@@ -120,8 +120,13 @@ class NesterovPlace
   {
     _move_coeff_list.clear();
     _frozen_coord_list.clear();
+    _anchor_frozen_valid.clear();
+    _anchor_frozen_coord_list.clear();
     syncLocalFixedFlags();
   }
+  // Re-anchor in-scope Active cells toward the session-anchor coordinates:
+  // their movement is scaled by (1-strength) around the anchor position.
+  void applyAnchorScope(float strength);
   const std::vector<float>& movementCoeffs() const { return _move_coeff_list; }
   // Build a scope from the current overflow bins: the hottest overflowing bins
   // (top active_ratio fraction) seed active instances; their net neighbors
@@ -231,6 +236,10 @@ class NesterovPlace
   // session-start coordinates. 0 disables, 1 freezes at the seed.
   float _seed_anchor_strength = 0.0F;
   std::vector<Point<int32_t>> _seed_anchor_coord_list;
+  // Re-anchor (scope_anchor_strength) per-instance frozen bases; the valid
+  // flag vector marks which entries participate (parallel to the placable list).
+  std::vector<Point<int32_t>> _anchor_frozen_coord_list;
+  std::vector<int8_t> _anchor_frozen_valid;
 
   void resetOverflowRecordList();
   void resetHPWLRecordList();

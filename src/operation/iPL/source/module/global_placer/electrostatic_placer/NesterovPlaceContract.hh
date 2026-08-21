@@ -115,6 +115,12 @@ struct GPStateCheckpoint
   // Runtime config mutation (the only NesterovPlaceConfig field mutated mid-run).
   float max_phi_coef = 1.05F;
 
+  // Session seed-anchor state (input-DEF positions captured at session start
+  // when seed_anchor_strength > 0). Persisted so applyAnchorScope keeps pulling
+  // toward the ORIGINAL anchor positions across checkpoint restores.
+  float seed_anchor_strength = 0.0F;
+  std::vector<Point<int32_t>> seed_anchor_coord_list;
+
   // Per-placable-instance state, in placable-list order. instance_names doubles
   // as the topology fingerprint validated on restore.
   std::vector<std::string> instance_names;
