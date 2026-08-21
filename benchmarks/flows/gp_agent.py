@@ -267,10 +267,12 @@ def cmd_start(args: argparse.Namespace) -> int:
     if args.report_route_util:
         cmd[-1] += " -report_route_util 1"
     run_config = config
+    derived_applied = False
     wants_timing = getattr(args, "timing", 0) == 1
     wants_bins = getattr(args, "bin_cnt", -1) > 0
     if wants_timing or wants_bins:
         try:
+            workdir.mkdir(parents=True, exist_ok=True)
             cfg_data = json.loads(config.read_text())
             pl = cfg_data.get("PL", cfg_data)
             if wants_timing:
@@ -283,8 +285,10 @@ def cmd_start(args: argparse.Namespace) -> int:
                 dens["bin_cnt_y"] = args.bin_cnt
             run_config = workdir / "pl_derived_config.json"
             run_config.write_text(json.dumps(cfg_data, indent=2))
+            derived_applied = True
         except Exception:
             run_config = config
+            derived_applied = False
     rc, out, err = run_ieda(workdir, case_root, foundry, run_config, input_def, cmd, def_save=True)
     record = last_gp_line(out) or last_ledger(workdir)
     if rc != 0:
@@ -316,10 +320,10 @@ def cmd_start(args: argparse.Namespace) -> int:
     if record.get("def_hpwl") is not None:
         record["def_hpwl_unit"] = "def"
     if getattr(args, "timing", 0) == 1:
-        record["timing_effort"] = True
-        record["timing_weight_updates"] = out.count("Update netweight for timing improvement")
+        record["timing_effort"] = derived_applied
+        record["timing_weight_updates"] = out.count("Update netweight for timing improvement") if derived_applied else None
     if getattr(args, "bin_cnt", -1) > 0:
-        record["bin_cnt_override"] = args.bin_cnt
+        record["bin_cnt_override"] = args.bin_cnt if derived_applied else None
     print(json.dumps({"ok": True, "state": state, "record": record}, indent=2))
     return 0
 

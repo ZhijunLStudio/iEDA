@@ -205,6 +205,25 @@ def design_status(workdir: str | Path, checkpoint: str | None = None) -> dict:
     out["checkpoint_list"] = [x["name"] for x in checkpoint_list(workdir)[-20:]]
     out["timing_stale"] = out["timing_iter"] != out["iteration"]
     out["rudy_stale"] = out["rudy_iter"] != out["iteration"]
+    # Die area + utilization facts (placement.def DIEAREA vs checkpoint instance area)
+    try:
+        placed = Path(workdir) / "placement.def"
+        if placed.exists():
+            text = placed.read_text(errors="ignore")
+            m_die = re.search(r"^\s*DIEAREA\s*\(\s*([-\d]+)\s+([-\d]+)\s*\)\s*\(\s*([-\d]+)\s+([-\d]+)\s*\)", text, re.M | re.I)
+            if m_die:
+                llx, lly, urx, ury = (int(x) for x in m_die.groups())
+                die_area = (urx - llx) * (ury - lly)
+                inst_area = cp.get("total_inst_area")
+                out["die_area"] = {"llx": llx, "lly": lly, "urx": urx, "ury": ury,
+                                   "area": die_area, "unit": "def_units^2"}
+                if inst_area:
+                    util = float(inst_area) / float(die_area) if die_area else None
+                    out["utilization"] = {"inst_area": float(inst_area), "die_area": die_area,
+                                          "ratio": round(util, 4) if util is not None else None,
+                                          "note": "ratio is inst_area/die_area; compare against the Innovus DEF's ratio (via verify metrics density) before judging HPWL fairness"}
+    except Exception:
+        pass
     # DEF-level HPWL of the exported placement (same evaluator as verify metrics)
     try:
         placed = Path(workdir) / "placement.def"
