@@ -1,0 +1,84 @@
+# GPA 目标循环 Round 1 证据记录
+
+日期：2026-08-21 晚
+分支：feat/parity-gp-session（已推送 personal）
+提交：8c7538d → 6782bd3 → ec5b5bf → 212b7ff → 002f59f → 0bcc713 → 2811f97 → 9f45508
+
+## 1. 本轮做的工具改动（全部已验证端到端）
+
+1. run record 统一带 def_hpwl（DEF 级 HPWL，与 verify metrics 同口径），
+   local_run delta 增加 rutil。
+2. verify metrics 按 (design, DEF 集合+mtime, model, timing) 缓存：
+   实测同组 DEF 第二次调用 5s → 0s。
+3. propose 全种类补 executable_action + 档位选项；
+   新增 propose kind=timing（读缓存 iSTA 报告 → 路径实例集合）；
+   propose regions priority=congestion（读缓存 RUDY map → region rect）。
+4. observe kind=experiments：trace 聚合 + Pareto 表 + archive metrics。
+5. 缓存预算按 source 拆分（run 128 / observe+verify 4000）。
+6. start/full 暴露 timing=1（is_timing_effort + opt_overflow_list
+   [0.15,0.20,0.25,0.30]），record 带 timing_weight_updates。
+7. start 暴露 bin_cnt（写 is_adaptive_bin=0 + N×N 固定网格）。
+8. propose_config 网格：congestion_effort 升级、timing_effort_on、
+   phi、seed_anchor、congestion_grid_64。
+9. verify lg 的 sky130 LEF 硬编码修复；status 带 def_hpwl；
+   checkpoint 符号标签（latest/start）+ 递归列表；scope 前置校验。
+
+## 2. 开放目标会话（4 个 PDK/规模，headless，只允许 ieda_gp_*）
+
+| 会话 | 设计 | 状态 | 工具调用 | 插件级错误 |
+|---|---|---|---|---|
+| s1238 | sky130 小 | 已结束 | 56 | 0 |
+| nangate | nangate45 小 | 运行中 | 40+ | 0 |
+| asap7 | asap7 大 | 运行中 | 54+ | 0 |
+| ihp130 | ihp130 中 | 运行中（b 次会话） | 27+ | 0 |
+
+模型编排失败全部被结构化错误接住（freeze 缺 region、空 workdir、
+checkpoint=start 等），无 traceback。
+
+## 3. s1238 会话最终结果（同 evaluator，含 timing）
+
+| 指标 | raw | candidate | innovus |
+|---|---|---|---|
+| HPWL | 5,957,257 | 5,934,445 | 8,053,041 |
+| RUDY max | 2.768 | 2.207 | 2.035 |
+| bins | 654 | 573 | 622 |
+| rsum | 208.65 | 171.85 | 133.02 |
+| WNS ns | -0.0503 | -0.0439 | -0.1341 |
+| freq MHz | 645.0 | 647.7 | 612.0 |
+
+- 五项全部超过 raw baseline；HPWL/bins/WNS 三项超过 Innovus；
+  RUDY max 与 rsum 从 gap 大幅收窄但仍未超过。
+- 候选 DEF：/tmp/my_goal_s1238/placement.def
+  （effort=1 seed=3000 400it + 两次 region 疏散，共 480it）。
+- 会话自述的结构性瓶颈：GP 拥塞感知网格（32×32 adaptive）
+  与 verify RUDY（64×64）不一致，细粒度尖峰 GP 看不见。
+
+## 4. 对网格对齐假说的独立 A/B（bin_cnt=64 旋钮）
+
+| 配置（均 seed=3000, 400it, raw DEF 起点） | defHPWL | verify RUDYmax | bins | rsum |
+|---|---|---|---|---|
+| 会话 best（adaptive, effort=1 + 局部修复） | 5,934,445 | 2.207 | 573 | 171.85 |
+| effort=1, bin 64 | 6,424,339 | 2.417 | 718 | 175.79 |
+| effort=2, bin 64 | 6,289,620 | 2.635 | 682 | 206.34 |
+| effort=3, bin 64（plain RUDY） | 6,312,418 | 2.833 | 631 | 208.27 |
+
+结论：
+- bin_cnt=64 对齐网格没有直接改善 verify RUDY；
+- GP 内部 route_util（effort2 报 1.98）与 verify RUDYmax（2.635）
+  存在模型校准差（route cap / demand spread / 惩罚形状），
+  不只是分辨率问题；
+- 目前最有效的仍是 agent 循环：effort=1 + 便宜的 congestion_hotspots
+  复查 + region 疏散局部动作（把 verify RUDYmax 从 2.768 压到 2.207）。
+
+## 5. 下一轮方向
+
+1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
+   （同几何、同 route cap、同 demand 估计），或直接在 GP 循环里
+   以 verify RUDY 为 score 做后处理疏散（GR/congestion-aware）。
+2. 等 nangate / asap7 / ihp130 会话收尾，收集最终对比表。
+3. nangate 会话当前 best（3,910,596 / 2.72 / 362 / 176.1 / -1.178 /
+   601.2）仍被 handover 的 Innovus-init 候选（2,775,743 / 3.084 /
+   259 / 144.6 / -1.184 / 599.0）Pareto 纠缠：需要 Innovus-init 路径
+   的系统引导（propose_config 的 seed_anchor / input_def=innovus DEF）。
+4. 工具层：experiments 的跨 workdir 查询（传 design + 多 workdir），
+   让新会话直接看到历史 Pareto。
