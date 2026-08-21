@@ -233,6 +233,21 @@ def cmd_start(args: argparse.Namespace) -> int:
     if rc != 0:
         print(json.dumps({"ok": False, "rc": rc, "stderr_tail": err[-2000:]}))
         return 1
+    # Budget-limited start publishes coordinates into the PlacerDB wrapper but
+    # does not commit/write-back the source database, so the def_save above can
+    # export the input DEF. Re-export the checkpoint through restore+accept in
+    # a fresh process; the original checkpoint remains resumable.
+    terminal_ckpt = workdir / "pl/gp_session_checkpoint.json"
+    if terminal_ckpt.exists():
+        export_cmds = [
+            f"placer_run_gp -mode restore -checkpoint {shlex.quote(str(terminal_ckpt))}",
+            "placer_run_gp -mode accept",
+        ]
+        rc2, out2, err2 = run_ieda(workdir, case_root, foundry, config, input_def, export_cmds, def_save=True)
+        if rc2 != 0:
+            print(json.dumps({"ok": False, "rc": rc2, "reason": "start finished but DEF re-export failed",
+                              "stderr_tail": err2[-2000:]}))
+            return 1
     state = update_state(workdir, {"case_root": str(case_root), "input_def": str(input_def),
                                    "config": str(config), "foundry_dir": str(foundry)}, record=record)
     record["checkpoint_path"] = record.get("checkpoint") or state.get("latest_checkpoint")
