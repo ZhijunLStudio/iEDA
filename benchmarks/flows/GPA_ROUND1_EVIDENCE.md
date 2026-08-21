@@ -227,6 +227,24 @@ checkpoint=start 等），无 traceback。
 - to=0.25 时 WNS -1.036 距 -1.024 仅 0.012ns、freq 165.7 vs 166.0；
   正在跑 to=0.30/0.35 找 crossover 点——若 WNS/freq 越过而
   rutil 仍 < 2.171、HPWL 仍 < 502.8M，ihp130 即达成全方位超过。
+### ★ ihp130 全方位超过 Innovus（to=0.3，crossover 达成）
+
+| 指标 | raw | candidate（cong3, to=0.3, 342it） | Innovus | vs Innovus |
+|---|---|---|---|---|
+| HPWL | 620,662,411 | 410,214,665 | 502,815,015 | -18.4% ✅ |
+| RUDY max | 2.655 | 1.866 | 2.171 | ✅ |
+| bins | 1728 | 844 | 1099 | ✅ |
+| rsum | 784.41 | 213.15 | 245.28 | ✅ |
+| WNS ns | +0.459 | -0.988 | -1.024 | +36ps ✅ |
+| freq MHz | 220.2 | 167.0 | 166.0 | ✅ |
+
+- 候选 DEF：/tmp/my_ihp130_to_0.3/placement.def
+- 六项指标全部超过 Innovus（含 timing 两项）——第一个达成
+  “全方位超过 Innovus”的设计。
+- 机制：cong3 从 Innovus DEF 起步，target_overflow=0.3 让 GP 在
+  不过度扩散的前提下优化 HPWL/拥塞，WNS 只牺牲 36ps 仍优于 Innovus。
+- to=0.35 的 rsum（249.8）略超 Innovus（245.3），不是全域赢家；
+  to=0.3 是 crossover 最优档。
 ## 5. 下一轮方向
 
 1. C++：把 GP 拥塞目标对齐 run_congestion_eval 的 RUDY 模型
