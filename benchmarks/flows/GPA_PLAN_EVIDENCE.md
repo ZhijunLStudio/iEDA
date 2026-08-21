@@ -913,3 +913,43 @@ Agent 自主决定评测时机和假设验证；最终候选必须跑
   - 但 opt_overflow_list 空时 timing net-weight 不触发；
   - 显式 opt_overflow_list=[0.05,0.08,0.1] 后结果仍相同，
     timing 目标在当前库/SDC 下未改变路径。
+
+## 新目标 Round 1：以“用户开放目标形式”跑会话，反推插件问题
+
+- 用用户的形式跑 headless 开放目标会话：
+  “对 ihp130_gcd / nangate45_gcd 做 GP 优化，
+   只允许 ieda_gp_*，不限轮数，自己判断停止。”
+- 第一轮暴露并已修复的插件 bug：
+  1. archive 函数使用 existsSync/copyFileSync 未 import，
+     导致所有 ieda_gp_run 报 `Error: existsSync is not defined`。
+     已补 import。
+  2. `ieda_gp_session accept` 不带 design 时硬编码 s1238，
+     nangate accept 用了 s1238 case/input/config。
+     已改为从 workdir trace 推断 design。
+  3. `ieda_gp_verify metrics` 不带 design 时把 undefined 传给
+     Python，metrics 产出空 JSON。
+     已改为 trace 推断 design。
+  4. `ieda_gp_observe` 非 designs 不带 workdir 时直接
+     Node paths[0] undefined。
+     已改为结构化错误。
+  5. metrics 不带 raw/candidate/extra 时无意义；
+     已前置校验。
+  6. propose freeze/region_density 不带 region 时 Python traceback；
+     已前置校验。
+- 已加的点工具能力：
+  1. ieda_gp_run 在 start/full/local_run 等动作前自动把
+     上一个 placement.def / checkpoint / metrics 归档到
+     <workdir>/archive/<timestamp>，防止 agent 覆盖历史。
+  2. status 返回 effective_config：
+     target_density / target_overflow / congestion level /
+     timing / bin size，agent 可看到被 solver 钳制后的真实值。
+  3. congestion_hotspots / timing_paths / metrics / accept
+     缺失 design 时从 gp_agent_trace.jsonl 推断。
+  4. headless profile patch 增加 tool-goal disabled，
+     避免 agent 调用 create_goal 破坏“只 GP 工具”。
+- 第二轮开放目标会话进行中：
+  ihp130_gcd：31 次工具调用，主要
+  start/full/verify/metrics/hotspots 循环；
+  nangate45_gcd：42 次调用，已出现
+  verify metrics / congestion_hotspots / full / advance 循环。
+  等会话结束后继续分析。
