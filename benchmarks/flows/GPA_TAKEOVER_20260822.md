@@ -1,0 +1,82 @@
+# GPA 接管日志（2026-08-22，新会话接手 94e65722）
+
+## 0. 接手背景
+
+原会话 session-94e65722（GPA交接任务理解，36 turns / 804 steps）在 11:45:46
+卡死于 `dev_reload_package("@ieda-ai/dsh-tool-ieda-gp")`：该调用与注入器文件
+watcher 的自动重载同秒并发互踩（step 8 刚重建 lib 触发指纹变化），旧 fiber 被
+dispose、新 fiber 未激活、结果事件永不到达，turn 永久 pending。用户决定弃用该
+会话，由本会话接手继续。
+
+## 1. 环境恢复（免重启）
+
+- 卡死现场：ieda-gp `[disposed]`，super-injector `[failed]`，op 锁被永不
+  resolve 的 promise 楔死（任何 dev_reload_package/dev_uninject_plugin 都会
+  再挂——**禁用**）。
+- 恢复手段：追加注释行 touch `~/.dsh/profiles/web/cordis.patch.yml`，include
+  插件对账后重新装配 ieda-gp → `[active]`，5 个工具恢复可用。后续插件代码
+  修改后同样用 patch-touch 重装配（watcher 已随 failed fiber 停止）。
+
+## 2. 已提交的改动（feat/parity-gp-session → personal）
+
+- ea467dc：`full` 的 baseline 回退 design `input_def`（无外部 GT 要求），
+  Innovus 仅在 registry 提供时作第三路（接原会话被卡住未提交的修复）。
+- d636275：
+  - `observe kind=designs` 剥离 GT 标量列 `innovus_hpwl`/`ieda_best_hpwl`
+    （迭代闭环不再能读到答案），路径字段保留。
+  - `full` baseline 增加 existsSync 回退（gp_baseline_def 缺文件 → input_def，
+    均无 → 明确报错）；innovus 路同样跳过缺失文件。
+
+## 3. aes（sky130）攻坚实验记录
+
+目标窗口（同 evaluator, rudy）：rudy_max < 1.682，rsum < 134.01，
+HPWL < 914,210,691（raw 已 4/6：HPWL 665M / WNS / bins / freq 领先）。
+
+| 实验 | 配方 | HPWL | rudy_max | bins | rsum |
+|---|---|---|---|---|---|
+| raw 基线 | p0_converged（td=0.8 收敛） | 665,002,127 | 2.023 | 540 | 186.63 |
+| Innovus 参考 | — | 914,210,691 | 1.682 | 808 | 134.01 |
+| gen-4 branch_a | td0.5 effort4 bin64 200it | 556.9M | 7.064 | 546 | 644.7 |
+| gen-4 branch_b | td0.5 effort4 bin64 | 398.0M | 12.493 | 300 | 642.1 |
+| gen-4 branch_c | td0.6 to0.1 | 647.0M | 2.702 | 542 | 192.7 |
+| E1 | raw 起步 effort3 to0.10 397it | 655.7M | 5.284 | 546 | 215.7 |
+| E2 | raw 起步 effort2 to0.10 419it | 651.9M | 7.513 | 583 | 241.7 |
+| E3 | td0.95 to0.15 effort0 400it | 541.7M | 3.300 | 545 | 275.7 |
+| E4/lc3 | **1 迭代即停（solver 内部 init）** | **101.6M** | **1.195** | **8** | **0.97** |
+
+### 关键发现
+
+1. `start` 的 input DEF 坐标**不参与初始布局**：random_init=0 时求解器仍会
+   重新 linearize（barycenter init）。input DEF 坐标只通过
+   `seed_anchor_strength>0` 的锚点混合参与，且锚点在 init 之后/早期迭代几乎
+   无效果（1 迭代时 s=0 与 s=0.5 结果相同）。→ "从 raw DEF 起步"必须
+   seed_anchor_strength>0 才成立，早期配方语义需要修正。
+2. **求解器内部 init 布局（1 迭代）本身就是 aes 全维度最优**：HPWL 101.6M、
+   RUDY 1.195/8/0.97、peak density 0.2277——但它是未收敛状态（密度 0.23，
+   LG/DP 后会变），不能直接作为交付。
+3. 任何收敛步骤（WL+density 目标）都会让 RUDY 峰值恶化 2-7×：密度装箱与
+   WL 聚类在 aes 上把 init 的均匀需求压成热点。effort 1/2/3、td 0.5-0.95、
+   to 0.10-0.15 的组合都没能守住 init 的拥塞优势。
+4. 局部疏散（local_congestion region/net-cone）在 aes 上发散
+   （overflow 0.145→2.9-3.5），net-cone 模式取到的 net 每 net 仅 1 个
+   instance，工具在该设计上不可用。
+
+### 待验证方向（下一轮）
+
+- A. 锚定收敛：seed_anchor_strength 取 0.5-0.8 从 init 出发长跑，看能否在
+  密度收敛到可用水平的同时保住 RUDY<1.68（锚点捕获时机见
+  NesterovPlace.cc:1910）。
+- B. init + LG/DP 直接成型：对 init 布局跑 LG（max_displacement 放宽），
+  测合法化后的真实 HPWL/RUDY/WNS——若成立，比硬收敛便宜得多。
+- C. 求解器层（dead session 定稿的下一 frontier）：NesterovPlace.cc:1632
+  congestion-aware 分支，RUDY 力没有针对峰值 bin 的有效惩罚（plain rudy
+  只压平均、LUT 峰值惩罚在 aes 上反向恶化），需要 density-congestion 联合
+  目标重构。
+
+## 4. 其他设计现状（来自 94e65722 定稿）
+
+- nangate45_gcd / ihp130_gcd / picorv32：6/6 全胜 Innovus ✅
+- s1238：5/6（rudy +1%、rsum +7%）
+- asap7_aes：4/5（rudy +9%）
+- apb4_timer：4/6（拥塞差 2%/24%）
+- aes：本日志攻坚中
