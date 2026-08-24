@@ -978,8 +978,8 @@ bool validateStartConfigOverrides(const GPRunRequest& request, std::string* reas
     *reason = "phi coefficients must satisfy 0 < min_phi_coef <= max_phi_coef";
     return false;
   }
-  if (request.congestion_effort > 4) {
-    *reason = "congestion_effort must be 0, 1, 2, 3 or 4";
+  if (request.congestion_effort > 5) {
+    *reason = "congestion_effort must be 0, 1, 2, 3, 4 or 5 (5 = joint density-congestion targets)";
     return false;
   }
   return true;

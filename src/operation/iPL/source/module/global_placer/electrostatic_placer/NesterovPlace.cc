@@ -1648,6 +1648,29 @@ GPAdvanceOutcome NesterovPlace::advanceAcceptedIterations(int32_t budget)
           } else {
             _nes_database->_bin_grid->evalRouteUtilByArea(_nes_database->_placer_db->get_layout()->get_database_unit());
           }
+          // Effort 5: joint density-congestion targets. Slow outer-loop
+          // modulation of the per-grid density screen by RUDY overflow: hot
+          // grids get a lower screen (their density capacity shrinks, the
+          // density penalty itself diffuses cells out), cooled grids relax
+          // back toward 1.0. Damped (<=15% cut per refresh, 0.6 floor) and
+          // applied only on global (scope-free) iterations so it cannot fight
+          // batch-scoped region/instance targets. Unlike the old per-iteration
+          // inflation prototype (4.10), the congestion influence rides the
+          // density force instead of adding a competing one.
+          if (_nes_config.getCongestionEffortLevel() >= 5 && _move_coeff_list.empty() && iter_num % 5 == 0) {
+            auto& grid_2d = _nes_database->_grid_manager->get_grid_2d_list();
+            for (auto& row : grid_2d) {
+              for (auto& grid : row) {
+                const float util = std::max(grid.h_util, grid.v_util);
+                if (util > 1.0F) {
+                  const float screen = 1.0F - 0.15F * std::min(1.0F, util - 1.0F);
+                  grid.density_target = std::max(0.6F, std::min(grid.density_target, screen));
+                } else {
+                  grid.density_target = std::min(1.0F, grid.density_target + 0.02F);
+                }
+              }
+            }
+          }
           // NOTE: a density-scale inflation for over-util bins was prototyped
           // here (see GPA_ROUND1_EVIDENCE.md 4.10) but destabilized density
           // convergence; the aligned force reweighting alone is shipped.
