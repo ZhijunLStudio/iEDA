@@ -8,7 +8,7 @@
     "ieda_best_hpwl": 5745273,
     "pdk": "sky130",
     "notes": "timing GP+LG+DP full placement",
-    "gp_baseline_def": "/tmp/p0_converged/s1238/placement.def"
+    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/s1238/ieda_gp.def"
   },
   "apb4_timer": {
     "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/apb4_timer",
@@ -19,7 +19,7 @@
     "ieda_best_hpwl": 17535062,
     "pdk": "sky130",
     "notes": "timing GP+LG+DP full placement",
-    "gp_baseline_def": "/tmp/p0_converged/apb4_timer/placement.def"
+    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/apb4_timer/ieda_gp.def"
   },
   "picorv32": {
     "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/picorv32",
@@ -30,7 +30,7 @@
     "ieda_best_hpwl": 296949944,
     "pdk": "sky130",
     "notes": "timing GP+LG+DP full placement",
-    "gp_baseline_def": "/tmp/p0_converged/picorv32/placement.def"
+    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/picorv32/ieda_gp.def"
   },
   "aes": {
     "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/aes",
@@ -41,7 +41,7 @@
     "ieda_best_hpwl": 1048174208,
     "pdk": "sky130",
     "notes": "timing GP+LG+DP full placement",
-    "gp_baseline_def": "/tmp/p0_converged/aes/placement.def"
+    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/aes/ieda_gp.def"
   },
   "nangate45_gcd": {
     "case_root": "/tmp/nangate45_gcd",
@@ -80,11 +80,11 @@
   "ihp130_gcd": {
     "case_root": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd",
     "input_def": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/result/iFP_result.def",
-    "pl_config": "/tmp/ihp130_gcd_pl_clean_config.json",
+    "pl_config": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/iEDA_config/pl_default_config.json",
     "foundry_dir": "/home/lizhijun/work/iEDA/scripts/foundry/ihp130",
     "pdk": "ihp130",
     "lef": "/home/lizhijun/work/iEDA/scripts/foundry/ihp130/ihp-sg13g2/libs.ref/sg13g2_stdcell/lef/sg13g2_stdcell.lef",
-    "gp_baseline_def": "/tmp/gp_ihp130_gcd/placement.def",
+    "gp_baseline_def": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/result/iFP_result.def",
     "innovus_def": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/innovus_placed.def",
     "alt_input_defs": [
       {
