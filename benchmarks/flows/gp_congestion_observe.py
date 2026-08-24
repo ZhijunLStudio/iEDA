@@ -159,6 +159,13 @@ def def_net_instances(def_path: Path, macros: dict, region):
         scored.append({"net": net_name, "hpwl": int(ux - lx + uy - ly), "pin_count": len(points),
                        "instance_count": len(instances), "bbox": [lx, ly, ux, uy], "overlap_ratio": overlap / region_area,
                        "score": score, "scope_instances": ",".join(instances), "instances": instances})
+    # Executable-scope selection: single-instance nets (pure IO-pin crossings)
+    # yield near-no-op scopes and dominate the scoreboard on large designs;
+    # boost nets with more movable instances and drop the 1-instance ones.
+    for s in scored:
+        s["score"] = s["score"] * (0.5 + 0.5 * min(1.0, s["instance_count"] / 8.0))
+    usable = [s for s in scored if s["instance_count"] >= 2]
+    scored = usable or scored
     scored.sort(key=lambda x: -x["score"])
     return scored
 
@@ -278,6 +285,7 @@ def main():
         if lef_candidates:
             macros, _ = mm.parse_lef(str(lef_candidates[0]))
             congestion_nets = def_net_instances(Path(args.def_path), macros, regions[0]["bbox"])[: args.top_n]
+            congestion_nets = [n for n in congestion_nets if n["instance_count"] >= 2] or congestion_nets
     with open(work / "congestion_nets.json", "w") as _cf:
         json.dump({"def": str(Path(args.def_path).resolve()), "regions": regions, "congestion_nets": congestion_nets}, _cf, indent=2)
     print(json.dumps({
