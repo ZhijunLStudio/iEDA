@@ -80,3 +80,60 @@ HPWL < 914,210,691（raw 已 4/6：HPWL 665M / WNS / bins / freq 领先）。
 - asap7_aes：4/5（rudy +9%）
 - apb4_timer：4/6（拥塞差 2%/24%）
 - aes：本日志攻坚中
+
+## 5. 2026-08-24 第二轮：按用户方向重构为「会话自主 + 事后对比」闭环
+
+### 工具面（GT 彻底摘除）
+- 8afad0f：observe designs 剥离 innovus_def 路径 + GT 种子 alt_input_defs
+  （含 nangate/asap7/ihp130 的 innovus_die 起点），agent 只看到 iEDA 自历史
+  gp_baseline_def；full 不再含 innovus 第三路，Innovus 对比只在会话结束后
+  由我离线跑。verify 描述里的 innovus 示例改为 neutral extra。
+- d21d81a：local_congestion 疏散默认参数放宽（density-target 0.5→0.8、
+  halo 1→2 hop）；congestion_nets 选择弃 1-instance 纯 IO pin net，并给
+  多实例 net 加权（score × (0.5+0.5·min(1,ic/8))）。依据：aes 上 net-cone
+  模式取到 write_data/read_data 每 net 仅 1 个实例导致疏散发散。
+
+### /tmp 清理后的 registry 修复（5a2efa5 + 042e487）
+- sky130 四设计 gp_baseline_def 指向仓库内 ieda_gp.def；但该 DEF 是整流程
+  产物含 filler（aes 4250 个 fill_1），timing eval 无 filler liberty 导致
+  rc=-6（apb4 会话首轮即中招）。修复：生成剥离 filler 的
+  ieda_gp_nofill.def（results 目录 gitignore，落盘保存），registry 改指
+  nofill 版本；同 evaluator 复验 aes：665.2M / 2.164 / 536 / 180.58。
+- nangate45/asap7 的 /tmp case 与 /mnt 外挂盘不可用，暂退出本轮战役。
+
+### 长程会话（headless，GT-free prompt）
+- DSH_HOME=/tmp/dsh-headless-gp 重建：profile headless bundles
+  [dsh-base, dsh-headless, ieda-gp]，cordis.patch 禁用 bash/fs/web/subagent/
+  goal 等全部非 GP 工具，agent 只持 5 个点工具；凭证走 .env 复制。
+- 启动 3 场并行会话（nohup，pid 见 /tmp/hl_runs/run_*.log）：
+  s1238（/tmp/agent_s1238）、apb4_timer（/tmp/agent_apb4，首轮因 timing
+  filler 问题失败已重启）、aes（/tmp/agent_aes）。
+- 会话提示词只给目标指标名，不含任何 GT 数值/路径；停止条件由 agent 自判。
+- 会话结束后：读 session.jsonl.zstd 轨迹 → 取最终 placement.def → 我离线
+  用同 evaluator 对 ieda_gp_nofill.def（baseline）+ innovus_placed.def
+  （GT）做全维度对比（含 timing），按差距定位工具/求解器问题再迭代。
+
+## 6. 求解器层突破：congestion_effort=5 联合密度-拥塞目标（3c2673a）
+
+按 4.11 的定稿方向实现了「密度-拥塞联合目标重构」的第一版：不再给 WL 力加
+拥塞惩罚（4.11 证明 in-loop 拥塞力破坏密度收敛），而是让拥塞影响**密度容量**——
+每 5 个迭代把热 RUDY grid 的 density screen 调低最多 15%（floor 0.6），冷 grid
+缓慢回 1.0，只在全局（无 scope）迭代生效；密度惩罚本身承载扩散力。
+
+s1238 结果（seed=1000 确定性复现，GT-free：无 Innovus 种子/分数）：
+
+| placement | HPWL | rudy_max | bins | rsum |
+|---|---|---|---|---|
+| 基线 ieda_gp_nofill | 5,982,950 | 2.560 | 611 | 220.02 |
+| effort5 400it（to=0.10, bin64） | 6,467,975 | **2.029** | 649 | 166.22 |
+| Innovus（事后参考） | 8,053,041 | 2.035 | 622 | 133.02 |
+| 旧工具可达最优（Innovus-anchor） | 7,533,348 | 2.056 | 616 | 142.06 |
+
+- rudy_max 首次**无 GT 低于 Innovus**（2.029 < 2.035），并低于旧 Innovus-
+  anchor 吸引子（2.056）；HPWL 仍优于 Innovus 21%。rsum 166 仍高于 Innovus
+  133，下一轮方向：rsum 需要更强的全局扩散（幅度/floor 扫描）+ 更长迭代。
+- 调参证据：cut 0.25/floor 0.55/每 2 迭代 → 2.560/174.3（劣化）；
+  cut 0.15/floor 0.6/每 5 迭代 → 2.029/166.2（当前最优，已固化）。
+- aes 同配方：658.7M / 3.024 / 568 / 198.0（HPWL 微升、拥塞劣化）——大 bin
+  设计需要不同参数或 bin_cnt 对齐（内部 grid 128 自适应 vs RUDY 64）。
+- 已同步工具描述（effort 2-5 语义），headless 下一波会话即可使用 effort5。
