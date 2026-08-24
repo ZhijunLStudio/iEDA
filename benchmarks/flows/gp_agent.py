@@ -94,9 +94,13 @@ def run_ieda(workdir: Path, case_root: Path, foundry_dir: Path, config: Path, in
              commands: list[str], def_save: bool = False) -> tuple[int, str, str]:
     tcl = write_tcl(workdir, case_root, foundry_dir, config, input_def, commands, def_save)
     env = os.environ.copy()
+    # SDC filename may not match the case directory name (e.g. case
+    # apb4_timer ships apb4.sdc); the <name>.sdc -> any *.sdc -> default.sdc
+    # ladder fixes timing-driven GP init on such cases.
     sdc = case_root / f"{case_root.name}.sdc"
     if not sdc.exists():
-        sdc = case_root / "default.sdc"
+        sdc_candidates = sorted(case_root.glob("*.sdc"))
+        sdc = sdc_candidates[0] if sdc_candidates else case_root / "default.sdc"
     env.update({
         "CONFIG_DIR": str(case_root / "iEDA_config"),
         "RESULT_DIR": str(workdir),

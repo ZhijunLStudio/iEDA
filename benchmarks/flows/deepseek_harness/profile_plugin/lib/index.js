@@ -3,6 +3,7 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { execFile } from "node:child_process";
 import { appendFileSync, readFileSync, mkdirSync, existsSync, copyFileSync, statSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 //#region lib/types/index.js
 /**
@@ -286,7 +287,7 @@ parameters: p({ workdir: { type: "string" }, workdirs: { type: "string" }, desig
 output: out(),
 execute: async (args) => {
 if (args.kind === "designs") return asJson({ ok: true, designs: stripGtDesigns(readDesigns(config.iedaRoot)) });
-if (!args.workdir) return asJson({ ok: false, reason: args.kind + " requires workdir (except kind=designs)" });
+if (!args.workdir && args.kind !== "congestion_hotspots" && args.kind !== "timing_paths") return asJson({ ok: false, reason: args.kind + " requires workdir (except kind=designs|congestion_hotspots|timing_paths)" });
 if (args.kind === "status") return toolbox(["status", "--workdir", resolve(args.workdir), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
 if (args.kind === "checkpoints") return toolbox(["checkpoints", "--workdir", resolve(args.workdir)]);
 if (args.kind === "grid") return toolbox(["grid", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 8), ...args.checkpoint ? ["--checkpoint", args.checkpoint] : []]);
@@ -295,8 +296,8 @@ if (args.kind === "longnets") return toolbox(["longnets", "--workdir", resolve(a
 if (args.kind === "unstable") return toolbox(["unstable", "--workdir", resolve(args.workdir), "--checkpoint-a", args.checkpoint_a, "--checkpoint-b", args.checkpoint_b, "--top-n", String(args.top_n ?? 5)]);
 if (args.kind === "trajectory") return toolbox(["trajectory", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 0)]);
 if (args.kind === "experiments") return toolbox(["experiments", "--workdir", resolve(args.workdir), "--top-n", String(args.top_n ?? 40), ...args.workdirs ? ["--workdirs", String(args.workdirs)] : []]);
-if (args.kind === "congestion_hotspots") { const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "congestion_hotspots requires design" }); return asJson(await runtime.congestionObserve(design, args.workdir, args.def_path, args.top_n, args.bin_cnt, args.foundry_dir, args.congestion_model)); }
-if (args.kind === "timing_paths") { const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "timing_paths requires design" }); return asJson(await runtime.timingObserve(design, args.workdir, args.def_path, args.top_n, args.foundry_dir)); }
+if (args.kind === "congestion_hotspots") { const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "congestion_hotspots requires design" }); const obsDir = args.workdir || join(tmpdir(), "ieda_gp_observe", design); return asJson(await runtime.congestionObserve(design, obsDir, args.def_path, args.top_n, args.bin_cnt, args.foundry_dir, args.congestion_model)); }
+if (args.kind === "timing_paths") { const design = args.design || inferDesignFromTrace(args.workdir); if (!design) return asJson({ ok: false, reason: "timing_paths requires design" }); const obsDir = args.workdir || join(tmpdir(), "ieda_gp_observe", design); return asJson(await runtime.timingObserve(design, obsDir, args.def_path, args.top_n, args.foundry_dir)); }
 throw new Error("ieda_gp_observe: kind must be designs|status|checkpoints|grid|hotspots|longnets|unstable|trajectory|experiments|congestion_hotspots|timing_paths");
 }
 }));

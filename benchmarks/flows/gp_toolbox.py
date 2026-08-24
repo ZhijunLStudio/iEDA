@@ -590,7 +590,26 @@ def propose_region_density(workdir: str | Path, region: str, checkpoint: str | N
         if not (urx <= blx or llx >= bux or ury <= bly or lly >= buy):
             overlap.append(b)
     if not overlap:
-        return {"ok": False, "reason": "region does not overlap any GP bin"}
+        # Dead-end guard: instead of failing, snap the request to the nearest
+        # grid bin so the proposal stays executable (agents pass regions from
+        # stale maps or other DEFs of different die size).
+        bins = grid.get("bins", [])
+        if not bins:
+            return {"ok": False, "reason": "region does not overlap any GP bin"}
+        cx = (llx + urx) / 2.0
+        cy = (lly + ury) / 2.0
+        nearest = min(bins, key=lambda b: ((b["ll_x"] + b["ur_x"]) / 2.0 - cx) ** 2 + ((b["ll_y"] + b["ur_y"]) / 2.0 - cy) ** 2)
+        snapped = f"{nearest['ll_x']} {nearest['ll_y']} {nearest['ur_x']} {nearest['ur_y']}"
+        llx, lly, urx, ury = nearest["ll_x"], nearest["ll_y"], nearest["ur_x"], nearest["ur_y"]
+        overlap = [nearest]
+        peak = max(b.get("density", 0.0) for b in overlap)
+        suggested = max(0.6, min(1.0, round(1.0 / peak, 2)))
+        return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
+                "iteration": cp.get("current_iter"), "region": snapped,
+                "requested_region": region, "snapped": True, "overlapping_bins": 1,
+                "peak_density": peak, "suggested_density_target": suggested,
+                "density_target_options": [t for t in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0) if t >= suggested - 1e-9],
+                "reason": "requested region missed the grid; snapped to nearest bin"}
     peak = max(b.get("density", 0.0) for b in overlap)
     suggested = max(0.6, min(1.0, round(1.0 / peak, 2)))
     return {"ok": True, "checkpoint_path": checkpoint_path(workdir, checkpoint),
