@@ -175,3 +175,14 @@ agent 自建基线、自找 effort3→4 扩散配方、自判「历史最好 HPW
 - 当前在跑：aes（942936）、s1238 第三波（1283615）、ihp130_gcd（1314394，
   registry 已修好 pl_default_config + iFP 输入，GT-free 提示词）。apb4 已
   收敛并验证完成，退出战役。
+
+## 9. ihp130 基线修正 + 验证表预置
+
+- iFP_result.def 是未布局输入（HPWL 0、RUDY 215），不能当基线；改指
+  仓库内真实 iPL 布局结果 result/iPL_result.def（无 filler，timing 可用）。
+- 预置事后验证基线（同 evaluator, timing=1）：
+  iPL_result: 638.7M / 2.637 / 1810 / 836.1 / WNS +0.630 / 228.8MHz；
+  Innovus:    502.8M / 2.171 / 1099 / 245.3 / WNS -1.024 / 166.0MHz。
+- ihp130 会话初期的 full/start 失败经复测确认为看门狗重复进程竞写所致
+  （干净 workdir 上 timing=1 + bin64 full 全部通过），非环境缺陷；agent
+  会自愈，未干预。
