@@ -1,0 +1,95 @@
+{
+  "design": "s1238",
+  "placements": {
+    "raw": {
+      "def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/s1238/ieda_gp_nofill.def",
+      "hpwl": 5982950,
+      "density": {
+        "ok": true,
+        "peak_cell_density": 0.379658,
+        "mean_cell_density": 0.379658,
+        "rudy_demand_max": 0.004324,
+        "rudy_demand_total": 3.801459,
+        "rudy_utilization_max": 2.560375,
+        "rudy_utilization_avg": 0.479979,
+        "rudy_utilization_h_max": 2.560375,
+        "rudy_utilization_v_max": 1.785283,
+        "rudy_overflow_bin_count": 611,
+        "rudy_overflow_util_sum": 220.019114,
+        "congestion_model": "rudy",
+        "congestion_bin_cnt": [
+          64,
+          64
+        ]
+      },
+      "timing": {
+        "ok": true,
+        "setup_wns_ns": -0.049476,
+        "setup_tns_ns": -0.079086,
+        "hold_wns_ns": 0.529097,
+        "hold_tns_ns": 0.0,
+        "suggest_freq_mhz": 645.3794702209004
+      }
+    },
+    "candidate": {
+      "def": "/tmp/agent_s1238/placement.def",
+      "hpwl": 3109892,
+      "density": {
+        "ok": true,
+        "peak_cell_density": 0.458522,
+        "mean_cell_density": 0.458522,
+        "rudy_demand_max": 0.016729,
+        "rudy_demand_total": 1.972453,
+        "rudy_utilization_max": 8.00615,
+        "rudy_utilization_avg": 0.257809,
+        "rudy_utilization_h_max": 8.00615,
+        "rudy_utilization_v_max": 6.710564,
+        "rudy_overflow_bin_count": 164,
+        "rudy_overflow_util_sum": 352.421095,
+        "congestion_model": "rudy",
+        "congestion_bin_cnt": [
+          64,
+          64
+        ]
+      },
+      "timing": {
+        "ok": true,
+        "setup_wns_ns": 0.146269,
+        "setup_tns_ns": 0.0,
+        "hold_wns_ns": 0.517363,
+        "hold_tns_ns": 0.0,
+        "suggest_freq_mhz": 738.6991950394871
+      }
+    },
+    "innovus": {
+      "def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/s1238/innovus_placed.def",
+      "hpwl": 8053041,
+      "density": {
+        "ok": true,
+        "peak_cell_density": 0.457168,
+        "mean_cell_density": 0.457168,
+        "rudy_demand_max": 0.003627,
+        "rudy_demand_total": 5.257225,
+        "rudy_utilization_max": 2.034871,
+        "rudy_utilization_avg": 0.653889,
+        "rudy_utilization_h_max": 1.937959,
+        "rudy_utilization_v_max": 2.034871,
+        "rudy_overflow_bin_count": 622,
+        "rudy_overflow_util_sum": 133.022759,
+        "congestion_model": "rudy",
+        "congestion_bin_cnt": [
+          64,
+          64
+        ]
+      },
+      "timing": {
+        "ok": true,
+        "setup_wns_ns": -0.134057,
+        "setup_tns_ns": -0.193712,
+        "hold_wns_ns": 0.530241,
+        "hold_tns_ns": 0.0,
+        "suggest_freq_mhz": 611.9737561174426
+      }
+    }
+  }
+}

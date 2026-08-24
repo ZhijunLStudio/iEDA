@@ -47,3 +47,5 @@ python3 benchmarks/flows/gp_agent.py start \
 详见 benchmarks/flows/GPA_ROUND1_EVIDENCE.md 与 GPA_FINAL_STATUS.md。
 | apb4_timer_final_gtfree.def | apb4 6/6 全胜 Innovus（GT-free 长程会话自收敛） |
 | apb4_timer_validate.json | 同 evaluator 验证（raw/candidate/innovus，timing=1） |
+| s1238_final_gtfree.def | s1238 GT-free 长程会话自收敛最终点（HPWL/WNS 端点） |
+| s1238_final_validate.json | 同 evaluator 验证（raw/candidate/innovus，timing=1） |

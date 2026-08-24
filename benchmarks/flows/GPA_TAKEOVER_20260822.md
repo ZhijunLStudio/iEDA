@@ -186,3 +186,22 @@ agent 自建基线、自找 effort3→4 扩散配方、自判「历史最好 HPW
 - ihp130 会话初期的 full/start 失败经复测确认为看门狗重复进程竞写所致
   （干净 workdir 上 timing=1 + bin64 full 全部通过），非环境缺陷；agent
   会自愈，未干预。
+
+## 10. s1238 会话自收敛验证（4/6，agent 自选 HPWL/WNS 端点）
+
+第三波 s1238 会话（session-ce67fea5）自判收敛并出最终报告；事后同 evaluator
+验证（timing=1）：
+
+| s1238 | HPWL | rudy_max | bins | rsum | WNS ns | freq MHz |
+|---|---|---|---|---|---|---|
+| baseline ieda_gp_nofill | 5,982,950 | 2.560 | 611 | 220.02 | -0.049 | 645.4 |
+| agent 最终 | **3,109,892** | 8.006 | **164** | 352.42 | **+0.146** | **738.7** |
+| Innovus | 8,053,041 | 2.035 | 622 | 133.02 | -0.134 | 612.0 |
+
+vs Innovus：HPWL/bins/WNS/freq 4 项胜，rudy_max/rsum 2 项负。agent 在报告里
+明确论证了 RUDY-HPWL 硬权衡并选择 HPWL/WNS 端点（其自判，尊重）。
+
+会话轨迹暴露的两个待查工具问题（下一轮）：
+1. agent 声称 start 路径 congestion_effort/target_overflow 全部"钉死"
+   （派生配置漂移），effort 2/3/4/5 结果相同——需复现验证。
+2. local_restart 触发 TimingAnnotation 崩溃（rc=-6）。
