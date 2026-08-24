@@ -8,7 +8,7 @@
     "ieda_best_hpwl": 5745273,
     "pdk": "sky130",
     "notes": "timing GP+LG+DP full placement",
-    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/s1238/ieda_gp.def"
+    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/s1238/ieda_gp_nofill.def"
   },
   "apb4_timer": {
     "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/apb4_timer",
@@ -19,7 +19,7 @@
     "ieda_best_hpwl": 17535062,
     "pdk": "sky130",
     "notes": "timing GP+LG+DP full placement",
-    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/apb4_timer/ieda_gp.def"
+    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/apb4_timer/ieda_gp_nofill.def"
   },
   "picorv32": {
     "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/picorv32",
@@ -30,7 +30,7 @@
     "ieda_best_hpwl": 296949944,
     "pdk": "sky130",
     "notes": "timing GP+LG+DP full placement",
-    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/picorv32/ieda_gp.def"
+    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/picorv32/ieda_gp_nofill.def"
   },
   "aes": {
     "case_root": "/home/lizhijun/work/iEDA/docs/ipl/pl_vis/cases/aes",
@@ -41,7 +41,7 @@
     "ieda_best_hpwl": 1048174208,
     "pdk": "sky130",
     "notes": "timing GP+LG+DP full placement",
-    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/aes/ieda_gp.def"
+    "gp_baseline_def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/aes/ieda_gp_nofill.def"
   },
   "nangate45_gcd": {
     "case_root": "/tmp/nangate45_gcd",
