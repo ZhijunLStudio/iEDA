@@ -45,3 +45,5 @@ python3 benchmarks/flows/gp_agent.py start \
 后续：local_run scope=instances 关键路径锥（top-3 路径 27 实例）修复 WNS。
 
 详见 benchmarks/flows/GPA_ROUND1_EVIDENCE.md 与 GPA_FINAL_STATUS.md。
+| apb4_timer_final_gtfree.def | apb4 6/6 全胜 Innovus（GT-free 长程会话自收敛） |
+| apb4_timer_validate.json | 同 evaluator 验证（raw/candidate/innovus，timing=1） |

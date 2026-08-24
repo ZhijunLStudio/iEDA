@@ -137,3 +137,28 @@ s1238 结果（seed=1000 确定性复现，GT-free：无 Innovus 种子/分数�
 - aes 同配方：658.7M / 3.024 / 568 / 198.0（HPWL 微升、拥塞劣化）——大 bin
   设计需要不同参数或 bin_cnt 对齐（内部 grid 128 自适应 vs RUDY 64）。
 - 已同步工具描述（effort 2-5 语义），headless 下一波会话即可使用 effort5。
+
+## 7. 第一场自停会话的事后验证：apb4_timer 6/6 全维度超过 Innovus
+
+apb4 headless 会话（GT-free 提示词、无任何 Innovus 数据）自主迭代 40+ 步后
+自判收敛并给出最终报告（session-2eae302e，最终 placement.def 已归档
+benchmarks/flows/gp_wins/staging/apb4_timer_final_gtfree.def）。
+事后同 evaluator 验证（timing=1，congestion_model=rudy）：
+
+| apb4_timer | HPWL | rudy_max | bins | rsum | WNS ns | freq MHz |
+|---|---|---|---|---|---|---|
+| baseline ieda_gp_nofill | 15,689,143 | 1.513 | 71 | 11.51 | -0.572 | 482.7 |
+| agent 最终 | **15,422,494** | **1.321** | **48** | **5.70** | -0.594 | 477.5 |
+| Innovus | 18,566,747 | 1.398 | 63 | 7.46 | -0.678 | 459.2 |
+
+**6/6 全维度超过 Innovus**（WNS -0.594 > -0.678），成为第 4 个全胜设计
+（前 3：nangate45_gcd / ihp130_gcd / picorv32）。且本场会话完全 GT-free：
+agent 自建基线、自找 effort3→4 扩散配方、自判「历史最好 HPWL 来自未扩散
+密集态不算数」并主动放弃，最终停在不可支配平衡点。
+
+会话期工具问题（已修）：timing=1 的 GP 内时序模式因 SDC 文件名错配失败
+（52e9e32 修复），agent 自行绕过（非时序 GP + 独立 iSTA 评估）。
+
+备注：headless 进程在 turn/end 后不退出（僵尸挂起，需 kill），疑似 harness
+关机路径问题，待查；s1238 第一波进程曾在调用中途无痕退出（原因待查，
+已重启第三波）。

@@ -1,0 +1,95 @@
+{
+  "design": "apb4_timer",
+  "placements": {
+    "raw": {
+      "def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/apb4_timer/ieda_gp_nofill.def",
+      "hpwl": 15689143,
+      "density": {
+        "ok": true,
+        "peak_cell_density": 0.327401,
+        "mean_cell_density": 0.327401,
+        "rudy_demand_max": 0.00349,
+        "rudy_demand_total": 2.337628,
+        "rudy_utilization_max": 1.513049,
+        "rudy_utilization_avg": 0.31515,
+        "rudy_utilization_h_max": 1.408169,
+        "rudy_utilization_v_max": 1.513049,
+        "rudy_overflow_bin_count": 71,
+        "rudy_overflow_util_sum": 11.507998,
+        "congestion_model": "rudy",
+        "congestion_bin_cnt": [
+          64,
+          64
+        ]
+      },
+      "timing": {
+        "ok": true,
+        "setup_wns_ns": -0.571769,
+        "setup_tns_ns": -26.105124999999997,
+        "hold_wns_ns": 0.334331,
+        "hold_tns_ns": 0.0,
+        "suggest_freq_mhz": 482.67929484416464
+      }
+    },
+    "candidate": {
+      "def": "/tmp/agent_apb4/placement.def",
+      "hpwl": 15422494,
+      "density": {
+        "ok": true,
+        "peak_cell_density": 0.36653,
+        "mean_cell_density": 0.36653,
+        "rudy_demand_max": 0.003068,
+        "rudy_demand_total": 2.313036,
+        "rudy_utilization_max": 1.321005,
+        "rudy_utilization_avg": 0.309138,
+        "rudy_utilization_h_max": 1.321005,
+        "rudy_utilization_v_max": 1.285186,
+        "rudy_overflow_bin_count": 48,
+        "rudy_overflow_util_sum": 5.698731,
+        "congestion_model": "rudy",
+        "congestion_bin_cnt": [
+          64,
+          64
+        ]
+      },
+      "timing": {
+        "ok": true,
+        "setup_wns_ns": -0.594176,
+        "setup_tns_ns": -26.899836,
+        "hold_wns_ns": 0.334569,
+        "hold_tns_ns": 0.0,
+        "suggest_freq_mhz": 477.5147838577082
+      }
+    },
+    "innovus": {
+      "def": "/home/lizhijun/work/iEDA.ai/benchmarks/results/innovus_gp_compare/apb4_timer/innovus_placed.def",
+      "hpwl": 18566747,
+      "density": {
+        "ok": true,
+        "peak_cell_density": 0.366077,
+        "mean_cell_density": 0.366077,
+        "rudy_demand_max": 0.002559,
+        "rudy_demand_total": 2.918314,
+        "rudy_utilization_max": 1.398297,
+        "rudy_utilization_avg": 0.369589,
+        "rudy_utilization_h_max": 1.398297,
+        "rudy_utilization_v_max": 1.286249,
+        "rudy_overflow_bin_count": 63,
+        "rudy_overflow_util_sum": 7.464614,
+        "congestion_model": "rudy",
+        "congestion_bin_cnt": [
+          64,
+          64
+        ]
+      },
+      "timing": {
+        "ok": true,
+        "setup_wns_ns": -0.677543,
+        "setup_tns_ns": -30.597338000000004,
+        "hold_wns_ns": 0.337704,
+        "hold_tns_ns": 0.0,
+        "suggest_freq_mhz": 459.2331816179979
+      }
+    }
+  }
+}
