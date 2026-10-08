@@ -60,7 +60,7 @@ FeatureParser::~FeatureParser()
 
 bool FeatureParser::buildSummary(std::string json_path)
 {
-  std::ofstream& file_stream = ieda::getOutputFileStream(json_path);
+  std::ofstream file_stream = ieda::getOutputFileStream(json_path);
   json root;
 
   root["Design Information"] = buildSummaryInfo();
@@ -113,7 +113,7 @@ bool FeatureParser::buildTools(std::string json_path, std::string step)
                                                                        {"drc", [this]() { return buildSummaryDRC(); }},
                                                                        {"route", [this]() { return buildSummaryRT(); }}};
 
-  std::ofstream& file_stream = ieda::getOutputFileStream(json_path);
+  std::ofstream file_stream = ieda::getOutputFileStream(json_path);
   json root;
 
   root[step] = stepToBuilder[step]();
@@ -129,7 +129,7 @@ bool FeatureParser::buildTools(std::string json_path, std::string step)
 
 bool FeatureParser::buildRouteData(std::string json_path, RouteAnalyseData* data)
 {
-  std::ofstream& file_stream = ieda::getOutputFileStream(json_path);
+  std::ofstream file_stream = ieda::getOutputFileStream(json_path);
   json root;
 
   for (auto [cellmaster_name, cell_master] : data->cell_master_list) {
@@ -207,7 +207,7 @@ bool FeatureParser::readRouteData(std::string json_path, RouteAnalyseData* data)
 
 bool FeatureParser::buildSummaryEval(std::string json_path)
 {
-  std::ofstream& file_stream = ieda::getOutputFileStream(json_path);
+  std::ofstream file_stream = ieda::getOutputFileStream(json_path);
   json root;
 
   root["Wirelength"] = buildSummaryWirelength();
@@ -231,7 +231,7 @@ bool FeatureParser::buildSummaryEval(std::string json_path)
 
 bool FeatureParser::buildSummaryTimingEval(std::string json_path)
 {
-  std::ofstream& file_stream = ieda::getOutputFileStream(json_path);
+  std::ofstream file_stream = ieda::getOutputFileStream(json_path);
   json root;
 
   root["clocks_timing"] = buildSummaryTiming();

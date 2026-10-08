@@ -56,8 +56,8 @@ void RuleValidator::verifyCutEOLSpacing(RVCluster& rv_cluster)
 {
   const auto orientations = {Orientation::kEast, Orientation::kSouth, Orientation::kWest, Orientation::kNorth};
   using RoutingEnvRTree = bgi::rtree<std::pair<GTLRectInt, int32_t>, bgi::quadratic<16>>;
-  std::vector<CutLayer>& cut_layer_list = DRCDM.getDatabase().get_cut_layer_list();
-  std::map<int32_t, std::vector<int32_t>>& cut_to_adjacent_routing_map = DRCDM.getDatabase().get_cut_to_adjacent_routing_map();
+  const std::vector<CutLayer>& cut_layer_list = DRCDM.getDatabase().get_cut_layer_list();
+  const auto& cut_to_adjacent_routing_map = DRCDM.getDatabase().get_cut_to_adjacent_routing_map();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   std::map<int32_t, RoutingEnvRTree> routing_net_env_rtrees;
@@ -122,7 +122,7 @@ void RuleValidator::verifyCutEOLSpacing(RVCluster& rv_cluster)
       int32_t cut_net_idx = cut_data.net_idx;
       PlanarRect cut_rect = DRCUTIL.convertToPlanarRect(cut_data.rect);
       // for each via, get overlaped metal
-      CutLayer& cut_layer = cut_layer_list[cut_layer_idx];
+      const CutLayer& cut_layer = cut_layer_list[cut_layer_idx];
       int32_t eol_spacing = cut_layer.get_cut_eol_spacing_rule().eol_spacing;
       int32_t eol_prl = cut_layer.get_cut_eol_spacing_rule().eol_prl;
       int32_t eol_prl_spacing = cut_layer.get_cut_eol_spacing_rule().eol_prl_spacing;
@@ -375,9 +375,8 @@ void RuleValidator::verifyCutEOLSpacing(RVCluster& rv_cluster)
 
               // VIAx的违例输出Mx
               int32_t violation_routing_layer_idx = -1;
-              {
-                std::vector<int32_t>& routing_layer_idx_list = cut_to_adjacent_routing_map[cut_layer_idx];
-                violation_routing_layer_idx = *std::min_element(routing_layer_idx_list.begin(), routing_layer_idx_list.end());
+              if (!getMinAdjacentRoutingLayerByCut(cut_layer_idx, violation_routing_layer_idx)) {
+                continue;
               }
               PlanarRect violation_rect;
               if (DRCUTIL.isClosedOverlap(cut_rect, env_cut_rect)) {

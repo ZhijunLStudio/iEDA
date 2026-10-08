@@ -16,6 +16,7 @@
 // ***************************************************************************************
 #include "tapcell.h"
 
+#include "../../utility/FloorplanGeometry.hh"
 #include "IdbCellMaster.h"
 #include "IdbDesign.h"
 #include "IdbEnum.h"
@@ -116,9 +117,15 @@ void TapCellPlacer::buildRegionInRow(idb::IdbRow* idb_row, int32_t index)
     if (blockage->is_palcement_blockage()) {
       /// add blocakge shape to region
       for (auto rect : blockage->get_rect_list()) {
-        /// row and rect intersected
-        if (idb_row_end_y < rect->get_low_y() || idb_row_start_y > rect->get_high_y() || idb_row_start_x > rect->get_low_x()
-            || idb_row_end_x < rect->get_high_x()) {
+        const FloorplanBox row_box{.low_x = idb_row_start_x,
+                                   .low_y = idb_row_start_y,
+                                   .high_x = idb_row_end_x,
+                                   .high_y = idb_row_end_y};
+        const FloorplanBox blockage_box{.low_x = rect->get_low_x(),
+                                        .low_y = rect->get_low_y(),
+                                        .high_x = rect->get_high_x(),
+                                        .high_y = rect->get_high_y()};
+        if (!intersectsClosed(row_box, blockage_box)) {
           continue;
         }
 

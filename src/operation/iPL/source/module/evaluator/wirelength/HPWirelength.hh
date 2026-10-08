@@ -27,7 +27,7 @@
 #ifndef IPL_EVALUATOR_HPWL_H
 #define IPL_EVALUATOR_HPWL_H
 
-#include "PlacerDB.hh"
+#include "TopologyManager.hh"
 #include "Wirelength.hh"
 namespace ipl {
 

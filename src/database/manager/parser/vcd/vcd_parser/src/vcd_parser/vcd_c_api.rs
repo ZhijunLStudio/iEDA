@@ -311,13 +311,27 @@ pub extern "C" fn rust_convert_vcd_file(c_vcd_file: *mut vcd_data::VCDFile) -> *
 
 #[no_mangle]
 pub extern "C" fn rust_parse_vcd(lib_path: *const c_char) -> *mut c_void {
+    if lib_path.is_null() {
+        return null_mut();
+    }
     let c_str = unsafe { std::ffi::CStr::from_ptr(lib_path) };
     let r_str = c_str.to_string_lossy().into_owned();
     println!("rust parse vcd {}", r_str);
 
-    let vcd_file = parse_vcd_file(&r_str);
+    let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse_vcd_file(&r_str)));
+    let vcd_file = match parsed {
+        Ok(Ok(vcd_file)) => vcd_file,
+        Ok(Err(error)) => {
+            eprintln!("failed to parse VCD {}: {}", r_str, error);
+            return null_mut();
+        }
+        Err(_) => {
+            eprintln!("failed to read or parse VCD {}", r_str);
+            return null_mut();
+        }
+    };
 
-    let vcd_file_pointer = Box::new(vcd_file.unwrap());
+    let vcd_file_pointer = Box::new(vcd_file);
 
     let raw_pointer = Box::into_raw(vcd_file_pointer);
     raw_pointer as *mut c_void
@@ -334,6 +348,9 @@ pub extern "C" fn rust_calc_scope_tc_sp(
     c_top_vcd_scope_name: *const c_char,
     c_vcd_file: *mut vcd_data::VCDFile,
 ) -> *mut RustTcAndSpResVecs {
+    if c_top_vcd_scope_name.is_null() || c_vcd_file.is_null() {
+        return null_mut();
+    }
     unsafe {
         let c_str = std::ffi::CStr::from_ptr(c_top_vcd_scope_name);
         let r_str = c_str.to_string_lossy().into_owned();
@@ -341,12 +358,15 @@ pub extern "C" fn rust_calc_scope_tc_sp(
 
         /*find top scope by top scope name */
         let find_scope_option = match (*c_vcd_file).get_root_scope() {
-            Some(the_scope) => {
-                let find_scope_closure = vcd_calc_tc_sp::FindScopeClosure::new();
-                let find_scope = (find_scope_closure.closure)(&the_scope, &r_str);
-                find_scope
+            Some(the_scope) => vcd_calc_tc_sp::find_scope(the_scope, &r_str),
+            None => None,
+        };
+        let find_top_scope = match find_scope_option {
+            Some(scope) => scope,
+            None => {
+                eprintln!("VCD scope not found: {}", r_str);
+                return null_mut();
             }
-            None => panic!("root scope not exist."),
         };
 
         let num_thread = 48;
@@ -356,7 +376,6 @@ pub extern "C" fn rust_calc_scope_tc_sp(
         let mut signal_tc_vec: Vec<vcd_calc_tc_sp::SignalTC> = Vec::new();
         let mut signal_duration_vec: Vec<vcd_calc_tc_sp::SignalDuration> = Vec::new();
 
-        let find_top_scope = find_scope_option.unwrap();
         let top_scope = find_top_scope.borrow();
         let calc_tc_sp = vcd_calc_tc_sp::CalcTcAndSp::new(c_vcd_file.as_ref().unwrap());
 
@@ -386,19 +405,21 @@ pub extern "C" fn find_scope_by_name(
     scope_name: *const c_char,
     c_vcd_file: *mut vcd_data::VCDFile,
 ) -> *mut RustVCDScope {
+    if scope_name.is_null() || c_vcd_file.is_null() {
+        return null_mut();
+    }
     unsafe {
         let c_str = std::ffi::CStr::from_ptr(scope_name);
         let r_str = c_str.to_string_lossy().into_owned();
 
         let find_scope_option = match (*c_vcd_file).get_root_scope() {
-            Some(the_scope) => {
-                let find_scope_closure = vcd_calc_tc_sp::FindScopeClosure::new();
-                let find_scope = (find_scope_closure.closure)(&the_scope, &r_str);
-                find_scope
-            }
-            None => panic!("root scope not exist."),
+            Some(the_scope) => vcd_calc_tc_sp::find_scope(the_scope, &r_str),
+            None => None,
         };
-        let find_scope = find_scope_option.unwrap();
+        let find_scope = match find_scope_option {
+            Some(scope) => scope,
+            None => return null_mut(),
+        };
         let raw_pointer = rust_convert_vcd_scope(find_scope.borrow().deref());
         raw_pointer
     }

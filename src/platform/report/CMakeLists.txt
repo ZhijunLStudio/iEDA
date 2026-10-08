@@ -9,6 +9,7 @@ add_subdirectory(report_drc)
 
 add_library(ieda_report
   report_manager.cpp
+  quality_gate.cpp
 )
 
 target_link_libraries(ieda_report 
@@ -24,4 +25,18 @@ target_link_libraries(ieda_report
 target_include_directories(ieda_report 
     PUBLIC 
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${HOME_THIRDPARTY}/json
 )
+
+add_executable(ieda_quality_gate_test EXCLUDE_FROM_ALL
+    tests/QualityGateTest.cpp
+    quality_gate.cpp
+)
+
+target_include_directories(ieda_quality_gate_test
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${HOME_THIRDPARTY}/json
+)
+
+add_test(NAME ieda_quality_gate_test COMMAND ieda_quality_gate_test)

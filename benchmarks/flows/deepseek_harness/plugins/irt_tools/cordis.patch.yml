@@ -1,0 +1,9 @@
+# Routing domain (iRT). EGR is the routing-domain authoritative congestion
+# primitive; placement borrows it through the domain-agnostic eval layer.
+- insert:
+    - id: irt-tools
+      name: '@ieda-ai/dsh-tool-irt'
+      config:
+        iedaRoot: !!js process.env.IEDA_ROOT
+        python: !!js process.env.IEDA_PYTHON ?? 'python3'
+        timeoutMs: 7200000

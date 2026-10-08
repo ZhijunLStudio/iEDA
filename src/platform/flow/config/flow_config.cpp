@@ -37,7 +37,7 @@ bool PLFConfig::initConfig(string path)
 {
   _path = path;
 
-  std::ifstream& config_stream = ieda::getInputFileStream(_path);
+  std::ifstream config_stream = ieda::getInputFileStream(_path);
 
   {
     nlohmann::json json;

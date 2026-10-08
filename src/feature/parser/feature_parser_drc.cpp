@@ -106,7 +106,7 @@ bool FeatureParser::buildMacroDrc(std::string path, std::string drc_path)
   }
 
   /// save macro drc distribution to json
-  std::ofstream& file_stream = ieda::getOutputFileStream(path);
+  std::ofstream file_stream = ieda::getOutputFileStream(path);
   json root_output;
 
   int macro_drc_num = 0;

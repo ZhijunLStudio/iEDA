@@ -29,15 +29,42 @@
 
 #include <float.h>
 
+#include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <string>
+#include <vector>
 
+#include "../../../../api/GPContract.hh"
 #include "Config.hh"
 #include "Log.hh"
+#include "NesterovPlaceContract.hh"
 #include "PlacerDB.hh"
 #include "config/NesterovPlaceConfig.hh"
 #include "database/NesterovDatabase.hh"
 namespace ipl {
+
+// JSON (de)serialization of GPStateCheckpoint for cross-process resume (72c M2).
+// Float values round-trip exactly through nlohmann::json (double represents
+// every float; the reverse cast is lossless).
+bool saveGPCheckpointFile(const std::string& path, const GPStateCheckpoint& checkpoint);
+bool loadGPCheckpointFile(const std::string& path, GPStateCheckpoint& checkpoint);
+bool saveGPOverflowReportFile(const std::string& path, const GPOverflowReport& report);
+
+struct NesterovPlaceResult
+{
+  bool success = false;
+  NesterovPlaceOutcome outcome = NesterovPlaceOutcome::kNotRun;
+  int32_t iterations = 0;
+  int64_t hpwl = 0;
+  float overflow = 0.0f;
+  float gradient_norm = 0.0f;
+  float step_length = 0.0f;
+  float density_penalty = 0.0f;
+  float route_util = 0.0f;
+  std::string reason;
+  std::vector<NesterovIterationRecord> iteration_records;
+};
 
 class NesterovPlace
 {
@@ -51,10 +78,116 @@ class NesterovPlace
   NesterovPlace& operator=(const NesterovPlace&) = delete;
   NesterovPlace& operator=(NesterovPlace&&) = delete;
 
-  void runNesterovPlace();
+  bool runNesterovPlace();
+  const NesterovPlaceResult& lastResult() const { return _last_result; }
+  const std::vector<NesterovIterationRecord>& iterationRecords() const { return _iteration_records; }
   void printNesterovDatabase();
 
   bool isJsonOutputEnabled() { return _enable_json_output; }
+
+  // ---- persistent session API (GP tool-ification, M1) ----
+  // The same NesterovPlace object is kept alive across calls so that the
+  // Nesterov solver state (coordinates, gradients, steplength, momentum)
+  // survives batch boundaries. Accepted-iteration budget semantics:
+  // internal backtracking does not count; a batch only stops at a complete
+  // accepted-iteration boundary or at a terminal condition.
+  bool initializeSession();                              // placable list + initial gradients + pre-loop setup
+  GPAdvanceOutcome advanceAcceptedIterations(int32_t budget);
+  void finishSession();                                  // terminal tail: kMaxIter finalize + notify + write back
+  void publishPlacement();                               // per-batch: notify + write back (does not touch solver state)
+  bool isSessionFinished() const { return _last_result.outcome != NesterovPlaceOutcome::kNotRun; }
+  int32_t currentIteration() const { return _current_iter; }
+  int64_t bestHpwl() const { return _best_hpwl; }
+  float bestOverflow() const { return _best_overflow; }
+  int64_t currentHpwl() const { return _prev_hpwl; }
+  float currentOverflow() const { return _sum_overflow; }
+  float currentStepLength() const { return _final_step_length; }
+  float currentDensityPenalty() const { return _nes_database->_density_penalty; }
+  float currentRouteUtil() const { return _final_route_util; }
+
+  // ---- checkpoint persistence (M2) ----
+  GPStateCheckpoint captureCheckpoint() const;
+  bool restoreCheckpoint(const GPStateCheckpoint& checkpoint);
+  std::string computeConfigFingerprint() const;
+
+  // ---- local scope (M4) ----
+  // Movement coefficients indexed by placable-list order: 1 = active (full
+  // update), (0,1) = halo (scaled update), 0 = context (coordinates frozen).
+  // Empty list = global GP (the default path is bit-identical without masking).
+  void setMovementCoeffs(const std::vector<float>& move_coeff_list);
+  void setScopeAnnealIterations(int32_t iterations) { _scope_anneal_iterations = iterations; }
+  void clearMovementScope()
+  {
+    _move_coeff_list.clear();
+    _frozen_coord_list.clear();
+    _anchor_frozen_valid.clear();
+    _anchor_frozen_coord_list.clear();
+    syncLocalFixedFlags();
+  }
+  // Re-anchor in-scope Active cells toward the session-anchor coordinates:
+  // their movement is scaled by (1-strength) around the anchor position.
+  void applyAnchorScope(float strength);
+  const std::vector<float>& movementCoeffs() const { return _move_coeff_list; }
+  // Build a scope from the current overflow bins: the hottest overflowing bins
+  // (top active_ratio fraction) seed active instances; their net neighbors
+  // become halo with halo_coeff; everything else is context.
+  void buildHotOverflowScope(float active_ratio, float halo_coeff, int32_t halo_hops = 1);
+  // Ablation control for the scope-finding question: a RANDOM active set of the
+  // same size (fixed seed = reproducible) with the same net-hop halo closure.
+  // Used by the experiment suite to test whether hot-bin selection matters.
+  void buildRandomScope(size_t active_count, float halo_coeff, uint32_t seed, int32_t halo_hops = 1);
+  // Agent-facing instance scope: caller supplies seed instance names; net-hop
+  // closure adds the halo. Returns false (without changing the current scope)
+  // when any name is not a movable instance.
+  bool buildInstanceScope(const std::vector<std::string>& seed_instance_names, float halo_coeff, int32_t halo_hops = 1);
+  // Physical rectangle seed: every movable instance whose density shape
+  // overlaps the rectangle is Active; net-hop closure adds the Halo. This is
+  // the direct scope-builder counterpart of the bin-level overflow report.
+  void buildRegionScope(const Rectangle<int32_t>& region, float halo_coeff, int32_t halo_hops = 1);
+  // Wirelength-driven seed: sort every movable pin by its net HPWL, then take
+  // distinct instances until scope_active_count is reached. Cheaper and often
+  // more relevant than hotspot-bin guessing.
+  void buildLongNetScope(size_t active_count, float halo_coeff, int32_t halo_hops = 1);
+
+  // Observation / contract helpers for the api layer.
+  GPRunScopeEffect computeScopeEffect() const;
+  GPOverflowReport buildOverflowReport(int32_t top_n) const;
+  // Recompute bin occupancy from the current solver coordinates without
+  // touching solver vectors. Used by kRestore so the post-restore grid report
+  // reflects the checkpoint placement (the next accepted iteration recomputes
+  // this occupancy again, so the observation cannot perturb the numerical path).
+  void refreshGridOccupation();
+  // Observation-only congestion snapshot: computes route demand/capacity/util
+  // for the current placement. It does not feed any solver gradient state;
+  // the next accepted iteration recomputes whatever it needs.
+  void evaluateRouteUtilObservation();
+
+  // ---- region density screens (L1) ----
+  // Set the density target factor (effective capacity multiplier) on every grid
+  // overlapping any region: factor < 1 makes the region feel overfull and the
+  // global density field pushes cells out (soft steering, nothing frozen).
+  // clearRegionDensityTargets() restores the global (1.0) path, which is
+  // bit-identical to never having set a screen.
+  void setSeedAnchorStrength(float strength) { _seed_anchor_strength = std::clamp(strength, 0.0F, 1.0F); }
+  void setRegionDensityTargets(const std::vector<Rectangle<int32_t>>& regions, float target);
+  void clearRegionDensityTargets();
+  // Screen the hottest overflowing bins (top_ratio fraction) with `target`.
+  void buildHotOverflowDensityTargets(float top_ratio, float target);
+  // Screen every grid overlapped by an Active (coefficient 1) instance with
+  // `target`, for scopes that do not have an explicit hot-bin/region screen.
+  void buildActiveScopeDensityTargets(float target);
+
+  // ---- real trial-route feedback (ce7) ----
+  // Periodically write the current placement back, run the in-process iRT trial
+  // route, read the authoritative UNION overflow map, and lower the density
+  // screen of placer bins that overlap over-capacity router gcells. This is the
+  // "布线器反馈进 GP 循环" inner-loop mechanism that ce5/ce6 (RUDY) only
+  // approximate.
+  void applyEgrCongestionScreen(int32_t iter_num);
+
+ private:
+  void applyNetHaloClosure(const std::vector<bool>& active, std::vector<float>& coeffs, float halo_coeff, int32_t halo_hops);
+  void syncLocalFixedFlags();
 
  private:
   NesterovPlaceConfig _nes_config;
@@ -68,7 +201,64 @@ class NesterovPlace
   float _quad_penalty_coeff = 0.005;
   int64_t _total_inst_area = 0;
   bool _enable_json_output = false;
-    int32_t _global_right_padding = 0;
+  int32_t _global_right_padding = 0;
+
+  // Persistent solve-loop state (hoisted from NesterovSolve() locals so the
+  // session survives across advanceAcceptedIterations() calls).
+  std::vector<NesInstance*> _placable_inst_list;
+  std::vector<Point<float>> _next_slp_wirelength_grad_list;
+  std::vector<Point<float>> _next_slp_density_grad_list;
+  std::vector<Point<float>> _next_slp_sum_grad_list;
+  std::ofstream _long_net_stream;
+  std::ofstream _info_stream;
+  int32_t _long_width = 0;
+  int32_t _long_height = 0;
+  bool _solve_setup_done = false;
+  int32_t _current_iter = 0;
+
+  // Local scope (M4): per-placable-instance movement coefficients and the
+  // batch-start coordinate snapshot used to freeze context instances.
+  std::vector<float> _move_coeff_list;
+  std::vector<Point<int32_t>> _frozen_coord_list;
+  int32_t _scope_anneal_iterations = 0;
+  float _sum_overflow = 0.0F;
+  int64_t _prev_hpwl = 0;
+  int64_t _cur_hpwl = 0;
+  float _sum_overflow_threshold = 1e25F;
+  float _hpwl_attach_sum_overflow = 1e25F;
+  bool _max_phi_coef_record = false;
+  int32_t _cur_opt_overflow_step = 0;
+  int32_t _last_perturb_iter = -50;
+  bool _is_add_quad_penalty = false;
+  bool _is_cal_phi = false;
+  bool _stop_placement = false;
+  std::vector<Point<int32_t>> _best_position_list;
+  std::vector<Point<int32_t>> _cur_position_list;
+  std::vector<float> _best_density_scale_list;
+  std::vector<float> _cur_density_scale_list;
+  int32_t _finished_iter = 0;
+  float _final_step_length = 0.0F;
+  float _final_gradient_norm = 0.0F;
+  float _final_route_util = 0.0F;
+  // Experimental seed-anchor screen: blend each solver step toward the
+  // session-start coordinates. 0 disables, 1 freezes at the seed.
+  float _seed_anchor_strength = 0.0F;
+  std::vector<Point<int32_t>> _seed_anchor_coord_list;
+  // Re-anchor (scope_anchor_strength) per-instance frozen bases; the valid
+  // flag vector marks which entries participate (parallel to the placable list).
+  std::vector<Point<int32_t>> _anchor_frozen_coord_list;
+  std::vector<int8_t> _anchor_frozen_valid;
+
+  // ce7 congestion force field: per-placable-instance EGR-overflow gradient,
+  // refreshed at the same cadence as the ce7 density screen and added to the
+  // solver sum-gradient every iteration with a small, adaptive coefficient.
+  // This is the "GR based congestion-driven optimization" the TODO in the
+  // solve loop sketched: unlike the density screen (indirect, via density
+  // penalty), the force field pushes cells directly downhill of the router
+  // overflow map.
+  std::vector<Point<float>> _egr_grad_list;
+  float _egr_grad_coef = 0.0F;
+  bool _egr_grad_valid = false;
 
   void resetOverflowRecordList();
   void resetHPWLRecordList();
@@ -77,6 +267,12 @@ class NesterovPlace
   void entropyInjection(float shrink_factor, float noise_intensity);
   bool checkDivergence(int32_t window, float threshold, bool is_routability = false);
   bool checkLongTimeOverflowUnchanged(int32_t window, float threshold);
+  bool isFiniteMetric(float value) const;
+  void resetRunState();
+  void recordIteration(int32_t iter_num, float overflow, int64_t hpwl, float step_length, float gradient_norm, float route_util,
+                       bool quad_penalty_enabled, bool entropy_injected);
+  void finalizeResult(NesterovPlaceOutcome outcome, int32_t iterations, int64_t hpwl, float overflow, float gradient_norm,
+                      float step_length, float density_penalty, float route_util, std::string reason);
 
   void initNesConfig(Config* config);
   void calculateAdaptiveBinCnt();
@@ -94,6 +290,7 @@ class NesterovPlace
 
   void initNesterovPlace(std::vector<NesInstance*>& inst_list);
   void NesterovSolve(std::vector<NesInstance*>& inst_list);
+  void setupNesterovSolve();
 
   std::vector<NesInstance*> obtianPlacableNesInstanceList();
 
@@ -157,6 +354,9 @@ class NesterovPlace
   void notifyPLBinSize();
   void notifyPLOverflowInfo(float final_overflow);
   void notifyPLPlaceDensity();
+
+  NesterovPlaceResult _last_result;
+  std::vector<NesterovIterationRecord> _iteration_records;
 };
 inline NesterovPlace::NesterovPlace(Config* config, PlacerDB* placer_db, bool enableJsonOutput)
     : _nes_database(nullptr), _enable_json_output(enableJsonOutput)

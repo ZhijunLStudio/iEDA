@@ -1,0 +1,9 @@
+# Domain-agnostic evaluator. Reads DEF files and runs the SAME iEDA
+# evaluators (HPWL + density + EGR + timing). No EDA domain import.
+- insert:
+    - id: eval-metrics
+      name: '@ieda-ai/dsh-tool-eval-metrics'
+      config:
+        iedaRoot: !!js process.env.IEDA_ROOT
+        python: !!js process.env.IEDA_PYTHON ?? 'python3'
+        timeoutMs: 7200000

@@ -15,8 +15,18 @@
 namespace ieval {
 
 struct CongestionValue {
-    double max_congestion;
-    double total_congestion;
+    double max_congestion = 0.0;
+    double total_congestion = 0.0;
+    double max_h_utilization = 0.0;
+    double max_v_utilization = 0.0;
+    double max_utilization = 0.0;
+    double avg_utilization = 0.0;
+    int32_t overflow_bin_count = 0;
+    double overflow_util_sum = 0.0;
+    int32_t region_lx = 0;
+    int32_t region_ly = 0;
+    int32_t region_ux = 0;
+    int32_t region_uy = 0;
 };
 
 struct CongestionPin
@@ -61,17 +71,24 @@ struct RUDYMapSummary
 
 struct OverflowSummary
 {
-  int32_t total_overflow_horizontal;
-  int32_t total_overflow_vertical;
-  int32_t total_overflow_union;
+  int32_t total_overflow_horizontal{-1};
+  int32_t total_overflow_vertical{-1};
+  int32_t total_overflow_union{-1};
 
-  int32_t max_overflow_horizontal;
-  int32_t max_overflow_vertical;
-  int32_t max_overflow_union;
+  int32_t max_overflow_horizontal{-1};
+  int32_t max_overflow_vertical{-1};
+  int32_t max_overflow_union{-1};
 
-  float weighted_average_overflow_horizontal;
-  float weighted_average_overflow_vertical;
-  float weighted_average_overflow_union;
+  float weighted_average_overflow_horizontal{-1.0F};
+  float weighted_average_overflow_vertical{-1.0F};
+  float weighted_average_overflow_union{-1.0F};
+
+  bool isValid() const
+  {
+    return total_overflow_horizontal >= 0 && total_overflow_vertical >= 0 && total_overflow_union >= 0 && max_overflow_horizontal >= 0
+           && max_overflow_vertical >= 0 && max_overflow_union >= 0 && weighted_average_overflow_horizontal >= 0.0F
+           && weighted_average_overflow_vertical >= 0.0F && weighted_average_overflow_union >= 0.0F;
+  }
 };
 
 struct UtilizationSummary

@@ -32,6 +32,11 @@ target_include_directories(ircx_compare_spef SYSTEM
     ${EIGEN3_INCLUDE_DIR}
 )
 
+add_executable(ircx_compare_json_test EXCLUDE_FROM_ALL
+  tests/CompareJsonTest.cc
+)
+target_link_libraries(ircx_compare_json_test PRIVATE ircx_compare_spef)
+
 add_library(ircx_tool_compare_spef
   CompareSpefTool.cc
 )

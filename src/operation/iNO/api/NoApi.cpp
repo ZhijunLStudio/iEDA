@@ -41,14 +41,30 @@ void NoApi::destroyInst() {
   }
 }
 
-void NoApi::initNO(const std::string &ITO_CONFIG_PATH) {
-  _ino = new ino::iNO(ITO_CONFIG_PATH);
+bool NoApi::initNO(const std::string &ITO_CONFIG_PATH) {
+  try {
+    _ino = new ino::iNO(ITO_CONFIG_PATH);
+    return true;
+  } catch (const std::exception &error) {
+    LOG_ERROR << "Failed to initialize iNO: " << error.what();
+    _ino = nullptr;
+    return false;
+  }
 }
 
-void NoApi::iNODataInit(idb::IdbBuilder *idb, ista::TimingEngine *timing) {
+bool NoApi::iNODataInit(idb::IdbBuilder *idb, ista::TimingEngine *timing) {
+  if (_ino == nullptr) {
+    LOG_ERROR << "Cannot initialize iNO data before a valid configuration is loaded.";
+    return false;
+  }
+
   if (nullptr == idb) {
     // init idb
     idb = initIDB();
+  }
+  if (idb == nullptr) {
+    LOG_ERROR << "Failed to initialize the iNO database.";
+    return false;
   }
 
   if (nullptr == timing) {
@@ -56,10 +72,16 @@ void NoApi::iNODataInit(idb::IdbBuilder *idb, ista::TimingEngine *timing) {
     timing = initISTA(idb);
   }
 
+  if (timing == nullptr) {
+    LOG_ERROR << "Failed to initialize the iNO timing engine.";
+    return false;
+  }
+
   _idb = idb;
   _timing_engine = timing;
 
   _ino->initialization(idb, timing);
+  return _ino->get_db_interface() != nullptr;
 }
 
 idb::IdbBuilder *NoApi::initIDB() {
@@ -107,9 +129,9 @@ ista::TimingEngine *NoApi::initISTA(idb::IdbBuilder *idb) {
   return timing_engine;
 }
 
-void NoApi::fixIO() { _ino->fixIO(); }
+bool NoApi::fixIO() { return _ino != nullptr && _ino->fixIO(); }
 
-void NoApi::fixFanout() { _ino->fixFanout(); }
+bool NoApi::fixFanout() { return _ino != nullptr && _ino->fixFanout(); }
 
 void NoApi::saveDef(string saved_def_path) {
   if (saved_def_path.empty()) {

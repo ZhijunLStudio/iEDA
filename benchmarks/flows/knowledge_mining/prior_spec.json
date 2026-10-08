@@ -1,0 +1,153 @@
+{
+  "meta": {
+    "version": 1,
+    "purpose": "把 knowledge.json 的 20 条散文知识压成 3 条可证伪决策轴。数值字段一律 null，由 fit.py 从训练集学出，禁止在此硬编码。",
+    "source": "benchmarks/flows/deepseek_harness/knowledge.json",
+    "created_at": "2026-09-10"
+  },
+  "features": {
+    "fill_rate": {
+      "desc": "core 已用面积 / core 总面积（= core util）",
+      "stage": "pre_pl",
+      "range": [0, 1]
+    },
+    "hfanout_ratio": {
+      "desc": "fanout > 8 的网数 / 总网数",
+      "stage": "pre_pl",
+      "range": [0, 1]
+    },
+    "hfanout_pin_share": {
+      "desc": "fanout > 8 网的 pin 总数 / 总 pin",
+      "stage": "pre_pl",
+      "range": [0, 1]
+    },
+    "net_bbox_span_p90": {
+      "desc": "网 bbox 跨距分布 p90 / die 对角线（需 placement，post-baseline）",
+      "stage": "post_baseline",
+      "range": [0, 1]
+    },
+    "die_aspect": {
+      "desc": "die 宽 / 高",
+      "stage": "pre_pl",
+      "range": [0, null]
+    },
+    "overflow_ratio": {
+      "desc": "溢出 bin 数 / 热点区 bin 数（post-baseline EGR 实测）",
+      "stage": "post_baseline",
+      "range": [0, 1]
+    },
+    "overflow_cluster": {
+      "desc": "溢出 bin 空间聚类度（最近邻距离均值 / die 尺度）",
+      "stage": "post_baseline",
+      "range": [0, 1]
+    },
+    "hotspot_hfanout": {
+      "desc": "溢出 bin 内网的平均 fanout",
+      "stage": "post_baseline",
+      "range": [0, null]
+    },
+    "ws_margin": {
+      "desc": "热点区白空间 / 热点区需求峰值",
+      "stage": "post_baseline",
+      "range": [0, null]
+    },
+    "vh_ratio": {
+      "desc": "热点区 V 需求 / H 需求",
+      "stage": "post_baseline",
+      "range": [0, null]
+    },
+    "rudy_peak": {
+      "desc": "verify 64x64 plain RUDY peak（诊断用，非标签）",
+      "stage": "post_baseline",
+      "range": [0, null]
+    },
+    "rudy_egr_mismatch": {
+      "desc": "rudy_peak 归一 - egr_max 归一的符号/幅度（RUDY↔EGR 背离度，待挖知识）",
+      "stage": "post_baseline",
+      "range": [null, null]
+    }
+  },
+  "axes": [
+    {
+      "id": "H1",
+      "name": "compress_vs_evacuate",
+      "hypothesis": "溢出源是长网跨空白→压缩收拢；溢出源是高扇出汇聚→疏散摊开。分岔判据可由可测特征拟合。",
+      "decision": {
+        "model": "logistic",
+        "features_compress": ["net_bbox_span_p90", "fill_rate", "overflow_ratio"],
+        "features_evacuate": ["overflow_ratio", "hfanout_ratio", "ws_margin"],
+        "weights": {
+          "score_compress": { "net_bbox_span_p90": null, "fill_rate": null, "overflow_ratio": null, "bias": null },
+          "score_evacuate": { "overflow_ratio": null, "hfanout_ratio": null, "ws_margin": null, "bias": null }
+        }
+      },
+      "dose": {
+        "target_density": {
+          "formula": "intercept - k*(1 - fill_rate)",
+          "intercept": null,
+          "k": null
+        },
+        "evacuation_strength": {
+          "formula": "strength_scale * (peak_demand - capacity)",
+          "strength_scale": null
+        }
+      },
+      "tool_mapping": {
+        "ieda": "score_compress>score_evacuate → plain --target-density {dose}; 否则 plain → local_congestion"
+      }
+    },
+    {
+      "id": "H2",
+      "name": "wirelength_vs_timing_drive",
+      "hypothesis": "拥塞/密度洁净的 setup-limited 设计，纯线长驱动已恢复大部分 WNS；时序加权只补残余扇出/拓扑项。",
+      "decision": {
+        "model": "logistic",
+        "features_wirelength": ["fill_rate", "overflow_ratio"],
+        "features_timing": ["hfanout_pin_share", "net_bbox_span_p90"],
+        "weights": {
+          "score_wirelength": { "fill_rate": null, "overflow_ratio": null, "bias": null },
+          "score_timing": { "hfanout_pin_share": null, "net_bbox_span_p90": null, "bias": null }
+        }
+      },
+      "dose": {
+        "timing_effort": {
+          "formula": "enabled if residual WNS < 0 after wirelength-driven convergence",
+          "threshold_wns": null
+        }
+      },
+      "tool_mapping": {
+        "ieda": "score_wirelength>score_timing → 先非时序 GP 收敛复测 WNS；仍亏且关键网高扇出 → timing=1"
+      }
+    },
+    {
+      "id": "H3",
+      "name": "global_vs_local_scope",
+      "hypothesis": "局部热点 + 全局有白空间 → 只动热点格；峰值真超容量 → 全局重解。作用范围可拟合。",
+      "decision": {
+        "model": "logistic",
+        "features_local": ["overflow_cluster", "ws_margin"],
+        "features_global": ["fill_rate", "overflow_ratio"],
+        "weights": {
+          "score_local": { "overflow_cluster": null, "ws_margin": null, "bias": null },
+          "score_global": { "fill_rate": null, "overflow_ratio": null, "bias": null }
+        }
+      },
+      "dose": {
+        "scope_halo_radius": {
+          "formula": "radius_scale * cluster_diameter",
+          "radius_scale": null
+        }
+      },
+      "tool_mapping": {
+        "ieda": "score_local>score_global → local_congestion 只动热点格；否则全局重解"
+      }
+    }
+  ],
+  "holdout": {
+    "split_unit": "logical_design",
+    "note": "同一逻辑设计的多个变体 key（如 s1238 / s1238_sky130_a）必须在同一边，禁止跨变体泄漏。",
+    "train": "约 15 个 sky130 逻辑设计",
+    "test": "约 5 个 sky130 逻辑设计（held-out，拟合中不可见）",
+    "ood": "nangate45(5) / ics55(4) / ihp130(1) / asap7(1)"
+  }
+}

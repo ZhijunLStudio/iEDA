@@ -75,8 +75,7 @@ unsigned report_power() {
   ista::Sta* ista = ista::Sta::getOrCreateSta();
   ipower::Power* ipower = ipower::Power::getOrCreatePower(&(ista->get_graph()));
 
-  ipower->runCompleteFlow();
-  return 1;
+  return ipower->runCompleteFlow();
 }
 
 /**

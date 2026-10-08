@@ -43,20 +43,34 @@ class RoutingLayer
   int32_t get_layer_idx() const { return _layer_idx; }
   int32_t get_layer_order() const { return _layer_order; }
   std::string& get_layer_name() { return _layer_name; }
+  const std::string& get_layer_name() const { return _layer_name; }
   Direction& get_prefer_direction() { return _prefer_direction; }
+  const Direction& get_prefer_direction() const { return _prefer_direction; }
   int32_t get_pitch() const { return _pitch; }
   CornerFillSpacingRule& get_corner_fill_spacing_rule() { return _corner_fill_spacing_rule; }
+  const CornerFillSpacingRule& get_corner_fill_spacing_rule() const { return _corner_fill_spacing_rule; }
   std::vector<CornerSpacingRule>& get_corner_spacing_rule_list() { return _corner_spacing_rule_list; }
+  const std::vector<CornerSpacingRule>& get_corner_spacing_rule_list() const { return _corner_spacing_rule_list; }
   std::vector<EndOfLineSpacingRule>& get_end_of_line_spacing_rule_list() { return _end_of_line_spacing_rule_list; }
+  const std::vector<EndOfLineSpacingRule>& get_end_of_line_spacing_rule_list() const { return _end_of_line_spacing_rule_list; }
   MaximumWidthRule& get_maximum_width_rule() { return _maximum_width_rule; }
+  const MaximumWidthRule& get_maximum_width_rule() const { return _maximum_width_rule; }
   MinHoleRule& get_min_hole_rule() { return _min_hole_rule; }
+  const MinHoleRule& get_min_hole_rule() const { return _min_hole_rule; }
   MinimumAreaRule& get_minimum_area_rule() { return _minimum_area_rule; }
+  const MinimumAreaRule& get_minimum_area_rule() const { return _minimum_area_rule; }
   std::vector<MinimumCutRule>& get_minimum_cut_rule_list() { return _minimum_cut_rule_list; }
+  const std::vector<MinimumCutRule>& get_minimum_cut_rule_list() const { return _minimum_cut_rule_list; }
   MinimumWidthRule& get_minimum_width_rule() { return _minimum_width_rule; }
+  const MinimumWidthRule& get_minimum_width_rule() const { return _minimum_width_rule; }
   MinStepRule& get_min_step_rule() { return _min_step_rule; }
+  const MinStepRule& get_min_step_rule() const { return _min_step_rule; }
   NonsufficientMetalOverlapRule& get_nonsufficient_metal_overlap_rule() { return _nonsufficient_metal_overlap_rule; }
+  const NonsufficientMetalOverlapRule& get_nonsufficient_metal_overlap_rule() const { return _nonsufficient_metal_overlap_rule; }
   NotchSpacingRule& get_notch_spacing_rule() { return _notch_spacing_rule; }
+  const NotchSpacingRule& get_notch_spacing_rule() const { return _notch_spacing_rule; }
   ParallelRunLengthSpacingRule& get_parallel_run_length_spacing_rule() { return _parallel_run_length_spacing_rule; }
+  const ParallelRunLengthSpacingRule& get_parallel_run_length_spacing_rule() const { return _parallel_run_length_spacing_rule; }
   // setter
   void set_layer_idx(const int32_t layer_idx) { _layer_idx = layer_idx; }
   void set_layer_order(const int32_t layer_order) { _layer_order = layer_order; }

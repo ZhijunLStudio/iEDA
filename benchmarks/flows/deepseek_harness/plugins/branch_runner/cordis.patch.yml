@@ -1,0 +1,11 @@
+# Branch-runner bundle patch. Ships the atomic-surface runner contract:
+# runnerScript points at any CLI implementing tree/apply/promote/rollback/
+# fork/prune (GP today: gp_agent.py; RT/STA/DRC later provide the same six
+# subcommands). No EDA domain is imported.
+- insert:
+    - id: branch-runner
+      name: '@ieda-ai/dsh-tool-branch-runner'
+      config:
+        runnerScript: !!js process.env.IEDA_ROOT + '/benchmarks/flows/gp_agent.py'
+        python: !!js process.env.IEDA_PYTHON ?? 'python3'
+        timeoutMs: 7200000

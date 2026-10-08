@@ -24,8 +24,11 @@
 
 #include "Power.hh"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <filesystem>
+#include <limits>
 
 #include "json/json.hpp"
 #include "ops/annotate_toggle_sp/AnnotateToggleSP.hh"
@@ -45,6 +48,160 @@
 #include "ops/propagate_toggle_sp/PwrPropagateToggleSP.hh"
 
 namespace ipower {
+
+namespace {
+
+unsigned writeJsonFile(const char* report_path, const nlohmann::json& report);
+
+nlohmann::json makeActivityJson(const ActivityReport& activity) {
+  return {
+      {"source", activitySourceName(activity.source)},
+      {"coverage", activity.coverage},
+      {"measured_coverage", activity.measured_coverage},
+      {"defaulted_coverage", activity.defaulted_coverage},
+      {"effective_coverage", activity.effective_coverage},
+      {"total_vertices", activity.total_vertices},
+      {"annotated_vertices", activity.annotated_vertices},
+      {"defaulted_vertices", activity.defaulted_vertices},
+      {"vectorless_enabled", activity.vectorless_enabled},
+      {"refused", activity.refused},
+      {"reason", activity.reason},
+  };
+}
+
+nlohmann::json makeActivitySourceJson(const ActivityReport& activity,
+                                      std::optional<double> default_toggle) {
+  const bool trusted = activity.source == ActivitySource::kVcd && !activity.refused;
+  return {
+      {"schema", "c-act/v0"},
+      {"activity_source", activitySourceName(activity.source)},
+      {"trusted", trusted},
+      {"coverage", activity.coverage},
+      {"measured_coverage", activity.measured_coverage},
+      {"defaulted_coverage", activity.defaulted_coverage},
+      {"effective_coverage", activity.effective_coverage},
+      {"toggle_default", default_toggle.has_value() ? nlohmann::json(*default_toggle) : nlohmann::json(nullptr)},
+      {"allow_default_toggle", activity.vectorless_enabled},
+      {"refused", activity.refused},
+      {"reason", activity.reason.empty() ? nlohmann::json(nullptr) : nlohmann::json(activity.reason)},
+      {"note", trusted ? "VCD activity is used as power evidence" : "vectorless/default activity is proxy-only; do not treat power as trusted"},
+  };
+}
+
+unsigned writeActivitySourceJson(const std::string& output_dir,
+                                 const ActivityReport& activity,
+                                 std::optional<double> default_toggle) {
+  const std::filesystem::path report_path =
+      std::filesystem::path(output_dir) / "activity_source.json";
+  std::filesystem::create_directories(report_path.parent_path());
+  return writeJsonFile(report_path.string().c_str(),
+                       makeActivitySourceJson(activity, default_toggle));
+}
+
+auto makeIRDropStatusJson(const std::map<std::string, std::map<std::string, double>>& net_to_instance_ir_drop) -> nlohmann::json {
+  nlohmann::json payload;
+  payload["schema"] = "c-ir/v0";
+  payload["ir_drop_run"] = !net_to_instance_ir_drop.empty();
+  payload["ir_status"] = net_to_instance_ir_drop.empty() ? "missing" : "checked";
+  payload["net_count"] = net_to_instance_ir_drop.size();
+  payload["nets"] = nlohmann::json::array();
+
+  std::size_t sample_count = 0;
+  for (const auto& [net_name, instance_ir_drop] : net_to_instance_ir_drop) {
+    nlohmann::json net_payload;
+    net_payload["net"] = net_name;
+    net_payload["sample_count"] = instance_ir_drop.size();
+    sample_count += instance_ir_drop.size();
+    if (!instance_ir_drop.empty()) {
+      double min_drop = std::numeric_limits<double>::max();
+      double max_drop = -std::numeric_limits<double>::max();
+      double sum_drop = 0.0;
+      for (const auto& [_, ir_drop] : instance_ir_drop) {
+        min_drop = std::min(min_drop, ir_drop);
+        max_drop = std::max(max_drop, ir_drop);
+        sum_drop += ir_drop;
+      }
+      net_payload["min_ir_drop"] = min_drop;
+      net_payload["max_ir_drop"] = max_drop;
+      net_payload["avg_ir_drop"] = sum_drop / static_cast<double>(instance_ir_drop.size());
+    }
+    payload["nets"].push_back(net_payload);
+  }
+
+  payload["sample_count"] = sample_count;
+  payload["trusted"] = sample_count > 0;
+  if (sample_count == 0) {
+    payload["reason"] = "IR report has no instance-level voltage samples";
+  }
+  return payload;
+}
+
+unsigned writeIRDropStatusJson(const std::string& output_dir,
+                               const std::map<std::string, std::map<std::string, double>>& net_to_instance_ir_drop) {
+  const std::filesystem::path report_path =
+      std::filesystem::path(output_dir) / "ir_drop_status.json";
+  std::filesystem::create_directories(report_path.parent_path());
+  return writeJsonFile(report_path.string().c_str(),
+                       makeIRDropStatusJson(net_to_instance_ir_drop));
+}
+
+void addActivityMetadata(nlohmann::json& report,
+                         const ActivityReport& activity) {
+  report["source"] = activitySourceName(activity.source);
+  report["coverage"] = activity.coverage;
+  report["refused"] = activity.refused;
+  report["activity_source"] = activitySourceName(activity.source);
+  report["activity_coverage"] = activity.coverage;
+  report["activity"] = makeActivityJson(activity);
+}
+
+void printActivityMetadata(std::FILE* file, const ActivityReport& activity) {
+  std::fprintf(file, "source: %s\n",
+               activitySourceName(activity.source));
+  std::fprintf(file, "coverage: %.6f\n", activity.coverage);
+  std::fprintf(file, "coverage_percent: %.3f%%\n",
+               activity.coverage * 100.0);
+  std::fprintf(file, "measured_coverage_percent: %.3f%%\n",
+               activity.measured_coverage * 100.0);
+  std::fprintf(file, "defaulted_coverage_percent: %.3f%%\n",
+               activity.defaulted_coverage * 100.0);
+  std::fprintf(file, "activity_vertices: %zu annotated / %zu total\n",
+               activity.annotated_vertices, activity.total_vertices);
+  std::fprintf(file, "defaulted_vertices: %zu\n",
+               activity.defaulted_vertices);
+  std::fprintf(file, "refused: %s\n",
+               activity.refused ? "true" : "false");
+  if (!activity.reason.empty()) {
+    std::fprintf(file, "activity_note: %s\n", activity.reason.c_str());
+  }
+}
+
+unsigned writeRefusedPowerText(const char* report_path,
+                               const ActivityReport& activity) {
+  std::FILE* file = std::fopen(report_path, "w");
+  if (!file) {
+    LOG_ERROR << "Failed to open power report file: " << report_path;
+    return 0;
+  }
+  std::fprintf(file, "Generate the report at %s\n", Time::getNowWallTime());
+  printActivityMetadata(file, activity);
+  std::fprintf(file, "Total Power : N/A\n");
+  std::fclose(file);
+  return 0;
+}
+
+unsigned writeJsonFile(const char* report_path, const nlohmann::json& report) {
+  std::ofstream out_file(report_path);
+  if (!out_file.is_open()) {
+    LOG_ERROR << "Failed to open JSON report file: " << report_path;
+    return 0;
+  }
+  out_file << report.dump(4);
+  LOG_INFO << "JSON report written to: " << report_path;
+  return 1;
+}
+
+}  // namespace
 
 Power* Power::_power = nullptr;
 
@@ -71,6 +228,17 @@ Power* Power::getOrCreatePower(StaGraph* sta_graph) {
 void Power::destroyPower() {
   delete _power;
   _power = nullptr;
+}
+
+bool Power::set_default_toggle(double default_toggle) {
+  if (!std::isfinite(default_toggle) || default_toggle < 0.0) {
+    LOG_ERROR << "vectorless toggle must be a finite, non-negative value";
+    return false;
+  }
+
+  _default_toggle = default_toggle;
+  _activity_provenance.selectVectorless();
+  return true;
 }
 
 /**
@@ -109,9 +277,21 @@ unsigned Power::setupClock(PwrClock&& fastest_clock,
 unsigned Power::readRustVCD(const char* vcd_path,
                             const char* top_instance_name) {
   LOG_INFO << "read vcd start";
-  _rust_vcd_wrapper.readVcdFile(vcd_path);
-  _rust_vcd_wrapper.buildAnnotateDB(top_instance_name);
-  _rust_vcd_wrapper.calcScopeToggleAndSp(top_instance_name);
+  if (!_rust_vcd_wrapper.readVcdFile(vcd_path)) {
+    _activity_provenance.markVcdFailed("failed to read VCD activity source");
+    return 0;
+  }
+  if (!_rust_vcd_wrapper.buildAnnotateDB(top_instance_name)) {
+    _activity_provenance.markVcdFailed(
+        "VCD top scope did not match the requested design scope");
+    return 0;
+  }
+  if (!_rust_vcd_wrapper.calcScopeToggleAndSp(top_instance_name)) {
+    _activity_provenance.markVcdFailed(
+        "failed to calculate activity for the requested VCD scope");
+    return 0;
+  }
+  _activity_provenance.markVcdLoaded();
   LOG_INFO << "read vcd end";
 
   return 1;
@@ -130,9 +310,28 @@ unsigned Power::annotateToggleSP() {
   annotate_toggle_SP.set_annotate_db(_rust_vcd_wrapper.get_annotate_db());
 
   unsigned is_ok = annotate_toggle_SP(&_power_graph);
+  updateActivityCoverage();
   LOG_INFO << "annotate toggle sp end";
 
   return is_ok;
+}
+
+void Power::updateActivityCoverage() {
+  std::size_t total_vertices = 0;
+  std::size_t annotated_vertices = 0;
+
+  PwrVertex* vertex;
+  FOREACH_PWR_VERTEX(&_power_graph, vertex) {
+    if (vertex->is_const()) {
+      continue;
+    }
+    ++total_vertices;
+    if (vertex->getToggleBucket().frontData(PwrDataSource::kAnnotate)) {
+      ++annotated_vertices;
+    }
+  }
+
+  _activity_provenance.updateCoverage(total_vertices, annotated_vertices);
 }
 
 /**
@@ -261,6 +460,12 @@ unsigned Power::calcSwitchPower() {
  * @return unsigned
  */
 unsigned Power::updatePower() {
+  const ActivityReport activity = getActivityReport();
+  if (activity.refused) {
+    LOG_ERROR << "Refusing power calculation: " << activity.reason;
+    return 0;
+  }
+
   {
     ieda::Stats stats;
     LOG_INFO << "power calculation start";
@@ -450,6 +655,12 @@ unsigned Power::analyzeGroupPower() {
  */
 unsigned Power::reportSummaryPower(const char* rpt_file_name,
                                    PwrAnalysisMode pwr_analysis_mode) {
+  const ActivityReport activity = getActivityReport();
+  if (activity.refused) {
+    LOG_ERROR << "Refusing numeric power report: " << activity.reason;
+    return writeRefusedPowerText(rpt_file_name, activity);
+  }
+
   PwrReportPowerSummary report_power(rpt_file_name, pwr_analysis_mode);
   report_power(this);
   auto& report_summary_data = report_power.get_report_summary_data();
@@ -497,9 +708,14 @@ unsigned Power::reportSummaryPower(const char* rpt_file_name,
 
   std::unique_ptr<std::FILE, decltype(close_file)> f(
       std::fopen(rpt_file_name, "w"), close_file);
+  if (!f) {
+    LOG_ERROR << "Failed to open power report file: " << rpt_file_name;
+    return 0;
+  }
 
   std::fprintf(f.get(), "Generate the report at %s\n", Time::getNowWallTime());
   std::fprintf(f.get(), "iPA elapsed time: %.2f seconds.\n", elapsed_time);
+  printActivityMetadata(f.get(), activity);
 
   std::map<PwrAnalysisMode, std::string> analysis_mode_to_string = {
       {PwrAnalysisMode::kAveraged, "Averaged"},
@@ -556,10 +772,26 @@ unsigned Power::reportSummaryPower(const char* rpt_file_name,
  */
 unsigned Power::reportSummaryPowerJSON(const char* rpt_file_name,
                                        PwrAnalysisMode pwr_analysis_mode) {
+  const ActivityReport activity = getActivityReport();
+  if (activity.refused) {
+    LOG_ERROR << "Refusing numeric JSON power report: " << activity.reason;
+    nlohmann::json refused_report = nlohmann::json::object();
+    addActivityMetadata(refused_report, activity);
+    refused_report["power_mw"] = {
+        {"value", nullptr}, {"unit", "mW"}, {"source", "ipa_report"}};
+    refused_report["components_mw"] = nullptr;
+    refused_report["total_power"] = nullptr;
+    refused_report["summary"] = nlohmann::json::array();
+    refused_report["groups"] = nlohmann::json::array();
+    writeJsonFile(rpt_file_name, refused_report);
+    return 0;
+  }
+
   PwrReportPowerSummary report_power("", pwr_analysis_mode);
   report_power(this);
   auto& report_summary_data = report_power.get_report_summary_data();
   nlohmann::json json_report = nlohmann::json::object();
+  addActivityMetadata(json_report, activity);
   auto& summary_json = json_report["summary"] = nlohmann::json::array();
 
   // lambda for print power data float to string.
@@ -676,6 +908,16 @@ unsigned Power::reportSummaryPowerJSON(const char* rpt_file_name,
 
   // Get total power
   json_report["total_power"] = data_str(total_power);
+  json_report["power_mw"] = {
+      {"value", total_power * 1000.0},
+      {"unit", "mW"},
+      {"source", "ipa_report"},
+  };
+  json_report["components_mw"] = {
+      {"switch", summary_switch_power * 1000.0},
+      {"internal", summary_internal_power * 1000.0},
+      {"leakage", summary_leakage_power * 1000.0},
+  };
 
   if (!failed_extract_module_name) {
     for (const auto& s : module_stats) {
@@ -695,16 +937,7 @@ unsigned Power::reportSummaryPowerJSON(const char* rpt_file_name,
     }
   }
 
-  std::ofstream out_file(rpt_file_name);
-  if (out_file.is_open()) {
-    out_file << json_report.dump(4);  // 4 spaces indent
-    LOG_INFO << "JSON report written to: " << rpt_file_name;
-    out_file.close();
-  } else {
-    LOG_ERROR << "Failed to open JSON report file: " << rpt_file_name;
-  }
-
-  return 1;
+  return writeJsonFile(rpt_file_name, json_report);
 }
 
 /**
@@ -716,6 +949,12 @@ unsigned Power::reportSummaryPowerJSON(const char* rpt_file_name,
  */
 unsigned Power::reportInstancePower(const char* rpt_file_name,
                                     PwrAnalysisMode pwr_analysis_mode) {
+  const ActivityReport activity = getActivityReport();
+  if (activity.refused) {
+    LOG_ERROR << "Refusing numeric instance power report: " << activity.reason;
+    return writeRefusedPowerText(rpt_file_name, activity);
+  }
+
   PwrReportInstance report_instance_power(rpt_file_name, pwr_analysis_mode);
   auto report_tbl =
       report_instance_power.createReportTable("Power Analysis Instance Report");
@@ -747,8 +986,14 @@ unsigned Power::reportInstancePower(const char* rpt_file_name,
 
   std::unique_ptr<std::FILE, decltype(close_file)> f(
       std::fopen(rpt_file_name, "w"), close_file);
+  if (!f) {
+    LOG_ERROR << "Failed to open instance power report file: "
+              << rpt_file_name;
+    return 0;
+  }
 
   std::fprintf(f.get(), "Generate the report at %s\n", Time::getNowWallTime());
+  printActivityMetadata(f.get(), activity);
 
   std::map<PwrAnalysisMode, std::string> analysis_mode_to_string = {
       {PwrAnalysisMode::kAveraged, "Averaged"},
@@ -770,7 +1015,26 @@ unsigned Power::reportInstancePower(const char* rpt_file_name,
  * @return unsigned
  */
 unsigned Power::reportInstancePowerCSV(const char* rpt_file_name) {
+  const ActivityReport activity = getActivityReport();
+  if (activity.refused) {
+    LOG_ERROR << "Refusing numeric instance power CSV: " << activity.reason;
+    std::ofstream refused_csv(rpt_file_name);
+    if (!refused_csv.is_open()) {
+      LOG_ERROR << "Failed to open instance power CSV: " << rpt_file_name;
+      return 0;
+    }
+    refused_csv << "source,coverage,refused,reason\n"
+                << activitySourceName(activity.source) << ","
+                << activity.coverage << ",true,\"" << activity.reason
+                << "\"\n";
+    return 0;
+  }
+
   std::ofstream csv_file(rpt_file_name);
+  if (!csv_file.is_open()) {
+    LOG_ERROR << "Failed to open instance power CSV: " << rpt_file_name;
+    return 0;
+  }
   csv_file << "Instance Name"
            << ","
            << "Nominal Voltage"
@@ -782,6 +1046,7 @@ unsigned Power::reportInstancePowerCSV(const char* rpt_file_name) {
            << "Leakage Power"
            << ","
            << "Total Power"
+           << ",source,coverage,refused"
            << "\n";
   auto data_str = [](double data) { return Str::printf("%.3e", data); };
 
@@ -797,7 +1062,9 @@ unsigned Power::reportInstancePowerCSV(const char* rpt_file_name) {
              << data_str(instance_power_data._internal_power) << ","
              << data_str(instance_power_data._switch_power) << ","
              << data_str(instance_power_data._leakage_power) << ","
-             << data_str(instance_power_data._total_power) << "\n";
+             << data_str(instance_power_data._total_power) << ","
+             << activitySourceName(activity.source) << ","
+             << activity.coverage << ",false\n";
   };
 
   csv_file.close();
@@ -811,6 +1078,11 @@ unsigned Power::reportInstancePowerCSV(const char* rpt_file_name) {
  */
 std::vector<IRInstancePower> Power::getInstancePowerData() {
   std::vector<IRInstancePower> instance_power_data;
+  const ActivityReport activity = getActivityReport();
+  if (activity.refused) {
+    LOG_ERROR << "Refusing instance power data: " << activity.reason;
+    return instance_power_data;
+  }
 
   IRInstancePower instance_power;
   PwrGroupData* group_data;
@@ -847,6 +1119,11 @@ std::map<Instance::Coordinate, double> Power::displayInstancePowerMap() {
   LOG_INFO << "display instance power map start";
 
   std::map<Instance::Coordinate, double> instance_power_map;
+  const ActivityReport activity = getActivityReport();
+  if (activity.refused) {
+    LOG_ERROR << "Refusing instance power map: " << activity.reason;
+    return instance_power_map;
+  }
 
   PwrGroupData* group_data;
   FOREACH_PWR_GROUP_DATA(this, group_data) {
@@ -903,14 +1180,13 @@ unsigned Power::initPowerGraphData() {
 
   {
     ieda::Stats stats;
-    LOG_INFO << "power annotate vcd start";
-    // std::pair begin_end = {0, 50000000};
-    // readVCD("/home/taosimin/T28/vcd/asic_top.vcd", "u0_asic_top",
-    //                 begin_end);
-    // annotate toggle sp
-    annotateToggleSP();
-
-    LOG_INFO << "power vcd annotate end";
+    if (getActivityReport().source == ActivitySource::kVcd) {
+      LOG_INFO << "power annotate vcd start";
+      annotateToggleSP();
+      LOG_INFO << "power vcd annotate end";
+    } else {
+      updateActivityCoverage();
+    }
     double memory_delta = stats.memoryDelta();
     LOG_INFO << "power vcd annotate memory usage " << memory_delta << "MB";
     double time_delta = stats.elapsedRunTime();
@@ -1024,6 +1300,8 @@ unsigned Power::reportPower(bool is_copy) {
   _backup_work_dir = backup_work_space;
   std::filesystem::create_directories(output_dir);
   const char* design_name = ista->get_design_name().c_str();
+  const ActivityReport activity = getActivityReport();
+  writeActivitySourceJson(output_dir, activity, getVectorlessToggle());
 
   {
     std::string file_name =
@@ -1033,6 +1311,19 @@ unsigned Power::reportPower(bool is_copy) {
     }
     std::string output_path = output_dir + "/" + file_name;
     reportSummaryPower(output_path.c_str(), PwrAnalysisMode::kAveraged);
+  }
+
+  if (activity.refused) {
+    if (isJsonReportEnabled()) {
+      std::string file_name = Str::printf("%s.pwr.json", design_name);
+      if (is_copy) {
+        CopyFile(backup_work_space, output_dir, file_name);
+      }
+      std::string output_path = output_dir + "/" + file_name;
+      reportSummaryPowerJSON(output_path.c_str(), PwrAnalysisMode::kAveraged);
+    }
+    LOG_ERROR << "power report refused: " << activity.reason;
+    return 0;
   }
 
   {
@@ -1116,12 +1407,31 @@ unsigned Power::runCompleteFlow() {
   Sta* ista = Sta::getOrCreateSta();
   Power::getOrCreatePower(&(ista->get_graph()));
 
-  initPowerGraphData();
-  initToggleSPData();
+  if (!hasActivitySelection()) {
+    LOG_ERROR << "Power analysis requires a VCD source or an explicitly "
+                 "selected vectorless toggle";
+    reportPower();
+    return 0;
+  }
 
-  updatePower();
-  reportPower();
-  return 1;
+  if (!initPowerGraphData()) {
+    return 0;
+  }
+
+  const ActivityReport activity = getActivityReport();
+  if (activity.refused) {
+    reportPower();
+    return 0;
+  }
+
+  if (!initToggleSPData()) {
+    return 0;
+  }
+
+  if (!updatePower()) {
+    return 0;
+  }
+  return reportPower();
 }
 
 /**
@@ -1288,6 +1598,13 @@ unsigned Power::reportIRDropCSV(const char* rpt_file_name,
  * @return unsigned
  */
 unsigned Power::runIRAnalysis(std::string power_net_name) {
+  const ActivityReport activity = getActivityReport();
+  if (activity.refused) {
+    LOG_ERROR << "Refusing IR analysis with untrusted power data: "
+              << activity.reason;
+    return 0;
+  }
+
   CPU_PROF_START(0);
   LOG_INFO << "run IR analysis start";
   // set power data.
@@ -1366,6 +1683,8 @@ unsigned Power::reportIRAnalysis(bool is_copy) {
 
     LOG_INFO << "output ir drop csv report: " << output_path;
   }
+
+  writeIRDropStatusJson(output_dir, getNetInstanceIRDrop());
 
   LOG_INFO << "report IR analysis end";
   return 1;

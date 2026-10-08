@@ -1,0 +1,8 @@
+# Domain-agnostic knowledge layer. No EDA domain import.
+- insert:
+    - id: agent-kb
+      name: '@ieda-ai/dsh-tool-agent-kb'
+      config:
+        iedaRoot: !!js process.env.IEDA_ROOT
+        python: !!js process.env.IEDA_PYTHON ?? 'python3'
+        timeoutMs: 7200000

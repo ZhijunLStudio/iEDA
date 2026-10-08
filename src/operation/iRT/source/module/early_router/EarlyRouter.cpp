@@ -399,7 +399,69 @@ std::vector<LayerCoord> EarlyRouter::getAccessCoordList(ERModel& er_model, std::
   layer_coord_list.erase(std::unique(layer_coord_list.begin(), layer_coord_list.end()), layer_coord_list.end());
   uniformSampleCoordList(er_model, layer_coord_list);
   if (layer_coord_list.empty()) {
-    RTLOG.error(Loc::current(), "The layer_coord_list is empty!");
+    // Raw global placement is not legalized: pin shapes can sit between tracks
+    // or straddle the die edge, so the normal access-coord generation above
+    // yields nothing. Fall back to snapping the pin-shape center to the
+    // nearest routing track on its own layer and clamping it inside the die,
+    // so run_ert can trial-route an off-grid GP DEF instead of dying here.
+    auto snap_to_nearest_track = [](int32_t coord, std::vector<ScaleGrid>& track_list) {
+      int32_t nearest = coord;
+      int64_t best = INT64_C(1) << 60;
+      for (ScaleGrid& grid : track_list) {
+        int32_t start = grid.get_start_line();
+        int32_t end = grid.get_end_line();
+        int32_t step = grid.get_step_length();
+        int32_t first = std::min(start, end);
+        int32_t last = std::max(start, end);
+        if (coord <= first) {
+          nearest = first;
+          break;
+        }
+        if (coord >= last) {
+          nearest = last;
+          break;
+        }
+        if (step <= 0) {
+          continue;
+        }
+        int32_t idx = (coord - start) / step;
+        for (int32_t d : {idx, idx + 1}) {
+          int32_t line = start + d * step;
+          if (line < first || line > last) {
+            continue;
+          }
+          int64_t dist = line > coord ? static_cast<int64_t>(line) - coord : static_cast<int64_t>(coord) - line;
+          if (dist < best) {
+            best = dist;
+            nearest = line;
+          }
+        }
+      }
+      return nearest;
+    };
+    PlanarRect fallback_shape = pin_shape_list.front().get_real_rect();
+    int32_t cx = (fallback_shape.get_ll_x() + fallback_shape.get_ur_x()) / 2;
+    int32_t cy = (fallback_shape.get_ll_y() + fallback_shape.get_ur_y()) / 2;
+    RoutingLayer& curr_routing_layer = routing_layer_list[curr_layer_idx];
+    int32_t x = snap_to_nearest_track(cx, curr_routing_layer.getXTrackGridList());
+    int32_t y = snap_to_nearest_track(cy, curr_routing_layer.getYTrackGridList());
+    PlanarRect die_valid_rect = die.get_real_rect();
+    int32_t shrinked_size = RTDM.getOnlyPitch();
+    if (RTUTIL.hasShrinkedRect(die_valid_rect, shrinked_size)) {
+      die_valid_rect = RTUTIL.getShrinkedRect(die_valid_rect, shrinked_size);
+    }
+    x = std::max(die_valid_rect.get_ll_x(), std::min(x, die_valid_rect.get_ur_x()));
+    y = std::max(die_valid_rect.get_ll_y(), std::min(y, die_valid_rect.get_ur_y()));
+    while (x % manufacture_grid != 0) {
+      x++;
+    }
+    while (y % manufacture_grid != 0) {
+      y++;
+    }
+    layer_coord_list.emplace_back(x, y, curr_layer_idx);
+  }
+  if (layer_coord_list.empty()) {
+    RTLOG.warn(Loc::current(), "The layer_coord_list is empty even after fallback snap!");
   }
   return layer_coord_list;
 }

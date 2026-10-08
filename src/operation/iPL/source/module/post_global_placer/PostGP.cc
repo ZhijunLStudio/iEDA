@@ -51,7 +51,11 @@ namespace ipl {
     delete _timing_annotation;
   }
 
-  void PostGP::runIncrTimingPlace() {
+  bool PostGP::runIncrTimingPlace() {
+    if (_timing_annotation == nullptr) {
+      LOG_ERROR << "PostGP timing annotation is not initialized";
+      return false;
+    }
     // Record incremental improvement and set loop
     int max_iter = 1;
     float expect_improve_ratio = 0.01;
@@ -86,6 +90,7 @@ namespace ipl {
 
     PlacerDBInst.updateTopoManager();
     PlacerDBInst.updateGridManager();
+    return std::isfinite(cur_tns);
   }
 
   void PostGP::runBufferBalancing()

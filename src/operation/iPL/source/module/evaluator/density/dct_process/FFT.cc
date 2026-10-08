@@ -125,7 +125,19 @@ void FFT::doFFT(bool is_calculate_phi)
       if (i == 0 && j == 0) {
         phi = electro_x = electro_y = 0.0f;
       } else {
-        float auv_by_wu2_plus_wv2 = auv / (wu2 + wv2);
+        // R46: optional anisotropic density force via DENSITY_ANISO_Y env
+        // (default 1.0 = isotropic). alpha>1 weakens the y repulsion (clusters
+        // cells vertically, relieves V congestion on wide-site PDKs like sky130;
+        // validated alpha=1.2 on s38584_sky130: V max 38->30). alpha<1 strengthens
+        // y spread for tall-site PDKs.
+        float aniso_y = 1.0F;
+        if (const char* env_a = std::getenv("DENSITY_ANISO_Y")) {
+          float a = std::atof(env_a);
+          if (a > 0.01F && a < 10.0F) {
+            aniso_y = a;
+          }
+        }
+        float auv_by_wu2_plus_wv2 = auv / (wu2 + aniso_y * wv2);
         if (is_calculate_phi) {
           phi = auv_by_wu2_plus_wv2;
         }

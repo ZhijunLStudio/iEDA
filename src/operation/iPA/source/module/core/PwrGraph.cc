@@ -34,7 +34,15 @@ namespace ipower {
 PwrVertex* PwrGraph::getDriverVertex(const std::string& net_name) {
   Netlist* nl = get_sta_graph()->get_nl();
   Net* cur_net = nl->findNet(net_name.c_str());
+  if (!cur_net) {
+    LOG_ERROR << "net " << net_name << " is not found in sta netlist.";
+    return nullptr;
+  }
   DesignObject* cur_obj = cur_net->getDriver();
+  if (!cur_obj) {
+    LOG_ERROR << "net " << net_name << " has no driver in sta netlist.";
+    return nullptr;
+  }
   auto driver_sta_vertex = get_sta_graph()->findVertex(cur_obj);
   if (!driver_sta_vertex) {
     LOG_ERROR << "net " << net_name << "'s driver vertex is not find";

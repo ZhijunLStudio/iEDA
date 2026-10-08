@@ -26,6 +26,8 @@
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -170,7 +172,15 @@ auto BuildTopHtreeConfig(const Config& config) -> HTree::Config
       .has_max_cap = config.has_max_cap(),
       .max_cap_pf = config.has_max_cap() ? config.get_max_cap() : 0.0,
       .enable_root_driver_sizing = false,
-      .allow_boundary_relaxation = false,
+      .allow_boundary_relaxation = []() {
+        const char* best_effort = std::getenv("IEDA_CTS_BEST_EFFORT");
+        if (best_effort == nullptr || best_effort[0] == '\0') {
+          best_effort = std::getenv("IEDA_RT_BEST_EFFORT");
+        }
+        return best_effort != nullptr
+               && (std::strcmp(best_effort, "1") == 0 || std::strcmp(best_effort, "true") == 0
+                   || std::strcmp(best_effort, "TRUE") == 0);
+      }(),
       .enable_analytical_solver = config.is_enable_analytical_htree(),
       .routing_layer = ResolveRoutingLayer(config),
       .wire_width_um = ResolveWireWidth(config),
@@ -238,6 +248,28 @@ auto BuildSourceTrunkTree(const SourceTrunkInput& input) -> SourceTrunkBuild
     auto segment_config = BuildTopSegmentConfig(flow_config);
     auto segment_build = SourceTrunkSegment::build(segment_input, segment_config);
     if (!segment_build.summary.success) {
+      const char* best_effort = std::getenv("IEDA_CTS_BEST_EFFORT");
+      if (best_effort == nullptr || best_effort[0] == '\0') {
+        best_effort = std::getenv("IEDA_RT_BEST_EFFORT");
+      }
+      const bool cts_best_effort = best_effort != nullptr
+                                   && (std::strcmp(best_effort, "1") == 0 || std::strcmp(best_effort, "true") == 0
+                                       || std::strcmp(best_effort, "TRUE") == 0);
+      if (cts_best_effort) {
+        LOG_WARNING << "SourceTrunk: BEST_EFFORT keeping direct source-to-root reconnect after segment failure: "
+                    << (segment_build.summary.failure_reason.empty() ? "top_segment_failed" : segment_build.summary.failure_reason);
+        result.summary.success = true;
+        result.summary.used_boundary_relaxation = true;
+        result.summary.failure_reason.clear();
+        dispatch_stage.finished({
+            {"stage", ToString(result.summary.stage)},
+            {"inserted_insts", "0"},
+            {"inserted_nets", "0"},
+            {"used_boundary_relaxation", "true"},
+            {"best_effort_direct_connect", "true"},
+        });
+        return result;
+      }
       result.summary.failure_reason
           = segment_build.summary.failure_reason.empty() ? "top_segment_failed" : segment_build.summary.failure_reason;
       result.summary.used_boundary_relaxation = segment_build.summary.used_boundary_relaxation;

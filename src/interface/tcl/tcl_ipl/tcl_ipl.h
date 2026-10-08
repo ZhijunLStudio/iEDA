@@ -33,6 +33,8 @@ using ieda::TclCmd;
 using ieda::TclOption;
 using ieda::TclStringOption;
 using ieda::TclSwitchOption;
+using ieda::TclIntOption;
+using ieda::TclDoubleOption;
 
 namespace tcl {
 
@@ -47,6 +49,7 @@ DEFINE_CMD_CLASS(PlacerInit);
 DEFINE_CMD_CLASS(PlacerDestroy);
 DEFINE_CMD_CLASS(PlacerRunMP);
 DEFINE_CMD_CLASS(PlacerRunGP);
+DEFINE_CMD_CLASS(PlacerCompareGP);
 DEFINE_CMD_CLASS(PlacerRunLG);
 DEFINE_CMD_CLASS(PlacerRunDP);
 

@@ -35,6 +35,15 @@ namespace ipl {
 
 namespace {
 
+struct PendingInstanceSnapshot
+{
+  IdbInstance* idb_inst = nullptr;
+  Rectangle<int32_t> bbox;
+  IdbOrient orient = IdbOrient::kNone;
+  IdbPlacementStatus status = IdbPlacementStatus::kNone;
+  bool existed_before = false;
+};
+
 IdbPlacementStatus convertToIdbPlacementStatus(Instance* inst)
 {
   if (inst == nullptr) {
@@ -73,10 +82,10 @@ IdbOrient convertToIdbOrient(Orient orient)
   }
 }
 
-void updateIdbInstancePlacement(IdbDesign* idb_design, IdbInstance* idb_inst, Instance* pl_inst)
+bool updateIdbInstancePlacement(IdbDesign* idb_design, IdbInstance* idb_inst, Instance* pl_inst)
 {
   if (idb_design == nullptr || idb_inst == nullptr || pl_inst == nullptr) {
-    return;
+    return false;
   }
 
   const auto status = convertToIdbPlacementStatus(pl_inst);
@@ -84,7 +93,9 @@ void updateIdbInstancePlacement(IdbDesign* idb_design, IdbInstance* idb_inst, In
   const auto coord = pl_inst->get_coordi();
   if (!idb_design->placeInstance(idb_inst->get_name(), coord.get_x(), coord.get_y(), orient, status)) {
     LOG_ERROR << "[updateIdbInstancePlacement] failed to place iDB inst. inst=" << idb_inst->get_name();
+    return false;
   }
+  return true;
 }
 
 }  // namespace
@@ -654,6 +665,28 @@ void IDBWrapper::wrapIdbInstance(IdbInstance* idb_inst)
     }
   }
 
+  if (idb_inst->has_route_halo()) {
+    auto core_shape = ipl_layout->get_core_shape();
+    auto* route_halo = idb_inst->get_route_halo();
+    const int32_t route_distance = route_halo->get_route_distance();
+    int32_t ll_x = inst_ptr->get_shape().get_ll_x() - route_distance;
+    int32_t ll_y = inst_ptr->get_shape().get_ll_y() - route_distance;
+    int32_t ur_x = inst_ptr->get_shape().get_ur_x() + route_distance;
+    int32_t ur_y = inst_ptr->get_shape().get_ur_y() + route_distance;
+
+    ll_x < core_shape.get_ll_x() ? ll_x = core_shape.get_ll_x() : ll_x;
+    ll_y < core_shape.get_ll_y() ? ll_y = core_shape.get_ll_y() : ll_y;
+    ur_x > core_shape.get_ur_x() ? ur_x = core_shape.get_ur_x() : ur_x;
+    ur_y > core_shape.get_ur_y() ? ur_y = core_shape.get_ur_y() : ur_y;
+
+    if ((ll_x < ur_x) && (ll_y < ur_y)) {
+      Region* region_ptr = new Region(idb_inst->get_name() + "_ROUTEHALO");
+      region_ptr->set_type(REGION_TYPE::kFence);
+      region_ptr->add_boundary(Rectangle<int32_t>(ll_x, ll_y, ur_x, ur_y));
+      ipl_design->add_region(region_ptr);
+    }
+  }
+
   ipl_design->add_instance(inst_ptr);
   _idbw_database->_ipl_inst_map.emplace(idb_inst, inst_ptr);
   _idbw_database->_idb_inst_map.emplace(inst_ptr, idb_inst);
@@ -853,49 +886,151 @@ void IDBWrapper::wrapRegions(IdbDesign* idb_design)
   }
 }
 
-void IDBWrapper::writeBackSourceDatabase()
+bool IDBWrapper::writeBackSourceDatabase()
 {
+  _last_write_back_result = IDBWriteBackResult{};
   auto* idb_design = _idbw_database->get_idb_builder()->get_def_service()->get_design();
-  for (auto* inst : _idbw_database->_design->get_instance_list()) {
-    if (inst->isFakeInstance()) {
-      continue;
-    }
+  if (idb_design == nullptr || _idbw_database->_design == nullptr) {
+    LOG_ERROR << "[writeBackSourceDatabase] missing iDB design.";
+    _last_write_back_result.outcome = IDBWriteBackOutcome::kMissingDesign;
+    _last_write_back_result.reason = "missing iDB design";
+    return false;
+  }
 
-    // iPL should not change fixed instances.
-    if (inst->isFixed()) {
-      continue;
-    }
-
+  struct PendingInstanceUpdate
+  {
+    Instance* pl_inst = nullptr;
     IdbInstance* idb_inst = nullptr;
+    bool create = false;
+    IdbOrient orient = IdbOrient::kNone;
+    IdbPlacementStatus status = IdbPlacementStatus::kNone;
+    Point<int32_t> coord;
+  };
+
+  std::vector<PendingInstanceUpdate> pending_updates;
+  pending_updates.reserve(_idbw_database->_design->get_instance_list().size());
+
+  // Validate the complete mutation set before touching iDB. This prevents a
+  // late malformed instance from leaving earlier placements partially applied.
+  for (auto* inst : _idbw_database->_design->get_instance_list()) {
+    if (inst == nullptr || inst->isFakeInstance() || inst->isFixed()) {
+      continue;
+    }
+
+    const auto orient = convertToIdbOrient(inst->get_orient());
+    const auto status = convertToIdbPlacementStatus(inst);
     auto idb_inst_iter = _idbw_database->_idb_inst_map.find(inst);
-    if (idb_inst_iter != _idbw_database->_idb_inst_map.end()) {
-      idb_inst = idb_inst_iter->second;
+    IdbInstance* idb_inst = idb_inst_iter == _idbw_database->_idb_inst_map.end() ? nullptr : idb_inst_iter->second;
+
+    if (idb_inst != nullptr) {
+      if (orient == IdbOrient::kNone || idb_inst->get_cell_master() == nullptr) {
+        _last_write_back_result.outcome = IDBWriteBackOutcome::kPreflightFailed;
+        _last_write_back_result.rollback_success = true;
+        _last_write_back_result.reason = "invalid mapped iDB instance: " + inst->get_name();
+        return false;
+      }
+    } else {
+      if (inst->get_cell_master() == nullptr) {
+        _last_write_back_result.outcome = IDBWriteBackOutcome::kPreflightFailed;
+        _last_write_back_result.rollback_success = true;
+        _last_write_back_result.reason = "instance has no cell master: " + inst->get_name();
+        return false;
+      }
+      if (idb_design->get_instance_list()->find_instance(inst->get_name()) != nullptr) {
+        _last_write_back_result.outcome = IDBWriteBackOutcome::kPreflightFailed;
+        _last_write_back_result.rollback_success = true;
+        _last_write_back_result.reason = "iDB instance exists without a stable wrapper mapping: " + inst->get_name();
+        return false;
+      }
+    }
+
+    pending_updates.push_back(PendingInstanceUpdate{inst, idb_inst, idb_inst == nullptr, orient, status, inst->get_coordi()});
+  }
+
+  std::vector<PendingInstanceSnapshot> snapshots;
+  std::vector<std::string> created_inst_names;
+  bool write_ok = true;
+
+  for (const auto& pending : pending_updates) {
+    auto* inst = pending.pl_inst;
+    auto* idb_inst = pending.idb_inst;
+    PendingInstanceSnapshot snapshot;
+    snapshot.idb_inst = idb_inst;
+    snapshot.existed_before = idb_inst != nullptr;
+    if (idb_inst != nullptr) {
+      const auto bbox = idb_inst->get_bounding_box();
+      if (bbox != nullptr) {
+        snapshot.bbox = Rectangle<int32_t>(bbox->get_low_x(), bbox->get_low_y(), bbox->get_high_x(), bbox->get_high_y());
+      }
+      snapshot.orient = idb_inst->get_orient();
+      snapshot.status = idb_inst->get_status();
+      snapshots.push_back(snapshot);
     }
 
     if (idb_inst) {
-      updateIdbInstancePlacement(idb_design, idb_inst, inst);
-    } else {
-      auto* cell_master = inst->get_cell_master();
-      if (cell_master == nullptr) {
-        LOG_ERROR << "[writeBackSourceDatabase] skip creating iDB inst without cell master. inst=" << inst->get_name();
-        continue;
+      if (!updateIdbInstancePlacement(idb_design, idb_inst, inst)) {
+        LOG_ERROR << "[writeBackSourceDatabase] failed to update iDB inst. inst=" << inst->get_name();
+        _last_write_back_result.outcome = IDBWriteBackOutcome::kUpdateFailed;
+        _last_write_back_result.reason = "failed to update iDB inst: " + inst->get_name();
+        write_ok = false;
+        break;
       }
-
-      const auto status = convertToIdbPlacementStatus(inst);
-      const auto orient = convertToIdbOrient(inst->get_orient());
-      const auto coord = inst->get_coordi();
-      auto* idb_new_inst = idb_design->createInstance(inst->get_name(), cell_master->get_name(), IdbInstanceType::kNone, status, orient,
-                                                      coord.get_x(), coord.get_y());
+      _last_write_back_result.updated_count++;
+    } else {
+      auto* idb_new_inst = idb_design->createInstance(inst->get_name(), inst->get_cell_master()->get_name(), IdbInstanceType::kNone,
+                                                      pending.status, pending.orient,
+                                                      pending.coord.get_x(), pending.coord.get_y());
       if (idb_new_inst == nullptr) {
         LOG_ERROR << "[writeBackSourceDatabase] failed to create iDB inst. inst=" << inst->get_name()
-                  << ", master=" << cell_master->get_name();
-        continue;
+                  << ", master=" << inst->get_cell_master()->get_name();
+        _last_write_back_result.outcome = IDBWriteBackOutcome::kCreateFailed;
+        _last_write_back_result.reason = "failed to create iDB inst: " + inst->get_name();
+        write_ok = false;
+        break;
       }
 
-      updateIdbInstancePlacement(idb_design, idb_new_inst, inst);
       _idbw_database->_idb_inst_map[inst] = idb_new_inst;
+      created_inst_names.push_back(inst->get_name());
+      _last_write_back_result.created_count++;
     }
   }
+
+  if (!write_ok) {
+    bool rollback_ok = true;
+    for (auto it = snapshots.rbegin(); it != snapshots.rend(); ++it) {
+      if (it->idb_inst == nullptr || !it->existed_before) {
+        continue;
+      }
+      rollback_ok &= idb_design->placeInstance(it->idb_inst->get_name(), it->bbox.get_ll_x(), it->bbox.get_ll_y(), it->orient, it->status);
+    }
+    for (const auto& inst_name : created_inst_names) {
+      if (!idb_design->removeInstanceSafe(inst_name)) {
+        LOG_ERROR << "[writeBackSourceDatabase] rollback failed to remove created iDB inst. inst=" << inst_name;
+        _last_write_back_result.outcome = IDBWriteBackOutcome::kRollbackFailed;
+        _last_write_back_result.reason = "rollback failed to remove created iDB inst: " + inst_name;
+        rollback_ok = false;
+      }
+      for (auto it = _idbw_database->_idb_inst_map.begin(); it != _idbw_database->_idb_inst_map.end();) {
+        if (it->second != nullptr && it->second->get_name() == inst_name) {
+          _idbw_database->_idb_inst_map.erase(it++);
+        } else {
+          ++it;
+        }
+      }
+    }
+    if (!rollback_ok) {
+      _last_write_back_result.outcome = IDBWriteBackOutcome::kRollbackFailed;
+      _last_write_back_result.reason = "source database write-back failed and rollback was required";
+    }
+    _last_write_back_result.rollback_success = rollback_ok;
+    return false;
+  }
+
+  _last_write_back_result.outcome = IDBWriteBackOutcome::kCompleted;
+  _last_write_back_result.execution_success = true;
+  _last_write_back_result.rollback_success = true;
+  _last_write_back_result.reason = "source database write-back completed";
+  return true;
 }
 
 void IDBWrapper::writeDef(std::string file_name = "")

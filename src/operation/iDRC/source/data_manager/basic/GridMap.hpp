@@ -64,14 +64,18 @@ class GridMap
 
     U& back() { return operator[](_y_size - 1); }
 
+    const U& front() const { return operator[](0); }
+
+    const U& back() const { return operator[](_y_size - 1); }
+
    private:
     int32_t _y_size = 0;
     U* _data_array = nullptr;
   };
 
-  Proxy<T> operator[](const size_t i) const { return operator[](static_cast<int32_t>(i)); }
+  Proxy<T> operator[](const size_t i) { return operator[](static_cast<int32_t>(i)); }
 
-  Proxy<T> operator[](const int32_t i) const
+  Proxy<T> operator[](const int32_t i)
   {
     if (i < 0 || _x_size <= i) {
       DRCLOG.error(Loc::current(), "The grid map index x ", i, " is out of bounds!");
@@ -79,9 +83,23 @@ class GridMap
     return Proxy<T>(_y_size, _data_map[i]);
   }
 
+  Proxy<const T> operator[](const size_t i) const { return operator[](static_cast<int32_t>(i)); }
+
+  Proxy<const T> operator[](const int32_t i) const
+  {
+    if (i < 0 || _x_size <= i) {
+      DRCLOG.error(Loc::current(), "The grid map index x ", i, " is out of bounds!");
+    }
+    return Proxy<const T>(_y_size, _data_map[i]);
+  }
+
   Proxy<T> front() { return operator[](0); }
 
   Proxy<T> back() { return operator[](_x_size - 1); }
+
+  Proxy<const T> front() const { return operator[](0); }
+
+  Proxy<const T> back() const { return operator[](_x_size - 1); }
 
   // getter
   int32_t get_x_size() const { return _x_size; }

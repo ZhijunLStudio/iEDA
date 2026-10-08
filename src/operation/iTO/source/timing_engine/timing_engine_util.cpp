@@ -17,9 +17,12 @@
 
 #include "timing_engine_util.h"
 
+#include "DirtySet.hh"
 #include "EstimateParasitics.h"
+#include "MoveTxn.hh"
 #include "ToConfig.h"
 #include "data_manager.h"
+#include "idm.h"
 #include "timing_engine.h"
 
 namespace ito {

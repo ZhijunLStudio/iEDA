@@ -44,8 +44,8 @@ class ParallelRunLengthSpacingRule
  public:
   ParallelRunLengthSpacingRule() = default;
   ~ParallelRunLengthSpacingRule() = default;
-  int32_t getMaxSpacing() { return width_parallel_length_map.back().back(); }
-  int32_t getSpacing(int32_t width, int32_t parallel_length)
+  int32_t getMaxSpacing() const { return width_parallel_length_map.back().back(); }
+  int32_t getSpacing(int32_t width, int32_t parallel_length) const
   {
     int32_t width_idx = static_cast<int32_t>(width_list.size()) - 1;
     for (int32_t i = 1; i <= width_idx; i++) {
@@ -71,11 +71,11 @@ class ParallelRunLengthSpacingRule
   std::vector<LayerSpacing> spacing_list;
   bool has_spacing_list = false;
 
-  int32_t getSpacingWithWidth(int32_t width)
+  int32_t getSpacingWithWidth(int32_t width) const
   {
     int32_t spacing = -1;
     int32_t default_spacing = -1;
-    for (auto& layerSpacing : spacing_list) {
+    for (const auto& layerSpacing : spacing_list) {
       if (layerSpacing.spacing_type == LayerSpacingType::kSpacingRange) {
         if (layerSpacing.min_width <= width && width <= layerSpacing.max_width) {
           spacing = layerSpacing.min_spacing;
@@ -87,10 +87,10 @@ class ParallelRunLengthSpacingRule
     return spacing == -1 ? default_spacing : spacing;
   }
 
-  int32_t getSpacingMaxWidth()
+  int32_t getSpacingMaxWidth() const
   {
     int32_t spacing = -1;
-    for (auto& layerSpacing : spacing_list) {
+    for (const auto& layerSpacing : spacing_list) {
       spacing = std::max(spacing, layerSpacing.min_spacing);
     }
     return spacing;

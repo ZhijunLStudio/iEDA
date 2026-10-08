@@ -42,10 +42,12 @@ unsigned CmdNORunFixFanout::exec()
   TclOption* option = getOptionOrArg(TCL_CONFIG);
   auto data_config = option->getStringVal();
 
-  if (iplf::tmInst->RunNOFixFanout(data_config)) {
-    std::cout << "iNO fixfanout run successfully." << std::endl;
+  if (!iplf::tmInst->RunNOFixFanout(data_config)) {
+    std::cerr << "iNO fixfanout failed." << std::endl;
+    return 0;
   }
 
+  std::cout << "iNO fixfanout run successfully." << std::endl;
   return 1;
 }
 
@@ -71,10 +73,12 @@ unsigned CmdNORunFixIO::exec()
   TclOption* option = getOptionOrArg(TCL_CONFIG);
   auto data_config = option->getStringVal();
 
-  if (iplf::tmInst->RunNOFixIO(data_config)) {
-    std::cout << "iNO fixIO run successfully." << std::endl;
+  if (!iplf::tmInst->RunNOFixIO(data_config)) {
+    std::cerr << "iNO fixIO failed." << std::endl;
+    return 0;
   }
 
+  std::cout << "iNO fixIO run successfully." << std::endl;
   return 1;
 }
 

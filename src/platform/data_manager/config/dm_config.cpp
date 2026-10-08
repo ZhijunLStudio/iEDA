@@ -49,7 +49,7 @@ bool DataConfig::initConfig(string config_path)
     _config_path = config_path;
     std::cout << "[Data config] begin config, path = " << _config_path << std::endl;
 
-    std::ifstream& config_stream = ieda::getInputFileStream(_config_path);
+    std::ifstream config_stream = ieda::getInputFileStream(_config_path);
 
     {
       nlohmann::json json;

@@ -35,14 +35,14 @@ class iNO {
   DbInterface *get_db_interface() { return _db_interface; }
   NoConfig *get_config() { return _no_config; }
 
-  void fixFanout();
-  void fixIO();
+  [[nodiscard]] bool fixFanout();
+  [[nodiscard]] bool fixIO();
 
   void initialization(idb::IdbBuilder *idb_build, ista::TimingEngine *timing);
  private:
 
   // data
-  DbInterface *_db_interface;
+  DbInterface *_db_interface = nullptr;
   NoConfig    *_no_config = nullptr;
 };
 

@@ -20,6 +20,7 @@
 #include "DRIterParam.hpp"
 #include "DRNet.hpp"
 #include "GridMap.hpp"
+#include "json.hpp"
 
 namespace irt {
 
@@ -38,6 +39,8 @@ class DRModel
   std::map<int32_t, std::vector<Segment<LayerCoord>>>& get_best_net_detailed_result_map() { return _best_net_detailed_result_map; }
   std::map<int32_t, std::vector<EXTLayerRect>>& get_best_net_detailed_patch_map() { return _best_net_detailed_patch_map; }
   std::vector<Violation>& get_best_route_violation_list() { return _best_route_violation_list; }
+  std::vector<nlohmann::json>& get_iter_observation_list() { return _iter_observation_list; }
+  std::vector<nlohmann::json>& get_repair_action_observation_list() { return _repair_action_observation_list; }
   // setter
   void set_dr_net_list(const std::vector<DRNet>& dr_net_list) { _dr_net_list = dr_net_list; }
   void set_initial_routing(const bool initial_routing) { _initial_routing = initial_routing; }
@@ -65,6 +68,8 @@ class DRModel
   std::map<int32_t, std::vector<Segment<LayerCoord>>> _best_net_detailed_result_map;
   std::map<int32_t, std::vector<EXTLayerRect>> _best_net_detailed_patch_map;
   std::vector<Violation> _best_route_violation_list;
+  std::vector<nlohmann::json> _iter_observation_list;
+  std::vector<nlohmann::json> _repair_action_observation_list;
 };
 
 }  // namespace irt

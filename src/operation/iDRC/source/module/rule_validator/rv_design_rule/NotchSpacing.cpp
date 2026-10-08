@@ -20,12 +20,12 @@ namespace idrc {
 
 void RuleValidator::verifyNotchSpacing(RVCluster& rv_cluster)
 {
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  const std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   for (auto& [routing_layer_idx, rv_layer_data] : layer_data) {
-    RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
-    NotchSpacingRule& notch_spacing_rule = routing_layer.get_notch_spacing_rule();
+    const RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
+    const NotchSpacingRule& notch_spacing_rule = routing_layer.get_notch_spacing_rule();
     int32_t notch_spacing = notch_spacing_rule.notch_spacing;
     int32_t notch_length = notch_spacing_rule.notch_length;
     std::optional<int32_t> concave_ends = notch_spacing_rule.concave_ends;

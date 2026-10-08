@@ -31,9 +31,12 @@
 #include <Spectra/SymEigsSolver.h>
 
 #include <Eigen/IterativeLinearSolvers>
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 
 #include "log/Log.hh"
 #if CUDA_IR_SOLVER
@@ -160,6 +163,14 @@ std::vector<double> IRSolver::getIRDrop(Eigen::VectorXd& v_vector) {
 std::vector<double> IRLUSolver::operator()(
     Eigen::Map<Eigen::SparseMatrix<double>>& G_matrix,
     Eigen::VectorXd& J_vector) {
+  _report = {};
+  if (G_matrix.rows() == 0 || G_matrix.rows() != G_matrix.cols() || J_vector.size() != G_matrix.rows()
+      || !J_vector.array().isFinite().all()) {
+    _report.status = IRSolveStatus::kInvalidInput;
+    _report.reason = "LU requires a non-empty square matrix and a finite matching RHS";
+    LOG_ERROR << _report.reason;
+    return {};
+  }
   Eigen::SparseMatrix<double> A =
       G_matrix;  // Copy G_matrix to A for preconditioning
 
@@ -175,11 +186,24 @@ std::vector<double> IRLUSolver::operator()(
 
   auto ret_value = solver.info();
   if (ret_value != Eigen::Success) {
-    // PrintMatrix(G_matrix, 0, G_matrix.rows());
-    LOG_FATAL << "LU solver error " << ret_value;
+    _report.status = IRSolveStatus::kFactorizationFailure;
+    _report.reason = "LU factorization failed with Eigen status " + std::to_string(static_cast<int>(ret_value));
+    LOG_ERROR << _report.reason;
+    return {};
   }
 
   Eigen::VectorXd v_vector = solver.solve(J_vector);
+  if (solver.info() != Eigen::Success || !v_vector.array().isFinite().all()) {
+    _report.status = IRSolveStatus::kNumericalFailure;
+    _report.reason = "LU solve produced an invalid voltage vector";
+    LOG_ERROR << _report.reason;
+    return {};
+  }
+
+  const Eigen::VectorXd residual = A * v_vector - J_vector;
+  _report.absolute_residual = residual.norm();
+  _report.relative_residual = _report.absolute_residual / std::max(J_vector.norm(), std::numeric_limits<double>::epsilon());
+  _report.status = IRSolveStatus::kConverged;
 
   // for debug
   // PrintVector(v_vector, "/home/taosimin/iEDA24/iEDA/bin/voltage.txt");
@@ -202,108 +226,127 @@ std::vector<double> IRLUSolver::operator()(
  * @param lambda
  * @return Eigen::VectorXd
  */
-Eigen::VectorXd conjugateGradient(const Eigen::SparseMatrix<double>& A,
-                                  const Eigen::VectorXd& b,
-                                  const Eigen::SparseMatrix<double>& M_inv,
-                                  const Eigen::VectorXd& x0, double tol,
-                                  int max_iter, double lambda) {
-  Eigen::VectorXd x = x0 * 0.95;
-  Eigen::VectorXd Ax = A * x;
-  // PrintVector(Ax, "/home/taosimin/iEDA24/iEDA/bin/Ax.txt");
-  // PrintVector(b, "/home/taosimin/iEDA24/iEDA/bin/b.txt");
+struct CGResult {
+  Eigen::VectorXd solution;
+  IRSolveReport report;
+};
 
-  // L2 regularization for residual
-  Eigen::VectorXd r = b - Ax - lambda * x;
-  // PrintVector(r, "/home/taosimin/iEDA24/iEDA/bin/residual.txt");
-
-  Eigen::VectorXd z = M_inv * r;  // Preconditioned residual
-
-  // PrintVector(z, "/home/taosimin/iEDA24/iEDA/bin/z.txt");
-
-  Eigen::VectorXd p = z;
-  double rsold = r.dot(z);
-
-  // Initialize the minimum residual and its corresponding x value
-  double min_rsnew = std::numeric_limits<double>::max();
-  Eigen::VectorXd min_x = x;
-
-  std::ofstream rsold_file("rsold.csv", std::ios::trunc);
-  rsold_file << "iteration,rsold\n";
-
-  int i = 0;
-  int min_residual_iter = 0;
-  for (; i < max_iter; ++i) {
-    LOG_INFO_EVERY_N(1000) << "CG iteration num: " << i + 1
-                           << " residual: " << sqrt(rsold);
-    // LOG_INFO_EVERY_N(200) << "x:\n"<< x.transpose();
-
-    // L2 regularization for gradient
-    Eigen::VectorXd Ap = A * p + lambda * p;
-    // PrintVector(Ap, "/home/taosimin/iEDA24/iEDA/bin/Ap.txt");
-
-    double pAp = p.dot(Ap);
-    double alpha = rsold / pAp;
-
-    // PrintVector(p, "/home/taosimin/iEDA24/iEDA/bin/p.txt");
-
-    // PrintVector(x, "/home/taosimin/iEDA24/iEDA/bin/voltage.txt");
-
-    x += alpha * p;
-
-    // PrintVector(x, "/home/taosimin/iEDA24/iEDA/bin/voltage.txt");
-
-    // x = x.cwiseMax(x0 * 0.1);  // Ensure min x
-
-    // LOG_INFO_EVERY_N(1) << "x:\n"<< x.transpose();
-    r -= alpha * Ap;
-
-    // PrintVector(r, "/home/taosimin/iEDA24/iEDA/bin/residual.txt");
-
-    z = M_inv * r;  // Preconditioned residual
-
-    // PrintVector(z, "/home/taosimin/iEDA24/iEDA/bin/z.txt");
-
-    // LOG_INFO_EVERY_N(1) << "r:\n"<< r.transpose();
-    double rsnew = r.dot(z);
-
-    // Update the minimum residual and its corresponding x value
-    if (rsnew < min_rsnew) {
-      min_rsnew = rsnew;
-      min_x = x;
-      min_residual_iter = i;
-    }
-
-    // LOG_INFO << "current residual: " << sqrt(rsnew);
-
-    if (sqrt(rsnew) < tol) {
-      rsold = rsnew;
-      ++i;
-      break;
-    }
-
-    double beta = rsnew / rsold;
-    p = z + beta * p;
-    rsold = rsnew;
-
-    rsold_file << i + 1 << "," << rsold << "\n";
+auto conjugateGradient(const Eigen::SparseMatrix<double>& matrix,
+                       const Eigen::VectorXd& rhs,
+                       const Eigen::VectorXd& initial,
+                       double relative_tolerance,
+                       double absolute_tolerance,
+                       int max_iter,
+                       double lambda) -> CGResult {
+  CGResult result{initial, {}};
+  if (matrix.rows() == 0 || matrix.rows() != matrix.cols() || rhs.size() != matrix.rows() || initial.size() != rhs.size()
+      || max_iter <= 0 || relative_tolerance < 0.0 || absolute_tolerance < 0.0 || !rhs.array().isFinite().all()
+      || !initial.array().isFinite().all()) {
+    result.report.status = IRSolveStatus::kInvalidInput;
+    result.report.reason = "CG received invalid dimensions, values, tolerance, or iteration budget";
+    return result;
   }
 
-  LOG_INFO << "Last 20 elements of x:";
-  int size = x.size();
-  int start_index = std::max(0, size - 20);
-  for (int index = start_index; index < size; ++index) {
-    LOG_INFO << "x[" << index << "] = " << min_x[index];
+  Eigen::VectorXd inverse_diagonal(matrix.rows());
+  for (Eigen::Index index = 0; index < matrix.rows(); ++index) {
+    const double diagonal = matrix.coeff(index, index) + lambda;
+    if (!std::isfinite(diagonal) || diagonal <= 0.0) {
+      result.report.status = IRSolveStatus::kInvalidInput;
+      result.report.reason = "CG requires a finite positive matrix diagonal";
+      return result;
+    }
+    inverse_diagonal(index) = 1.0 / diagonal;
   }
 
-  LOG_INFO << "CPU CG toal iteration num: " << i
-           << ", minum residual iter: " << min_residual_iter + 1;
-  LOG_INFO << "Final residual Norm: " << sqrt(rsold)
-           << ", minum residual Norm: " << sqrt(min_rsnew);
+  Eigen::SparseMatrix<double> transpose = matrix.transpose();
+  const Eigen::SparseMatrix<double> asymmetry = matrix - transpose;
+  const double matrix_norm = matrix.norm();
+  if (!std::isfinite(matrix_norm) || matrix_norm == 0.0
+      || asymmetry.norm() / matrix_norm > 1e-10) {
+    result.report.status = IRSolveStatus::kInvalidInput;
+    result.report.reason = "CG requires a finite symmetric conductance matrix";
+    return result;
+  }
 
-  // Close the file after the loop
-  rsold_file.close();
+  auto apply_matrix = [&matrix, lambda](const Eigen::VectorXd& value) {
+    return matrix * value + lambda * value;
+  };
+  const double rhs_norm = std::max(rhs.norm(), std::numeric_limits<double>::epsilon());
+  Eigen::VectorXd residual = rhs - apply_matrix(result.solution);
 
-  return min_x;
+  const auto update_residual_report = [&result, rhs_norm](const Eigen::VectorXd& value) {
+    result.report.absolute_residual = value.norm();
+    result.report.relative_residual = result.report.absolute_residual / rhs_norm;
+  };
+  const auto converged = [&result, relative_tolerance, absolute_tolerance] {
+    return result.report.absolute_residual <= absolute_tolerance && result.report.relative_residual <= relative_tolerance;
+  };
+
+  update_residual_report(residual);
+  if (converged()) {
+    result.report.status = IRSolveStatus::kConverged;
+    return result;
+  }
+
+  Eigen::VectorXd preconditioned = inverse_diagonal.cwiseProduct(residual);
+  Eigen::VectorXd direction = preconditioned;
+  double residual_dot_preconditioned = residual.dot(preconditioned);
+  if (!std::isfinite(residual_dot_preconditioned) || residual_dot_preconditioned <= 0.0) {
+    result.report.status = IRSolveStatus::kNumericalFailure;
+    result.report.reason = "CG initial preconditioned residual is not positive";
+    return result;
+  }
+
+  for (int iteration = 1; iteration <= max_iter; ++iteration) {
+    const Eigen::VectorXd matrix_direction = apply_matrix(direction);
+    const double direction_curvature = direction.dot(matrix_direction);
+    if (!std::isfinite(direction_curvature) || direction_curvature <= 0.0) {
+      result.report.status = IRSolveStatus::kNumericalFailure;
+      result.report.iterations = iteration - 1;
+      result.report.reason = "CG encountered non-positive or non-finite pAp";
+      return result;
+    }
+
+    const double alpha = residual_dot_preconditioned / direction_curvature;
+    if (!std::isfinite(alpha)) {
+      result.report.status = IRSolveStatus::kNumericalFailure;
+      result.report.iterations = iteration - 1;
+      result.report.reason = "CG step length is non-finite";
+      return result;
+    }
+    result.solution += alpha * direction;
+    if (iteration % 50 == 0) {
+      residual = rhs - apply_matrix(result.solution);
+    } else {
+      residual -= alpha * matrix_direction;
+    }
+    result.report.iterations = iteration;
+    update_residual_report(residual);
+    if (!result.solution.array().isFinite().all() || !std::isfinite(result.report.absolute_residual)) {
+      result.report.status = IRSolveStatus::kNumericalFailure;
+      result.report.reason = "CG produced NaN or Inf";
+      return result;
+    }
+    if (converged()) {
+      result.report.status = IRSolveStatus::kConverged;
+      return result;
+    }
+
+    preconditioned = inverse_diagonal.cwiseProduct(residual);
+    const double next_residual_dot_preconditioned = residual.dot(preconditioned);
+    if (!std::isfinite(next_residual_dot_preconditioned) || next_residual_dot_preconditioned <= 0.0) {
+      result.report.status = IRSolveStatus::kNumericalFailure;
+      result.report.reason = "CG preconditioned residual lost positive definiteness";
+      return result;
+    }
+    const double beta = next_residual_dot_preconditioned / residual_dot_preconditioned;
+    direction = preconditioned + beta * direction;
+    residual_dot_preconditioned = next_residual_dot_preconditioned;
+  }
+
+  result.report.status = IRSolveStatus::kMaxIterations;
+  result.report.reason = "CG exhausted the iteration budget before both residual gates passed";
+  return result;
 }
 
 /**
@@ -430,13 +473,11 @@ void PrintTopTenVectorElements(Eigen::VectorXd& vec) {
 std::vector<double> IRCGSolver::operator()(
     Eigen::Map<Eigen::SparseMatrix<double>>& G_matrix,
     Eigen::VectorXd& J_vector) {
+  _report = {};
   // for debug
   // PrintVector(J_vector, "/home/taosimin/iEDA24/iEDA/bin/current.txt");
   // PrintMatrix(G_matrix, 0);
   // PrintCSCMatrix(G_matrix);
-
-  double scale = 1.0;
-  J_vector = J_vector * scale;  // convert to mA
 
 #if !CUDA_IR_SOLVER
   Eigen::SparseMatrix<double> A = G_matrix;
@@ -451,34 +492,15 @@ std::vector<double> IRCGSolver::operator()(
 
   // cg.solve(J_vector);
 
-  Eigen::VectorXd X0 =
-      Eigen::VectorXd::Constant(J_vector.size(), _nominal_voltage * scale);
-
-  // Construct the diagonal preconditioner matrix
-  Eigen::SparseMatrix<double> preconditioner(A.rows(), A.cols());
-  for (int i = 0; i < A.rows(); ++i) {
-    double diag = A.coeff(i, i);
-    if (diag != 0) {
-      preconditioner.insert(i, i) = 1.0 / 1.0;
-      // LOG_INFO << "Diagonal element at index " << i << " : " << diag;
-    } else {
-      preconditioner.insert(i, i) = 0.0;  // Handle zero diagonal elements
-    }
+  Eigen::VectorXd X0 = Eigen::VectorXd::Constant(J_vector.size(), _nominal_voltage);
+  auto cg_result = conjugateGradient(A, J_vector, X0, _relative_tolerance, _absolute_tolerance, _max_iteration, _lambda);
+  Eigen::VectorXd v_vector = std::move(cg_result.solution);
+  _report = std::move(cg_result.report);
+  if (!_report.converged()) {
+    LOG_ERROR << "IR CG solver failed: " << _report.reason << ", iterations=" << _report.iterations
+              << ", abs_residual=" << _report.absolute_residual << ", rel_residual=" << _report.relative_residual;
+    return {};
   }
-  LOG_INFO << "Preconditioner matrix constructed.";
-
-  auto B = preconditioner * A;           // Apply the preconditioner
-  J_vector = preconditioner * J_vector;  // Apply the preconditioner to J_vector
-
-  // for debug, calculate the condition number of matrix A
-  // double condition_number = calculateConditionNumber(B);
-  // LOG_INFO << "Condition number of matrix A: " << condition_number;
-
-  auto max_iter = std::max((int)X0.size(), _max_iteration);
-  Eigen::VectorXd v_vector = conjugateGradient(B, J_vector, preconditioner, X0,
-                                               _tolerance, max_iter, _lambda);
-
-  v_vector = v_vector / scale;
 
   // PrintVector(v_vector, "/home/taosimin/iEDA24/iEDA/bin/voltage.txt");
 
@@ -489,8 +511,7 @@ std::vector<double> IRCGSolver::operator()(
   Eigen::VectorXd X0 =
       Eigen::VectorXd::Constant(J_vector.size(), _nominal_voltage);
 
-  auto max_iter = std::max((int)X0.size(), _max_iteration);
-  auto X = ir_cg_solver(A, J_vector, X0, _tolerance, max_iter, _lambda);
+  auto X = ir_cg_solver(A, J_vector, X0, _relative_tolerance, _max_iteration, _lambda);
   Eigen::VectorXd v_vector(X.size());
   for (decltype(X.size()) i = 0; i < X.size(); ++i) {
     v_vector(i) = X[i];
@@ -500,7 +521,21 @@ std::vector<double> IRCGSolver::operator()(
 #endif
 
   Eigen::VectorXd residual = G_matrix * v_vector - J_vector;
-  LOG_INFO << "residual norm: " << residual.norm() << std::endl;
+  _report.absolute_residual = residual.norm();
+  _report.relative_residual = _report.absolute_residual / std::max(J_vector.norm(), std::numeric_limits<double>::epsilon());
+#if CUDA_IR_SOLVER
+  _report.status = std::isfinite(_report.absolute_residual) && _report.absolute_residual <= _absolute_tolerance
+                           && _report.relative_residual <= _relative_tolerance
+                       ? IRSolveStatus::kConverged
+                       : IRSolveStatus::kNumericalFailure;
+  if (!_report.converged()) {
+    _report.reason = "GPU IR solve did not satisfy residual gates";
+    LOG_ERROR << _report.reason;
+    return {};
+  }
+#endif
+  LOG_INFO << "IR residual: abs=" << _report.absolute_residual << ", rel=" << _report.relative_residual
+           << ", iterations=" << _report.iterations;
 
   auto ir_drops = getIRDrop(v_vector);
 

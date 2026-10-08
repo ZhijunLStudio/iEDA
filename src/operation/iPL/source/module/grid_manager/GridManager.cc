@@ -22,27 +22,46 @@
 
 namespace ipl {
 
-int64_t Grid::obtainAvailableArea()
+int64_t Grid::obtainAvailableArea() const
 {
-  return static_cast<int64_t>(this->grid_area * this->available_ratio) - this->occupied_area - this->fixed_area;
+  return static_cast<int64_t>(this->grid_area * this->available_ratio * this->density_target) - this->occupied_area
+         - this->fixed_area - this->local_fixed_area;
 }
 
-int64_t Grid::obtainGridOverflowArea()
+int64_t Grid::obtainGridOverflowArea() const
 {
-  return std::max(int64_t(0), static_cast<int64_t>(this->occupied_area + this->fixed_area - (this->available_ratio * this->grid_area)));
+  return std::max(int64_t(0), static_cast<int64_t>(this->occupied_area + this->fixed_area + this->local_fixed_area
+                                                  - (this->available_ratio * this->density_target * this->grid_area)));
 }
 
-float Grid::obtainGridDensity()
+float Grid::obtainGridDensity() const
 {
-  return static_cast<float>(this->occupied_area + this->fixed_area) / this->grid_area;
+  // The caller normalizes by available_ratio; density_target is the region
+  // density screen factor (1.0 = global, unchanged default path). Locally fixed
+  // context instances are part of the density charge, exactly like fixed macros.
+  return static_cast<float>(this->occupied_area + this->fixed_area + this->local_fixed_area)
+         / (this->grid_area * this->density_target);
 }
 
 void GridManager::obtainOverlapGridList(std::vector<Grid*>& grid_list, Rectangle<int32_t>& rect)
 {
   LOG_ERROR_IF(!grid_list.empty()) << "Pass overlap_grid_list is not Empty!";
 
+  if (rect.get_ll_x() >= rect.get_ur_x() || rect.get_ll_y() >= rect.get_ur_y()) {
+    grid_list.clear();
+    return;
+  }
+
   std::pair<int, int> y_range = _utility.obtainMinMaxIdx(_shape.get_ll_y(), _grid_size_y, rect.get_ll_y(), rect.get_ur_y());
   std::pair<int, int> x_range = _utility.obtainMinMaxIdx(_shape.get_ll_x(), _grid_size_x, rect.get_ll_x(), rect.get_ur_x());
+
+  _utility.correctPairRange(y_range, 0, _grid_cnt_y);
+  _utility.correctPairRange(x_range, 0, _grid_cnt_x);
+
+  if (y_range.first >= y_range.second || x_range.first >= x_range.second) {
+    grid_list.clear();
+    return;
+  }
 
   int32_t y_cnt = y_range.second - y_range.first;
   int32_t x_cnt = x_range.second - x_range.first;
@@ -117,6 +136,7 @@ void GridManager::clearAllOccupiedArea()
   for (int32_t i = 0; i < _grid_cnt_y; i++) {
     for (int32_t j = 0; j < _grid_cnt_x; j++) {
       _grid_2d_list[i][j].occupied_area = 0;
+      _grid_2d_list[i][j].local_fixed_area = 0;
     }
   }
 }
@@ -151,6 +171,49 @@ void GridManager::initRouteCap(int32_t h_cap, int32_t v_cap)
       _grid_2d_list[i][j].v_cap = v_cap;
     }
   }  
+}
+
+void GridManager::evalRouteUtilByArea(int32_t dbu_unit)
+{
+  // Evaluator-aligned utilization: demand density per bin area, union max.
+  // This matches run_congestion_eval's rudy_utilization_max (union map).
+  // The evaluator computes in microns; multiply the dbu-space demand by the
+  // database unit so the values land on the same scale (otherwise the
+  // >1.0 overflow thresholds never trigger).
+  const float unit_scale = static_cast<float>(dbu_unit > 0 ? dbu_unit : 1000);
+  _h_util_max = 0.0f;
+  _v_util_max = 0.0f;
+  _h_util_sum = 0.0f;
+  _v_util_sum = 0.0f;
+  _union_util_max = 0.0f;
+#pragma omp parallel for num_threads(_thread_num)
+  for (int32_t i = 0; i < _grid_cnt_y; i++) {
+    for (int32_t j = 0; j < _grid_cnt_x; j++) {
+      const auto& grid = _grid_2d_list[i][j];
+      int64_t bin_area = (grid.shape.get_ur_x() - grid.shape.get_ll_x())
+                         * (grid.shape.get_ur_y() - grid.shape.get_ll_y());
+      if (bin_area <= 0) {
+        continue;
+      }
+      _grid_2d_list[i][j].h_util = grid.h_cong * unit_scale / static_cast<float>(bin_area);
+      _grid_2d_list[i][j].v_util = grid.v_cong * unit_scale / static_cast<float>(bin_area);
+      float union_util = _grid_2d_list[i][j].h_util + _grid_2d_list[i][j].v_util;
+      #pragma omp critical
+      {
+          if (_grid_2d_list[i][j].h_util > _h_util_max) {
+              _h_util_max = _grid_2d_list[i][j].h_util;
+          }
+          if (_grid_2d_list[i][j].v_util > _v_util_max) {
+              _v_util_max = _grid_2d_list[i][j].v_util;
+          }
+          if (union_util > _union_util_max) {
+              _union_util_max = union_util;
+          }
+          _h_util_sum += _grid_2d_list[i][j].h_util;
+          _v_util_sum += _grid_2d_list[i][j].v_util;
+      }
+    }
+  }
 }
 
 void GridManager::evalRouteUtil()
@@ -411,7 +474,6 @@ int64_t GridManager::obtainOverlapArea(Grid* grid, const Rectangle<int32_t>& rec
   int64_t overlap_rect_uy = std::min(grid_shape.get_ur_y(), rect.get_ur_y());
 
   if (overlap_rect_lx >= overlap_rect_ux || overlap_rect_ly >= overlap_rect_uy) {
-    LOG_WARNING << "Overlap of grid and input rect produce wrong rectangle!";
     return 0;
   } else {
     return (overlap_rect_ux - overlap_rect_lx) * (overlap_rect_uy - overlap_rect_ly);
@@ -428,12 +490,9 @@ Rectangle<int32_t> GridManager::obtainOverlapRect(Grid* grid, const Rectangle<in
   int32_t overlap_rect_uy = std::min(grid_shape.get_ur_y(), rect.get_ur_y());
 
   if (overlap_rect_lx >= overlap_rect_ux || overlap_rect_ly >= overlap_rect_uy) {
-    int32_t fake_rect_lx = (overlap_rect_lx + overlap_rect_ux) / 2;
-    int32_t fake_rect_ly = (overlap_rect_ly + overlap_rect_uy) / 2;
-    Rectangle rect(fake_rect_lx, fake_rect_ly, fake_rect_lx, fake_rect_ly);
-    return rect;
+    return Rectangle<int32_t>(overlap_rect_lx, overlap_rect_ly, overlap_rect_lx, overlap_rect_ly);
   } else {
-    Rectangle rect(overlap_rect_lx,overlap_rect_ly,overlap_rect_ux,overlap_rect_uy);
+    Rectangle<int32_t> rect(overlap_rect_lx, overlap_rect_ly, overlap_rect_ux, overlap_rect_uy);
     return rect;
   }
 }

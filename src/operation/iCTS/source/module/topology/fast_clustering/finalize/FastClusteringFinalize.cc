@@ -26,6 +26,8 @@
 #include <algorithm>
 #include <compare>
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -130,6 +132,22 @@ auto AppendFinalCluster(const std::vector<Pin*>& cluster, const ClusterConfig& c
     }
 
     if (current_cluster.size() <= 1U) {
+      const char* best_effort = std::getenv("IEDA_CTS_BEST_EFFORT");
+      if (best_effort == nullptr || best_effort[0] == '\0') {
+        best_effort = std::getenv("IEDA_RT_BEST_EFFORT");
+      }
+      const bool allow_illegal = best_effort != nullptr
+                                 && (std::strcmp(best_effort, "1") == 0 || std::strcmp(best_effort, "true") == 0
+                                     || std::strcmp(best_effort, "TRUE") == 0);
+      if (allow_illegal) {
+        LOG_WARNING << "Fast clustering accepting illegal singleton under BEST_EFFORT: violation="
+                    << static_cast<int>(evaluation.violation)
+                    << ", pin=" << (current_cluster.front() == nullptr ? std::string("<null>") : current_cluster.front()->get_name());
+        result.clusters.push_back(current_cluster);
+        result.centers.push_back(CalcCenter(current_cluster));
+        result.electrical_summaries.push_back(ToElectricalSummary(evaluation));
+        continue;
+      }
       LOG_WARNING << "Fast clustering could not legalize singleton cluster: violation=" << static_cast<int>(evaluation.violation)
                   << ", pin=" << (current_cluster.front() == nullptr ? std::string("<null>") : current_cluster.front()->get_name());
       return false;

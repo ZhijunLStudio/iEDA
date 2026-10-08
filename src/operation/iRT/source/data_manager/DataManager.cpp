@@ -1257,7 +1257,8 @@ void DataManager::makeObstacleList()
   std::map<int32_t, std::vector<PlanarRect>> routing_rect_list_map;
   for (Obstacle& routing_obstacle : routing_obstacle_list) {
     if (!RTUTIL.hasRegularRect(routing_obstacle.get_real_rect(), die.get_real_rect())) {
-      RTLOG.error(Loc::current(), "This shape is outside the die!");
+      RTLOG.warn(Loc::current(), "Skip obstacle shape outside the die!");
+      continue;
     }
     PlanarRect regular_rect = RTUTIL.getRegularRect(routing_obstacle.get_real_rect(), die.get_real_rect());
     routing_rect_list_map[routing_obstacle.get_layer_idx()].push_back(regular_rect);
@@ -1272,13 +1273,19 @@ void DataManager::makeObstacleList()
       routing_obstacle_list.push_back(routing_obstacle);
     }
   }
-#pragma omp parallel for
-  for (Obstacle& cut_obstacle : cut_obstacle_list) {
-    if (!RTUTIL.hasRegularRect(cut_obstacle.get_real_rect(), die.get_real_rect())) {
-      RTLOG.error(Loc::current(), "This shape is outside the die!");
+  {
+    std::vector<Obstacle> cut_obstacle_list_filtered;
+    cut_obstacle_list_filtered.reserve(cut_obstacle_list.size());
+    for (Obstacle& cut_obstacle : cut_obstacle_list) {
+      if (!RTUTIL.hasRegularRect(cut_obstacle.get_real_rect(), die.get_real_rect())) {
+        RTLOG.warn(Loc::current(), "Skip cut obstacle shape outside the die!");
+        continue;
+      }
+      cut_obstacle.set_real_rect(RTUTIL.getRegularRect(cut_obstacle.get_real_rect(), die.get_real_rect()));
+      cut_obstacle.set_grid_rect(RTUTIL.getClosedGCellGridRect(cut_obstacle.get_real_rect(), gcell_axis));
+      cut_obstacle_list_filtered.push_back(cut_obstacle);
     }
-    cut_obstacle.set_real_rect(RTUTIL.getRegularRect(cut_obstacle.get_real_rect(), die.get_real_rect()));
-    cut_obstacle.set_grid_rect(RTUTIL.getClosedGCellGridRect(cut_obstacle.get_real_rect(), gcell_axis));
+    cut_obstacle_list = std::move(cut_obstacle_list_filtered);
   }
   std::set<int32_t> ignore_cut_layer_idx_set;
   for (auto& [cut_layer_idx, routing_layer_idx_list] : cut_to_adjacent_routing_map) {
@@ -1302,24 +1309,22 @@ void DataManager::checkObstacleList()
   std::vector<Obstacle>& routing_obstacle_list = _database.get_routing_obstacle_list();
   std::vector<Obstacle>& cut_obstacle_list = _database.get_cut_obstacle_list();
 
-#pragma omp parallel for
   for (Obstacle& obstacle : routing_obstacle_list) {
     if (obstacle.get_real_ll_x() < die.get_real_ll_x() || obstacle.get_real_ll_y() < die.get_real_ll_y() || die.get_real_ur_x() < obstacle.get_real_ur_x()
         || die.get_real_ur_y() < obstacle.get_real_ur_y()) {
       // log
-      RTLOG.error(Loc::current(), "The obstacle '(", obstacle.get_real_ll_x(), " , ", obstacle.get_real_ll_y(), ") - (", obstacle.get_real_ur_x(), " , ",
-                  obstacle.get_real_ur_y(), ") ", routing_layer_list[obstacle.get_layer_idx()].get_layer_name(), "' is wrong! Die '(", die.get_real_ll_x(),
-                  " , ", die.get_real_ll_y(), ") - (", die.get_real_ur_x(), " , ", die.get_real_ur_y(), ")'");
+      RTLOG.warn(Loc::current(), "The obstacle '(", obstacle.get_real_ll_x(), " , ", obstacle.get_real_ll_y(), ") - (", obstacle.get_real_ur_x(), " , ",
+                 obstacle.get_real_ur_y(), ") ", routing_layer_list[obstacle.get_layer_idx()].get_layer_name(), "' is wrong! Die '(", die.get_real_ll_x(),
+                 " , ", die.get_real_ll_y(), ") - (", die.get_real_ur_x(), " , ", die.get_real_ur_y(), ")'");
     }
   }
-#pragma omp parallel for
   for (Obstacle& obstacle : cut_obstacle_list) {
     if (obstacle.get_real_ll_x() < die.get_real_ll_x() || obstacle.get_real_ll_y() < die.get_real_ll_y() || die.get_real_ur_x() < obstacle.get_real_ur_x()
         || die.get_real_ur_y() < obstacle.get_real_ur_y()) {
       // log
-      RTLOG.error(Loc::current(), "The obstacle '(", obstacle.get_real_ll_x(), " , ", obstacle.get_real_ll_y(), ") - (", obstacle.get_real_ur_x(), " , ",
-                  obstacle.get_real_ur_y(), ") ", routing_layer_list[obstacle.get_layer_idx()].get_layer_name(), "' is wrong! Die '(", die.get_real_ll_x(),
-                  " , ", die.get_real_ll_y(), ") - (", die.get_real_ur_x(), " , ", die.get_real_ur_y(), ")'");
+      RTLOG.warn(Loc::current(), "The obstacle '(", obstacle.get_real_ll_x(), " , ", obstacle.get_real_ll_y(), ") - (", obstacle.get_real_ur_x(), " , ",
+                 obstacle.get_real_ur_y(), ") ", routing_layer_list[obstacle.get_layer_idx()].get_layer_name(), "' is wrong! Die '(", die.get_real_ll_x(),
+                 " , ", die.get_real_ll_y(), ") - (", die.get_real_ur_x(), " , ", die.get_real_ur_y(), ")'");
     }
   }
 }
@@ -1371,14 +1376,16 @@ void DataManager::makePinList(Net& net)
     pin.set_pin_idx(static_cast<int32_t>(pin_idx));
     for (EXTLayerRect& routing_shape : pin.get_routing_shape_list()) {
       if (!RTUTIL.hasRegularRect(routing_shape.get_real_rect(), die.get_real_rect())) {
-        RTLOG.error(Loc::current(), "This shape is outside the die!");
+        RTLOG.warn(Loc::current(), "Skip pin routing shape outside the die!");
+        continue;
       }
       routing_shape.set_real_rect(RTUTIL.getRegularRect(routing_shape.get_real_rect(), die.get_real_rect()));
       routing_shape.set_grid_rect(RTUTIL.getClosedGCellGridRect(routing_shape.get_real_rect(), gcell_axis));
     }
     for (EXTLayerRect& cut_shape : pin.get_cut_shape_list()) {
       if (!RTUTIL.hasRegularRect(cut_shape.get_real_rect(), die.get_real_rect())) {
-        RTLOG.error(Loc::current(), "This shape is outside the die!");
+        RTLOG.warn(Loc::current(), "Skip pin cut shape outside the die!");
+        continue;
       }
       cut_shape.set_real_rect(RTUTIL.getRegularRect(cut_shape.get_real_rect(), die.get_real_rect()));
       cut_shape.set_grid_rect(RTUTIL.getClosedGCellGridRect(cut_shape.get_real_rect(), gcell_axis));
@@ -1396,7 +1403,7 @@ void DataManager::checkPinList(Net& net)
     for (EXTLayerRect& routing_shape : pin.get_routing_shape_list()) {
       if (routing_shape.get_real_ll_x() < die.get_real_ll_x() || routing_shape.get_real_ll_y() < die.get_real_ll_y()
           || die.get_real_ur_x() < routing_shape.get_real_ur_x() || die.get_real_ur_y() < routing_shape.get_real_ur_y()) {
-        RTLOG.error(Loc::current(), "The pin_shape '(", routing_shape.get_real_ll_x(), " , ", routing_shape.get_real_ll_y(), ") - (",
+        RTLOG.warn(Loc::current(), "The pin_shape '(", routing_shape.get_real_ll_x(), " , ", routing_shape.get_real_ll_y(), ") - (",
                     routing_shape.get_real_ur_x(), " , ", routing_shape.get_real_ur_y(), ") ",
                     routing_layer_list[routing_shape.get_layer_idx()].get_layer_name(), "' is wrong! Die '(", die.get_real_ll_x(), " , ", die.get_real_ll_y(),
                     ") - (", die.get_real_ur_x(), " , ", die.get_real_ur_y(), ")'");
@@ -1405,7 +1412,7 @@ void DataManager::checkPinList(Net& net)
     for (EXTLayerRect& cut_shape : pin.get_cut_shape_list()) {
       if (cut_shape.get_real_ll_x() < die.get_real_ll_x() || cut_shape.get_real_ll_y() < die.get_real_ll_y() || die.get_real_ur_x() < cut_shape.get_real_ur_x()
           || die.get_real_ur_y() < cut_shape.get_real_ur_y()) {
-        RTLOG.error(Loc::current(), "The pin_shape '(", cut_shape.get_real_ll_x(), " , ", cut_shape.get_real_ll_y(), ") - (", cut_shape.get_real_ur_x(), " , ",
+        RTLOG.warn(Loc::current(), "The pin_shape '(", cut_shape.get_real_ll_x(), " , ", cut_shape.get_real_ll_y(), ") - (", cut_shape.get_real_ur_x(), " , ",
                     cut_shape.get_real_ur_y(), ") ", cut_layer_list[cut_shape.get_layer_idx()].get_layer_name(), "' is wrong! Die '(", die.get_real_ll_x(),
                     " , ", die.get_real_ll_y(), ") - (", die.get_real_ur_x(), " , ", die.get_real_ur_y(), ")'");
       }
@@ -1594,6 +1601,28 @@ void DataManager::printConfig()
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_notification);
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_timing");
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_timing);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "dr_plateau_window");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.dr_plateau_window);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "dr_plateau_min_improvement");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.dr_plateau_min_improvement);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "dr_plateau_hotspot_change");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.dr_plateau_hotspot_change);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "fail_on_residual_drc");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.fail_on_residual_drc);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_plateau_escalate");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_plateau_escalate);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_rule_aware_cost");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_rule_aware_cost);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_enhanced_minarea_repair");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_enhanced_minarea_repair);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "rule_aware_max_history_scale");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.rule_aware_max_history_scale);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_component_escalate");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_component_escalate);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "enable_prl_short_repair");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.enable_prl_short_repair);
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "component_escalate_halo_pitch");
+  RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(2), _config.component_escalate_halo_pitch);
   // **********        RT         ********** //
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(0), "RT_CONFIG_BUILD");
   RTLOG.info(Loc::current(), RTUTIL.getSpaceByTabNum(1), "log_file_path");

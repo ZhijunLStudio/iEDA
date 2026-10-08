@@ -15,7 +15,6 @@
 // See the Mulan PSL v2 for more details.
 // ***************************************************************************************
 #pragma once
-#include <fstream>
 #include <string>
 #include <vector>
 
@@ -45,6 +44,9 @@ class Hmetis
 
   void partition(int vertex_num, const std::vector<std::vector<int>>& hyper_edge_list); // Index of each hyperedge node
   std::vector<int> get_result() { return _partition_result; }
+  bool last_run_succeeded() const { return _last_run_succeeded; }
+  const std::string& last_error() const { return _last_error; }
+  const std::vector<std::string>& last_command_arguments() const { return _last_command_arguments; }
 
  private:
   std::string _hmetis_path = "../src/third_party/hmetis/hmetis2.0pre1";
@@ -70,6 +72,9 @@ class Hmetis
 
   // result
   std::vector<int> _partition_result;
+  bool _last_run_succeeded = false;
+  std::string _last_error;
+  std::vector<std::string> _last_command_arguments;
 };
 
 }  // namespace ipl

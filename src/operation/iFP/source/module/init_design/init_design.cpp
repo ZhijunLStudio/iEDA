@@ -16,6 +16,7 @@
 // ***************************************************************************************
 #include "init_design.h"
 
+#include "../../utility/FloorplanGeometry.hh"
 #include "IdbDesign.h"
 #include "idm.h"
 
@@ -31,13 +32,34 @@ int32_t InitDesign::transUnitDB(double value)
 
 bool InitDesign::initDie(double die_lx, double die_ly, double die_ux, double die_uy)
 {
-  auto idb_design = dmInst->get_idb_design();
-  auto idb_layout = idb_design->get_layout();
+  if (!isValidCoordinateBox(die_lx, die_ly, die_ux, die_uy)) {
+    return false;
+  }
 
+  auto idb_design = dmInst->get_idb_design();
+  if (idb_design == nullptr) {
+    return false;
+  }
+  auto idb_layout = idb_design->get_layout();
+  if (idb_layout == nullptr) {
+    return false;
+  }
   auto idb_die = idb_layout->get_die();
+  if (idb_die == nullptr) {
+    return false;
+  }
+
+  const FloorplanBox die_box{.low_x = transUnitDB(die_lx),
+                             .low_y = transUnitDB(die_ly),
+                             .high_x = transUnitDB(die_ux),
+                             .high_y = transUnitDB(die_uy)};
+  if (!isValidFloorplanBox(die_box)) {
+    return false;
+  }
+
   idb_die->reset();
-  idb_die->add_point(transUnitDB(die_lx), transUnitDB(die_ly));
-  idb_die->add_point(transUnitDB(die_ux), transUnitDB(die_uy));
+  idb_die->add_point(die_box.low_x, die_box.low_y);
+  idb_die->add_point(die_box.high_x, die_box.high_y);
 
   return true;
 }
@@ -45,29 +67,56 @@ bool InitDesign::initDie(double die_lx, double die_ly, double die_ux, double die
 bool InitDesign::initCore(double core_lx, double core_ly, double core_ux, double core_uy, std::string core_site_name,
                           std::string iocell_site_name, std::string corner_site_name)
 {
-  auto idb_design = dmInst->get_idb_design();
-  auto idb_layout = idb_design->get_layout();
+  if (!isValidCoordinateBox(core_lx, core_ly, core_ux, core_uy)) {
+    return false;
+  }
 
+  auto idb_design = dmInst->get_idb_design();
+  if (idb_design == nullptr) {
+    return false;
+  }
+  auto idb_layout = idb_design->get_layout();
+  if (idb_layout == nullptr) {
+    return false;
+  }
+  auto idb_sites = idb_layout->get_sites();
+  if (idb_sites == nullptr) {
+    return false;
+  }
   auto idb_die = idb_layout->get_die();
-  auto core_site = idb_layout->get_sites()->find_site(core_site_name);
-  auto io_site = idb_layout->get_sites()->find_site(iocell_site_name);
-  auto corner_site = idb_layout->get_sites()->find_site(corner_site_name);
-  if (nullptr == idb_layout || nullptr == idb_die || nullptr == core_site || nullptr == corner_site) {
+  auto core_site = idb_sites->find_site(core_site_name);
+  auto io_site = idb_sites->find_site(iocell_site_name);
+  auto corner_site = idb_sites->find_site(corner_site_name);
+  if (nullptr == idb_die || nullptr == core_site || nullptr == corner_site) {
     return false;
   }
 
   /// set site
-  idb_layout->get_sites()->set_core_site(core_site);
-  idb_layout->get_sites()->set_io_site(io_site);
-  idb_layout->get_sites()->set_corener_site(corner_site);
+  idb_sites->set_core_site(core_site);
+  idb_sites->set_io_site(io_site);
+  idb_sites->set_corener_site(corner_site);
 
   int site_dx = core_site->get_width();
   int site_dy = core_site->get_height();
+  if (site_dx <= 0 || site_dy <= 0) {
+    return false;
+  }
+
   // floor core lower left corner to multiple of core_site dx/dy.
   int core_lx_int = (transUnitDB(core_lx) / site_dx) * site_dx;
   int core_ly_int = (transUnitDB(core_ly) / site_dy) * site_dy;
   int core_ux_int = (transUnitDB(core_ux) / site_dx) * site_dx;
   int core_uy_int = (transUnitDB(core_uy) / site_dy) * site_dy;
+
+  const FloorplanBox die_box{.low_x = idb_die->get_llx(),
+                             .low_y = idb_die->get_lly(),
+                             .high_x = idb_die->get_urx(),
+                             .high_y = idb_die->get_ury()};
+  const FloorplanBox core_box{
+      .low_x = core_lx_int, .low_y = core_ly_int, .high_x = core_ux_int, .high_y = core_uy_int};
+  if (!containsBox(die_box, core_box)) {
+    return false;
+  }
 
   /// make enough space for io cell
   //   int32_t io_height = io_site != nullptr ? io_site->get_height() : 0;

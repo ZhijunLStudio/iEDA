@@ -24,11 +24,14 @@
  */
 #include "tcl_eval.h"
 
+#include <fstream>
 #include <iostream>
 
 #include "wirelength_io.h"
 #include "density_io.h"
+#include "congestion_api.h"
 #include "init_egr.h"
+#include "init_sta.hh"
 
 using namespace ieval;
 
@@ -75,9 +78,13 @@ CmdEvalTimingRun::CmdEvalTimingRun(const char* cmd_name) : TclCmd(cmd_name)
   auto* path_option = new TclStringOption(TCL_OUTPUT_PATH, 1, nullptr);
   auto* output_path_option = new TclStringOption("-eval_output_path", 1, nullptr);
   auto* route_type_option = new TclStringOption("-routing_type", 1, "HPWL");
+  auto* path_json_option = new TclStringOption("-path_json", 1, nullptr);
+  auto* max_path_option = new TclIntOption("-max_path", 1, 3);
   addOption(output_path_option);
   addOption(path_option);
   addOption(route_type_option);
+  addOption(path_json_option);
+  addOption(max_path_option);
 }
 
 unsigned CmdEvalTimingRun::check()
@@ -99,9 +106,13 @@ unsigned CmdEvalTimingRun::exec()
   TclOption* path_option = getOptionOrArg(TCL_OUTPUT_PATH);
   TclOption* output_path_option = getOptionOrArg("-eval_output_path");
   TclOption* route_type_option = getOptionOrArg("-routing_type");
+  TclOption* path_json_option = getOptionOrArg("-path_json");
+  TclOption* max_path_option = getOptionOrArg("-max_path");
   const auto path = path_option->getStringVal() != nullptr ? path_option->getStringVal() : "";
   const auto output_path = output_path_option->getStringVal() != nullptr ? output_path_option->getStringVal() : "";
   const auto route_type = route_type_option->getStringVal() != nullptr ? route_type_option->getStringVal() : "HPWL";
+  const std::string path_json = path_json_option->getStringVal() != nullptr ? path_json_option->getStringVal() : "";
+  const auto max_path = max_path_option->getIntVal();
   std::cout << "[Evaluate Timing] path = " << path << std::endl;
   std::cout << "[Evaluate Timing] output_path = " << output_path << std::endl;
   std::cout << "[Evaluate Timing] route_type = " << route_type << std::endl;
@@ -109,6 +120,14 @@ unsigned CmdEvalTimingRun::exec()
   EvalTiming::runTimingEval(route_type);
   EvalTiming::setOutputPath(output_path);
   EvalTiming::printTimingResult();
+  if (!path_json.empty()) {
+    std::ofstream path_file(path_json);
+    if (path_file.is_open()) {
+      path_file << ieval::InitSTA::getInst()->getTimingPathsJson(static_cast<unsigned>(max_path)) << std::endl;
+      path_file.close();
+      std::cout << "Timing path JSON saved to " << path_json << std::endl;
+    }
+  }
   std::cout << path << std::endl;
 
   return 1;
@@ -203,6 +222,119 @@ unsigned CmdEvalDensityRun::exec()
 
 
 namespace tcl {
+
+CmdEvalCongestionRun::CmdEvalCongestionRun(const char* cmd_name) : TclCmd(cmd_name)
+{
+  auto* bin_cnt_x = new TclIntOption("-bin_cnt_x", 1, 256);
+  auto* bin_cnt_y = new TclIntOption("-bin_cnt_y", 1, 256);
+  auto* output_path = new TclStringOption("-eval_output_path", 1, nullptr);
+  auto* model = new TclStringOption("-model", 1, "rudy");
+  addOption(bin_cnt_x);
+  addOption(bin_cnt_y);
+  addOption(output_path);
+  addOption(model);
+}
+
+unsigned CmdEvalCongestionRun::check()
+{
+  return 1;
+}
+
+unsigned CmdEvalCongestionRun::exec()
+{
+  if (!check()) {
+    return 0;
+  }
+  auto* bin_x = getOptionOrArg("-bin_cnt_x");
+  auto* bin_y = getOptionOrArg("-bin_cnt_y");
+  auto* path_opt = getOptionOrArg("-eval_output_path");
+  auto* model_opt = getOptionOrArg("-model");
+  const int32_t bin_cnt_x = bin_x ? bin_x->getIntVal() : 256;
+  const int32_t bin_cnt_y = bin_y ? bin_y->getIntVal() : 256;
+  const std::string output_path = path_opt && path_opt->getStringVal() ? path_opt->getStringVal() : "";
+  const std::string model = model_opt && model_opt->getStringVal() ? model_opt->getStringVal() : "rudy";
+
+  if (model == "egr") {
+    return execEgr(output_path);
+  }
+
+  ieval::CongestionValue value{0.0, 0.0};
+  std::string demand_map_path;
+  std::string util_map_path;
+  if (!output_path.empty()) {
+    demand_map_path = output_path + "/rudy_demand.csv";
+    util_map_path = output_path + "/rudy_util.csv";
+  }
+  if (model == "lutrudy") {
+    value = ieval::CongestionAPI::getInst()->lutRudyCongestion(bin_cnt_x, bin_cnt_y, demand_map_path, util_map_path);
+  } else {
+    value = ieval::CongestionAPI::getInst()->rudyCongestion(bin_cnt_x, bin_cnt_y, demand_map_path, util_map_path);
+  }
+
+  // calRUDY reports both demand density and utilization against the same
+  // track-count supply model the global placer uses for its route-util
+  // observation. Utilization > 1 means a bin is over its routing supply.
+  const std::string json = "{\"model\":\"" + model + "\",\"bin_cnt_x\":" + std::to_string(bin_cnt_x)
+                           + ",\"bin_cnt_y\":" + std::to_string(bin_cnt_y)
+                           + ",\"rudy_demand_max\":" + std::to_string(value.max_congestion)
+                           + ",\"rudy_demand_total\":" + std::to_string(value.total_congestion)
+                           + ",\"rudy_utilization_max\":" + std::to_string(value.max_utilization)
+                           + ",\"rudy_utilization_avg\":" + std::to_string(value.avg_utilization)
+                           + ",\"rudy_utilization_h_max\":" + std::to_string(value.max_h_utilization)
+                           + ",\"rudy_utilization_v_max\":" + std::to_string(value.max_v_utilization)
+                           + ",\"rudy_overflow_bin_count\":" + std::to_string(value.overflow_bin_count)
+                           + ",\"rudy_overflow_util_sum\":" + std::to_string(value.overflow_util_sum)
+                           + ",\"rudy_demand_map_path\":\"" + demand_map_path
+                           + "\",\"rudy_util_map_path\":\"" + util_map_path
+                           + "\",\"region\":[" + std::to_string(value.region_lx) + "," + std::to_string(value.region_ly)
+                           + "," + std::to_string(value.region_ux) + "," + std::to_string(value.region_uy) + "]"
+                           + ",\"save_path\":\"" + output_path + "\"}";
+  if (!output_path.empty()) {
+    const std::string result_file = output_path + "/congestion_result.json";
+    std::ofstream ofs(result_file);
+    if (ofs.is_open()) {
+      ofs << json << std::endl;
+      ofs.close();
+    }
+  }
+  std::cout << json << std::endl;
+  return 1;
+}
+
+unsigned CmdEvalCongestionRun::execEgr(const std::string& output_path)
+{
+  ieval::CongestionAPI* api = ieval::CongestionAPI::getInst();
+  // Run the early-global-router (trial route) and parse its overflow maps,
+  // then report the authoritative router congestion metrics instead of the
+  // RUDY demand-density estimate. This is the "布线器指标" (same-router
+  // evaluation) path used to compare iEDA vs Innovus placements on the same
+  // iRT trial router.
+  api->egrMap("place");
+  ieval::OverflowSummary s = api->egrOverflow("place");
+
+  const std::string json = "{\"model\":\"egr\","
+                           "\"egr_total_overflow_horizontal\":" + std::to_string(s.total_overflow_horizontal)
+                           + ",\"egr_total_overflow_vertical\":" + std::to_string(s.total_overflow_vertical)
+                           + ",\"egr_total_overflow_union\":" + std::to_string(s.total_overflow_union)
+                           + ",\"egr_max_overflow_horizontal\":" + std::to_string(s.max_overflow_horizontal)
+                           + ",\"egr_max_overflow_vertical\":" + std::to_string(s.max_overflow_vertical)
+                           + ",\"egr_max_overflow_union\":" + std::to_string(s.max_overflow_union)
+                           + ",\"egr_avg_overflow_horizontal\":" + std::to_string(s.weighted_average_overflow_horizontal)
+                           + ",\"egr_avg_overflow_vertical\":" + std::to_string(s.weighted_average_overflow_vertical)
+                           + ",\"egr_avg_overflow_union\":" + std::to_string(s.weighted_average_overflow_union)
+                           + ",\"egr_valid\":" + (s.isValid() ? "true" : "false")
+                           + ",\"save_path\":\"" + output_path + "\"}";
+  if (!output_path.empty()) {
+    const std::string result_file = output_path + "/congestion_result.json";
+    std::ofstream ofs(result_file);
+    if (ofs.is_open()) {
+      ofs << json << std::endl;
+      ofs.close();
+    }
+  }
+  std::cout << json << std::endl;
+  return 1;
+}
 
 CmdEvalEgrConfig::CmdEvalEgrConfig(const char* cmd_name) : TclCmd(cmd_name)
 {

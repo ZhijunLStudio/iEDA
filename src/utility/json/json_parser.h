@@ -30,14 +30,19 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <ctime>
+#include <exception>
 #include <fstream>
+#include <iostream>
 #include <map>
 #include <queue>
 #include <set>
 #include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "../string/Str.hh"
@@ -46,117 +51,173 @@
 
 namespace ieda {
 
-static nlohmann::json getJsonData(nlohmann::json value, std::vector<std::string> flag_list, nlohmann::json default_value = "")
+static nlohmann::json getJsonData(const nlohmann::json& value, const std::vector<std::string>& flag_list,
+                                  nlohmann::json default_value = "")
 {
   if (flag_list.empty()) {
     std::cout << "[json error] : The flag list is empty!" << std::endl;
+    return default_value;
   }
 
-  int flag_size = flag_list.size();
-  for (int i = 0; i < flag_size; i++) {
-    value = value[flag_list[i]];
-  }
-
-  if (!value.is_null()) {
-    return value;
-  }
-
-  std::string key;
-
-  for (int i = 0; i < flag_size; i++) {
-    key += flag_list[i];
-    if (i < flag_size - 1) {
-      key += ".";
+  const nlohmann::json* current_value = &value;
+  for (const auto& flag : flag_list) {
+    if (!current_value->is_object()) {
+      return default_value;
     }
+
+    const auto json_iter = current_value->find(flag);
+    if (json_iter == current_value->end() || json_iter->is_null()) {
+      return default_value;
+    }
+    current_value = &(*json_iter);
   }
-  //   std::cout << "[json error] : The configuration file key = " << key << " do not exist." << std::endl;
-  return default_value;
+
+  return *current_value;
 }
 
 template <typename T>
-static T& getFileStream(std::string file_path)
+static T getFileStream(const std::string& file_path)
 {
-  T* file = new T(file_path);
-  if (!file->is_open()) {
+  T file(file_path);
+  if (!file.is_open()) {
     std::cout << "[json error] : Failed to open file = " << file_path << std::endl;
   }
-  return *file;
+  return file;
 }
 
-static std::string get_gz_string(std::string file_path)
+static bool read_gz_string(const std::string& file_path, std::string& content)
 {
-  gzFile file = gzopen(file_path.c_str(), "rb");
-  if (!file) {
+  content.clear();
+
+  std::ifstream file(file_path, std::ios::binary);
+  if (!file.is_open()) {
     std::cout << "[json error] : Failed to open file = " << file_path << std::endl;
-    return "";
+    return false;
   }
 
-  unsigned int file_length = 0;
-  gzseek(file, 0, SEEK_END);
-  file_length = gztell(file);
-  gzseek(file, 0, SEEK_SET);
-
-  char* content = (char*) malloc(file_length);
-  if (!content) {
-    std::cout << "[json warning] : File empty." << file_path << std::endl;
-    gzclose(file);
-    return "";
+  z_stream stream{};
+  if (inflateInit2(&stream, 16 + MAX_WBITS) != Z_OK) {
+    std::cout << "[json error] : Failed to initialize gzip decompressor for file = " << file_path << std::endl;
+    return false;
   }
+  struct InflateEndGuard
+  {
+    z_stream& stream;
+    ~InflateEndGuard() { inflateEnd(&stream); }
+  } inflate_end_guard{stream};
 
-  int bytes_read = gzread(file, content, file_length);
-  if (bytes_read < 0) {
-    printf("Error reading from file\n");
-    free(content);
-    gzclose(file);
-    return std::string(content);
+  constexpr size_t k_buffer_size = 64 * 1024;
+  std::array<unsigned char, k_buffer_size> input_buffer{};
+  std::array<unsigned char, k_buffer_size> output_buffer{};
+
+  while (true) {
+    if (stream.avail_in == 0) {
+      file.read(reinterpret_cast<char*>(input_buffer.data()), static_cast<std::streamsize>(input_buffer.size()));
+      const std::streamsize bytes_read = file.gcount();
+      if (bytes_read <= 0) {
+        if (file.bad()) {
+          std::cout << "[json error] : Failed to read gzip file = " << file_path << std::endl;
+        } else {
+          std::cout << "[json error] : Truncated gzip file = " << file_path << std::endl;
+        }
+        content.clear();
+        return false;
+      }
+      stream.next_in = input_buffer.data();
+      stream.avail_in = static_cast<uInt>(bytes_read);
+    }
+
+    stream.next_out = output_buffer.data();
+    stream.avail_out = static_cast<uInt>(output_buffer.size());
+    const int inflate_status = inflate(&stream, Z_NO_FLUSH);
+    const size_t bytes_written = output_buffer.size() - stream.avail_out;
+    if (bytes_written > 0) {
+      if (content.size() > content.max_size() - bytes_written) {
+        std::cout << "[json error] : Gzip content is too large = " << file_path << std::endl;
+        content.clear();
+        return false;
+      }
+      try {
+        content.append(reinterpret_cast<const char*>(output_buffer.data()), bytes_written);
+      } catch (const std::exception& e) {
+        std::cout << "[json error] : Failed to store gzip content = " << file_path << ", reason = " << e.what() << std::endl;
+        content.clear();
+        return false;
+      }
+    }
+
+    if (inflate_status == Z_STREAM_END) {
+      if (content.empty()) {
+        std::cout << "[json error] : Empty gzip content = " << file_path << std::endl;
+        content.clear();
+        return false;
+      }
+      return true;
+    }
+    if (inflate_status != Z_OK) {
+      std::cout << "[json error] : Failed to read gzip file = " << file_path << ", zlib status = " << inflate_status << std::endl;
+      content.clear();
+      return false;
+    }
   }
-
-  gzclose(file);
-
-  return std::string(content);
 }
 
-static std::istringstream& getGzFileStream(std::string file_path)
+static std::string get_gz_string(const std::string& file_path)
 {
+  std::string content;
+  if (!read_gz_string(file_path, content)) {
+    return "";
+  }
+  return content;
+}
+
+static std::istringstream getGzFileStream(const std::string& file_path)
+{
+  std::istringstream data_stream;
   if (ieda::Str::contain(file_path.c_str(), ".gz")) {
-    std::cout << "[json error] : do not support gz file by now." << std::endl;
-    auto content = get_gz_string(file_path);
-    std::istringstream* dataStream = new std::istringstream(content);
-    return *dataStream;
-  } else {
-    std::istringstream* dataStream = new std::istringstream("");
-    return *dataStream;
+    std::string content;
+    if (!read_gz_string(file_path, content)) {
+      data_stream.setstate(std::ios::badbit);
+      return data_stream;
+    }
+    data_stream.str(std::move(content));
   }
+  return data_stream;
 }
 
-static std::ifstream& getInputFileStream(std::string file_path)
+static std::ifstream getInputFileStream(const std::string& file_path)
 {
-  //   if (ieda::Str::contain(file_path.c_str(), ".gz")) {
-  //     std::cout << "[json error] : do not support gz file by now." << std::endl;
-  //     auto content = get_gz_string(file_path);
-  //     std::istringstream dataStream(content);
-  //     std::ifstream* file = new std::ifstream(dataStream);
-  //     if (!file->is_open()) {
-  //       std::cout << "[json error] : Failed to open file = " << file_path << std::endl;
-  //     }
-  //     return *file;
-  //   } else {
   return getFileStream<std::ifstream>(file_path);
-  //   }
 }
 
-static void initJson(std::string file_path, nlohmann::json& json)
+static void initJson(const std::string& file_path, nlohmann::json& json)
 {
-  if (ieda::Str::contain(file_path.c_str(), ".gz")) {
-    auto& file_stream = getGzFileStream(file_path);
-    file_stream >> json;
-  } else {
-    auto& file_stream = getFileStream<std::ifstream>(file_path);
-    file_stream >> json;
+  json = nullptr;
+
+  try {
+    if (ieda::Str::contain(file_path.c_str(), ".gz")) {
+      auto file_stream = getGzFileStream(file_path);
+      if (!file_stream.good()) {
+        return;
+      }
+      file_stream >> json;
+    } else {
+      auto file_stream = getFileStream<std::ifstream>(file_path);
+      if (!file_stream.is_open()) {
+        return;
+      }
+      file_stream >> json;
+    }
+  } catch (const nlohmann::json::exception& e) {
+    std::cout << "[json error] : Failed to parse JSON file = " << file_path << ", reason = " << e.what() << std::endl;
+    json = nullptr;
+  } catch (const std::exception& e) {
+    std::cout << "[json error] : Failed to read JSON file = " << file_path << ", reason = " << e.what() << std::endl;
+    json = nullptr;
   }
 }
 
-static std::ofstream& getOutputFileStream(std::string file_path)
+static std::ofstream getOutputFileStream(const std::string& file_path)
 {
   return getFileStream<std::ofstream>(file_path);
 }

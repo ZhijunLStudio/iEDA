@@ -1,3 +1,5 @@
+find_package(Boost REQUIRED)
+
 add_library(solver_geometry_boost 
     geometry_boost.cpp
 )
@@ -11,4 +13,5 @@ target_include_directories(solver_geometry_boost
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${HOME_DATABASE}/interaction
+    ${Boost_INCLUDE_DIRS}
 )

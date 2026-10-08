@@ -17,6 +17,7 @@
 #include "ipl_io.h"
 
 #include "PLAPI.hh"
+#include "PlacementResult.hh"
 #include "builder.h"
 #include "flow_config.h"
 #include "idm.h"
@@ -62,14 +63,15 @@ bool PlacerIO::runPlacement(std::string config, bool enableJsonOutput)
   }
 
   ieda::Stats stats;
-  iPLAPIInst.runFlow();
+  const auto placement_result = iPLAPIInst.runFlowResult();
+  const bool placement_succeeded = ipl::placementTclResult(placement_result);
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
 
   // destroyPlacer();
 
-  return true;
+  return placement_succeeded;
 }
 
 bool PlacerIO::runAiPlacement(std::string config, std::string onnx_path, std::string normalization_path)
@@ -81,14 +83,15 @@ bool PlacerIO::runAiPlacement(std::string config, std::string onnx_path, std::st
   }
 
   ieda::Stats stats;
-  iPLAPIInst.runAiFlow(onnx_path, normalization_path);
+  const auto placement_result = iPLAPIInst.runAiFlowResult(onnx_path, normalization_path);
+  const bool placement_succeeded = ipl::placementTclResult(placement_result);
 
   flowConfigInst->add_status_runtime(stats.elapsedRunTime());
   flowConfigInst->set_status_memmory(stats.memoryDelta());
 
   // destroyPlacer();
 
-  return true;
+  return placement_succeeded;
 }
 
 
@@ -169,15 +172,17 @@ bool PlacerIO::runFillerInsertion(std::string config)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool PlacerIO::runMacroPlacement()
 {
-  // if (!iPLAPIInst.isPlacerDBStarted()) {
-  //   this->initPlacer("");
-  // } else {
-  //   iPLAPIInst.updatePlacerDB();
-  // }
-
-  // iPLAPIInst.runMP();
-
-  return true;
+  if (!iPLAPIInst.isPlacerDBStarted()) {
+    this->initPlacer("");
+  } else {
+    iPLAPIInst.updatePlacerDB();
+  }
+  iPLAPIInst.resetFlowStatus();
+  const bool success = iPLAPIInst.runMP();
+  if (success && !iPLAPIInst.writeBackSourceDataBase()) {
+    return false;
+  }
+  return success;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,9 +196,30 @@ bool PlacerIO::runGlobalPlacement()
     iPLAPIInst.updatePlacerDB();
   }
 
-  iPLAPIInst.runGP();
+  iPLAPIInst.resetFlowStatus();
+  const bool success = iPLAPIInst.runGPResult().success;
+  return success && iPLAPIInst.writeBackSourceDataBase();
+}
 
-  return true;
+bool PlacerIO::runGlobalPlacementSession(const ipl::GPRunRequest& request, const std::string& mode)
+{
+  // Mirror runGlobalPlacement()'s DB bootstrap for the session entry. For
+  // advance/resume the PlacerDB is already started by the start call (or by
+  // init_pl) and the solver keeps its own state, so no re-init/update happens.
+  if (!iPLAPIInst.isPlacerDBStarted()) {
+    this->initPlacer("");
+  } else if (mode == "start" || mode == "relinearize") {
+    iPLAPIInst.updatePlacerDB();
+  }
+  if (mode == "start" || mode == "relinearize") {
+    iPLAPIInst.resetFlowStatus();
+  }
+
+  const auto result = iPLAPIInst.gpRun(request);
+  if (!result.ok) {
+    return false;
+  }
+  return result.session_active || iPLAPIInst.writeBackSourceDataBase();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,6 +234,9 @@ bool PlacerIO::runLegalization()
   }
 
   bool flag = iPLAPIInst.runLG();
+  if (flag) {
+    flag = iPLAPIInst.writeBackSourceDataBase();
+  }
 
   return flag;
 }
@@ -215,7 +244,7 @@ bool PlacerIO::runLegalization()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void PlacerIO::runDetailPlacement()
+bool PlacerIO::runDetailPlacement()
 {
   if (!iPLAPIInst.isPlacerDBStarted()) {
     this->initPlacer("");
@@ -223,7 +252,8 @@ void PlacerIO::runDetailPlacement()
     iPLAPIInst.updatePlacerDB();
   }
 
-  iPLAPIInst.runDP();
+  const bool success = iPLAPIInst.runDP();
+  return success && iPLAPIInst.writeBackSourceDataBase();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

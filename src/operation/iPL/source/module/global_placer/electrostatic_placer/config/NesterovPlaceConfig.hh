@@ -27,6 +27,7 @@
 #ifndef IPL_OPERATOR_GP_NESTEROV_PLACE_CONFIG_H
 #define IPL_OPERATOR_GP_NESTEROV_PLACE_CONFIG_H
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -43,8 +44,107 @@ class NesterovPlaceConfig
   NesterovPlaceConfig& operator=(const NesterovPlaceConfig& other) = default;
   NesterovPlaceConfig& operator=(NesterovPlaceConfig&& other) = default;
 
+  // Complete effective-configuration snapshot. The GP checkpoint stores this so
+  // a resume can rebuild the solver database from the exact config that saved
+  // the checkpoint, even when the original JSON file no longer matches (for
+  // example after an agent-facing -target_density override).
+  struct State
+  {
+    int32_t thread_num = 1;
+    int32_t info_iter_num = 10;
+    float init_wirelength_coef = 1.0F;
+    float reference_hpwl = 1.0F;
+    float min_wirelength_force_bar = 1.0F;
+    float target_density = 0.7F;
+    bool is_adaptive_bin = false;
+    int32_t bin_cnt_x = 16;
+    int32_t bin_cnt_y = 16;
+    float min_phi_coef = 0.1F;
+    float max_phi_coef = 0.98F;
+    int32_t max_iter = 250;
+    int32_t max_back_track = 10;
+    float init_density_penalty = 1.0F;
+    float target_overflow = 0.1F;
+    float initial_prev_coordi_update_coef = 0.9F;
+    float min_precondition = 1.0e-6F;
+    bool is_opt_max_wirelength = false;
+    bool is_opt_timing = false;
+    bool is_opt_congestion = false;
+    int32_t congestion_effort_level = 1;
+    int32_t max_net_wirelength = -1;
+    int32_t global_padding = 0;
+    std::vector<float> opt_overflow_list;
+    bool opt_overflow_list_configured = false;
+    // Timing net-weight updates are down-weighted for nets whose hold slack is
+    // already inside this margin (seconds), so setup optimization does not
+    // create hold violations. 0 disables the hold guard.
+    float timing_hold_slack_guard = 0.1F;
+  };
+
+  State captureState() const
+  {
+    State state;
+    state.thread_num = _thread_num;
+    state.info_iter_num = _info_iter_num;
+    state.init_wirelength_coef = _init_wirelength_coef;
+    state.reference_hpwl = _reference_hpwl;
+    state.min_wirelength_force_bar = _min_wirelength_force_bar;
+    state.target_density = _target_density;
+    state.is_adaptive_bin = _is_adaptive_bin;
+    state.bin_cnt_x = _bin_cnt_x;
+    state.bin_cnt_y = _bin_cnt_y;
+    state.min_phi_coef = _min_phi_coef;
+    state.max_phi_coef = _max_phi_coef;
+    state.max_iter = _max_iter;
+    state.max_back_track = _max_back_track;
+    state.init_density_penalty = _init_density_penalty;
+    state.target_overflow = _target_overflow;
+    state.initial_prev_coordi_update_coef = _initial_prev_coordi_update_coef;
+    state.min_precondition = _min_precondition;
+    state.is_opt_max_wirelength = _is_opt_max_wirelength;
+    state.is_opt_timing = _is_opt_timing;
+    state.is_opt_congestion = _is_opt_congestion;
+    state.congestion_effort_level = _congestion_effort_level;
+    state.max_net_wirelength = _max_net_wirelength;
+    state.global_padding = _global_padding;
+    state.opt_overflow_list = _opt_overflow_list;
+    state.opt_overflow_list_configured = _opt_overflow_list_configured;
+    state.timing_hold_slack_guard = _timing_hold_slack_guard;
+    return state;
+  }
+
+  void restoreState(const State& state)
+  {
+    _thread_num = state.thread_num;
+    _info_iter_num = state.info_iter_num;
+    _init_wirelength_coef = state.init_wirelength_coef;
+    _reference_hpwl = state.reference_hpwl;
+    _min_wirelength_force_bar = state.min_wirelength_force_bar;
+    _target_density = state.target_density;
+    _is_adaptive_bin = state.is_adaptive_bin;
+    _bin_cnt_x = state.bin_cnt_x;
+    _bin_cnt_y = state.bin_cnt_y;
+    _min_phi_coef = state.min_phi_coef;
+    _max_phi_coef = state.max_phi_coef;
+    _max_iter = state.max_iter;
+    _max_back_track = state.max_back_track;
+    _init_density_penalty = state.init_density_penalty;
+    _target_overflow = state.target_overflow;
+    _initial_prev_coordi_update_coef = state.initial_prev_coordi_update_coef;
+    _min_precondition = state.min_precondition;
+    _is_opt_max_wirelength = state.is_opt_max_wirelength;
+    _is_opt_timing = state.is_opt_timing;
+    _is_opt_congestion = state.is_opt_congestion;
+    _congestion_effort_level = state.congestion_effort_level;
+    _max_net_wirelength = state.max_net_wirelength;
+    _global_padding = state.global_padding;
+    _opt_overflow_list = state.opt_overflow_list;
+    _opt_overflow_list_configured = state.opt_overflow_list_configured;
+    _timing_hold_slack_guard = state.timing_hold_slack_guard;
+  }
+
   // getter.
-  int32_t get_thread_num() const { return _thread_num;}
+  int32_t get_thread_num() const { return _thread_num; }
   int32_t get_info_iter_num() const { return _info_iter_num; }
   float   get_init_wirelength_coef() const { return _init_wirelength_coef; }
   float   get_reference_hpwl() const { return _reference_hpwl; }
@@ -64,9 +164,77 @@ class NesterovPlaceConfig
   bool isOptMaxWirelength() const { return _is_opt_max_wirelength;}
   bool isOptTiming() const { return _is_opt_timing;}
   bool isOptCongestion() const { return _is_opt_congestion;}
+  int32_t getCongestionEffortLevel() const { return _congestion_effort_level;}
   int32_t get_max_net_wirelength() const { return _max_net_wirelength;}
   int32_t get_global_padding() const { return _global_padding; }
-  const std::vector<float>& get_opt_overflow_list() {return _opt_overflow_list;} 
+  const std::vector<float>& get_opt_overflow_list() const { return _opt_overflow_list; }
+  bool isOptOverflowListConfigured() const { return _opt_overflow_list_configured; }
+  float get_timing_hold_slack_guard() const { return _timing_hold_slack_guard; }
+
+  bool validate(std::string* reason = nullptr) const
+  {
+    const auto fail = [reason](const std::string& message) {
+      if (reason != nullptr) {
+        *reason = message;
+      }
+      return false;
+    };
+
+    if (_thread_num <= 0) {
+      return fail("thread_num must be positive");
+    }
+    if (_info_iter_num <= 0) {
+      return fail("info_iter_num must be positive");
+    }
+    if (!std::isfinite(_init_wirelength_coef) || _init_wirelength_coef <= 0.0f) {
+      return fail("init_wirelength_coef must be positive and finite");
+    }
+    if (!std::isfinite(_reference_hpwl) || _reference_hpwl <= 0.0f) {
+      return fail("reference_hpwl must be positive and finite");
+    }
+    if (!std::isfinite(_min_wirelength_force_bar)) {
+      return fail("min_wirelength_force_bar must be finite");
+    }
+    if (!std::isfinite(_target_density) || _target_density <= 0.0f || _target_density >= 1.0f) {
+      return fail("target_density must be in (0,1)");
+    }
+    if (_bin_cnt_x <= 0 || _bin_cnt_y <= 0) {
+      return fail("bin counts must be positive");
+    }
+    if (_max_iter <= 0) {
+      return fail("max_iter must be positive");
+    }
+    if (_max_back_track <= 0) {
+      return fail("max_back_track must be positive");
+    }
+    if (!std::isfinite(_init_density_penalty) || _init_density_penalty <= 0.0f) {
+      return fail("init_density_penalty must be positive and finite");
+    }
+    if (!std::isfinite(_target_overflow) || _target_overflow <= 0.0f || _target_overflow >= 1.0f) {
+      return fail("target_overflow must be in (0,1)");
+    }
+    if (!std::isfinite(_initial_prev_coordi_update_coef) || _initial_prev_coordi_update_coef < 0.0f) {
+      return fail("initial_prev_coordi_update_coef must be non-negative and finite");
+    }
+    if (!std::isfinite(_min_precondition) || _min_precondition <= 0.0f) {
+      return fail("min_precondition must be positive and finite");
+    }
+    if (!std::isfinite(_min_phi_coef) || !std::isfinite(_max_phi_coef) || _min_phi_coef <= 0.0f || _max_phi_coef <= 0.0f
+        || _min_phi_coef > _max_phi_coef) {
+      return fail("phi coefficients must satisfy 0 < min_phi_coef <= max_phi_coef");
+    }
+    if (_is_opt_max_wirelength && _max_net_wirelength <= 0) {
+      return fail("max_net_wirelength must be positive when max wirelength optimization is enabled");
+    }
+    if (_global_padding < 0) {
+      return fail("global_padding must be non-negative");
+    }
+    if (!std::isfinite(_timing_hold_slack_guard) || _timing_hold_slack_guard < 0.0F) {
+      return fail("timing_hold_slack_guard must be non-negative and finite");
+    }
+
+    return true;
+  }
 
   // setter.
   void set_thread_num(int32_t num_thread) { _thread_num = num_thread; }
@@ -89,46 +257,56 @@ class NesterovPlaceConfig
   void set_is_opt_max_wirelength(bool flag) { _is_opt_max_wirelength = flag;}
   void set_is_opt_timing(bool flag) { _is_opt_timing = flag; }
   void set_is_opt_congestion(bool flag) { _is_opt_congestion = flag;}
+  void set_congestion_effort_level(int32_t level) { _congestion_effort_level = level;}
   void set_max_net_wirelength(int32_t max_wirelength) { _max_net_wirelength = max_wirelength;}
   void set_global_padding(int32_t padding) { _global_padding = padding; }
   void add_opt_target_overflow(float overflow) { _opt_overflow_list.push_back(overflow);}
+  void set_opt_overflow_list(const std::vector<float>& overflow_list)
+  {
+    _opt_overflow_list = overflow_list;
+    _opt_overflow_list_configured = true;
+  }
+  void set_timing_hold_slack_guard(float guard) { _timing_hold_slack_guard = guard; }
 
  private:
-  int32_t _thread_num;
-  int32_t _info_iter_num;
+  int32_t _thread_num = 1;
+  int32_t _info_iter_num = 10;
   // about wirelength.
-  float _init_wirelength_coef;
-  float _reference_hpwl;
-  float _min_wirelength_force_bar;
+  float _init_wirelength_coef = 1.0F;
+  float _reference_hpwl = 1.0F;
+  float _min_wirelength_force_bar = 1.0F;
 
   // about density.
-  float   _target_density;
-  bool _is_adaptive_bin;
-  int32_t _bin_cnt_x;
-  int32_t _bin_cnt_y;
+  float _target_density = 0.7F;
+  bool _is_adaptive_bin = false;
+  int32_t _bin_cnt_x = 16;
+  int32_t _bin_cnt_y = 16;
 
   // about nesterov.
-  int32_t _max_iter;
-  int32_t _max_back_track;
-  float   _init_density_penalty;
-  float   _target_overflow;
-  float   _initial_prev_coordi_update_coef;
-  float   _min_precondition;
-  float   _min_phi_coef;
-  float   _max_phi_coef;
+  int32_t _max_iter = 250;
+  int32_t _max_back_track = 10;
+  float _init_density_penalty = 1.0F;
+  float _target_overflow = 0.1F;
+  float _initial_prev_coordi_update_coef = 0.9F;
+  float _min_precondition = 1.0e-6F;
+  float _min_phi_coef = 0.1F;
+  float _max_phi_coef = 0.98F;
 
   // about maxlength constraint
-  bool _is_opt_max_wirelength;
-  int32_t _max_net_wirelength;
+  bool _is_opt_max_wirelength = false;
+  int32_t _max_net_wirelength = -1;
 
   // about timing.
-  bool _is_opt_timing;
+  bool _is_opt_timing = false;
 
   // about congestion.
-  bool _is_opt_congestion;
+  bool _is_opt_congestion = false;
+  int32_t _congestion_effort_level = 1;
 
   // about opt target overflow list
   std::vector<float> _opt_overflow_list;
+  bool _opt_overflow_list_configured = false;
+  float _timing_hold_slack_guard = 0.1F;
 
   // about global right padding (site count)
   int32_t _global_padding = 0;

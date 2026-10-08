@@ -1,0 +1,38 @@
+{
+  "note": "切分单位 = 逻辑设计。同一逻辑设计的变体 key 必须在同一边。train/test 用 sky130 key，OOD 用跨工艺 key。缺文件的 nangate45_gcd/asap7_aes 排除。",
+  "train": [
+    {"logical_design": "gcd", "design_key": "gcd_sky130_a"},
+    {"logical_design": "aes", "design_key": "aes_sky130_a"},
+    {"logical_design": "aes_core", "design_key": "aes_core_sky130_b"},
+    {"logical_design": "apb4_clint", "design_key": "apb4_clint_sky130_b"},
+    {"logical_design": "apb4_i2c", "design_key": "apb4_i2c_sky130_b"},
+    {"logical_design": "apb4_ps2", "design_key": "apb4_ps2_sky130_b"},
+    {"logical_design": "apb4_timer", "design_key": "apb4_timer_sky130_b"},
+    {"logical_design": "apb4_uart", "design_key": "apb4_uart_sky130_b"},
+    {"logical_design": "picorv32", "design_key": "picorv32_sky130_a"},
+    {"logical_design": "s1238", "design_key": "s1238_sky130_a"},
+    {"logical_design": "s13207", "design_key": "s13207_sky130_b"},
+    {"logical_design": "s1488", "design_key": "s1488_sky130_b"},
+    {"logical_design": "s35932", "design_key": "s35932_sky130_b"},
+    {"logical_design": "salsa20", "design_key": "salsa20_sky130_a"}
+  ],
+  "test": [
+    {"logical_design": "PPU", "design_key": "PPU_sky130_b"},
+    {"logical_design": "s15850", "design_key": "s15850_sky130_b"},
+    {"logical_design": "s38417", "design_key": "s38417_sky130_b"},
+    {"logical_design": "s38584", "design_key": "s38584_sky130_a"},
+    {"logical_design": "s5378", "design_key": "s5378_sky130_b"},
+    {"logical_design": "s9234", "design_key": "s9234_sky130_b"}
+  ],
+  "ood": [
+    {"logical_design": "ihp130_gcd", "design_key": "ihp130_gcd"},
+    {"logical_design": "gcd_nangate45", "design_key": "gcd_nangate45_a"},
+    {"logical_design": "gcd_ics55", "design_key": "gcd_ics55_a"},
+    {"logical_design": "s1238_nangate45", "design_key": "s1238_nangate45_a"},
+    {"logical_design": "s1238_ics55", "design_key": "s1238_ics55_a"},
+    {"logical_design": "s38584_nangate45", "design_key": "s38584_nangate45_a"},
+    {"logical_design": "s38584_ics55", "design_key": "s38584_ics55_a"},
+    {"logical_design": "salsa20_nangate45", "design_key": "salsa20_nangate45_a"},
+    {"logical_design": "salsa20_ics55", "design_key": "salsa20_ics55_a"}
+  ]
+}

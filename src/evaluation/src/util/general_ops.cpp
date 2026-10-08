@@ -89,6 +89,9 @@ bool createDirectoryRecursive(const std::string& path)
 std::string getDefaultOutputPath()
 {
   std::string base_path = dmInst->get_config().get_feature_path();
+  if (base_path.empty()) {
+    base_path = dmInst->get_config().get_output_path();
+  }
   return base_path;
 }
 

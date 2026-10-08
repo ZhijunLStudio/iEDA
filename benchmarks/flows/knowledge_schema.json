@@ -1,0 +1,96 @@
+{
+  "version": 2,
+  "description": "知识 = 物理决策层规则：condition(物理现象+可测判定) + decision(工具无关物理动作+机理) + tradeoff(EGR/HPWL/时序三维得失) + tool_mapping(工具实现,降级隔离) + falsify_if(可证伪)。分类法是事后索引,不是事前菜单:agent 通过引导问题自由回答,大类稳定、小类可生长。颗粒度锚点:不跑 iEDA 就能观测到、换个工具(Innovus/OpenROAD)同样成立的现象级规律才是知识;绑定具体 netlist=fact,绑定工具旋钮=tool_doc。",
+  "layers": {
+    "rules": {
+      "file": "knowledge.json",
+      "entry": {
+        "id": "string (唯一)",
+        "hypothesis": "string（若 X 则 Y，可证伪）",
+        "condition": {
+          "pdk": "sky130|nangate45|ics55|ihp130|null",
+          "size_bucket": "small|mid_small|mid_large|big|null（按 cells 档）",
+          "cells_range": "string（可测的 cell 数范围，如 '3k-15k'）",
+          "bottleneck": {
+            "metric": "egr|hpwl|timing|null（该知识针对的优化瓶颈维度）",
+            "source": "密度型|连接型|时序型|null（瓶颈来源大类,稳定）",
+            "subclass": "string（瓶颈来源小类,可生长,如 局部密度峰/均匀偏高/结构性长网/高扇出网/关键路径过长）"
+          },
+          "observable": "string（可测判定特征:不跑 iEDA、仅从 DEF/网表/指标就能观测到的物理现象描述）"
+        },
+        "decision": {
+          "do": "string（工具无关的物理动作,如 '做全局布线需求加权的重分布'）",
+          "mechanism": "string（机理:为什么这个现象下这个动作有效）",
+          "category": "重分布|聚拢|疏散|保持|null（动作大类,稳定）",
+          "subclass": "string（动作小类,可生长,如 全局布线需求加权/峰值惩罚/强连接网聚拢/热点疏散/密度刚满足即停）"
+        },
+        "tradeoff": {
+          "egr": {"direction": "down|up|flat", "delta": "string（定量,如 '-4~10%' 或 '103928→95242'）"},
+          "hpwl": {"direction": "down|up|flat", "delta": "string"},
+          "timing": {"direction": "down|up|flat", "delta": "string（如 'setup WNS 基本不变'）"}
+        },
+        "tool_mapping": {
+          "ieda": "string（在 iEDA 里如何实现这个物理动作,如 'congestion_effort=3'。这是工具文档,不是知识本体）"
+        },
+        "prediction": "string（可测预言,能被未来 fork 证伪）",
+        "falsify_if": "string（明确证伪条件:什么观测结果能证明这条知识错）",
+        "action": "string（兼容旧字段=decision.do 的旧工具旋钮名,迁移后废弃）",
+        "scope": {"pdk": "string", "cells": "string", "bottleneck": "string", "physical": "string|null", "domain": "string"},
+        "effect": {"metric": "string", "direction": "string", "delta": "string"},
+        "cost": {"metric": "string", "direction": "string", "delta": "string"},
+        "evidence": [{"case": "string", "outcome": "confirm|falsify|falsify_scope_out", "detail": "string", "at": "ISO时间"}],
+        "confidence": "float 0-1（Laplace 平滑, distinct design）",
+        "status": "unverified|partial|confirmed|narrowed|dead",
+        "kind": "qualitative|quantitative|both",
+        "guidance": "string（一句话:agent 在什么物理条件下该做/不该做什么）",
+        "created_at": "ISO时间",
+        "updated_at": "ISO时间"
+      }
+    },
+    "facts": {
+      "file": "per_design_facts.json",
+      "entry": {
+        "design": "string（具体 netlist 实例名）",
+        "pdk": "string",
+        "cells": "int",
+        "best_params": {},
+        "best_metrics": {},
+        "final_def": "string",
+        "notes": "list<string>（审计日志,不可迁移,不参与置信度）",
+        "_note": "facts 是实例日志不是知识。跨实例的可证伪规律必须提炼成 rules。"
+      }
+    }
+  },
+  "classification": {
+    "_note": "分类法是事后索引,不是事前菜单。agent 回答引导问题,自由填 source/subclass/category/subclass;遇到新现象/新动作时新增小类,但必须写定义+与已有小类的区别,防止无意义分裂。大类稳定。",
+    "bottleneck_source": {
+      "密度型": ["局部密度峰", "均匀偏高", "宏间挤压"],
+      "连接型": ["结构性长网", "高扇出网", "长距跨区"],
+      "时序型": ["关键路径过长", "hold 违例"]
+    },
+    "action_category": {
+      "重分布": ["全局布线需求加权", "峰值惩罚", "密度重分布"],
+      "聚拢": ["强连接网聚拢", "关键路径聚拢"],
+      "疏散": ["热点区域疏散"],
+      "保持": ["不做干预", "密度刚满足即停"]
+    }
+  },
+  "update_rules": {
+    "confirm": "按 distinct design 去重计数;同 pdk >=2 个不同设计 confirm 才 status=confirmed;1 个设计只能 partial;confidence=(c+1)/(c+f+1) 使用 distinct 计数",
+    "falsify": "先收窄 condition(如 pdk 收到具体 pdk、source 细分到更窄 subclass),再降 confidence;confidence < 0.2 标 dead(不删,留审计)",
+    "falsify_scope_out": "scope 外观察记为 falsify_scope_out,不进 confirm/falsify 计数",
+    "new_rule": "agent 汇总时主动提出可证伪假设,必须填 condition(含 observable)+decision(do+mechanism)+tradeoff 三维+falsify_if,标 unverified"
+  },
+  "iron_rules": [
+    "跨设计验证是硬门槛:一条 rule 要 confirmed,必须在同 pdk 的 >=2 个不同设计上同向;单设计重复跑 = fact(status=partial)。",
+    "★ 增量价值门槛(最重要):一条知识必须能回答「没有它,agent 会做错什么」。只有三类有增量价值——correction(纠正错误先验,如 target_density 其实有用)、counterintuitive(阻止本能但错误的行为,如疏散有时有害)、threshold(把模糊直觉变成可执行分界线,如 pin>50 才疏散)。答不出「agent 原本会做错什么」的,是教科书常识,降级为审计(archived=true),不占知识位置。",
+    "知识是物理决策层,不是工具层:decision.do 必须是不依赖 iEDA 的物理动作,tool_mapping 只是它在 iEDA 的实现。若 do 写不出工具无关的物理动作,则这条是工具噪声,不该进 rules。",
+    "颗粒度锚点:一条 rule 描述的现象能否不跑 iEDA、只用 DEF/网表/指标就观测到、且换工具同样成立?能=知识;绑定 netlist=fact;绑定旋钮=tool_doc。",
+    "三维权衡:每条 rule 必须给出 EGR/HPWL/时序三个维度的得失(tradeoff),不能只报单维。目标是三维全面超越,不是单维。",
+    "分类法是索引不是菜单:agent 不枚举 source×category 的笛卡尔积,而是诊断具体现象→做决策→贴标签;新小类可新增但须给定义。",
+    "scope 只含 pdk/规模/瓶颈/物理量,不是 netlist 实例名;scope 外观察记 falsify_scope_out。",
+    "负面/边界知识是补充不是主体;证伪的目的是收窄出'何时有效'的行动边界。",
+    "facts 是实例审计日志不是知识,不迁移、不参与置信度。",
+    "common_sense(教科书常识)不是知识:拥塞就疏散、大设计别调参、见好就收、均匀用全局——这些 agent 天生会,不应占知识库位置,标 archived=true 降级为审计参考。"
+  ]
+}

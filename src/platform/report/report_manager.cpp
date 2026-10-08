@@ -31,6 +31,7 @@
 #include <filesystem>
 
 #include "idm.h"
+#include "quality_gate.h"
 #include "report_basic.h"
 #include "report_db.h"
 #include "report_drc.h"
@@ -102,6 +103,12 @@ bool ReportManager::reportCongestion(const std::string& file_name)
   std::cout << "report time cost: " << ms << " ms" << std::endl;
   ofs << report;
   return true;
+}
+
+bool ReportManager::reportQualityGate(const std::string& file_name)
+{
+  auto& config = dmInst->get_config();
+  return writeQualityGateJson(file_name, config.get_output_path(), config.get_sdc_path(), config.get_spef_path());
 }
 
 bool ReportManager::reportInstance(const std::string& file_name, const std::string& inst_name)

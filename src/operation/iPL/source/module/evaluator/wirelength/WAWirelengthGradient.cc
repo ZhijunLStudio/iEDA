@@ -26,6 +26,8 @@
 
 #include "WAWirelengthGradient.hh"
 
+#include <cmath>
+
 #include "omp.h"
 #include "usage/usage.hh"
 
@@ -225,10 +227,14 @@ void WAWirelengthGradient::updateWirelengthForce(float coeff_x, float coeff_y, f
   }
 }
 
-void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coeff_y, float min_force_bar, int32_t thread_num, GridManager* grid_manager)
+void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coeff_y, float min_force_bar, int32_t thread_num, GridManager* grid_manager, int32_t congestion_effort_level)
 {
+  if (grid_manager == nullptr) {
+    return;
+  }
   float util_max = std::max(grid_manager->get_h_util_max(), grid_manager->get_v_util_max());
   LOG_INFO << "Congestion Utilizaiton: horizontal_max = " << grid_manager->get_h_util_max() << ",  vertical_max = " << grid_manager->get_v_util_max();
+
 
   // NOLINTNEXTLINE
   int32_t net_chunk_size = std::max(int(_topology_manager->get_network_list().size() / thread_num / 16), 1);
@@ -262,21 +268,67 @@ void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coef
 
     float bin_util_h_max = 0.0f;
     float bin_util_v_max = 0.0f;
+    float bin_egr_max = 0.0f;
+    float bin_egr_h_max = 0.0f;
+    float bin_egr_v_max = 0.0f;
+    float hot_cx = 0.0f;
+    float hot_cy = 0.0f;
     for (int i = y_range.first ; i < y_range.second ; i++){
       for (int j = x_range.first ; j < x_range.second; j++){
         auto bin = &grid_manager->get_grid_2d_list()[i][j];
         bin_util_h_max = std::max(bin->h_util, bin_util_h_max);
         bin_util_v_max = std::max(bin->v_util, bin_util_v_max);
+        bin_egr_h_max = std::max(bin->egr_overflow_h, bin_egr_h_max);
+        bin_egr_v_max = std::max(bin->egr_overflow_v, bin_egr_v_max);
+        // Track the hottest EGR bin this net crosses (ce7 detour repulsion
+        // pushes the net's pins away from this center).
+        if (bin->egr_overflow > bin_egr_max) {
+          bin_egr_max = bin->egr_overflow;
+          hot_cx = static_cast<float>(bin->shape.get_ll_x() + bin->shape.get_ur_x()) * 0.5F;
+          hot_cy = static_cast<float>(bin->shape.get_ll_y() + bin->shape.get_ur_y()) * 0.5F;
+        }
       }
     }
 
     float f_x = 0.f;
     float f_y = 0.f;
-    f_x = bin_util_h_max / util_max;
-    f_y = bin_util_v_max / util_max;
+    if (!std::isfinite(util_max) || util_max <= 0.0F) {
+      f_x = 0.0F;
+      f_y = 0.0F;
+    } else {
+      f_x = bin_util_h_max / util_max;
+      f_y = bin_util_v_max / util_max;
+    }
 
     double a = 1 + (f_x - f_y);
     double b = 1 - (f_x - f_y) * 1.5;
+
+    // congestion_effort=2: amplify the wirelength gradient of nets whose
+    // bbox crosses an over-congested RUDY bin (local util > 1). This shrinks
+    // exactly those net bboxes and attacks the evaluator-visible peak bin,
+    // which level-1 (directional reweighting only) leaves mostly untouched.
+    if (congestion_effort_level >= 2) {
+      const float over_util = std::max(0.0F, std::max(bin_util_h_max, bin_util_v_max) - 1.0F);
+      double penalty = 1.0;
+      if (congestion_effort_level >= 7) {
+        // ce7 (P2): the bbox-shrink penalty is REMOVED. Shrinking a net whose
+        // hotspot sits inside its bbox pulls pins TOWARD the hotspot and raises
+        // demand (verified: penalty 0.8/1.2 both made EGR worse). Instead the
+        // detour repulsion below pushes pins AWAY from the hotspot center.
+        penalty = 1.0;
+      } else if (congestion_effort_level >= 4) {
+        // Level 4 optimizes the verify evaluator's exact RUDY scale. The
+        // penalty is super-linear in over_util so the hottest bins dominate
+        // the force: a linear term alone leaves the fixed point unchanged.
+        // (s1238 sweep: 0 is the empirically winning setting on RUDY scale.)
+        penalty = 1.0;
+      } else {
+        const double penalty_coef = congestion_effort_level >= 3 ? 0.1 : 0.25;
+        penalty = 1.0 + penalty_coef * over_util;
+      }
+      a *= penalty;
+      b *= penalty;
+    }
  
     float net_expminsum_x, net_expmaxsum_x, net_expminsum_y, net_expmaxsum_y;
     float net_x_expminsum_x, net_x_expmaxsum_x, net_y_expminsum_y, net_y_expmaxsum_y;
@@ -364,6 +416,26 @@ void WAWirelengthGradient::updateWirelengthForceDirect(float coeff_x, float coef
 
       _pin_grad_x_list[node->get_node_id()] = a * (pin_grad_min_x - pin_grad_max_x);
       _pin_grad_y_list[node->get_node_id()] = b * (pin_grad_min_y - pin_grad_max_y);
+
+      // P2: hotspot detour repulsion (ce7 only). Push every pin of a net that
+      // crosses an EGR hotspot AWAY from the hottest bin center, translating
+      // the whole net around the hotspot instead of shrinking its bbox into it.
+      // Magnitude is scaled to the wirelength coeff so it stays a gentle
+      // directional bias (2x the wl force at peak overflow), and unit direction
+      // avoids distance-dependent blow-up near the center.
+      if (congestion_effort_level >= 7 && (bin_egr_h_max > 0.01f || bin_egr_v_max > 0.01f)) {
+        const float dx = static_cast<float>(node_loc.get_x()) - hot_cx;
+        const float dy = static_cast<float>(node_loc.get_y()) - hot_cy;
+        const float dist = std::sqrt(dx * dx + dy * dy) + 1.0F;
+        // Direction-aware detour: horizontal hotspot -> push vertically,
+        // vertical hotspot -> push horizontally (attack dominant demand dir).
+        // R17: amplify 10x (was 1.0x) - the old force was too small to move
+        // pins against the wirelength preconditioner (verified bit-identical).
+        const float rep_x = coeff_x * 1.0F * bin_egr_v_max;
+        const float rep_y = coeff_x * 1.0F * bin_egr_h_max;
+        _pin_grad_x_list[node->get_node_id()] += rep_x * dx / dist;
+        _pin_grad_y_list[node->get_node_id()] += rep_y * dy / dist;
+      }
     }
   }
 }

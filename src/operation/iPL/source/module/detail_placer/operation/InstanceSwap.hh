@@ -32,6 +32,7 @@
 #include "config/DetailPlacerConfig.hh"
 #include "database/DPDatabase.hh"
 #include "DPOperator.hh"
+#include "InstanceSwapResult.hh"
 
 namespace ipl {
 class InstanceSwap
@@ -46,8 +47,10 @@ public:
     InstanceSwap& operator=(const InstanceSwap&) = delete;
     InstanceSwap& operator=(InstanceSwap&&) = delete;
 
-    void runGlobalSwap();
-    void runVerticalSwap();
+    InstanceSwapResult runGlobalSwap();
+    InstanceSwapResult runVerticalSwap();
+    const InstanceSwapResult& lastGlobalResult() const { return _last_global_result; }
+    const InstanceSwapResult& lastVerticalResult() const { return _last_vertical_result; }
 
 private:
     DPConfig* _config;
@@ -55,6 +58,8 @@ private:
     DPOperator* _operator;
     int32_t _row_height;
     int32_t _site_width;
+    InstanceSwapResult _last_global_result;
+    InstanceSwapResult _last_vertical_result;
 
     void sortInstBasedHPWLBenefit(std::vector<DPInstance*>& movable_inst_list);
     void searchCandidateCoordiList(Rectangle<int32_t>& optimal_region, DPInstance* inst, std::vector<std::pair<Point<int32_t>, DPInstance*>>& candidate_list);
@@ -86,6 +91,8 @@ private:
 
     // tmp test
     int64_t testCalTotalHPWL();
+    InstanceSwapResult runSwap(bool vertical);
+    bool checkOutputLegal() const;
 
 };
 }

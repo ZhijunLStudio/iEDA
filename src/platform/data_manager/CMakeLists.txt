@@ -21,6 +21,7 @@ add_library(idm
 
 target_link_libraries(idm 
     PUBLIC
+    design_state
     flow 
     file_manager_cts 
     # file_manager_drc 

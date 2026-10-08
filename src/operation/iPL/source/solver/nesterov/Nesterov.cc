@@ -231,4 +231,36 @@ void Nesterov::cleanNextParameter()
   _next_parameter = FLT_MIN;
 }
 
+Nesterov::State Nesterov::captureState() const
+{
+  State state;
+  state.current_iter = _current_iter;
+  state.current_parameter = _current_parameter;
+  state.next_parameter = _next_parameter;
+  state.current_steplength = _current_steplength;
+  state.next_steplength = _next_steplength;
+  state.current_coordis = _current_coordis;
+  state.next_coordis = _next_coordis;
+  state.current_slp_coordis = _current_slp_coordis;
+  state.next_slp_coordis = _next_slp_coordis;
+  state.current_gradients = _current_gradients;
+  state.next_gradients = _next_gradients;
+  return state;
+}
+
+void Nesterov::restoreState(const State& state)
+{
+  _current_iter = state.current_iter;
+  _current_parameter = state.current_parameter;
+  _next_parameter = state.next_parameter;
+  _current_steplength = state.current_steplength;
+  _next_steplength = state.next_steplength;
+  _current_coordis = state.current_coordis;
+  _next_coordis = state.next_coordis;
+  _current_slp_coordis = state.current_slp_coordis;
+  _next_slp_coordis = state.next_slp_coordis;
+  _current_gradients = state.current_gradients;
+  _next_gradients = state.next_gradients;
+}
+
 }  // namespace ipl

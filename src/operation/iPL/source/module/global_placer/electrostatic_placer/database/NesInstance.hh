@@ -62,6 +62,7 @@ class NesInstance
   bool isFixed() const { return _is_fixed == 1; }
   bool isFiller() const { return _is_filler == 1; }
   bool isMacro() const { return _is_macro == 1; }
+  bool isLocallyFixed() const { return _is_local_fixed == 1; }
 
   // setter.
   void set_inst_id(int32_t id) { _n_inst_id = id; }
@@ -75,6 +76,7 @@ class NesInstance
   void set_fixed() { _is_fixed = 1; }
   void set_filler() { _is_filler = 1; }
   void set_macro() { _is_macro = 1; }
+  void set_local_fixed(bool flag) { _is_local_fixed = flag ? 1 : 0; }
 
   // function.
   void updateDensityLocation(Point<int32_t> coordi);
@@ -96,11 +98,12 @@ class NesInstance
   unsigned char _is_fixed : 1;
   unsigned char _is_filler : 1;
   unsigned char _is_macro : 1;
+  unsigned char _is_local_fixed : 1;
 
   void updateNesPinListLocation();
 };
 inline NesInstance::NesInstance(std::string name)
-    : _n_inst_id(-1), _name(std::move(name)), _density_scale(1.0F), _is_fixed(0), _is_filler(0), _is_macro(0)
+    : _n_inst_id(-1), _name(std::move(name)), _density_scale(1.0F), _is_fixed(0), _is_filler(0), _is_macro(0), _is_local_fixed(0)
 {
 }
 

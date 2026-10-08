@@ -23,9 +23,27 @@
  */
 
 #include "PwrCalcInternalPower.hh"
+
+#include <cmath>
+#include <string_view>
+
 #include "PwrCalcSPData.hh"
 namespace ipower {
 using ieda::Stats;
+
+namespace {
+
+double finiteOrZero(double value, const char* context, std::string_view object)
+{
+  if (std::isfinite(value)) {
+    return value;
+  }
+  LOG_ERROR_IF_EVERY_N(true, 100) << "non-finite internal power input in " << context << " for " << object
+                                  << ", use 0 for this pin/arc.";
+  return 0.0;
+}
+
+}  // namespace
 
 /**
  * @brief Get toggle data.
@@ -38,11 +56,19 @@ double PwrCalcInternalPower::getToggleData(Pin* pin) {
   auto* the_pwr_graph = get_the_pwr_graph();
   auto* the_sta_graph = the_pwr_graph->get_sta_graph();
   auto the_sta_vertex = the_sta_graph->findVertex(pin);
+  if (!the_sta_vertex || !*the_sta_vertex) {
+    LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << pin->getFullName() << " has no STA vertex for toggle annotation.";
+    return 0.0;
+  }
   auto* the_pwr_vertex = the_pwr_graph->staToPwrVertex(*the_sta_vertex);
+  if (!the_pwr_vertex) {
+    LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << pin->getFullName() << " has no power vertex for toggle annotation.";
+    return 0.0;
+  }
 
   // get toggle data.
   double toggle_value = the_pwr_vertex->getToggleData(std::nullopt);
-  return toggle_value;
+  return finiteOrZero(toggle_value, "toggle annotation", pin->getFullName());
 }
 
 /**
@@ -62,7 +88,7 @@ double PwrCalcInternalPower::calcSPByWhen(const char* when, Instance* inst) {
   PwrCalcSPData calc_sp_data;
   calc_sp_data.set_the_pwr_graph(get_the_pwr_graph());
   double sp_value = calc_sp_data.calcSPData(expr, inst);
-  return sp_value;
+  return finiteOrZero(sp_value, "when SP", inst->get_name());
 }
 
 /**
@@ -90,6 +116,11 @@ double PwrCalcInternalPower::calcCombInputPinPower(Instance* inst,
   auto* the_sta_graph = the_pwr_graph->get_sta_graph();
 
   auto the_input_sta_vertex = the_sta_graph->findVertex(input_pin);
+  if (!the_input_sta_vertex || !*the_input_sta_vertex) {
+    LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << input_pin->getFullName()
+                                    << " has no STA vertex, skip comb input internal power.";
+    return 0.0;
+  }
 
   auto* cell_port = input_pin->get_cell_port();
   auto* lib_cell = cell_port->get_ower_cell();
@@ -108,7 +139,8 @@ double PwrCalcInternalPower::calcCombInputPinPower(Instance* inst,
 
     double rise_power = internal_power->gatePower(
         TransType::kRise, rise_slew.value_or(0.0), std ::nullopt);
-    double rise_power_mw = lib_cell->convertTablePowerToMw(rise_power);
+    double rise_power_mw = finiteOrZero(lib_cell->convertTablePowerToMw(rise_power), "comb input rise power",
+                                        input_pin->getFullName());
     // fall power
     auto fall_slew = (*the_input_sta_vertex)
                          ->getSlewNs(AnalysisMode::kMax, TransType::kFall);
@@ -116,20 +148,24 @@ double PwrCalcInternalPower::calcCombInputPinPower(Instance* inst,
         << (*the_input_sta_vertex)->getName() << " fall slew is not exist.";
     double fall_power = internal_power->gatePower(
         TransType::kFall, fall_slew.value_or(0.0), std ::nullopt);
-    double fall_power_mw = lib_cell->convertTablePowerToMw(fall_power);
+    double fall_power_mw = finiteOrZero(lib_cell->convertTablePowerToMw(fall_power), "comb input fall power",
+                                        input_pin->getFullName());
 
     // When the input causes the output to be flipped, the toggle needs to
     // be calculated based on the percentage of the input toggle.
     double input_pin_toggle = getToggleData(input_pin);
-    double output_flip_toggle =
-        output_pin_toggle > 0
-            ? (input_pin_toggle / input_sum_toggle) * output_pin_toggle
-            : 0;
+    input_pin_toggle = finiteOrZero(input_pin_toggle, "comb input toggle", input_pin->getFullName());
+    output_pin_toggle = finiteOrZero(output_pin_toggle, "comb output toggle", input_pin->getFullName());
+    double output_flip_toggle = (output_pin_toggle > 0 && input_sum_toggle > 0)
+                                    ? (input_pin_toggle / input_sum_toggle) * output_pin_toggle
+                                    : 0;
     double output_no_flip_toggle = input_pin_toggle - output_flip_toggle;
 
     // the internal power of this condition.
-    double average_power_mw = CalcAveragePower(rise_power_mw, fall_power_mw);
-    double the_internal_power = output_no_flip_toggle * average_power_mw;
+    double average_power_mw =
+        finiteOrZero(CalcAveragePower(rise_power_mw, fall_power_mw), "comb input average power", input_pin->getFullName());
+    double the_internal_power =
+        finiteOrZero(output_no_flip_toggle * average_power_mw, "comb input internal power", input_pin->getFullName());
 
     if (is_debug) {
       
@@ -149,7 +185,7 @@ double PwrCalcInternalPower::calcCombInputPinPower(Instance* inst,
     if (!when.empty()) {
       // get the sp data of this condition.
       double sp_value = calcSPByWhen(when.c_str(), inst);
-      pin_internal_power += sp_value * the_internal_power;
+      pin_internal_power += finiteOrZero(sp_value * the_internal_power, "comb input conditional power", input_pin->getFullName());
     } else {
       pin_internal_power += the_internal_power;
     }
@@ -179,6 +215,11 @@ double PwrCalcInternalPower::calcOutputPinPower(Instance* inst,
   auto* the_sta_graph = the_pwr_graph->get_sta_graph();
   StaVertex* the_output_sta_vertex =
       the_sta_graph->findVertex(output_pin).value_or(nullptr);
+  if (!the_output_sta_vertex) {
+    LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << output_pin->getFullName()
+                                    << " has no STA vertex, skip output internal power.";
+    return 0.0;
+  }
   if (output_pin->isInout()) {
     // for inout pin, get the assistant node.
     LOG_FATAL_IF(!the_output_sta_vertex)
@@ -203,15 +244,34 @@ double PwrCalcInternalPower::calcOutputPinPower(Instance* inst,
 
   auto* the_output_pwr_vertex =
       the_pwr_graph->staToPwrVertex(the_output_sta_vertex);
+  if (!the_output_pwr_vertex) {
+    LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << output_pin->getFullName()
+                                    << " has no power vertex, skip output internal power.";
+    return 0.0;
+  }
   FOREACH_SNK_PWR_ARC(the_output_pwr_vertex, snk_arc) {
+    if (snk_arc->isNetArc()) {
+      continue;
+    }
+
+    auto* pwr_inst_arc = dynamic_cast<PwrInstArc*>(snk_arc);
+    if (!pwr_inst_arc) {
+      continue;
+    }
+
     // get src vertex
     auto* src_input_pwr_vertex = snk_arc->get_src();
     auto* src_input_sta_vertex =
         the_pwr_graph->pwrToStaVertex(src_input_pwr_vertex);
 
     // get sta arc, theoretically only one arc.
-    auto* sta_arc =
-        the_output_sta_vertex->getSrcArc(src_input_sta_vertex).front();
+    auto sta_arcs = the_output_sta_vertex->getSrcArc(src_input_sta_vertex);
+    if (sta_arcs.empty()) {
+      LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << output_pin->getFullName()
+                                      << " has no source STA arc, skip output internal power arc.";
+      continue;
+    }
+    auto* sta_arc = sta_arcs.front();
 
     auto query_power =
         [sta_arc, convert_load_to_lib_unit](
@@ -235,16 +295,11 @@ double PwrCalcInternalPower::calcOutputPinPower(Instance* inst,
           power_arc->get_owner_cell()->convertTablePowerToMw(
               internal_power_value);
 
-      return {internal_power_value_mw, input_slew_ns ? *input_slew_ns : 0.0,
-              output_load};
+      return {finiteOrZero(internal_power_value_mw, "output arc table power", sta_arc->get_snk()->getName()),
+              input_slew_ns ? *input_slew_ns : 0.0, output_load};
     };
 
-    if (snk_arc->isNetArc()) {
-      continue;
-    }
-
-    auto* power_arc_set =
-        dynamic_cast<PwrInstArc*>(snk_arc)->get_power_arc_set();
+    auto* power_arc_set = pwr_inst_arc->get_power_arc_set();
 
     if (!power_arc_set) {
       continue;
@@ -258,10 +313,11 @@ double PwrCalcInternalPower::calcOutputPinPower(Instance* inst,
           query_power(power_arc, TransType::kFall);
       // the internal power of this power arc.
       double table_average_power_mw =
-          CalcAveragePower(rise_power_mw, fall_power_mw);
+          finiteOrZero(CalcAveragePower(rise_power_mw, fall_power_mw), "output arc average power", output_pin->getFullName());
 
       double output_toggle = getToggleData(output_pin);
-      double the_arc_power = output_toggle * table_average_power_mw;
+      double the_arc_power =
+          finiteOrZero(output_toggle * table_average_power_mw, "output arc internal power", output_pin->getFullName());
 
       VERBOSE_LOG(1) << "output pin " << output_pin->getFullName()
                      << " arc power(mW) " << the_arc_power << " toggle "
@@ -274,13 +330,13 @@ double PwrCalcInternalPower::calcOutputPinPower(Instance* inst,
       if (!when.empty()) {
         // get the sp data of this condition.
         double sp_value = calcSPByWhen(when.c_str(), inst);
-        the_arc_power = sp_value * the_arc_power;
+        the_arc_power = finiteOrZero(sp_value * the_arc_power, "output conditional power", output_pin->getFullName());
         pin_internal_power += the_arc_power;
       } else {
         pin_internal_power += the_arc_power;
       }
 
-      dynamic_cast<PwrInstArc*>(snk_arc)->set_internal_power(the_arc_power);
+      pwr_inst_arc->set_internal_power(the_arc_power);
 
       // for debug
       if (is_debug) {
@@ -324,6 +380,11 @@ double PwrCalcInternalPower::calcClockPinPower(Instance* inst, Pin* clock_pin,
   auto* the_pwr_graph = get_the_pwr_graph();
   auto* the_sta_graph = the_pwr_graph->get_sta_graph();
   auto the_clock_sta_vertex = the_sta_graph->findVertex(clock_pin);
+  if (!the_clock_sta_vertex || !*the_clock_sta_vertex) {
+    LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << clock_pin->getFullName()
+                                    << " has no STA vertex, skip clock internal power.";
+    return 0.0;
+  }
   auto* cell_port = clock_pin->get_cell_port();
   auto* lib_cell = cell_port->get_ower_cell();
 
@@ -341,7 +402,8 @@ double PwrCalcInternalPower::calcClockPinPower(Instance* inst, Pin* clock_pin,
 
     double rise_power = internal_power->gatePower(
         TransType::kRise, rise_slew.value_or(0.0), std ::nullopt);
-    double rise_power_mw = lib_cell->convertTablePowerToMw(rise_power);
+    double rise_power_mw =
+        finiteOrZero(lib_cell->convertTablePowerToMw(rise_power), "clock rise power", clock_pin->getFullName());
     // fall power
     auto fall_slew = (*the_clock_sta_vertex)
                          ->getSlewNs(AnalysisMode::kMax, TransType::kFall);
@@ -353,23 +415,28 @@ double PwrCalcInternalPower::calcClockPinPower(Instance* inst, Pin* clock_pin,
 
     double fall_power = internal_power->gatePower(
         TransType::kFall, fall_slew.value_or(0.0), std ::nullopt);
-    double fall_power_mw = lib_cell->convertTablePowerToMw(fall_power);
+    double fall_power_mw =
+        finiteOrZero(lib_cell->convertTablePowerToMw(fall_power), "clock fall power", clock_pin->getFullName());
 
-    double average_power_mw = CalcAveragePower(rise_power_mw, fall_power_mw);
+    double average_power_mw =
+        finiteOrZero(CalcAveragePower(rise_power_mw, fall_power_mw), "clock average power", clock_pin->getFullName());
 
     double clock_pin_toggle = getToggleData(clock_pin);
+    output_pin_toggle = finiteOrZero(output_pin_toggle, "clock output toggle", clock_pin->getFullName());
 
     // the internal power of this condition.
     double output_flip_power =
-        HalfToggle(clock_pin_toggle) *
+        finiteOrZero(HalfToggle(clock_pin_toggle) *
         ((*the_clock_sta_vertex)->isRisingTriggered() ? rise_power_mw
-                                                      : fall_power_mw);
+                                                      : fall_power_mw), "clock flip power", clock_pin->getFullName());
 
     double output_no_flip_power =
+        finiteOrZero(
         (clock_pin_toggle - output_pin_toggle) * average_power_mw +
         HalfToggle(clock_pin_toggle) *
             ((*the_clock_sta_vertex)->isRisingTriggered() ? rise_power_mw
-                                                          : fall_power_mw);
+                                                          : fall_power_mw),
+        "clock no-flip power", clock_pin->getFullName());
 
     VERBOSE_LOG(1) << "clock pin " << clock_pin->getFullName()
                    << " output flip power(mW) " << output_flip_power
@@ -382,7 +449,8 @@ double PwrCalcInternalPower::calcClockPinPower(Instance* inst, Pin* clock_pin,
       // get the sp data of this condition.
       double sp_value = calcSPByWhen(when.c_str(), inst);
       pin_internal_power +=
-          sp_value * (output_flip_power + output_no_flip_power);
+          finiteOrZero(sp_value * (output_flip_power + output_no_flip_power), "clock conditional power",
+                       clock_pin->getFullName());
     } else {
       pin_internal_power += output_flip_power + output_no_flip_power;
     }
@@ -406,6 +474,11 @@ double PwrCalcInternalPower::calcSeqInputPinPower(Instance* inst,
   auto* the_pwr_graph = get_the_pwr_graph();
   auto* the_sta_graph = the_pwr_graph->get_sta_graph();
   auto the_input_sta_vertex = the_sta_graph->findVertex(input_pin);
+  if (!the_input_sta_vertex || !*the_input_sta_vertex) {
+    LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << input_pin->getFullName()
+                                    << " has no STA vertex, skip seq input internal power.";
+    return 0.0;
+  }
 
   auto* cell_port = input_pin->get_cell_port();
   auto* lib_cell = cell_port->get_ower_cell();
@@ -427,7 +500,8 @@ double PwrCalcInternalPower::calcSeqInputPinPower(Instance* inst,
     if (rise_slew) {
       double rise_power = internal_power->gatePower(
           TransType::kRise, rise_slew.value_or(0.0), std ::nullopt);
-      rise_power_mw = lib_cell->convertTablePowerToMw(rise_power);
+      rise_power_mw =
+          finiteOrZero(lib_cell->convertTablePowerToMw(rise_power), "seq input rise power", input_pin->getFullName());
     }
 
     // fall power
@@ -439,15 +513,18 @@ double PwrCalcInternalPower::calcSeqInputPinPower(Instance* inst,
     if (fall_slew) {
       double fall_power = internal_power->gatePower(
           TransType::kFall, fall_slew.value_or(0.0), std ::nullopt);
-      fall_power_mw = lib_cell->convertTablePowerToMw(fall_power);
+      fall_power_mw =
+          finiteOrZero(lib_cell->convertTablePowerToMw(fall_power), "seq input fall power", input_pin->getFullName());
     }
 
-    double average_power_mw = CalcAveragePower(rise_power_mw, fall_power_mw);
+    double average_power_mw =
+        finiteOrZero(CalcAveragePower(rise_power_mw, fall_power_mw), "seq input average power", input_pin->getFullName());
 
     double input_pin_toggle = getToggleData(input_pin);
 
     // the internal power of this condition.
-    double the_internal_power = input_pin_toggle * average_power_mw;
+    double the_internal_power =
+        finiteOrZero(input_pin_toggle * average_power_mw, "seq input internal power", input_pin->getFullName());
 
     VERBOSE_LOG(1) << "input pin " << input_pin->getFullName() << " toggle "
                    << input_pin_toggle << " average power(mW) "
@@ -458,7 +535,7 @@ double PwrCalcInternalPower::calcSeqInputPinPower(Instance* inst,
     if (!when.empty()) {
       // get the sp data of this condition.
       double sp_value = calcSPByWhen(when.c_str(), inst);
-      pin_internal_power += sp_value * the_internal_power;
+      pin_internal_power += finiteOrZero(sp_value * the_internal_power, "seq input conditional power", input_pin->getFullName());
     } else {
       pin_internal_power += the_internal_power;
     }
@@ -496,7 +573,17 @@ double PwrCalcInternalPower::calcCombInternalPower(Instance* inst) {
     auto* the_pwr_graph = get_the_pwr_graph();
     auto* the_sta_graph = the_pwr_graph->get_sta_graph();
     auto the_sta_vertex = the_sta_graph->findVertex(pin);
+    if (!the_sta_vertex || !*the_sta_vertex) {
+      LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << pin->getFullName()
+                                      << " has no STA vertex, skip comb pin internal power.";
+      continue;
+    }
     auto* the_pwr_vertex = the_pwr_graph->staToPwrVertex(*the_sta_vertex);
+    if (!the_pwr_vertex) {
+      LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << pin->getFullName()
+                                      << " has no power vertex, skip comb pin internal power.";
+      continue;
+    }
     
     double pin_internal_power = 0;
     // for inout pin, we need calc input and output both.
@@ -551,7 +638,17 @@ double PwrCalcInternalPower::calcSeqInternalPower(Instance* inst) {
     auto* the_pwr_graph = get_the_pwr_graph();
     auto* the_sta_graph = the_pwr_graph->get_sta_graph();
     auto the_sta_vertex = the_sta_graph->findVertex(pin);
+    if (!the_sta_vertex || !*the_sta_vertex) {
+      LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << pin->getFullName()
+                                      << " has no STA vertex, skip seq pin internal power.";
+      continue;
+    }
     auto* the_pwr_vertex = the_pwr_graph->staToPwrVertex(*the_sta_vertex);
+    if (!the_pwr_vertex) {
+      LOG_ERROR_IF_EVERY_N(true, 100) << "pin " << pin->getFullName()
+                                      << " has no power vertex, skip seq pin internal power.";
+      continue;
+    }
 
     if (the_pwr_vertex->is_const()) {
       continue;
@@ -625,12 +722,11 @@ unsigned PwrCalcInternalPower::operator()(PwrGraph* the_graph) {
 
   set_the_pwr_graph(the_graph);
 
-  double inst_internal_power = 0;
-
   PwrCell* cell;
   FOREACH_PWR_CELL(the_graph, cell) {
     auto* design_inst = cell->get_design_inst();
     auto* inst_cell = design_inst->get_inst_cell();
+    double inst_internal_power = 0.0;
 
     if (inst_cell->isMacroCell()) {
       // TODO
@@ -645,13 +741,13 @@ unsigned PwrCalcInternalPower::operator()(PwrGraph* the_graph) {
     double nom_voltage = inst_cell->get_owner_lib()->get_nom_voltage();
     // add power analysis data.
     auto internal_data = std::make_unique<PwrInternalData>(
-        design_inst, MW_TO_W(inst_internal_power));
+        design_inst, MW_TO_W(finiteOrZero(inst_internal_power, "instance internal power", design_inst->get_name())));
     internal_data->set_nom_voltage(nom_voltage);
 
     addInternalPower(std::move(internal_data));
     VERBOSE_LOG(1) << "cell  " << design_inst->get_name()
                    << "  internal power: " << inst_internal_power << "mW";
-    _internal_power_result += inst_internal_power;
+    _internal_power_result += finiteOrZero(inst_internal_power, "internal power sum", design_inst->get_name());
   }
 
 // debug internal power

@@ -14,19 +14,144 @@
 #include <fstream>
 #include <iostream>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 
 #include "general_ops.h"
+#include "IdbLayer.h"
+#include "IdbTrackGrid.h"
 #include "idm.h"
 #include "init_egr.h"
 #include "init_idb.h"
+#include "log/Log.hh"
 #include "wirelength_lut.h"
 
 namespace ieval {
 
 #define EVAL_INIT_EGR_INST (ieval::InitEGR::getInst())
 #define EVAL_INIT_IDB_INST (ieval::InitIDB::getInst())
+
+namespace {
+
+std::optional<std::filesystem::path> resolveOverflowMapPath(const std::string& rt_dir_path, const std::string& file_name)
+{
+  std::vector<std::filesystem::path> candidates;
+  const std::filesystem::path requested_dir(rt_dir_path);
+  candidates.push_back(requested_dir / file_name);
+  candidates.push_back(requested_dir / "egr_congestion_map" / file_name);
+  if (requested_dir.has_parent_path() && requested_dir.parent_path().has_parent_path()) {
+    candidates.push_back(requested_dir.parent_path().parent_path() / "egr_congestion_map" / file_name);
+  }
+  candidates.push_back(std::filesystem::path(getDefaultOutputPath()) / "egr_congestion_map" / file_name);
+  const std::string& feature_path = dmInst->get_config().get_feature_path();
+  if (!feature_path.empty()) {
+    candidates.push_back(std::filesystem::path(feature_path) / "egr_congestion_map" / file_name);
+  }
+  const std::string& output_path = dmInst->get_config().get_output_path();
+  if (!output_path.empty() && output_path != getDefaultOutputPath()) {
+    candidates.push_back(std::filesystem::path(output_path) / "egr_congestion_map" / file_name);
+  }
+
+  for (const auto& candidate : candidates) {
+    std::error_code error;
+    if (std::filesystem::is_regular_file(candidate, error) && !error) {
+      return candidate;
+    }
+  }
+  LOG_ERROR << "EGR overflow map not found: " << file_name << ", requested routing directory: " << rt_dir_path;
+  return std::nullopt;
+}
+
+std::optional<std::vector<int32_t>> readOverflowValues(const std::string& rt_dir_path, const std::string& file_name)
+{
+  const auto file_path = resolveOverflowMapPath(rt_dir_path, file_name);
+  if (!file_path) {
+    return std::nullopt;
+  }
+  std::ifstream file(*file_path);
+  if (!file.is_open()) {
+    LOG_ERROR << "failed to open EGR overflow map: " << file_path->string();
+    return std::nullopt;
+  }
+
+  std::vector<int32_t> values;
+  std::string line;
+  size_t row = 0;
+  try {
+    while (std::getline(file, line)) {
+      ++row;
+      std::istringstream stream(line);
+      std::string token;
+      size_t column = 0;
+      while (std::getline(stream, token, ',')) {
+        ++column;
+        const size_t first = token.find_first_not_of(" \t\r\n");
+        const size_t last = token.find_last_not_of(" \t\r\n");
+        if (first == std::string::npos) {
+          LOG_ERROR << "empty EGR overflow value in " << file_path->string() << " at " << row << ':' << column;
+          return std::nullopt;
+        }
+        const std::string normalized = token.substr(first, last - first + 1);
+        size_t parsed_length = 0;
+        const double parsed = std::stod(normalized, &parsed_length);
+        if (parsed_length != normalized.size() || !std::isfinite(parsed) || parsed < 0.0 || parsed > INT32_MAX
+            || std::floor(parsed) != parsed) {
+          LOG_ERROR << "invalid EGR overflow value '" << normalized << "' in " << file_path->string() << " at " << row << ':' << column;
+          return std::nullopt;
+        }
+        values.push_back(static_cast<int32_t>(parsed));
+      }
+    }
+  } catch (const std::exception& error) {
+    LOG_ERROR << "failed to parse EGR overflow map " << file_path->string() << ": " << error.what();
+    return std::nullopt;
+  }
+  if (values.empty()) {
+    LOG_ERROR << "EGR overflow map is empty: " << file_path->string();
+    return std::nullopt;
+  }
+  return values;
+}
+
+std::pair<int, int> routeTrackCapacities()
+{
+  int route_cap_h = 0;
+  int route_cap_v = 0;
+  auto* layout = dmInst->get_idb_layout();
+  auto* layers = layout ? layout->get_layers() : nullptr;
+  if (!layers) {
+    return {route_cap_h, route_cap_v};
+  }
+  const int route_layer_num = layers->get_routing_layers_number();
+  for (int i = 0; i < route_layer_num; ++i) {
+    auto* layer = dynamic_cast<IdbLayerRouting*>(layers->find_routing_layer(i));
+    if (!layer) {
+      continue;
+    }
+    auto* prefer_track = layer->get_prefer_track_grid();
+    if (!prefer_track) {
+      continue;
+    }
+    if (layer->is_horizontal()) {
+      route_cap_h += static_cast<int>(prefer_track->get_track_num());
+    } else {
+      route_cap_v += static_cast<int>(prefer_track->get_track_num());
+    }
+  }
+  return {route_cap_h, route_cap_v};
+}
+
+std::optional<std::string> overflowFileName(const std::string& stage, const std::string& overflow_type)
+{
+  if (overflow_type != "horizontal" && overflow_type != "vertical" && overflow_type != "union") {
+    LOG_ERROR << "unsupported EGR overflow type: " << overflow_type;
+    return std::nullopt;
+  }
+  return stage + "_egr_" + overflow_type + "_overflow.csv";
+}
+
+}  // namespace
 
 CongestionEval* CongestionEval::_congestion_eval = nullptr;
 
@@ -576,113 +701,48 @@ double CongestionEval::getLUT(int32_t pin_num, int32_t aspect_ratio, double l_ne
 
 int32_t CongestionEval::evalTotalOverflow(string stage, string rt_dir_path, string overflow_type)
 {
-  int32_t total_overflow = 0;
-  std::string file_name;
-
-  if (overflow_type == "horizontal") {
-    file_name = stage + "_egr_horizontal_overflow.csv";
-  } else if (overflow_type == "vertical") {
-    file_name = stage + "_egr_vertical_overflow.csv";
-  } else if (overflow_type == "union") {
-    file_name = stage + "_egr_union_overflow.csv";
-  } else {
+  const auto file_name = overflowFileName(stage, overflow_type);
+  if (!file_name) {
     return -1;
   }
-
-  std::string file_path_str = dmInst->get_config().get_feature_path() + "/egr_congestion_map/" + file_name;
-
-  std::ifstream file(file_path_str);
-  if (!file.is_open()) {
+  const auto values = readOverflowValues(rt_dir_path, *file_name);
+  if (!values) {
     return -1;
   }
-
-  std::string line;
-  while (std::getline(file, line)) {
-    std::istringstream iss(line);
-    std::string value;
-    while (std::getline(iss, value, ',')) {
-      total_overflow += std::stoi(value);
-    }
+  const int64_t total = std::accumulate(values->begin(), values->end(), int64_t{0});
+  if (total > INT32_MAX) {
+    LOG_ERROR << "EGR total overflow exceeds int32 range in " << *file_name << ": " << total;
+    return -1;
   }
-
-  file.close();
-  return total_overflow;
+  return static_cast<int32_t>(total);
 }
 
 int32_t CongestionEval::evalMaxOverflow(string stage, string rt_dir_path, string overflow_type)
 {
-  int32_t max_overflow = -1;
-  std::string file_name;
-
-  if (overflow_type == "horizontal") {
-    file_name = stage + "_egr_horizontal_overflow.csv";
-  } else if (overflow_type == "vertical") {
-    file_name = stage + "_egr_vertical_overflow.csv";
-  } else if (overflow_type == "union") {
-    file_name = stage + "_egr_union_overflow.csv";
-  } else {
+  const auto file_name = overflowFileName(stage, overflow_type);
+  if (!file_name) {
     return -1;
   }
-  std::string file_path_str = dmInst->get_config().get_feature_path() + "/egr_congestion_map/" + file_name;
-
-
-  std::ifstream file(file_path_str);
-  if (!file.is_open()) {
+  const auto values = readOverflowValues(rt_dir_path, *file_name);
+  if (!values) {
     return -1;
   }
-
-  std::string line;
-  while (std::getline(file, line)) {
-    std::istringstream iss(line);
-    std::string value;
-    while (std::getline(iss, value, ',')) {
-      int32_t current_value = std::stoi(value);
-      max_overflow = std::max(max_overflow, current_value);
-    }
-  }
-
-  file.close();
-  return max_overflow;
+  return *std::max_element(values->begin(), values->end());
 }
 
 float CongestionEval::evalAvgOverflow(string stage, string rt_dir_path, string overflow_type)
 {
-  float avg_overflow = 0.0f;
-  std::string file_name;
-
-  if (overflow_type == "horizontal") {
-    file_name = stage + "_egr_horizontal_overflow.csv";
-  } else if (overflow_type == "vertical") {
-    file_name = stage + "_egr_vertical_overflow.csv";
-  } else if (overflow_type == "union") {
-    file_name = stage + "_egr_union_overflow.csv";
-  } else {
+  const auto file_name = overflowFileName(stage, overflow_type);
+  if (!file_name) {
     return -1;
   }
-  std::string file_path_str = dmInst->get_config().get_feature_path() + "/egr_congestion_map/" + file_name;
-
-  std::ifstream file(file_path_str);
-  if (!file.is_open()) {
+  auto values = readOverflowValues(rt_dir_path, *file_name);
+  if (!values) {
     return -1;
   }
+  std::sort(values->begin(), values->end(), std::greater<int32_t>());
 
-  std::vector<int32_t> values;
-
-  std::string line;
-  while (std::getline(file, line)) {
-    std::istringstream iss(line);
-    std::string value;
-    while (std::getline(iss, value, ',')) {
-      int32_t current_value = std::stoi(value);
-      values.push_back(current_value);
-    }
-  }
-
-  file.close();
-
-  std::sort(values.begin(), values.end(), std::greater<int32_t>());
-
-  size_t size = values.size();
+  size_t size = values->size();
   size_t idx_0_5_percent = std::max(size_t(1), static_cast<size_t>(std::ceil(size * 0.005)));
   size_t idx_1_percent = std::max(size_t(1), static_cast<size_t>(std::ceil(size * 0.01)));
   size_t idx_2_percent = std::max(size_t(1), static_cast<size_t>(std::ceil(size * 0.02)));
@@ -700,28 +760,28 @@ float CongestionEval::evalAvgOverflow(string stage, string rt_dir_path, string o
 
   // 0-0.5%
   for (size_t i = 0; i < idx_0_5_percent; ++i) {
-    sum_05 += values[i];
+    sum_05 += (*values)[i];
   }
   sum_1 = sum_05;
 
   // 0.5%-1%
   for (size_t i = idx_0_5_percent; i < idx_1_percent; ++i) {
-    sum_1 += values[i];
+    sum_1 += (*values)[i];
   }
   sum_2 = sum_1;
 
   // 1%-2%
   for (size_t i = idx_1_percent; i < idx_2_percent; ++i) {
-    sum_2 += values[i];
+    sum_2 += (*values)[i];
   }
   sum_5 = sum_2;
 
   // 2%-5%
   for (size_t i = idx_2_percent; i < idx_5_percent; ++i) {
-    sum_5 += values[i];
+    sum_5 += (*values)[i];
   }
 
-  avg_overflow = (sum_05 * weight_05 + sum_1 * weight_1 + sum_2 * weight_2 + sum_5 * weight_5) / 4.0;
+  const float avg_overflow = (sum_05 * weight_05 + sum_1 * weight_1 + sum_2 * weight_2 + sum_5 * weight_5) / 4.0F;
 
   return avg_overflow;
 }
@@ -889,15 +949,25 @@ int32_t CongestionEval::getRowHeight()
   return EVAL_INIT_IDB_INST->getRowHeight();
 }
 
-CongestionValue CongestionEval::calRUDY(int bin_cnt_x, int bin_cnt_y, const std::string& save_path)
+CongestionValue CongestionEval::calRUDY(int bin_cnt_x, int bin_cnt_y, const std::string& save_path,
+                                        const std::string& util_save_path)
 {
   CongestionRegion region = getCongestionRegion();
   CongestionNets nets = getCongestionNets();
 
   std::vector<std::vector<double>> density_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
+  std::vector<std::vector<double>> hor_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
+  std::vector<std::vector<double>> ver_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
 
   double grid_size_x = static_cast<double>(region.ux - region.lx) / bin_cnt_x;
   double grid_size_y = static_cast<double>(region.uy - region.ly) / bin_cnt_y;
+
+  const auto [route_cap_h, route_cap_v] = routeTrackCapacities();
+  // Same supply model as the global placer's RUDY congestion observation:
+  // horizontal demand is multiplied by (bin_height / horizontal tracks per
+  // bin) and compared against the bin area as capacity.
+  const double wire_space_h = route_cap_h > 0 ? grid_size_y / (static_cast<double>(route_cap_h) / bin_cnt_y) : 0.0;
+  const double wire_space_v = route_cap_v > 0 ? grid_size_x / (static_cast<double>(route_cap_v) / bin_cnt_x) : 0.0;
 
   for (const auto& net : nets) {
     int32_t start_row = bin_cnt_y - 1;
@@ -963,7 +1033,11 @@ CongestionValue CongestionEval::calRUDY(int bin_cnt_x, int bin_cnt_y, const std:
           overlap_area = (overlap_ux - overlap_lx) * (overlap_uy - overlap_ly);
         }
 
-        density_grid[row][col] += overlap_area * (hor_rudy + ver_rudy) / grid_area;
+        const double hor_density = overlap_area * hor_rudy / grid_area;
+        const double ver_density = overlap_area * ver_rudy / grid_area;
+        density_grid[row][col] += hor_density + ver_density;
+        hor_grid[row][col] += hor_density;
+        ver_grid[row][col] += ver_density;
       }
     }
   }
@@ -986,31 +1060,92 @@ CongestionValue CongestionEval::calRUDY(int bin_cnt_x, int bin_cnt_y, const std:
 
   double max_congestion = 0.0;
   double total_congestion = 0.0;
-  
-  for (const auto& row : density_grid) {
-    for (double congestion : row) {
+  double max_h_utilization = 0.0;
+  double max_v_utilization = 0.0;
+  double max_utilization = 0.0;
+  double total_utilization = 0.0;
+  int32_t overflow_bin_count = 0;
+  double overflow_util_sum = 0.0;
+
+  const double demand_scale = 4.0;
+  for (size_t row = 0; row < density_grid.size(); ++row) {
+    for (size_t col = 0; col < density_grid[row].size(); ++col) {
+      const double congestion = density_grid[row][col];
       total_congestion += congestion;
       max_congestion = std::max(max_congestion, congestion);
+
+      const double h_util = hor_grid[row][col] * wire_space_h * demand_scale;
+      const double v_util = ver_grid[row][col] * wire_space_v * demand_scale;
+      const double util = std::max(h_util, v_util);
+      max_h_utilization = std::max(max_h_utilization, h_util);
+      max_v_utilization = std::max(max_v_utilization, v_util);
+      max_utilization = std::max(max_utilization, util);
+      total_utilization += util;
+      if (util > 1.0) {
+        overflow_bin_count += 1;
+        overflow_util_sum += util - 1.0;
+      }
     }
   }
-  
+
   CongestionValue result;
   result.max_congestion = max_congestion;
   result.total_congestion = total_congestion;
-  
+  result.max_h_utilization = max_h_utilization;
+  result.max_v_utilization = max_v_utilization;
+  result.max_utilization = max_utilization;
+  result.avg_utilization = density_grid.empty() || density_grid.front().empty()
+                               ? 0.0
+                               : total_utilization / static_cast<double>(density_grid.size() * density_grid.front().size());
+  result.overflow_bin_count = overflow_bin_count;
+  result.overflow_util_sum = overflow_util_sum;
+  result.region_lx = region.lx;
+  result.region_ly = region.ly;
+  result.region_ux = region.ux;
+  result.region_uy = region.uy;
+
+  if (!util_save_path.empty()) {
+    std::ofstream util_file(util_save_path);
+    if (util_file.is_open()) {
+      for (size_t row_index = density_grid.size(); row_index-- > 0;) {
+        const auto& row = density_grid[row_index];
+        for (size_t i = 0; i < row.size(); ++i) {
+          const double util = std::max(hor_grid[row_index][i] * wire_space_h * demand_scale,
+                                       ver_grid[row_index][i] * wire_space_v * demand_scale);
+          util_file << std::fixed << std::setprecision(6) << util;
+          if (i < row.size() - 1) {
+            util_file << ",";
+          }
+        }
+        util_file << "\n";
+      }
+      util_file.close();
+    }
+  }
+
   return result;
 
 }
 
-CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const std::string& save_path)
+CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const std::string& save_path,
+                                       const std::string& util_save_path)
 {
   CongestionRegion region = getCongestionRegion();
   CongestionNets nets = getCongestionNets();
 
   std::vector<std::vector<double>> density_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
+  std::vector<std::vector<double>> hor_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
+  std::vector<std::vector<double>> ver_grid(bin_cnt_y, std::vector<double>(bin_cnt_x, 0.0));
 
   double grid_size_x = static_cast<double>(region.ux - region.lx) / bin_cnt_x;
   double grid_size_y = static_cast<double>(region.uy - region.ly) / bin_cnt_y;
+
+  const auto [route_cap_h, route_cap_v] = routeTrackCapacities();
+  // Same supply model as the global placer's RUDY congestion observation:
+  // horizontal demand is multiplied by (bin_height / horizontal tracks per
+  // bin) and compared against the bin area as capacity.
+  const double wire_space_h = route_cap_h > 0 ? grid_size_y / (static_cast<double>(route_cap_h) / bin_cnt_y) : 0.0;
+  const double wire_space_v = route_cap_v > 0 ? grid_size_x / (static_cast<double>(route_cap_v) / bin_cnt_x) : 0.0;
 
   for (const auto& net : nets) {
     int32_t start_row = bin_cnt_y - 1;
@@ -1095,7 +1230,11 @@ CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const s
           overlap_area = (overlap_ux - overlap_lx) * (overlap_uy - overlap_ly);
         }
 
-        density_grid[row][col] += overlap_area * (hor_lutrudy + ver_lutrudy) / grid_area;
+        const double hor_density = overlap_area * hor_lutrudy / grid_area;
+        const double ver_density = overlap_area * ver_lutrudy / grid_area;
+        density_grid[row][col] += hor_density + ver_density;
+        hor_grid[row][col] += hor_density;
+        ver_grid[row][col] += ver_density;
       }
     }
   }
@@ -1118,22 +1257,72 @@ CongestionValue CongestionEval::calLUTRUDY(int bin_cnt_x, int bin_cnt_y, const s
 
   double max_congestion = 0.0;
   double total_congestion = 0.0;
-  
-  for (const auto& row : density_grid) {
-    for (double congestion : row) {
+  double max_h_utilization = 0.0;
+  double max_v_utilization = 0.0;
+  double max_utilization = 0.0;
+  double total_utilization = 0.0;
+  int32_t overflow_bin_count = 0;
+  double overflow_util_sum = 0.0;
+
+  const double demand_scale = 4.0;
+  for (size_t row = 0; row < density_grid.size(); ++row) {
+    for (size_t col = 0; col < density_grid[row].size(); ++col) {
+      const double congestion = density_grid[row][col];
       total_congestion += congestion;
       max_congestion = std::max(max_congestion, congestion);
+
+      const double h_util = hor_grid[row][col] * wire_space_h * demand_scale;
+      const double v_util = ver_grid[row][col] * wire_space_v * demand_scale;
+      const double util = std::max(h_util, v_util);
+      max_h_utilization = std::max(max_h_utilization, h_util);
+      max_v_utilization = std::max(max_v_utilization, v_util);
+      max_utilization = std::max(max_utilization, util);
+      total_utilization += util;
+      if (util > 1.0) {
+        overflow_bin_count += 1;
+        overflow_util_sum += util - 1.0;
+      }
     }
   }
-  
+
   CongestionValue result;
   result.max_congestion = max_congestion;
   result.total_congestion = total_congestion;
-  
+  result.max_h_utilization = max_h_utilization;
+  result.max_v_utilization = max_v_utilization;
+  result.max_utilization = max_utilization;
+  result.avg_utilization = density_grid.empty() || density_grid.front().empty()
+                               ? 0.0
+                               : total_utilization / static_cast<double>(density_grid.size() * density_grid.front().size());
+  result.overflow_bin_count = overflow_bin_count;
+  result.overflow_util_sum = overflow_util_sum;
+  result.region_lx = region.lx;
+  result.region_ly = region.ly;
+  result.region_ux = region.ux;
+  result.region_uy = region.uy;
+
+  if (!util_save_path.empty()) {
+    std::ofstream util_file(util_save_path);
+    if (util_file.is_open()) {
+      for (size_t row_index = density_grid.size(); row_index-- > 0;) {
+        const auto& row = density_grid[row_index];
+        for (size_t i = 0; i < row.size(); ++i) {
+          const double util = std::max(hor_grid[row_index][i] * wire_space_h * demand_scale,
+                                       ver_grid[row_index][i] * wire_space_v * demand_scale);
+          util_file << std::fixed << std::setprecision(6) << util;
+          if (i < row.size() - 1) {
+            util_file << ",";
+          }
+        }
+        util_file << "\n";
+      }
+      util_file.close();
+    }
+  }
+
   return result;
+
 }
-
-
 CongestionValue CongestionEval::calEGRCongestion(const std::string& save_path)
 {
   std::string rt_dir_path = getEGRDirPath();

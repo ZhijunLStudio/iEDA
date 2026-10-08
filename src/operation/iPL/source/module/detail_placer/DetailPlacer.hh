@@ -32,10 +32,41 @@
 #include "PlacerDB.hh"
 #include "TopologyManager.hh"
 #include "database/DPDatabase.hh"
+#include "operation/NFSpread.hh"
+#include "operation/InstanceSwapResult.hh"
+#include "operation/BinOptResult.hh"
+#include "operation/LocalReorderResult.hh"
+#include "operation/RowOptResult.hh"
 
 namespace ipl {
 
 class AIWirelength;
+
+enum class DetailPlacementOutcome
+{
+  kNotRun,
+  kCompleted,
+  kInputIllegal,
+  kAlgorithmFailed,
+  kOutputIllegal,
+  kRollbackFailed
+};
+
+struct DetailPlacementResult
+{
+  DetailPlacementOutcome outcome = DetailPlacementOutcome::kNotRun;
+  bool execution_success = false;
+  bool legal_before = false;
+  bool legal_after = false;
+  bool rolled_back = false;
+  int64_t hpwl_before = 0;
+  int64_t hpwl_after = 0;
+  int64_t changed_count = 0;
+  std::vector<std::string> operator_exhibit;
+  std::string reason = "detail placement has not run";
+
+  bool isSuccessful() const { return execution_success && legal_after && !rolled_back; }
+};
 
 class DetailPlacer
 {
@@ -50,11 +81,18 @@ class DetailPlacer
   DetailPlacer& operator=(DetailPlacer&&) = delete;
 
   bool checkIsLegal();
-  void runDetailPlace();
+  bool runDetailPlace();
+  RowOptResult runRowOpt();
+  InstanceSwapResult runGlobalSwap();
+  InstanceSwapResult runVerticalSwap();
+  LocalReorderResult runLocalReorder();
+  BinOptResult runBinOpt();
   int64_t calTotalHPWL();
   float calPeakBinDensity();
+  const DetailPlacementResult& lastResult() const { return _last_result; }
 
-  void runDetailPlaceNFS();
+  bool runDetailPlaceNFS();
+  const NFSpreadResult& lastNetworkFlowResult() const { return _last_nfs_result; }
 
 #ifdef ENABLE_AI
   // AI wirelength prediction methods
@@ -66,6 +104,8 @@ class DetailPlacer
   DPConfig _config;
   DPDatabase _database;
   DPOperator _operator;
+  DetailPlacementResult _last_result;
+  NFSpreadResult _last_nfs_result;
 #ifdef ENABLE_AI
   bool _use_ai_wirelength = false;
 #endif
@@ -88,6 +128,9 @@ class DetailPlacer
 
   void clearClusterInfo();
   void alignInstanceOrient();
+  InstanceSwapResult runInstanceSwap(bool vertical);
+  LocalReorderResult runLocalReorderStage();
+  BinOptResult runBinOptStage();
 
   void notifyPLPlaceDensity();
 };

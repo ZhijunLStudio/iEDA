@@ -16,6 +16,9 @@
 // ***************************************************************************************
 #pragma once
 
+#include <cstdlib>
+#include <string>
+
 #include "Direction.hpp"
 #include "EXTPlanarRect.hpp"
 #include "GridMap.hpp"
@@ -1854,7 +1857,12 @@ class Utility
     }
     // 检查树是否到达所有的关键坐标
     if (!passCheckingConnectivity(coord_tree, key_coord_pin_map)) {
-      RTLOG.error(Loc::current(), "The key points unreachable!");
+      const char* best_effort = std::getenv("IEDA_RT_BEST_EFFORT");
+      if (best_effort != nullptr && (std::string(best_effort) == "1" || std::string(best_effort) == "true")) {
+        RTLOG.warn(Loc::current(), "The key points unreachable! (IEDA_RT_BEST_EFFORT=1: continue)");
+      } else {
+        RTLOG.error(Loc::current(), "The key points unreachable!");
+      }
     }
     return coord_tree;
   }

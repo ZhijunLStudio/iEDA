@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <queue>
 
 #include "StaFunc.hh"
@@ -64,6 +65,9 @@ class StaIncremental {
 
   unsigned applyFwdQueue();
   unsigned applyBwdQueue();
+  size_t pendingFwdCount() const { return _fwd_queue.size(); }
+  size_t pendingBwdCount() const { return _bwd_queue.size(); }
+  void clearQueues();
 
  private:
   std::priority_queue<StaVertex*, std::vector<StaVertex*>,

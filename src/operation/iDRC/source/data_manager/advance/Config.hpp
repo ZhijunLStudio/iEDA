@@ -29,6 +29,10 @@ class Config
   // **********        DRC         ********** //
   std::string temp_directory_path;  // required
   int32_t thread_number;            // optional
+  std::string rule_coverage_table_path;  // optional; required for foundry-deck coverage evidence
+  // WP-DRC-01 / C-VIO (default OFF → zero regression)
+  int32_t enable_c_vio_json = 0;     // optional; env IEDA_DRC_ENABLE_C_VIO overrides
+  std::string c_vio_json_path;       // optional; empty → temp_directory_path/c_vio.json
   /////////////////////////////////////////////
   // **********        DRC         ********** //
   std::string log_file_path;  // building

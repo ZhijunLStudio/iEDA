@@ -16,6 +16,8 @@
 // ***************************************************************************************
 #include "BinOpt.hh"
 
+#include <map>
+
 #include "utility/Utility.hh"
 
 namespace ipl {
@@ -33,8 +35,24 @@ BinOpt::~BinOpt()
 {
 }
 
-void BinOpt::runBinOpt()
+BinOptResult BinOpt::runBinOpt()
 {
+  _last_result = BinOptResult{};
+  if (_database == nullptr || _database->get_design() == nullptr || _database->get_layout() == nullptr || _operator == nullptr
+      || _row_height <= 0 || _site_width <= 0) {
+    _last_result.outcome = BinOptOutcome::kInvalidInput;
+    _last_result.reason = "bin optimization has incomplete database";
+    return _last_result;
+  }
+
+  std::map<DPInstance*, Point<int32_t>> before_coordinates;
+  for (auto* inst : _database->get_design()->get_inst_list()) {
+    if (inst != nullptr) {
+      before_coordinates.emplace(inst, inst->get_coordi());
+    }
+  }
+  _last_result.hpwl_before = _operator->calTotalHPWL();
+
   bool is_clusted = _operator->checkIfClustered();
   if (!is_clusted) {
     _operator->updateInstClustering();
@@ -43,6 +61,11 @@ void BinOpt::runBinOpt()
   auto* grid_manager = _operator->get_grid_manager();
   int64_t grid_size_x = grid_manager->get_grid_size_x();
   int64_t grid_size_y = grid_manager->get_grid_size_y();
+  if (grid_size_x <= 0 || grid_size_y <= 0 || grid_manager->get_grid_2d_list().empty()) {
+    _last_result.outcome = BinOptOutcome::kInvalidInput;
+    _last_result.reason = "bin optimization has no usable grid";
+    return _last_result;
+  }
   int64_t grid_area = grid_size_x * grid_size_y;
 
   // update grid_manager
@@ -52,6 +75,7 @@ void BinOpt::runBinOpt()
   auto& grid_2d_list = grid_manager->get_grid_2d_list();
   for (auto& grid_row : grid_2d_list) {
     for (size_t i = 0, j = i + 1; i < grid_row.size() && j < grid_row.size(); i++, j++) {
+      ++_last_result.candidate_count;
       auto* supply_grid = &grid_row[i];
       auto* demand_grid = &grid_row[j];
       slidingInstBetweenGrids(supply_grid, demand_grid, grid_area);
@@ -74,6 +98,7 @@ void BinOpt::runBinOpt()
   // right to left
   for (auto& grid_row : grid_2d_list) {
     for (int32_t i = grid_row.size() - 1, j = i - 1; i >= 0 && j >= 0; i--, j--) {
+      ++_last_result.candidate_count;
       auto* supply_grid = &grid_row[i];
       auto* demand_grid = &grid_row[j];
       slidingInstBetweenGrids(supply_grid, demand_grid, grid_area);
@@ -89,6 +114,27 @@ void BinOpt::runBinOpt()
   //     slidingInstBetweenGrids(supply_grid, demand_grid, grid_area);
   //   }
   // }
+
+  for (const auto& before : before_coordinates) {
+    if (before.first->get_coordi().get_x() != before.second.get_x()
+        || before.first->get_coordi().get_y() != before.second.get_y()) {
+      ++_last_result.changed_count;
+    }
+  }
+  _last_result.hpwl_after = _operator->calTotalHPWL();
+  _last_result.completed = true;
+  _last_result.legal = checkOutputLegal();
+  if (!_last_result.legal) {
+    _last_result.outcome = BinOptOutcome::kIllegalOutput;
+    _last_result.reason = "bin optimization produced an out-of-interval instance";
+  } else if (_last_result.changed_count == 0) {
+    _last_result.outcome = BinOptOutcome::kNoOp;
+    _last_result.reason = "bin optimization made no coordinate changes";
+  } else {
+    _last_result.outcome = BinOptOutcome::kCompleted;
+    _last_result.reason = "bin optimization completed";
+  }
+  return _last_result;
 }
 
 void BinOpt::slidingInstBetweenGrids(Grid* supply_grid, Grid* demand_grid, int64_t grid_area)
@@ -247,6 +293,35 @@ void BinOpt::slidingInstBetweenGrids(Grid* supply_grid, Grid* demand_grid, int64
       }
     }
   }
+}
+
+bool BinOpt::checkOutputLegal() const
+{
+  auto* layout = _database->get_layout();
+  const auto& intervals = layout->get_interval_2d_list();
+  const int32_t row_height = layout->get_row_height();
+  for (auto* inst : _database->get_design()->get_inst_list()) {
+    if (inst == nullptr || inst->get_state() == DPINSTANCE_STATE::kFixed
+        || inst->get_state() == DPINSTANCE_STATE::kUnPlaced) {
+      continue;
+    }
+    const auto shape = inst->get_shape();
+    const int32_t row_index = shape.get_ll_y() / row_height;
+    if (row_index < 0 || row_index >= static_cast<int32_t>(intervals.size())) {
+      return false;
+    }
+    bool in_interval = false;
+    for (auto* interval : intervals.at(row_index)) {
+      if (interval != nullptr && interval->checkInLine(shape.get_ll_x(), shape.get_ur_x())) {
+        in_interval = true;
+        break;
+      }
+    }
+    if (!in_interval || shape.get_ll_x() % _site_width != 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 int64_t BinOpt::calSlidingFlowValue(Grid* supply_grid, Grid* demand_grid, int64_t target_area)

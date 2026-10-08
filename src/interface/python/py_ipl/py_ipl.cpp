@@ -18,6 +18,7 @@
 
 #include "idm.h"
 #include "ipl_io/ipl_io.h"
+#include "PlacementResult.hh"
 #include "tool_manager.h"
 namespace python_interface {
 
@@ -84,29 +85,25 @@ bool placerDestroy()
 bool placerRunMP()
 {
   auto* inst = iplf::PlacerIO::getInstance();
-  bool run_ok = inst->runMacroPlacement();
-  return run_ok;
+  return ipl::placementPythonResult(inst->runMacroPlacement());
 }
 
 bool placerRunGP()
 {
   auto* inst = iplf::PlacerIO::getInstance();
-  bool run_ok = inst->runGlobalPlacement();
-  return run_ok;
+  return ipl::placementPythonResult(inst->runGlobalPlacement());
 }
 
 bool placerRunLG()
 {
   auto* inst = iplf::PlacerIO::getInstance();
-  bool run_ok = inst->runLegalization();
-  return run_ok;
+  return ipl::placementPythonResult(inst->runLegalization());
 }
 
 bool placerRunDP()
 {
   auto* inst = iplf::PlacerIO::getInstance();
-  inst->runDetailPlacement();
-  return true;
+  return ipl::placementPythonResult(inst->runDetailPlacement());
 }
 
 }  // namespace python_interface

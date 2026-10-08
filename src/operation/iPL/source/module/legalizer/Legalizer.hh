@@ -53,17 +53,16 @@ class Legalizer
   bool runLegalize();
   bool runIncrLegalize();
   bool runRollback(bool clear_but_not_rollback);
-
-  bool isInitialized() { return _mode != LG_MODE::kNone; }
+  bool isInitialized() const { return _mode != LG_MODE::kNone && _method != nullptr; }
 
  private:
   static Legalizer* _s_lg_instance;
-  LG_MODE _mode;
+  LG_MODE _mode = LG_MODE::kNone;
 
   LGConfig _config;
   LGDatabase _database;
   std::vector<LGInstance*> _target_inst_list;
-  ieda_solver::LGMethodInterface* _method;
+  ieda_solver::LGMethodInterface* _method = nullptr;
 
   Legalizer() = default;
   Legalizer(const Legalizer&) = delete;

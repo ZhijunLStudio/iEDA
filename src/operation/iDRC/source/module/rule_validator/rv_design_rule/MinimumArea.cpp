@@ -23,7 +23,7 @@ void RuleValidator::verifyMinimumArea(RVCluster& rv_cluster)
 {
   using ViolationBBoxRTree = bgi::rtree<GTLRectInt, bgi::quadratic<16>>;
 
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  const std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
   std::map<int32_t, std::map<int32_t, GTLPolySetInt>> env_layer_net_polyset_map;
   std::map<int32_t, ViolationBBoxRTree> env_violation_rtree_map;

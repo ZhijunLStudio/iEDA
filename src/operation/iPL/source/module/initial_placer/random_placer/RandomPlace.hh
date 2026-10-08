@@ -35,7 +35,7 @@ class RandomPlace
   RandomPlace& operator=(const RandomPlace&) = delete;
   RandomPlace& operator=(RandomPlace&&) = delete;
 
-  void runRandomPlace();
+  void runRandomPlace(int32_t seed = 1000);
 
  private:
   PlacerDB* _placer_db;

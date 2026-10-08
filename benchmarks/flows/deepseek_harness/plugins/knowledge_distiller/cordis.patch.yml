@@ -1,0 +1,9 @@
+# Knowledge distiller bundle patch. Injects tools + subagents; distiller runs as a one-shot subagent on the "spawn" provider.
+- insert:
+    - id: knowledge-distiller
+      name: '@ieda-ai/dsh-tool-knowledge-distiller'
+      config:
+        iedaRoot: !!js process.env.IEDA_ROOT
+        python: !!js process.env.IEDA_PYTHON ?? 'python3'
+        provider: spawn
+        timeoutMs: 7200000

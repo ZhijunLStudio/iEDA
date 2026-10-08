@@ -20,12 +20,12 @@ namespace idrc {
 
 void RuleValidator::verifyCornerFillSpacing(RVCluster& rv_cluster)
 {
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  const std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   for (auto& [routing_layer_idx, rv_layer_data] : layer_data) {
-    RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
-    CornerFillSpacingRule& corner_fill_spacing_rule = routing_layer.get_corner_fill_spacing_rule();
+    const RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
+    const CornerFillSpacingRule& corner_fill_spacing_rule = routing_layer.get_corner_fill_spacing_rule();
     if (!corner_fill_spacing_rule.has_corner_fill) {
       continue;
     }

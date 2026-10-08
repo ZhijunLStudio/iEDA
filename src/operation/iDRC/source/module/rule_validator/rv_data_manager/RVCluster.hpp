@@ -19,6 +19,7 @@
 #include "DRCShape.hpp"
 #include "RVComParam.hpp"
 #include "RVLayerData.hpp"
+#include "RuleValidatorStats.hpp"
 #include "Violation.hpp"
 
 namespace idrc {
@@ -31,13 +32,23 @@ class RVCluster
   // getter
   int32_t get_cluster_idx() const { return _cluster_idx; }
   std::vector<PlanarRect>& get_cluster_rect_list() { return _cluster_rect_list; }
+  const std::vector<PlanarRect>& get_cluster_rect_list() const { return _cluster_rect_list; }
   RVComParam* get_rv_com_param() { return _rv_com_param; }
+  const RVComParam* get_rv_com_param() const { return _rv_com_param; }
   std::vector<DRCShape*>& get_drc_env_shape_list() { return _drc_env_shape_list; }
+  const std::vector<DRCShape*>& get_drc_env_shape_list() const { return _drc_env_shape_list; }
   std::vector<DRCShape*>& get_drc_result_shape_list() { return _drc_result_shape_list; }
+  const std::vector<DRCShape*>& get_drc_result_shape_list() const { return _drc_result_shape_list; }
   std::set<ViolationType>* get_drc_check_type_set() { return _drc_check_type_set; }
+  const std::set<ViolationType>* get_drc_check_type_set() const { return _drc_check_type_set; }
   std::vector<DRCShape>* get_drc_check_region_list() { return _drc_check_region_list; }
+  const std::vector<DRCShape>* get_drc_check_region_list() const { return _drc_check_region_list; }
   std::vector<Violation>& get_violation_list() { return _violation_list; }
+  const std::vector<Violation>& get_violation_list() const { return _violation_list; }
   std::map<int32_t, RVLayerData>& get_layer_data() { return _layer_data; }
+  const std::map<int32_t, RVLayerData>& get_layer_data() const { return _layer_data; }
+  RuleValidatorRunStats& get_run_stats() { return _run_stats; }
+  const RuleValidatorRunStats& get_run_stats() const { return _run_stats; }
   // setter
   void set_cluster_idx(const int32_t cluster_idx) { _cluster_idx = cluster_idx; }
   void set_cluster_rect_list(const std::vector<PlanarRect>& cluster_rect_list) { _cluster_rect_list = cluster_rect_list; }
@@ -48,6 +59,7 @@ class RVCluster
   void set_drc_check_region_list(std::vector<DRCShape>* drc_check_region_list) { _drc_check_region_list = drc_check_region_list; }
   void set_violation_list(const std::vector<Violation>& violation_list) { _violation_list = violation_list; }
   void set_layer_data(std::map<int32_t, RVLayerData>& layer_data) { _layer_data = layer_data; }
+  void set_run_stats(const RuleValidatorRunStats& run_stats) { _run_stats = run_stats; }
   // function
  private:
   int32_t _cluster_idx = -1;
@@ -59,6 +71,7 @@ class RVCluster
   std::vector<DRCShape>* _drc_check_region_list;
   std::vector<Violation> _violation_list;
   std::map<int32_t, RVLayerData> _layer_data;
+  RuleValidatorRunStats _run_stats;
 };
 
 }  // namespace idrc

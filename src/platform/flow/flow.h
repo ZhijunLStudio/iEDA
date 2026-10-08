@@ -29,6 +29,7 @@
 #include <string>
 
 #include "config/flow_config.h"
+#include "FlowScheduler.hh"
 #include "tool_manager.h"
 
 using std::string;
@@ -51,12 +52,15 @@ class Flow
   bool initFlow(string flow_config = "");
   void run(int argc, char** argv);
   void runTcl(int argc, char** argv);
+  ieda::platform::FlowScheduler& scheduler() { return _scheduler; }
 
  private:
   static Flow* _instance;
 
   Flow() {}
   ~Flow() = default;
+
+  ieda::platform::FlowScheduler _scheduler;
 };
 
 }  // namespace iplf

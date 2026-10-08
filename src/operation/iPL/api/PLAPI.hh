@@ -26,6 +26,9 @@
 #ifndef IPL_API_H
 #define IPL_API_H
 
+#include "PlacementStatus.hh"
+#include "PlacementResult.hh"
+#include "GPContract.hh"
 #include "external_api/ExternalAPI.hh"
 #include "report/PLReporter.hh"
 
@@ -37,6 +40,14 @@ namespace ipl {
 
 #define iPLAPIInst ipl::PLAPI::getInst()
 
+class NesterovPlace;
+class PlacerDB;
+
+// Opaque GP session state (solver object + stage transaction + per-batch record
+// offset). Defined in PLAPI.cc so the api header stays independent of module
+// internals.
+struct GPSessionState;
+
 class PLAPI
 {
  public:
@@ -44,25 +55,43 @@ class PLAPI
   static void destoryInst();
 
   void initAPI(std::string pl_json_path, idb::IdbBuilder* idb_builder);
-  void runFlow();
-  void runAiFlow(const std::string& onnx_path, const std::string& normalization_path);
+  bool runFlow();
+  PlacementFlowResult runFlowResult();
+  bool runAiFlow(const std::string& onnx_path, const std::string& normalization_path);
+  PlacementFlowResult runAiFlowResult(const std::string& onnx_path, const std::string& normalization_path);
   void runIncrementalFlow();
   void insertLayoutFiller();
 
-  void runGP();
-  void runMP();
-  void runNetworkFlowSpread();
+  bool runGP();
+  PlacementFlowResult runGPResult();
+  bool runMP();
+  bool runNetworkFlowSpread();
+
+  // ---- persistent GP session API (M1: in-memory session; M2 adds checkpoint persistence) ----
+  // Segmented global placement: gpRun(kStart, N) builds a session and runs N accepted
+  // iterations; gpRun(kAdvance, N) continues the same session. The legacy runGPResult()
+  // path is unchanged and drives the same session primitives internally.
+  GPRunResult gpRun(const GPRunRequest& request);
+  bool gpSessionActive() const { return _gp_session_state != nullptr; }
+  const GPRunResult& lastGPRunResult() const { return _last_gp_run_result; }
+  void gpCloseSession();
+  // Candidate governance: compare two persisted checkpoints (pure observation)
+  // and commit the currently active restored/advanced session as the accepted
+  // placement. gpCloseSession remains the discard path.
+  bool gpCompareCheckpoints(const std::string& left_path, const std::string& right_path, GPCandidateComparison& comparison,
+                           float overflow_penalty = 0.0F) const;
+  GPRunResult gpCommitSession();
 
   bool runLG();
   bool runIncrLG();
   bool runIncrLG(std::vector<std::string> inst_name_list);
-  void runPostGP();
-  void runDP();
+  bool runPostGP();
+  bool runDP();
 #ifdef ENABLE_AI
-  void runDPwithAiWireLengthPredictor(const std::string& onnx_path, const std::string& normalization_path);
+  bool runDPwithAiWireLengthPredictor(const std::string& onnx_path, const std::string& normalization_path);
 #endif
-  void runBufferInsertion();
-  void writeBackSourceDataBase();
+  bool runBufferInsertion();
+  bool writeBackSourceDataBase();
 
   std::string obtainTargetDir();
 
@@ -126,6 +155,13 @@ class PLAPI
 
   void enableJsonOutput() { _enable_json_output = true; }
   bool isJsonOutputEnabled() { return _enable_json_output; }
+  void resetFlowStatus() { _flow_status = PlacementFlowStatus{}; }
+  const PlacementFlowStatus& lastRunStatus() const { return _flow_status; }
+
+  // Focused failure-injection seam for API/command boundary regression tests.
+  // Empty value disables injection and has no production-flow effect.
+  void setFailureInjectionForTest(std::string stage) { _failure_injection_stage = std::move(stage); }
+  void clearFailureInjectionForTest() { _failure_injection_stage.clear(); }
 
   /*****************************Timing-driven Placement: START*****************************/
   double obtainPinEarlySlack(std::string pin_name);
@@ -164,6 +200,22 @@ class PLAPI
   PLReporter* _reporter;
 
   bool _enable_json_output = false;
+  std::string _failure_injection_stage;
+  PlacementFlowStatus _flow_status;
+
+  // GP session (M1). The NesterovPlace object is kept alive across gpRun calls;
+  // the stage transaction and the per-batch iteration-record offset belong to the
+  // same session lifetime.
+  std::unique_ptr<GPSessionState> _gp_session_state;
+  GPRunResult _last_gp_run_result;
+  bool _last_terminal_committed = false;
+
+  GPRunResult gpRunStart(const GPRunRequest& request);
+  GPRunResult gpRunAdvance(const GPRunRequest& request);
+  GPRunResult gpRunResume(const GPRunRequest& request);
+  GPRunResult gpRunRestore(const GPRunRequest& request);
+  GPRunResult gpRunCandidate(const GPRunRequest& request);
+  GPRunResult gpFinalizeTerminal(GPRunResult result);
 
   PLAPI() = default;
   PLAPI(const PLAPI&) = delete;
@@ -171,6 +223,10 @@ class PLAPI
   ~PLAPI();
   PLAPI& operator=(const PLAPI&) = delete;
   PLAPI& operator=(PLAPI&&) = delete;
+
+  bool shouldInjectFailure(const std::string& stage) const { return _failure_injection_stage == stage; }
+  bool failInjectedStage(const std::string& stage, PlacementStatusCode code, const std::string& reason);
+  bool writePlacementStatus();
 };
 
 }  // namespace ipl

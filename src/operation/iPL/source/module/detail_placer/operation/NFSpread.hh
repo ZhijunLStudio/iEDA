@@ -29,6 +29,7 @@
 #include "database/DPNode.hh"
 #include "database/DPBin.hh"
 #include "database/DPSegment.hh"
+#include "operation/NFSpreadResult.hh"
 
 namespace ipl {
 
@@ -60,7 +61,7 @@ public:
     NFSpread& operator=(const NFSpread&) = delete;
     NFSpread& operator=(NFSpread&&) = delete;
 
-    void runNFSpread();
+    NFSpreadResult runNFSpread();
 
 private:
     DPConfig* _config;
@@ -78,8 +79,12 @@ private:
 	double _max_overfilled_area_ratio = 0.0;
 	double _avg_overfilled_area_ratio = 0.0;
 	double _alpha = 0.6;
-	double _betha = 0.05;
+    double _betha = 0.05;
     int64_t _max_displacement = 0;
+    int64_t _moved_count = 0;
+    int64_t _overflow_before = 0;
+    int64_t _overflow_after = 0;
+    int32_t _no_path_count = 0;
     
     std::vector<DPBin*> _bin_list;
     std::deque<DPBin*> _overflowed_bin_list;
@@ -87,11 +92,11 @@ private:
     std::deque<DPNode* > _dirty_node_list;
     std::map<DPInstance*, int> _inst_to_node_map;
 
-    void init();
+    bool init();
     void computeAbu();
     void cellSpreading(const int max_iteration = 1000);
     
-    void computeBinWidth();
+    bool computeBinWidth();
     void initRows();
     void initBlockages();
     void connectVerticalSegments();
@@ -133,7 +138,7 @@ private:
     int64_t moveHorizontalNeighborFlow(DPBin* src, DPBin* sink, const int64_t flow);
     int64_t moveFullCellFlow(DPBin* src, DPBin* sink, const int64_t flow);
     void computeHorizontalPosition(DPBin* sink, const Rectangle<int64_t>& inst, const int64_t flow, int64_t& pos_x, int64_t& pos_y);
-    void moveNode(DPNode* node, DPSegment* src, DPSegment* sink ,int64_t target_pos_x, int64_t target_pos_y);
+    bool moveNode(DPNode* node, DPSegment* src, DPSegment* sink, int64_t target_pos_x, int64_t target_pos_y);
 	void insertNode(DPSegment* segment, DPNode* inst){ segment->insertNode(inst);}
     void removeNode(DPSegment* segment, DPNode* inst){ segment->removeNode(inst);}
 };

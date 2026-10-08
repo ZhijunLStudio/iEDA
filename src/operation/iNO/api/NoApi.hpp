@@ -38,12 +38,12 @@ class NoApi {
   static NoApi &getInst();
   static void   destroyInst();
 
-  void initNO(const std::string &ITO_CONFIG_PATH);
-  void iNODataInit(idb::IdbBuilder *idb = nullptr, ista::TimingEngine *timing = nullptr);
+  [[nodiscard]] bool initNO(const std::string &ITO_CONFIG_PATH);
+  [[nodiscard]] bool iNODataInit(idb::IdbBuilder *idb = nullptr, ista::TimingEngine *timing = nullptr);
   // void resetiTOData(idb::IdbBuilder *idb, ista::TimingEngine *timing = nullptr);
   // // function API
-  void fixFanout();
-  void fixIO();
+  [[nodiscard]] bool fixFanout();
+  [[nodiscard]] bool fixIO();
 
   void saveDef(std::string saved_def_path = "");
 

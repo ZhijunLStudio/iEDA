@@ -29,7 +29,24 @@
 
 #include "idm.h"
 
+#include <memory>
+#include <optional>
+
 namespace idm {
+
+namespace {
+
+ieda::platform::DirtyRegion instanceRegion(int32_t x, int32_t y, const IdbCellMaster* cell_master, IdbOrient orient)
+{
+  int64_t width = cell_master->get_width();
+  int64_t height = cell_master->get_height();
+  if (orient == IdbOrient::kW_R90 || orient == IdbOrient::kE_R270 || orient == IdbOrient::kFE_MY90 || orient == IdbOrient::kFW_MX90) {
+    std::swap(width, height);
+  }
+  return {-1, x, y, x + width, y + height};
+}
+
+}  // namespace
 
 /**
  * @Brief :
@@ -282,12 +299,21 @@ IdbInstance* DataManager::insertIOFiller(string inst_name, string cell_master_na
  * @return true
  * @return false
  */
-bool DataManager::placeInst(string inst_name, int32_t x, int32_t y, string orient_name, string cell_master_name, string source)
+bool DataManager::placeInst(string inst_name, int32_t x, int32_t y, string orient_name, string cell_master_name, string source,
+                            ieda::platform::MoveTxn* transaction)
 {
-  IdbCellMaster* cellmaster;
+  if (_design == nullptr || _layout == nullptr || _design->get_instance_list() == nullptr) {
+    std::cout << "[IDM Error] placeInst requires an initialized design and layout" << std::endl;
+    return false;
+  }
+
+  auto* idb_inst_list = _design->get_instance_list();
+  IdbInstance* instance = idb_inst_list->find_instance(inst_name);
+  IdbCellMaster* cellmaster = nullptr;
   if (cell_master_name == "") {
-    auto inst = _design->get_instance_list()->find_instance(inst_name);
-    cellmaster = inst->get_cell_master();
+    if (instance != nullptr) {
+      cellmaster = instance->get_cell_master();
+    }
   } else {
     cellmaster = _layout->get_cell_master_list()->find_cell_master(cell_master_name);
   }
@@ -299,17 +325,9 @@ bool DataManager::placeInst(string inst_name, int32_t x, int32_t y, string orien
     return false;
   }
 
-  int32_t width = cellmaster->get_width();
-  int32_t height = cellmaster->get_height();
-  int32_t urx;
-  int32_t ury;
-  if (orient == IdbOrient::kN_R0 || orient == IdbOrient::kS_R180 || orient == IdbOrient::kFN_MY || orient == IdbOrient::kFS_MX) {
-    urx = x + width;
-    ury = y + height;
-  } else {
-    urx = x + height;
-    ury = y + height;
-  }
+  const auto new_region = instanceRegion(x, y, cellmaster, orient);
+  const int32_t urx = static_cast<int32_t>(new_region.upper_x);
+  const int32_t ury = static_cast<int32_t>(new_region.upper_y);
 
   if (cellmaster->is_endcap()) {
     if (!isOnDieBoundary(x, y, urx, ury, orient)) {
@@ -322,13 +340,33 @@ bool DataManager::placeInst(string inst_name, int32_t x, int32_t y, string orien
     }
   }
 
-  auto idb_inst_list = _design->get_instance_list();
-  IdbInstance* instance = idb_inst_list->find_instance(inst_name);
+  std::unique_ptr<ieda::platform::MoveTxn> owned_transaction;
+  if (transaction == nullptr) {
+    owned_transaction = std::make_unique<ieda::platform::MoveTxn>(_design_state, "DataManager::placeInst(" + inst_name + ")");
+    transaction = owned_transaction.get();
+  }
+
+  std::optional<ieda::platform::DirtyRegion> old_region;
   if (instance == nullptr) {
-    instance = new IdbInstance();
-    instance->set_name(inst_name);
-    instance->set_cell_master(cellmaster);
-    idb_inst_list->add_instance(instance);
+    transaction->recordUndo([idb_inst_list, inst_name] { idb_inst_list->remove_instance(inst_name); });
+    auto new_instance = std::make_unique<IdbInstance>();
+    new_instance->set_name(inst_name);
+    new_instance->set_cell_master(cellmaster);
+    instance = idb_inst_list->add_instance(new_instance.get());
+    new_instance.release();
+  } else {
+    const auto old_x = instance->get_coordinate()->get_x();
+    const auto old_y = instance->get_coordinate()->get_y();
+    const auto old_orient = instance->get_orient();
+    const auto old_status = instance->get_status();
+    const auto old_type = instance->get_type();
+    old_region = instanceRegion(old_x, old_y, instance->get_cell_master(), old_orient);
+    transaction->recordUndo([instance, old_x, old_y, old_orient, old_status, old_type] {
+      instance->set_orient(old_orient, false);
+      instance->set_coodinate(old_x, old_y);
+      instance->set_status(old_status);
+      instance->set_type(old_type);
+    });
   }
 
   if (!source.empty()) {
@@ -338,6 +376,26 @@ bool DataManager::placeInst(string inst_name, int32_t x, int32_t y, string orien
   instance->set_orient(orient);
   instance->set_coodinate(x, y);
   instance->set_status_fixed();
+
+  ieda::platform::DirtySet dirty;
+  dirty.addInstance(instance->get_id());
+  dirty.addRegion(new_region);
+  if (old_region.has_value()) {
+    dirty.addRegion(*old_region);
+  }
+  if (instance->get_pin_list() != nullptr) {
+    for (auto* pin : instance->get_pin_list()->get_pin_list()) {
+      dirty.addPin(pin->get_id());
+      if (pin->get_net() != nullptr) {
+        dirty.addNet(pin->get_net()->get_id());
+      }
+    }
+  }
+  transaction->markDirty(dirty);
+
+  if (owned_transaction != nullptr) {
+    owned_transaction->commit();
+  }
 
   return true;
 }

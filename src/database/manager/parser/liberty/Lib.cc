@@ -187,6 +187,18 @@ double LibTable::findValue(double slew, double constrain_slew_or_load)
   // Find the interpolation interval on the axis,
   // and return the two endpoint values required for interpolation and the left index value.
   auto get_axis_region = [this](auto axis_index, auto num_val, auto val) {
+    // Clamp to the table range. Linear extrapolation beyond the measured
+    // liberty axis is not a valid delay model: for ps-unit libraries an
+    // out-of-range slew/load can extrapolate to large negative delays, which
+    // then poison every downstream propagation value.
+    const auto axis_min = getAxis(axis_index)[0];
+    const auto axis_max = getAxis(axis_index)[num_val - 1];
+    if (val < axis_min) {
+      val = axis_min;
+    } else if (val > axis_max) {
+      val = axis_max;
+    }
+
     auto x2 = 0.0;
     unsigned int val_index = 0;
     for (; val_index < num_val; val_index++) {
@@ -217,6 +229,7 @@ double LibTable::findValue(double slew, double constrain_slew_or_load)
   if (1 == get_axes().size()) {
     // Use linear interpolation (LinearInterpolate) in the case of a single variable
     auto num_val1 = check_val(0, val1);
+    val1 = std::clamp(val1, getAxis(0)[0], getAxis(0)[num_val1 - 1]);
     auto [x1, x2, val1_index] = get_axis_region(0, num_val1, val1);
     double x1_table_val = get_table_value(val1_index);
     double x2_table_val = get_table_value(val1_index + 1);
@@ -228,6 +241,8 @@ double LibTable::findValue(double slew, double constrain_slew_or_load)
     // Use bilinear interpolation in the case of two variables (BilinearInterpolation)
     auto num_val1 = check_val(0, val1);
     auto num_val2 = check_val(1, val2);
+    val1 = std::clamp(val1, getAxis(0)[0], getAxis(0)[num_val1 - 1]);
+    val2 = std::clamp(val2, getAxis(1)[0], getAxis(1)[num_val2 - 1]);
 
     auto [x1, x2, val1_index] = get_axis_region(0, num_val1, val1);
     auto [y1, y2, val2_index] = get_axis_region(1, num_val2, val2);

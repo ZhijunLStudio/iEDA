@@ -127,6 +127,7 @@ unsigned StaIncremental::applyFwdQueue() {
     }
 
     _fwd_queue.pop();
+    the_vertex->reset_is_fwd_reset();
   }
 
   return is_ok;
@@ -140,8 +141,8 @@ unsigned StaIncremental::applyFwdQueue() {
 unsigned StaIncremental::applyBwdQueue() {
   unsigned is_ok = 1;
 
-  while (!_fwd_queue.empty()) {
-    auto* the_vertex = _fwd_queue.top();
+  while (!_bwd_queue.empty()) {
+    auto* the_vertex = _bwd_queue.top();
 
     // need to parallel execute the follow task.
     is_ok &= propagateRT(the_vertex);
@@ -150,10 +151,22 @@ unsigned StaIncremental::applyBwdQueue() {
       break;
     }
 
-    _fwd_queue.pop();
+    _bwd_queue.pop();
+    the_vertex->reset_is_bwd_reset();
   }
 
   return is_ok;
+}
+
+void StaIncremental::clearQueues() {
+  while (!_fwd_queue.empty()) {
+    _fwd_queue.top()->reset_is_fwd_reset();
+    _fwd_queue.pop();
+  }
+  while (!_bwd_queue.empty()) {
+    _bwd_queue.top()->reset_is_bwd_reset();
+    _bwd_queue.pop();
+  }
 }
 
 /**

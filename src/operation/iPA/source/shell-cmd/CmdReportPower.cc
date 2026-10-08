@@ -31,6 +31,10 @@ CmdReportPower::CmdReportPower(const char* cmd_name) : TclCmd(cmd_name) {
   auto* default_toggle = new TclDoubleOption("-toggle", 0, 0.02);
   addOption(default_toggle);
 
+  auto* allow_default_toggle =
+      new TclSwitchOption("-allow_default_toggle");
+  addOption(allow_default_toggle);
+
   auto* enable_json_output = new TclSwitchOption("-json");
   addOption(enable_json_output);
 }
@@ -46,18 +50,28 @@ unsigned CmdReportPower::exec() {
   Power* ipower = Power::getOrCreatePower(&(ista->get_graph()));
 
   auto* default_toggle_option = getOptionOrArg("-toggle");
-  double default_toggle = default_toggle_option->getDoubleVal();
+  auto* allow_default_toggle_option =
+      getOptionOrArg("-allow_default_toggle");
 
   auto* enable_json_output_option = getOptionOrArg("-json");
   if (enable_json_output_option->is_set_val()) {
     ipower->enableJsonReport();
   }
 
-  ipower->set_default_toggle(default_toggle);
+  const bool toggle_is_explicit =
+      default_toggle_option && default_toggle_option->is_set_val();
+  const bool vectorless_is_explicit =
+      allow_default_toggle_option && allow_default_toggle_option->is_set_val();
+  if (toggle_is_explicit || vectorless_is_explicit) {
+    const double default_toggle = toggle_is_explicit
+                                      ? default_toggle_option->getDoubleVal()
+                                      : 0.02;
+    if (!ipower->set_default_toggle(default_toggle)) {
+      return 0;
+    }
+  }
 
-  ipower->runCompleteFlow();
-
-  return 1;
+  return ipower->runCompleteFlow();
 }
 
 }  // namespace ipower

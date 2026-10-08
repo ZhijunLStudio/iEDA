@@ -81,6 +81,19 @@ public:
   unsigned exec() override;
 };
 
+class CmdEvalCongestionRun final : public TclCmd
+{
+ public:
+  explicit CmdEvalCongestionRun(const char* cmd_name);
+  ~CmdEvalCongestionRun() override = default;
+
+  unsigned check() override;
+  unsigned exec() override;
+
+ private:
+  unsigned execEgr(const std::string& output_path);
+};
+
 class CmdEvalEgrConfig : public TclCmd
 {
  public:

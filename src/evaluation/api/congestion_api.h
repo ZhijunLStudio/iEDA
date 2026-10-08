@@ -8,8 +8,10 @@
 #pragma once
 
 #include <map>
+#include <optional>
 
 #include "congestion_db.h"
+#include "congestion_summary.h"
 
 namespace ieval {
 
@@ -33,6 +35,9 @@ class CongestionAPI
   EGRMapSummary egrMap(std::string stage, std::string rt_dir_path);
   EGRMapSummary egrMapPure(std::string stage, std::string rt_dir_path);
   OverflowSummary egrOverflow(std::string stage, std::string rt_dir_path);
+  bool writeCongestionSummary(std::string stage, std::string output_path);
+  bool writeCongestionSummary(std::string stage, std::string rt_dir_path, std::string output_path);
+  std::optional<CongestionSummaryDocument> readCongestionSummary(std::string input_path);
   RUDYMapSummary rudyMap(std::string stage, CongestionNets congestion_nets, CongestionRegion region, int32_t grid_size);
   UtilizationSummary rudyUtilization(std::string stage, std::string rudy_dir_path, bool use_lut = false);
 
@@ -41,8 +46,10 @@ class CongestionAPI
   std::map<int, double> patchEGRCongestion(std::map<int, std::pair<std::pair<int, int>, std::pair<int, int>>> patch_coords);
   std::map<int, std::map<std::string, double>> patchLayerEGRCongestion(std::map<int, std::pair<std::pair<int, int>, std::pair<int, int>>> patch_coords);
 
-  CongestionValue rudyCongestion(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "");
-  CongestionValue lutRudyCongestion(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "");
+  CongestionValue rudyCongestion(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "",
+                                  const std::string& util_save_path = "");
+  CongestionValue lutRudyCongestion(int bin_cnt_x = 256, int bin_cnt_y = 256, const std::string& save_path = "",
+                                      const std::string& util_save_path = "");
   CongestionValue egrCongestion(const std::string& save_path = "");
 
   void evalNetInfo();

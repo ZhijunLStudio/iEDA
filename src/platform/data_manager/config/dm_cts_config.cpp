@@ -48,7 +48,7 @@ bool CtsConfig::initConfig(string config_path)
   if (checkFilePath(config_path)) {
     _config_path = config_path;
 
-    std::ifstream& config_stream = ieda::getInputFileStream(_config_path);
+    std::ifstream config_stream = ieda::getInputFileStream(_config_path);
 
     {
       nlohmann::json json;

@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.11)
 set(CMAKE_CXX_STANDARD 20)
 
+find_package(Boost REQUIRED)
+
 # add include and lib dirs
 include_directories(SYSTEM ${HOME_THIRDPARTY})
+include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
 include_directories(${HOME_UTILITY}/stdBase/include)
 include_directories(${HOME_UTILITY}/stdBase/graph)
 include_directories(${HOME_UTILITY}/log)

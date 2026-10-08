@@ -43,8 +43,15 @@ CmdReadVcd::CmdReadVcd(const char* cmd_name) : TclCmd(cmd_name) {
 unsigned CmdReadVcd::check() {
   TclOption* file_name_option = getOptionOrArg("file_name");
   TclOption* top_instance_name_option = getOptionOrArg("-top_name");
-  LOG_FATAL_IF(!file_name_option) << "vcd file should be specified";
-  LOG_FATAL_IF(!top_instance_name_option) << "top instance name should be specified";
+  if (file_name_option == nullptr || file_name_option->getStringVal() == nullptr || file_name_option->getStringVal()[0] == '\0') {
+    LOG_ERROR << "read_vcd requires a VCD file";
+    return 0;
+  }
+  if (top_instance_name_option == nullptr || top_instance_name_option->getStringVal() == nullptr
+      || top_instance_name_option->getStringVal()[0] == '\0') {
+    LOG_ERROR << "read_vcd requires -top_name";
+    return 0;
+  }
   return 1;
 }
 
@@ -58,7 +65,6 @@ unsigned CmdReadVcd::exec() {
 
   TclOption* top_instance_name_option = getOptionOrArg("-top_name");
   auto* top_instance_name = top_instance_name_option->getStringVal();
-  LOG_FATAL_IF(!top_instance_name) << "netlist top instance name should be specified";
 
   Sta* ista = Sta::getOrCreateSta();
   Power* ipower = Power::getOrCreatePower(&(ista->get_graph()));

@@ -251,6 +251,41 @@ pub struct FindScopeClosure {
     pub closure: Box<dyn Fn(&Rc<RefCell<VCDScope>>, &str) -> Option<Rc<RefCell<VCDScope>>>>,
 }
 
+pub fn find_scope(
+    root_scope: &Rc<RefCell<VCDScope>>,
+    scope_name_or_path: &str,
+) -> Option<Rc<RefCell<VCDScope>>> {
+    let components: Vec<&str> = scope_name_or_path
+        .split('/')
+        .filter(|component| !component.is_empty())
+        .collect();
+    if components.is_empty() {
+        return None;
+    }
+
+    if components.len() == 1 {
+        if root_scope.borrow().get_name() == components[0] {
+            return Some(Rc::clone(root_scope));
+        }
+        let finder = FindScopeClosure::new();
+        return (finder.closure)(root_scope, components[0]);
+    }
+
+    let mut current = if root_scope.borrow().get_name() == components[0] {
+        Rc::clone(root_scope)
+    } else {
+        let finder = FindScopeClosure::new();
+        (finder.closure)(root_scope, components[0])?
+    };
+    for component in components.iter().skip(1) {
+        let children = current.borrow().get_children_scopes().clone();
+        current = children
+            .into_iter()
+            .find(|child| child.borrow().get_name() == *component)?;
+    }
+    Some(current)
+}
+
 impl FindScopeClosure {
     pub fn new() -> Self {
         let closure = Box::new(
@@ -531,5 +566,47 @@ impl<'a> CalcTcAndSp<'a> {
                 signal_duration_vec,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scope_tree() -> Rc<RefCell<VCDScope>> {
+        let root = Rc::new(RefCell::new(VCDScope::new("tb".to_string())));
+        let dut = Rc::new(RefCell::new(VCDScope::new("dut".to_string())));
+        let core = Rc::new(RefCell::new(VCDScope::new("core".to_string())));
+        dut.borrow_mut().add_child_scope(core);
+        root.borrow_mut().add_child_scope(dut);
+        root
+    }
+
+    #[test]
+    fn finds_single_scope_name() {
+        let root = scope_tree();
+        assert_eq!(
+            find_scope(&root, "core").unwrap().borrow().get_name(),
+            "core"
+        );
+    }
+
+    #[test]
+    fn finds_hierarchical_scope_path() {
+        let root = scope_tree();
+        assert_eq!(
+            find_scope(&root, "tb/dut/core")
+                .unwrap()
+                .borrow()
+                .get_name(),
+            "core"
+        );
+        assert!(find_scope(&root, "/tb/dut/core").is_some());
+    }
+
+    #[test]
+    fn missing_scope_is_recoverable() {
+        let root = scope_tree();
+        assert!(find_scope(&root, "tb/dut/missing").is_none());
     }
 }

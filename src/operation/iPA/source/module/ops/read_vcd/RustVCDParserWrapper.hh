@@ -26,9 +26,9 @@ class RustVcdParserWrapper {
   auto* get_annotate_db() { return &_annotate_db; }
 
  private:
-  RustVCDFile* _vcd_file;
-  void* _vcd_file_ptr;
-  RustVCDScope* _top_instance_scope;
+  RustVCDFile* _vcd_file{nullptr};
+  void* _vcd_file_ptr{nullptr};
+  RustVCDScope* _top_instance_scope{nullptr};
 
   // std::vector<RustSignalTC> _signal_tc_vec;
 

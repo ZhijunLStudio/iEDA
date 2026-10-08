@@ -25,7 +25,7 @@ class CornerSpacingRule
  public:
   CornerSpacingRule() = default;
   ~CornerSpacingRule() = default;
-  int32_t get_width_spacing(int32_t width)
+  int32_t get_width_spacing(int32_t width) const
   {
     for (int32_t i = width_spacing_list.size() - 1; i >= 0; i--) {
       if (width > width_spacing_list[i].first) {

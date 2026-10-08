@@ -83,9 +83,10 @@ class BinGrid
   void updateBinGrid(std::vector<NesInstance*>& nInst_list, int32_t thread_num);
   void updataOverflowArea(std::vector<NesInstance*>& nInst_list, int32_t thread_num);
 
-  void evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num);
+  void evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num, bool plain_rudy = false, bool eval_aligned = false);
   void evalRouteCap(int32_t thread_num);
   void evalRouteUtil();
+  void evalRouteUtilByArea(int32_t dbu_unit);
   void plotRouteCap();
   void plotRouteUtil(int32_t iter_num);
   void plotRouteDem();
@@ -198,14 +199,16 @@ inline void BinGrid::updateBinGrid(std::vector<NesInstance*>& nInst_list, int32_
     std::vector<Grid*> overlap_grid_list;
     _grid_manager->obtainOverlapGridList(overlap_grid_list, nInst_density_shape);
     for (auto* grid : overlap_grid_list) {
-      auto& grid_area_ref = grid->occupied_area;
-
       int64_t overlap_area = _grid_manager->obtainOverlapArea(grid, nInst_density_shape);
-
       int64_t inst_area = static_cast<int64_t>(overlap_area * nInst->get_density_scale());
 
+      if (nInst->isLocallyFixed()) {
 #pragma omp atomic
-      grid_area_ref += inst_area;
+        grid->local_fixed_area += inst_area;
+      } else {
+#pragma omp atomic
+        grid->occupied_area += inst_area;
+      }
     }
   }
 }
@@ -229,8 +232,13 @@ inline void BinGrid::updataOverflowArea(std::vector<NesInstance*>& nInst_list, i
 
       inst_area *= grid->available_ratio;
 
+      if (nInst->isLocallyFixed()) {
 #pragma omp atomic
-      grid_area_ref += inst_area;
+        grid->local_fixed_area += inst_area;
+      } else {
+#pragma omp atomic
+        grid_area_ref += inst_area;
+      }
     }
   }
 
@@ -246,8 +254,13 @@ inline void BinGrid::updataOverflowArea(std::vector<NesInstance*>& nInst_list, i
       int64_t overlap_area = _grid_manager->obtainOverlapArea(grid, nInst_density_shape);
       int64_t inst_area = static_cast<int64_t>(overlap_area * nInst->get_density_scale());
 
+      if (nInst->isLocallyFixed()) {
 #pragma omp atomic
-      grid_area_ref += inst_area;
+        grid->local_fixed_area += inst_area;
+      } else {
+#pragma omp atomic
+        grid_area_ref += inst_area;
+      }
     }
   }
 
@@ -259,7 +272,7 @@ inline void BinGrid::updataOverflowArea(std::vector<NesInstance*>& nInst_list, i
   _overflow_area_wofiller = overflow_area_wofiller;
 }
 
-inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num)
+inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int32_t thread_num, bool plain_rudy, bool eval_aligned)
 {
   _grid_manager->clearRUDY();
   int wire_space_h = _bin_size_y / (_route_cap_h / _bin_cnt_y);
@@ -319,7 +332,15 @@ inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int
     } else {
       l_ness = 0.5;
     }
-    l_ness = netWiringDistributionMapWeight(pin_num, aspect_ratio, l_ness);
+    // plain RUDY mode: the same model as the evaluator used by
+    // ieda_gp_verify metrics(congestion_model=rudy). LUT-based wire
+    // distribution and Gaussian blur are deliberately skipped so the solver
+    // optimizes exactly the metric the agent compares against.
+    if (plain_rudy) {
+      l_ness = 1.0;
+    } else {
+      l_ness = netWiringDistributionMapWeight(pin_num, aspect_ratio, l_ness);
+    }
 
     std::vector<Grid*> overlap_grid_list;
     _grid_manager->obtainOverlapGridList(overlap_grid_list, net_shape);
@@ -340,11 +361,23 @@ inline void BinGrid::evalRouteDem(const std::vector<NetWork*>& network_list, int
 
       float tmp_h_cong = 0.0;
       float tmp_v_cong = 0.0;
-      if (net_shape.get_height() != 0) {
-        tmp_h_cong = l_ness * overlap_area * wire_space_h * dm_h / static_cast<float>(net_shape.get_height());
-      }
-      if (net_shape.get_width() != 0) {
-        tmp_v_cong = l_ness * overlap_area * wire_space_v * dm_v / static_cast<float>(net_shape.get_width());
+      if (eval_aligned) {
+        // Evaluator-aligned RUDY: demand = overlap_area * (1/h + 1/w),
+        // utilization = demand / bin_area. Identical to run_congestion_eval's
+        // union rudy map (congestion_effort=4).
+        if (net_shape.get_height() != 0) {
+          tmp_h_cong = static_cast<float>(overlap_area) / static_cast<float>(net_shape.get_height());
+        }
+        if (net_shape.get_width() != 0) {
+          tmp_v_cong = static_cast<float>(overlap_area) / static_cast<float>(net_shape.get_width());
+        }
+      } else {
+        if (net_shape.get_height() != 0) {
+          tmp_h_cong = l_ness * overlap_area * wire_space_h * dm_h / static_cast<float>(net_shape.get_height());
+        }
+        if (net_shape.get_width() != 0) {
+          tmp_v_cong = l_ness * overlap_area * wire_space_v * dm_v / static_cast<float>(net_shape.get_width());
+        }
       }
 
 #pragma omp atomic
@@ -478,6 +511,11 @@ inline void BinGrid::evalRouteCap(int32_t thread_num)
 inline void BinGrid::evalRouteUtil()
 {
   _grid_manager->evalRouteUtil();
+}
+
+inline void BinGrid::evalRouteUtilByArea(int32_t dbu_unit)
+{
+  _grid_manager->evalRouteUtilByArea(dbu_unit);
 }
 
 inline void BinGrid::plotOverflowUtil(float sum_overflow, int32_t iter_num)

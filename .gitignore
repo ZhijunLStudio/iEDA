@@ -7,6 +7,21 @@ tags
 
 bin
 build
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+build.ninja
+.ninja_deps
+.ninja_log
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+*.a
+*.so
+*.o
+*.d
 catboost_info
 *.rpt
 *.idx
@@ -29,6 +44,7 @@ scripts
 *.patch
 CMakePresets.json
 .venv/
+.env
 __pycache__
 mcp_iEDA.egg-info/
 
@@ -37,3 +53,28 @@ src/third_party/mt-kahypar/
 
 # local clone of OSCC-Project/iEDA (not part of iEDA.ai)
 iEDA/
+
+# ---- EDA 运行数据 / 备份 / 日志（不入库）----
+# bal20 案例运行工作区（workspace/result 产物，可重新生成）
+benchmarks/bal20/
+# 备份文件
+*.bak*
+*.bak*_*
+
+*_backup.txt
+# 运行日志垃圾
+nohup.out
+innovus.*
+
+# 官方 deepseek-harness 仓库克隆（本地源码参考；当前 checkout: tag dsh-v0.1.2-rc.1）
+deepseek-harness/
+
+# dsv 运行产物（知识库/观测是实验输出，归档到 archive/）
+benchmarks/flows/deepseek_harness/knowledge.json
+benchmarks/flows/deepseek_harness/observations/
+
+# 插件装配产物（node_modules junction 指向本机绝对路径，不入库）
+node_modules/
+
+# 知识挖掘运行产物（可重新生成）
+benchmarks/flows/knowledge_mining/output/

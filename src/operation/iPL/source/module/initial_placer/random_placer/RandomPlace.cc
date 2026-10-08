@@ -21,11 +21,10 @@
 
 namespace ipl {
 
-void RandomPlace::runRandomPlace()
+void RandomPlace::runRandomPlace(int32_t seed)
 {
   auto core_shape = std::move(_placer_db->get_layout()->get_core_shape());
 
-  int32_t seed = 1000;
   std::default_random_engine gen(seed);
   std::normal_distribution<float> dis_x(core_shape.get_center().get_x(), core_shape.get_width() * 0.001);
   std::normal_distribution<float> dis_y(core_shape.get_center().get_y(), core_shape.get_height() * 0.001);

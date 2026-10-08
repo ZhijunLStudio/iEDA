@@ -20,11 +20,11 @@ namespace idrc {
 
 void RuleValidator::verifyNonsufficientMetalOverlap(RVCluster& rv_cluster)
 {
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  const std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   for (auto& [routing_layer_idx, rv_layer_data] : layer_data) {
-    RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
+    const RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
     int32_t min_width = routing_layer.get_minimum_width_rule().min_width;
     int32_t half_width = min_width / 2;
     for (auto& [net_idx, routing_net] : rv_layer_data.nets) {

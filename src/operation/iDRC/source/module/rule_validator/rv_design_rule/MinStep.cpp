@@ -20,12 +20,12 @@ namespace idrc {
 
 void RuleValidator::verifyMinStep(RVCluster& rv_cluster)
 {
-  std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
+  const std::vector<RoutingLayer>& routing_layer_list = DRCDM.getDatabase().get_routing_layer_list();
   const auto& layer_data = rv_cluster.get_layer_data();
 
   for (auto& [routing_layer_idx, rv_layer_data] : layer_data) {
-    RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
-    MinStepRule& min_step_rule = routing_layer.get_min_step_rule();
+    const RoutingLayer& routing_layer = routing_layer_list[routing_layer_idx];
+    const MinStepRule& min_step_rule = routing_layer.get_min_step_rule();
     int32_t min_step = min_step_rule.min_step;
     int32_t max_edges = min_step_rule.max_edges;
     int32_t lef58_min_step = min_step_rule.lef58_min_step;

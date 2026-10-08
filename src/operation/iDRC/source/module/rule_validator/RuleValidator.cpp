@@ -27,6 +27,33 @@ namespace idrc {
 
 namespace {
 
+auto currentWallSeconds() -> double
+{
+  return omp_get_wtime();
+}
+
+auto currentPeakRssMb() -> double
+{
+  struct rusage usage;
+  if (getrusage(RUSAGE_SELF, &usage) != 0) {
+    return 0.0;
+  }
+  return static_cast<double>(usage.ru_maxrss) / 1000.0;
+}
+
+void mergeRunStats(RuleValidatorRunStats& target, const RuleValidatorRunStats& source)
+{
+  target.verified_cluster_count += source.verified_cluster_count;
+  target.stale_cluster_cache_count += source.stale_cluster_cache_count;
+  target.peak_rss_mb = std::max(target.peak_rss_mb, source.peak_rss_mb);
+  for (const auto& [rule, source_rule_stats] : source.per_rule) {
+    RuleRuntimeStats& target_rule_stats = target.per_rule[rule];
+    target_rule_stats.runtime_seconds += source_rule_stats.runtime_seconds;
+    target_rule_stats.cluster_count += source_rule_stats.cluster_count;
+    target_rule_stats.violation_count += source_rule_stats.violation_count;
+  }
+}
+
 Orientation getBoundaryOrient(Rotation rotation, bool is_hole, const PlanarCoord& begin_coord, const PlanarCoord& end_coord)
 {
   auto rotate_left = [](Orientation orient) {
@@ -227,8 +254,14 @@ std::vector<Violation> RuleValidator::verify(std::vector<DRCShape>& drc_env_shap
   RVModel rv_model = initRVModel(drc_env_shape_list, drc_result_shape_list, drc_check_type_set, drc_check_region_list);
   setRVComParam(rv_model);
   buildRVClusterList(rv_model);
-  verifyRVModel(rv_model);
+  RuleValidatorRunStats run_stats;
+  run_stats.cluster_count = static_cast<int64_t>(rv_model.get_rv_cluster_list().size());
+  const double start_time = currentWallSeconds();
+  verifyRVModel(rv_model, run_stats);
   buildViolationList(rv_model);
+  run_stats.runtime_seconds = currentWallSeconds() - start_time;
+  run_stats.peak_rss_mb = std::max(run_stats.peak_rss_mb, currentPeakRssMb());
+  _last_run_stats = run_stats;
   // debugPlotRVModel(rv_model, "best");
   DRCLOG.info(Loc::current(), "Completed", monitor ? monitor->getStatsInfo() : "");
   return rv_model.get_violation_list();
@@ -349,24 +382,34 @@ void RuleValidator::buildRVClusterList(RVModel& rv_model)
   }
 }
 
-void RuleValidator::verifyRVModel(RVModel& rv_model)
+void RuleValidator::verifyRVModel(RVModel& rv_model, RuleValidatorRunStats& run_stats)
 {
   auto monitor = Monitor::create();
   DRCLOG.info(Loc::current(), "Starting...");
-#pragma omp parallel for schedule(dynamic)
-  for (RVCluster& rv_cluster : rv_model.get_rv_cluster_list()) {
+  int32_t actual_thread_count = 1;
+  std::vector<RVCluster>& rv_cluster_list = rv_model.get_rv_cluster_list();
+#pragma omp parallel for schedule(dynamic) reduction(max : actual_thread_count)
+  for (int64_t cluster_index = 0; cluster_index < static_cast<int64_t>(rv_cluster_list.size()); ++cluster_index) {
+    actual_thread_count = std::max(actual_thread_count, omp_get_num_threads());
+    RVCluster& rv_cluster = rv_cluster_list[cluster_index];
     buildRVCluster(rv_cluster);
     if (needVerifying(rv_cluster)) {
-      buildViolationList(rv_cluster);
+      RuleValidatorRunStats cluster_stats;
+      cluster_stats.cluster_count = 1;
+      cluster_stats.thread_count = omp_get_num_threads();
+      buildViolationList(rv_cluster, cluster_stats);
+      rv_cluster.set_run_stats(cluster_stats);
     }
+  }
+  run_stats.thread_count = actual_thread_count;
+  for (RVCluster& rv_cluster : rv_cluster_list) {
+    mergeRunStats(run_stats, rv_cluster.get_run_stats());
   }
   DRCLOG.info(Loc::current(), "Completed", monitor ? monitor->getStatsInfo() : "");
 }
 
 void RuleValidator::buildRVCluster(RVCluster& rv_cluster)
 {
-  std::map<int32_t, std::vector<int32_t>>& routing_to_adjacent_cut_map = DRCDM.getDatabase().get_routing_to_adjacent_cut_map();
-
   std::vector<DRCShape>* drc_check_region_list = rv_cluster.get_drc_check_region_list();
   int32_t expand_size = rv_cluster.get_rv_com_param()->get_expand_size();
 
@@ -379,8 +422,9 @@ void RuleValidator::buildRVCluster(RVCluster& rv_cluster)
       {
         int32_t layer_idx = drc_check_region.get_layer_idx();
         type_layer_idx_map[true].insert({layer_idx - 1, layer_idx, layer_idx + 1});
-        std::vector<int32_t>& cut_layer_idx_list = routing_to_adjacent_cut_map[layer_idx];
-        type_layer_idx_map[false].insert(cut_layer_idx_list.begin(), cut_layer_idx_list.end());
+        if (const auto* cut_layer_idx_list = findAdjacentCutLayersByRouting(layer_idx); cut_layer_idx_list != nullptr) {
+          type_layer_idx_map[false].insert(cut_layer_idx_list->begin(), cut_layer_idx_list->end());
+        }
       }
       for (DRCShape* drc_shape : rv_cluster.get_drc_env_shape_list()) {
         if (DRCUTIL.exist(type_layer_idx_map[drc_shape->get_is_routing()], drc_shape->get_layer_idx())
@@ -419,15 +463,20 @@ bool RuleValidator::needVerifying(RVCluster& rv_cluster)
   return false;
 }
 
-void RuleValidator::buildViolationList(RVCluster& rv_cluster)
+void RuleValidator::buildViolationList(RVCluster& rv_cluster, RuleValidatorRunStats& run_stats)
 {
+  const bool had_cluster_cache = !rv_cluster.get_layer_data().empty();
   prepareRVCluster(rv_cluster);
-  verifyRVCluster(rv_cluster);
+  verifyRVCluster(rv_cluster, run_stats);
 
-  // destroy cluster cache after verify
   rv_cluster.get_layer_data().clear();
+  if (had_cluster_cache) {
+    run_stats.stale_cluster_cache_count += 1;
+  }
 
   processRVCluster(rv_cluster);
+  run_stats.verified_cluster_count += 1;
+  run_stats.peak_rss_mb = std::max(run_stats.peak_rss_mb, currentPeakRssMb());
 }
 
 void RuleValidator::prepareRVCluster(RVCluster& rv_cluster)
@@ -605,86 +654,47 @@ void RuleValidator::prepareRVCluster(RVCluster& rv_cluster)
   }
 }
 
-void RuleValidator::verifyRVCluster(RVCluster& rv_cluster)
+void RuleValidator::verifyRVCluster(RVCluster& rv_cluster, RuleValidatorRunStats& run_stats)
 {
-  if (needVerifying(rv_cluster, ViolationType::kAdjacentCutSpacing)) {
-    verifyAdjacentCutSpacing(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kCornerFillSpacing)) {
-    verifyCornerFillSpacing(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kCornerSpacing)) {
-    verifyCornerSpacing(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kCutEOLSpacing)) {
-    verifyCutEOLSpacing(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kCutShort)) {
-    verifyCutShort(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kDifferentLayerCutSpacing)) {
-    verifyDifferentLayerCutSpacing(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kEnclosure)) {
-    verifyEnclosure(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kEnclosureEdge)) {
-    verifyEnclosureEdge(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kEnclosureParallel)) {
-    verifyEnclosureParallel(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kEndOfLineSpacing)) {
-    verifyEndOfLineSpacing(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kFloatingPatch)) {
-    verifyFloatingPatch(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kJogToJogSpacing)) {
-    verifyJogToJogSpacing(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kMaximumWidth)) {
-    verifyMaximumWidth(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kMaxViaStack)) {
-    verifyMaxViaStack(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kMetalShort)) {
-    verifyMetalShort(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kMinHole)) {
-    verifyMinHole(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kMinimumArea)) {
-    verifyMinimumArea(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kMinimumCut)) {
-    verifyMinimumCut(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kMinimumWidth)) {
-    verifyMinimumWidth(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kMinStep)) {
-    verifyMinStep(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kNonsufficientMetalOverlap)) {
-    verifyNonsufficientMetalOverlap(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kNotchSpacing)) {
-    verifyNotchSpacing(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kOffGridOrWrongWay)) {
-    verifyOffGridOrWrongWay(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kOutOfDie)) {
-    verifyOutOfDie(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kParallelRunLengthSpacing)) {
-    verifyParallelRunLengthSpacing(rv_cluster);
-  }
-  if (needVerifying(rv_cluster, ViolationType::kSameLayerCutSpacing)) {
-    verifySameLayerCutSpacing(rv_cluster);
-  }
+  auto run_rule = [&](ViolationType violation_type, auto&& verify_rule) {
+    if (!needVerifying(rv_cluster, violation_type)) {
+      return;
+    }
+    const std::size_t before_violation_count = rv_cluster.get_violation_list().size();
+    const double start_time = currentWallSeconds();
+    verify_rule();
+    RuleRuntimeStats& rule_stats = run_stats.per_rule[GetViolationTypeName()(violation_type)];
+    rule_stats.runtime_seconds += currentWallSeconds() - start_time;
+    rule_stats.cluster_count += 1;
+    rule_stats.violation_count += static_cast<int64_t>(rv_cluster.get_violation_list().size() - before_violation_count);
+  };
+
+  run_rule(ViolationType::kAdjacentCutSpacing, [&]() { verifyAdjacentCutSpacing(rv_cluster); });
+  run_rule(ViolationType::kCornerFillSpacing, [&]() { verifyCornerFillSpacing(rv_cluster); });
+  run_rule(ViolationType::kCornerSpacing, [&]() { verifyCornerSpacing(rv_cluster); });
+  run_rule(ViolationType::kCutEOLSpacing, [&]() { verifyCutEOLSpacing(rv_cluster); });
+  run_rule(ViolationType::kCutShort, [&]() { verifyCutShort(rv_cluster); });
+  run_rule(ViolationType::kDifferentLayerCutSpacing, [&]() { verifyDifferentLayerCutSpacing(rv_cluster); });
+  run_rule(ViolationType::kEnclosure, [&]() { verifyEnclosure(rv_cluster); });
+  run_rule(ViolationType::kEnclosureEdge, [&]() { verifyEnclosureEdge(rv_cluster); });
+  run_rule(ViolationType::kEnclosureParallel, [&]() { verifyEnclosureParallel(rv_cluster); });
+  run_rule(ViolationType::kEndOfLineSpacing, [&]() { verifyEndOfLineSpacing(rv_cluster); });
+  run_rule(ViolationType::kFloatingPatch, [&]() { verifyFloatingPatch(rv_cluster); });
+  run_rule(ViolationType::kJogToJogSpacing, [&]() { verifyJogToJogSpacing(rv_cluster); });
+  run_rule(ViolationType::kMaximumWidth, [&]() { verifyMaximumWidth(rv_cluster); });
+  run_rule(ViolationType::kMaxViaStack, [&]() { verifyMaxViaStack(rv_cluster); });
+  run_rule(ViolationType::kMetalShort, [&]() { verifyMetalShort(rv_cluster); });
+  run_rule(ViolationType::kMinHole, [&]() { verifyMinHole(rv_cluster); });
+  run_rule(ViolationType::kMinimumArea, [&]() { verifyMinimumArea(rv_cluster); });
+  run_rule(ViolationType::kMinimumCut, [&]() { verifyMinimumCut(rv_cluster); });
+  run_rule(ViolationType::kMinimumWidth, [&]() { verifyMinimumWidth(rv_cluster); });
+  run_rule(ViolationType::kMinStep, [&]() { verifyMinStep(rv_cluster); });
+  run_rule(ViolationType::kNonsufficientMetalOverlap, [&]() { verifyNonsufficientMetalOverlap(rv_cluster); });
+  run_rule(ViolationType::kNotchSpacing, [&]() { verifyNotchSpacing(rv_cluster); });
+  run_rule(ViolationType::kOffGridOrWrongWay, [&]() { verifyOffGridOrWrongWay(rv_cluster); });
+  run_rule(ViolationType::kOutOfDie, [&]() { verifyOutOfDie(rv_cluster); });
+  run_rule(ViolationType::kParallelRunLengthSpacing, [&]() { verifyParallelRunLengthSpacing(rv_cluster); });
+  run_rule(ViolationType::kSameLayerCutSpacing, [&]() { verifySameLayerCutSpacing(rv_cluster); });
 }
 
 bool RuleValidator::needVerifying(RVCluster& rv_cluster, ViolationType violation_type)
@@ -698,6 +708,28 @@ bool RuleValidator::needVerifying(RVCluster& rv_cluster, ViolationType violation
   } else {
     return (DRCUTIL.exist(*drc_check_type_set, violation_type) && DRCUTIL.exist(exist_rule_set, violation_type));
   }
+}
+
+bool RuleValidator::getMinAdjacentRoutingLayerByCut(int32_t cut_layer_idx, int32_t& routing_layer_idx) const
+{
+  const auto& cut_to_adjacent_routing_map = DRCDM.getDatabase().get_cut_to_adjacent_routing_map();
+  const auto adjacent_iter = cut_to_adjacent_routing_map.find(cut_layer_idx);
+  if (adjacent_iter == cut_to_adjacent_routing_map.end() || adjacent_iter->second.empty()) {
+    routing_layer_idx = -1;
+    return false;
+  }
+  routing_layer_idx = *std::min_element(adjacent_iter->second.begin(), adjacent_iter->second.end());
+  return true;
+}
+
+const std::vector<int32_t>* RuleValidator::findAdjacentCutLayersByRouting(int32_t routing_layer_idx) const
+{
+  const auto& routing_to_adjacent_cut_map = DRCDM.getDatabase().get_routing_to_adjacent_cut_map();
+  const auto adjacent_iter = routing_to_adjacent_cut_map.find(routing_layer_idx);
+  if (adjacent_iter == routing_to_adjacent_cut_map.end()) {
+    return nullptr;
+  }
+  return &adjacent_iter->second;
 }
 
 void RuleValidator::processRVCluster(RVCluster& rv_cluster)

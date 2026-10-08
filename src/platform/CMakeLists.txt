@@ -1,3 +1,4 @@
+add_subdirectory(design_state)
 add_subdirectory(data_manager)
 add_subdirectory(file_manager)
 add_subdirectory(flow)

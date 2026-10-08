@@ -37,6 +37,8 @@
 #include "IdbLayout.h"
 #include "builder.h"
 #include "config/dm_config.h"
+#include "DesignState.hh"
+#include "MoveTxn.hh"
 #include "def_service.h"
 #include "lef_service.h"
 #include "string/Str.hh"
@@ -74,6 +76,7 @@ class DataManager
   IdbDesign* get_idb_design() { return _idb_def_service != nullptr ? _idb_def_service->get_design() : nullptr; }
   IdbLayout* get_idb_layout() { return _idb_lef_service != nullptr ? _idb_lef_service->get_layout() : nullptr; }
   bool is_def_read() { return _idb_def_service != nullptr ? true : false; }
+  ieda::platform::DesignState& get_design_state() { return _design_state; }
 
   int get_routing_layer_1st();
 
@@ -136,7 +139,8 @@ class DataManager
   IdbInstance* insertIOFiller(string inst_name, string cell_master_name, int32_t coord_x = 0, int32_t coord_y = 0,
                               IdbOrient orient = IdbOrient::kN_R0);
 
-  bool placeInst(string inst_name, int32_t x, int32_t y, string orient, string cell_master_name, string source = "");
+  bool placeInst(string inst_name, int32_t x, int32_t y, string orient, string cell_master_name, string source = "",
+                 ieda::platform::MoveTxn* transaction = nullptr);
 
   void place_macro_generate_tcl(std::string directory, std::string tcl_name, int number = 100);
   bool place_macro_loc_rand(std::string tcl_path);
@@ -228,13 +232,14 @@ class DataManager
   IdbLefService* _idb_lef_service = nullptr;
   IdbDesign* _design = nullptr;
   IdbLayout* _layout = nullptr;
+  ieda::platform::DesignState _design_state;
   // pa
   // std::map<std::string, std::map<std::string, std::vector<ids::AccessPoint>>> _master_access_point_map;
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   /// constructor
-  DataManager() {}
+  DataManager();
   ~DataManager() = default;
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -28,10 +28,12 @@
 #define IPL_LOCALREORDER_H
 
 #include <string>
+#include <vector>
 
 #include "config/DetailPlacerConfig.hh"
 #include "database/DPDatabase.hh"
 #include "DPOperator.hh"
+#include "LocalReorderResult.hh"
 
 namespace ipl {
 class LocalReorder
@@ -46,12 +48,19 @@ public:
     LocalReorder& operator=(const LocalReorder&) = delete;
     LocalReorder& operator=(LocalReorder&&) = delete;
 
-    void runLocalReorder();
+    LocalReorderResult runLocalReorder();
+    const LocalReorderResult& lastResult() const { return _last_result; }
 
 private:
     DPConfig* _config;
     DPDatabase* _database;
     DPOperator* _operator;
+    LocalReorderResult _last_result;
+
+    bool checkOutputLegal() const;
+    void restoreWindow(const std::vector<DPInstance*>& instances,
+                       const std::vector<Point<int32_t>>& coordinates) const;
+    void updateClusterIds(DPCluster* cluster) const;
 };
 }
 #endif

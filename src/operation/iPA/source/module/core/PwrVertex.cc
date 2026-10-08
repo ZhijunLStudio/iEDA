@@ -204,8 +204,7 @@ double PwrVertex::getToggleData(std::optional<PwrDataSource> data_source) {
 
   if (!toggle_data) {
     Power* ipower = Power::getOrCreatePower(nullptr);
-    double default_toggle = ipower->get_default_toggle();
-    return default_toggle;
+    return ipower->getVectorlessToggle().value_or(0.0);
   }
   double toggle_value = toggle_data->get_toggle();
   return toggle_value;

@@ -25,6 +25,25 @@
 #include "SpefContext.hh"
 
 namespace ircx {
+namespace {
+
+Str spefNameMapToken(Str name)
+{
+  Str result;
+  result.reserve(name.size());
+  for (char ch : name) {
+    if (ch == '\\') {
+      continue;
+    }
+    if (ch == '.') {
+      result.push_back('\\');
+    }
+    result.push_back(ch);
+  }
+  return result;
+}
+
+}  // namespace
 
 void SpefDumper::writeHeader(std::ofstream& ofs, Size corner_idx) const
 {
@@ -59,13 +78,13 @@ void SpefDumper::writeNameMap(std::ofstream& ofs) const
   ofs << "\n*NAME_MAP\n";
 
   for (const auto& [id, name] : name_maps_.port_id_to_name) {
-    ofs << "*" << id << " " << name << "\n";
+    ofs << "*" << id << " " << spefNameMapToken(name) << "\n";
   }
   for (const auto& [id, name] : name_maps_.inst_id_to_name) {
-    ofs << "*" << id << " " << name << "\n";
+    ofs << "*" << id << " " << spefNameMapToken(name) << "\n";
   }
   for (const auto& [id, name] : name_maps_.net_id_to_name) {
-    ofs << "*" << id << " " << name << "\n";
+    ofs << "*" << id << " " << spefNameMapToken(name) << "\n";
   }
 }
 

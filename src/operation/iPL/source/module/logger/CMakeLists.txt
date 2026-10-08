@@ -3,7 +3,7 @@ add_definitions(-DGLOG_USE_GLOG_EXPORT)
 
 add_library(ipl-module-logger INTERFACE)
 
-target_link_directories(ipl-module-logger
+target_link_libraries(ipl-module-logger
     INTERFACE
         ipl-bridge
         log

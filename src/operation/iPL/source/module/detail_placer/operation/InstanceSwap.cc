@@ -16,6 +16,8 @@
 // ***************************************************************************************
 #include "InstanceSwap.hh"
 
+#include <map>
+
 #include "utility/Utility.hh"
 
 namespace ipl {
@@ -33,116 +35,159 @@ InstanceSwap::~InstanceSwap()
 {
 }
 
-void InstanceSwap::runGlobalSwap()
+InstanceSwapResult InstanceSwap::runGlobalSwap()
 {
-  bool is_clusted = _operator->checkIfClustered();
-  if (!is_clusted) {
-    _operator->updateInstClustering();
-  }
-
-  // step 1: sort inst based on their hpwl benefit
-  std::vector<DPInstance*> movable_inst_list;
-  sortInstBasedHPWLBenefit(movable_inst_list);
-
-  int64_t total_benefit = 0;
-
-  for (auto* inst : movable_inst_list) {
-    Rectangle<int32_t> optimal_region = _operator->obtainOptimalCoordiRegion(inst);
-
-    // step 2: select optimal region candidate
-    std::vector<std::pair<Point<int32_t>, DPInstance*>> candidate_list;
-    searchCandidateCoordiList(optimal_region, inst, candidate_list);
-
-    // step 3: trially place or swap, calculate the benefit
-    std::pair<Point<int32_t>, DPInstance*> best_candidate;
-    int64_t best_benefit = 0;
-    for (auto pair : candidate_list) {
-      int64_t swap_benefit = 0;
-
-      if (!pair.second) {
-        swap_benefit = placeInstance(inst, pair.first.get_x(), pair.first.get_y(), true);
-      } else {
-        swap_benefit = swapInstance(inst, pair.second, true);
-      }
-
-      if (swap_benefit > 0) {  // record swap candidate when has benefit for accelerating
-        best_benefit = swap_benefit;
-        best_candidate = pair;
-        break;
-      }
-    }
-
-    // skip when no benefit
-    if (best_benefit <= 0) {
-      continue;
-    }
-
-    // step 4: place or swap decision
-    if (!best_candidate.second) {
-      placeInstance(inst, best_candidate.first.get_x(), best_candidate.first.get_y(), false);
-    } else {
-      swapInstance(inst, best_candidate.second, false);
-    }
-
-    total_benefit += best_benefit;
-  }
-  // LOG_INFO << "Expected Total HPWL Benefit: " << total_benefit;
+  return runSwap(false);
 }
 
-void InstanceSwap::runVerticalSwap()
+InstanceSwapResult InstanceSwap::runVerticalSwap()
 {
+  return runSwap(true);
+}
+
+InstanceSwapResult InstanceSwap::runSwap(bool vertical)
+{
+  auto& result = vertical ? _last_vertical_result : _last_global_result;
+  result = InstanceSwapResult{};
+  if (_database == nullptr || _database->get_design() == nullptr || _database->get_layout() == nullptr || _operator == nullptr
+      || _row_height <= 0 || _site_width <= 0) {
+    result.outcome = InstanceSwapOutcome::kInvalidInput;
+    result.reason = "instance swap has incomplete database";
+    return result;
+  }
+
+  std::map<DPInstance*, Point<int32_t>> before_coordinates;
+  for (auto* inst : _database->get_design()->get_inst_list()) {
+    if (inst != nullptr) {
+      before_coordinates.emplace(inst, inst->get_coordi());
+    }
+  }
+  result.hpwl_before = _operator->calTotalHPWL();
+
   bool is_clusted = _operator->checkIfClustered();
   if (!is_clusted) {
     _operator->updateInstClustering();
   }
 
-  int64_t total_benefit = 0;
-  for (auto* inst : _database->get_design()->get_inst_list()) {
-    if (inst->get_state() == DPINSTANCE_STATE::kFixed) {
-      continue;
-    }
+  if (!vertical) {
+    // step 1: sort inst based on their hpwl benefit
+    std::vector<DPInstance*> movable_inst_list;
+    sortInstBasedHPWLBenefit(movable_inst_list);
 
-    // step 1: select optimal row candidate
-    std::vector<std::pair<Point<int32_t>, DPInstance*>> candidate_list;
-    std::pair<int32_t, int32_t> optimal_line = _operator->obtainOptimalYCoordiLine(inst);
-    searchImproveYCoordiList(optimal_line, inst, 1, candidate_list);
+    for (auto* inst : movable_inst_list) {
+      Rectangle<int32_t> optimal_region = _operator->obtainOptimalCoordiRegion(inst);
 
-    // step 2: trially place or swap, calculate the benefit
-    std::pair<Point<int32_t>, DPInstance*> best_candidate;
-    int64_t best_benefit = 0;
+      std::vector<std::pair<Point<int32_t>, DPInstance*>> candidate_list;
+      searchCandidateCoordiList(optimal_region, inst, candidate_list);
+      result.candidate_count += static_cast<int64_t>(candidate_list.size());
 
-    for (auto pair : candidate_list) {
-      int64_t swap_benefit = 0;
-
-      if (!pair.second) {
-        swap_benefit = placeInstance(inst, pair.first.get_x(), pair.first.get_y(), true);
+      std::pair<Point<int32_t>, DPInstance*> best_candidate;
+      int64_t best_benefit = 0;
+      for (auto pair : candidate_list) {
+        int64_t swap_benefit = pair.second ? swapInstance(inst, pair.second, true)
+                                           : placeInstance(inst, pair.first.get_x(), pair.first.get_y(), true);
+        if (swap_benefit > 0) {
+          best_benefit = swap_benefit;
+          best_candidate = pair;
+          break;
+        }
+      }
+      if (best_benefit <= 0) {
+        continue;
+      }
+      if (!best_candidate.second) {
+        placeInstance(inst, best_candidate.first.get_x(), best_candidate.first.get_y(), false);
       } else {
-        swap_benefit = swapInstance(inst, pair.second, true);
+        swapInstance(inst, best_candidate.second, false);
+      }
+      ++result.accepted_count;
+    }
+  } else {
+    for (auto* inst : _database->get_design()->get_inst_list()) {
+      if (inst->get_state() == DPINSTANCE_STATE::kFixed) {
+        continue;
       }
 
-      if (swap_benefit > 0) {  // record swap candidate when has benefit for accelerating
-        best_benefit = swap_benefit;
-        best_candidate = pair;
+      std::vector<std::pair<Point<int32_t>, DPInstance*>> candidate_list;
+      std::pair<int32_t, int32_t> optimal_line = _operator->obtainOptimalYCoordiLine(inst);
+      searchImproveYCoordiList(optimal_line, inst, 1, candidate_list);
+      result.candidate_count += static_cast<int64_t>(candidate_list.size());
+
+      std::pair<Point<int32_t>, DPInstance*> best_candidate;
+      int64_t best_benefit = 0;
+      for (auto pair : candidate_list) {
+        int64_t swap_benefit = pair.second ? swapInstance(inst, pair.second, true)
+                                           : placeInstance(inst, pair.first.get_x(), pair.first.get_y(), true);
+        if (swap_benefit > 0) {
+          best_benefit = swap_benefit;
+          best_candidate = pair;
+          break;
+        }
+      }
+      if (best_benefit <= 0) {
+        continue;
+      }
+      if (!best_candidate.second) {
+        placeInstance(inst, best_candidate.first.get_x(), best_candidate.first.get_y(), false);
+      } else {
+        swapInstance(inst, best_candidate.second, false);
+      }
+      ++result.accepted_count;
+    }
+  }
+
+  for (const auto& before : before_coordinates) {
+    if (before.first->get_coordi().get_x() != before.second.get_x()
+        || before.first->get_coordi().get_y() != before.second.get_y()) {
+      ++result.changed_count;
+    }
+  }
+  result.hpwl_after = _operator->calTotalHPWL();
+  result.completed = true;
+  result.legal = checkOutputLegal();
+  if (!result.legal) {
+    result.outcome = InstanceSwapOutcome::kIllegalOutput;
+    result.reason = "instance swap produced an out-of-interval instance";
+  } else if (result.accepted_count == 0) {
+    result.outcome = InstanceSwapOutcome::kNoOp;
+    result.reason = vertical ? "vertical swap found no improving candidate" : "global swap found no improving candidate";
+  } else {
+    result.outcome = InstanceSwapOutcome::kCompleted;
+    result.reason = vertical ? "vertical swap completed" : "global swap completed";
+  }
+  return result;
+}
+
+bool InstanceSwap::checkOutputLegal() const
+{
+  auto* layout = _database->get_layout();
+  const auto& intervals = layout->get_interval_2d_list();
+  const int32_t row_height = layout->get_row_height();
+  for (auto* inst : _database->get_design()->get_inst_list()) {
+    if (inst == nullptr || inst->get_state() == DPINSTANCE_STATE::kFixed
+        || inst->get_state() == DPINSTANCE_STATE::kUnPlaced) {
+      continue;
+    }
+    const auto shape = inst->get_shape();
+    const int32_t row_index = shape.get_ll_y() / row_height;
+    if (row_index < 0 || row_index >= static_cast<int32_t>(intervals.size())) {
+      return false;
+    }
+    bool in_interval = false;
+    for (auto* interval : intervals.at(row_index)) {
+      if (interval != nullptr && interval->checkInLine(shape.get_ll_x(), shape.get_ur_x())) {
+        in_interval = true;
         break;
       }
     }
-
-    // skip when no benefit
-    if (best_benefit <= 0) {
-      continue;
+    if (!in_interval) {
+      return false;
     }
-
-    // step 4: place or swap decision
-    if (!best_candidate.second) {
-      placeInstance(inst, best_candidate.first.get_x(), best_candidate.first.get_y(), false);
-    } else {
-      swapInstance(inst, best_candidate.second, false);
+    if (_site_width > 0 && shape.get_ll_x() % _site_width != 0) {
+      return false;
     }
-
-    // LOG_INFO << "Expected HPWL Benefit: " << best_benefit;
-    total_benefit += best_benefit;
   }
-  // LOG_INFO << "Expected Total HPWL Benefit: " << total_benefit;
+  return true;
 }
 
 void InstanceSwap::sortInstBasedHPWLBenefit(std::vector<DPInstance*>& movable_inst_list)

@@ -52,7 +52,7 @@ void BufferInserter::initMasterList()
   }
 }
 
-void BufferInserter::runBufferInsertionForMaxWireLength()
+bool BufferInserter::runBufferInsertionForMaxWireLength()
 {
   LOG_INFO << "-----------------Start Buffer Insertion For Max Wirelength repair-----------------";
   ieda::Stats buffer_status;
@@ -82,15 +82,21 @@ void BufferInserter::runBufferInsertionForMaxWireLength()
   stwl_eval.updatePartOfNetWorkPointPair(violated_network_list);
 
   int32_t fixed_net_cnt = 0;
+  bool all_fixed = true;
   LOG_INFO << "Violation Net Count: " << violated_network_list.size();
   for (auto* violated_network : violated_network_list) {
     // skip the lack of driven pin net.
     if (!violated_network->get_transmitter()) {
+      all_fixed = false;
+      LOG_WARNING << "Cannot repair net without a transmitter: " << violated_network->get_name();
       continue;
     }
     MultiTree* topo_tree = stwl_eval.obtainMultiTree(violated_network);
-    if (!insertBufferWithMaxWireLength(topo_tree, 0)) {
+    const bool fixed = insertBufferWithMaxWireLength(topo_tree, 0);
+    if (!fixed) {
+      all_fixed = false;
       LOG_WARNING << "Fixing Net : " << topo_tree->get_network()->get_name() << " Buffer Insertion Error!";
+      continue;
     }
 
     fixed_net_cnt++;
@@ -105,6 +111,7 @@ void BufferInserter::runBufferInsertionForMaxWireLength()
   double time_delta = buffer_status.elapsedRunTime();
   LOG_INFO << "Buffer Insertion Total Time Elapsed: " << time_delta << "s";
   LOG_INFO << "-----------------Finish Buffer Insertion-----------------";
+  return all_fixed && fixed_net_cnt == static_cast<int32_t>(violated_network_list.size());
 }
 
 bool BufferInserter::insertBufferWithMaxWireLength(MultiTree* topo_tree, int32_t buffer_level)

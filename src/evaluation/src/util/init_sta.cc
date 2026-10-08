@@ -179,6 +179,42 @@ void InitSTA::saveTimingPowerBenchmark()
   LOG_INFO << "save benchmark json path: " << benchmark_file_path;
 }
 
+std::string InitSTA::getTimingPathsJson(unsigned max_path) const
+{
+  json root;
+  root["max_path"] = max_path;
+  json paths = json::array();
+  auto seq_paths = STA_INST->getTopNWorstSeqPaths(AnalysisMode::kMax, max_path);
+  for (auto* seq_path : seq_paths) {
+    if (!seq_path) {
+      continue;
+    }
+    json path;
+    path["endpoint"] = seq_path->getEndVertex()->getName();
+    path["slack"] = seq_path->getSlackNs();
+    path["arrive_time"] = seq_path->getArriveTimeNs();
+    path["require_time"] = FS_TO_NS(seq_path->getRequireTime());
+
+    json nodes = json::array();
+    auto data_stack = seq_path->getPathDelayData();
+    while (!data_stack.empty()) {
+      auto* path_delay_data = data_stack.top();
+      data_stack.pop();
+      if (!path_delay_data || !path_delay_data->get_own_vertex()) {
+        continue;
+      }
+      json node;
+      node["name"] = path_delay_data->get_own_vertex()->getName();
+      node["arrive_time"] = FS_TO_NS(path_delay_data->get_arrive_time());
+      nodes.push_back(std::move(node));
+    }
+    path["nodes"] = std::move(nodes);
+    paths.push_back(std::move(path));
+  }
+  root["paths"] = std::move(paths);
+  return root.dump(2);
+}
+
 void InitSTA::evalTiming(const std::string& routing_type, const bool& rt_done)
 {
   initStaEngine();

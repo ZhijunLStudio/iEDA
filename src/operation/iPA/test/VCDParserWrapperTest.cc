@@ -18,30 +18,48 @@
 #include "log/Log.hh"
 #include "ops/read_vcd/RustVCDParserWrapper.hh"
 
+#include <filesystem>
+
 using namespace ipower;
 using namespace ieda;
 
 namespace {
 
 class VCDParserWrapperTest : public testing::Test {
-  void SetUp() final {
+ protected:
+  static void SetUpTestSuite() {
     char config[] = "test";
     char* argv[] = {config};
     Log::init(argv);
   }
-  void TearDown() final { Log::end(); }
+  static void TearDownTestSuite() { Log::end(); }
 };
+
+std::filesystem::path testVcd() {
+  return (std::filesystem::path(__FILE__).parent_path() /
+          "../../../database/manager/parser/vcd/vcd_parser/benchmark/test1.vcd")
+      .lexically_normal();
+}
 
 TEST_F(VCDParserWrapperTest, rust_reader) {
   ipower::RustVcdParserWrapper vcd_reader;
-
-  vcd_reader.readVcdFile(
-      "/home/shaozheqing/iEDA/src/database/manager/parser/vcd/vcd_parser/"
-      "benchmark/test1.vcd");
-
-  vcd_reader.buildAnnotateDB("top_i");
-  vcd_reader.calcScopeToggleAndSp("top_i");
+  ASSERT_EQ(vcd_reader.readVcdFile(testVcd().c_str()), 1U);
+  ASSERT_EQ(vcd_reader.buildAnnotateDB("top_i"), 1U);
+  ASSERT_EQ(vcd_reader.calcScopeToggleAndSp("top_i"), 1U);
   vcd_reader.printAnnotateDB(std::cout);
+}
+
+TEST_F(VCDParserWrapperTest, hierarchical_scope) {
+  ipower::RustVcdParserWrapper vcd_reader;
+  ASSERT_EQ(vcd_reader.readVcdFile(testVcd().c_str()), 1U);
+  ASSERT_EQ(vcd_reader.buildAnnotateDB("test/top_i/sub_i"), 1U);
+  EXPECT_EQ(vcd_reader.calcScopeToggleAndSp("test/top_i/sub_i"), 1U);
+}
+
+TEST_F(VCDParserWrapperTest, missing_scope_is_recoverable) {
+  ipower::RustVcdParserWrapper vcd_reader;
+  ASSERT_EQ(vcd_reader.readVcdFile(testVcd().c_str()), 1U);
+  EXPECT_EQ(vcd_reader.buildAnnotateDB("test/top_i/missing"), 0U);
 }
 
 }  // namespace

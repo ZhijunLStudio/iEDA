@@ -133,6 +133,21 @@ OverflowSummary CongestionAPI::egrOverflow(std::string stage, std::string rt_dir
   return overflow_summary;
 }
 
+bool CongestionAPI::writeCongestionSummary(std::string stage, std::string output_path)
+{
+  return writeCongestionSummary(stage, EVAL_CONGESTION_INST->getEGRDirPath(), output_path);
+}
+
+bool CongestionAPI::writeCongestionSummary(std::string stage, std::string rt_dir_path, std::string output_path)
+{
+  return writeCongestionSummaryJson(stage, rt_dir_path, output_path);
+}
+
+std::optional<CongestionSummaryDocument> CongestionAPI::readCongestionSummary(std::string input_path)
+{
+  return readCongestionSummaryJson(input_path);
+}
+
 UtilizationSummary CongestionAPI::rudyUtilization(std::string stage, bool use_lut)
 {
   UtilizationSummary utilization_summary;
@@ -158,23 +173,25 @@ UtilizationSummary CongestionAPI::rudyUtilization(std::string stage, std::string
   return utilization_summary;
 }
 
-CongestionValue CongestionAPI::rudyCongestion(int bin_cnt_x, int bin_cnt_y, const std::string& save_path)
+CongestionValue CongestionAPI::rudyCongestion(int bin_cnt_x, int bin_cnt_y, const std::string& save_path,
+                                              const std::string& util_save_path)
 {
   CongestionValue congestion_value;
 
   EVAL_CONGESTION_INST->initIDB();
-  congestion_value = EVAL_CONGESTION_INST->calRUDY(bin_cnt_x, bin_cnt_y, save_path);
+  congestion_value = EVAL_CONGESTION_INST->calRUDY(bin_cnt_x, bin_cnt_y, save_path, util_save_path);
   EVAL_CONGESTION_INST->destroyIDB();
 
   return congestion_value;
 }
 
-CongestionValue CongestionAPI::lutRudyCongestion(int bin_cnt_x, int bin_cnt_y, const std::string& save_path)
+CongestionValue CongestionAPI::lutRudyCongestion(int bin_cnt_x, int bin_cnt_y, const std::string& save_path,
+                                                 const std::string& util_save_path)
 {
   CongestionValue congestion_value;
 
   EVAL_CONGESTION_INST->initIDB();
-  congestion_value = EVAL_CONGESTION_INST->calLUTRUDY(bin_cnt_x, bin_cnt_y, save_path);
+  congestion_value = EVAL_CONGESTION_INST->calLUTRUDY(bin_cnt_x, bin_cnt_y, save_path, util_save_path);
   EVAL_CONGESTION_INST->destroyIDB();
 
   return congestion_value;

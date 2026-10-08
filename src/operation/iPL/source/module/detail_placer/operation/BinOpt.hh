@@ -33,6 +33,7 @@
 #include "config/DetailPlacerConfig.hh"
 #include "database/DPDatabase.hh"
 #include "DPOperator.hh"
+#include "BinOptResult.hh"
 
 namespace ipl {
 class BinOpt
@@ -47,7 +48,8 @@ public:
     BinOpt& operator=(const BinOpt&) = delete;
     BinOpt& operator=(BinOpt&&) = delete;
 
-    void runBinOpt();
+    BinOptResult runBinOpt();
+    const BinOptResult& lastResult() const { return _last_result; }
 
 private:
     DPConfig* _config;
@@ -55,6 +57,7 @@ private:
     DPOperator* _operator;
     int32_t _row_height;
     int32_t _site_width;
+    BinOptResult _last_result;
 
     void slidingInstBetweenGrids(Grid* supply_grid, Grid* demand_grid, int64_t grid_area);
     int64_t calSlidingFlowValue(Grid* supply_grid, Grid* demand_grid, int64_t grid_area);
@@ -68,6 +71,7 @@ private:
     int32_t obtainBackMinX(DPCluster* cluster);
     void collapseCluster(DPCluster* dest_cluster, DPCluster* src_cluster);
     DPCluster* createInstClusterForInterval(DPInstance* inst, DPInterval* interval);
+    bool checkOutputLegal() const;
 
 };
 }
