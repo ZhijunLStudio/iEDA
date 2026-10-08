@@ -97,7 +97,9 @@ def write_tcl(workdir: Path, case_root: Path, foundry_dir: Path, config: Path, i
 
 def _run_ieda_via_daemon(workdir: Path, commands: list[str], def_save: bool, def_path: Path | None) -> tuple[int, str, str] | None:
     """Try the persistent socket daemon first; return None when absent/broken."""
-    if os.environ.get("GP_AGENT_NO_DAEMON") == "1":
+    # The socket daemon runs outside the wrapper that hides the host log-path shim, so it cannot
+    # create iEDA log directories. Disabled unless explicitly re-enabled.
+    if os.environ.get("GP_AGENT_USE_DAEMON") != "1":
         return None
     sock_path = workdir / ".ieda_daemon.sock"
     if not sock_path.exists():
@@ -204,7 +206,11 @@ def run_ieda(workdir: Path, case_root: Path, foundry_dir: Path, config: Path, in
     # (lxq pdh/aes13) case_roots expect in db_path_setting.tcl; bal11-style case_roots
     # derive these from $FOUNDRY_DIR themselves and ignore the extras.
     env.update(_derive_pdk_env(foundry_dir))
-    proc = subprocess.run([str(IEDa_BIN), "-script", str(tcl)], cwd=REPO_ROOT, env=env,
+    # Resolve the binary at call time, not at import time: the A/B harness changes IEDA_BIN per
+    # arm after importing this module, and reading it at import silently ran both arms with the
+    # default binary.
+    _bin = Path(os.environ.get("IEDA_BIN", str(IEDa_BIN)))
+    proc = subprocess.run([str(_bin), "-script", str(tcl)], cwd=REPO_ROOT, env=env,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=1800)
     return proc.returncode, proc.stdout, proc.stderr
 

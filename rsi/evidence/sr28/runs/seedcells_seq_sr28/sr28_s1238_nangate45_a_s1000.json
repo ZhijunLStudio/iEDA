@@ -1,0 +1,13 @@
+{
+ "design": "s1238_nangate45_a",
+ "arm": "sr28",
+ "seed": 1000,
+ "flow_s": 20.7,
+ "ok": true,
+ "hpwl": 5814008,
+ "union": 0,
+ "max": 0,
+ "fails": [],
+ "pass_": true,
+ "def_md5": "75b4a6ad"
+}

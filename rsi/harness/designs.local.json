@@ -1,0 +1,353 @@
+{
+  "s1238": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/pl_vis_cases/s1238",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/s1238/ieda_in_unplaced.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/s1238/pl_clean_config.json",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/s1238/innovus_placed.def",
+    "innovus_hpwl": 7417394,
+    "ieda_best_hpwl": 5745273,
+    "pdk": "sky130",
+    "notes": "timing GP+LG+DP full placement",
+    "gp_baseline_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/s1238/ieda_gp_nofill.def",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef"
+  },
+  "apb4_timer": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/pl_vis_cases/apb4_timer",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/apb4_timer/ieda_in_unplaced.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/apb4_timer/pl_clean_config.json",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/apb4_timer/innovus_placed.def",
+    "innovus_hpwl": 20389663,
+    "ieda_best_hpwl": 17535062,
+    "pdk": "sky130",
+    "notes": "timing GP+LG+DP full placement",
+    "gp_baseline_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/apb4_timer/ieda_gp_nofill.def",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef"
+  },
+  "picorv32": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/pl_vis_cases/picorv32",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/picorv32/ieda_in_unplaced.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/picorv32/pl_clean_config.json",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/picorv32/innovus_placed.def",
+    "innovus_hpwl": 358263695,
+    "ieda_best_hpwl": 296949944,
+    "pdk": "sky130",
+    "notes": "timing GP+LG+DP full placement",
+    "gp_baseline_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/picorv32/ieda_gp_nofill.def",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef"
+  },
+  "aes": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/pl_vis_cases/aes",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/aes/ieda_in_unplaced.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/aes/pl_clean_config.json",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/aes/innovus_placed.def",
+    "innovus_hpwl": 1154174869,
+    "ieda_best_hpwl": 1048174208,
+    "pdk": "sky130",
+    "notes": "timing GP+LG+DP full placement",
+    "gp_baseline_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/aes/ieda_gp_nofill.def",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef"
+  },
+  "nangate45_gcd": {
+    "case_root": "/tmp/nangate45_gcd",
+    "input_def": "/tmp/nangate45_gcd/gcd_nangate45.def",
+    "pl_config": "/tmp/nangate45_gcd/pl_clean_config.json",
+    "foundry_dir": "/mnt/usb20t/PCL-167/data3/taosimin/OpenROAD/test/Nangate45",
+    "pdk": "nangate45",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/nangate45/lef/NangateOpenCellLibrary.macro.mod.lef",
+    "gp_baseline_def": "/tmp/gp_nangate45_direct/placement.def",
+    "innovus_def": "/tmp/nangate45_gcd/innovus_placed.def",
+    "alt_input_defs": [
+      {
+        "label": "innovus_die",
+        "path": "/tmp/nangate45_gcd/innovus_placed.def",
+        "note": "same die as Innovus (util 0.772 vs registry input 0.839); start with random_init=0, congestion_effort=3 reproduces HPWL 3.19M"
+      }
+    ]
+  },
+  "asap7_aes": {
+    "case_root": "/tmp/asap7_aes_ws/workspace",
+    "input_def": "/tmp/asap7_aes_ws/workspace/result/iFP_result.def",
+    "pl_config": "/tmp/asap7_aes/pl_clean_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/asap7",
+    "pdk": "asap7",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/asap7/lef/asap7sc7p5t_27_R_1x_201211.lef",
+    "gp_baseline_def": "/tmp/asap7_aes_ws/workspace/result/iPL_result.def",
+    "innovus_def": "",
+    "alt_input_defs": [
+      {
+        "label": "innovus_die",
+        "path": "/tmp/asap7_aes/innovus_placed.def",
+        "note": "Innovus placement as GP seed; start with random_init=0 keeps its die/utilization context"
+      }
+    ]
+  },
+  "ihp130_gcd": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/ieda/scripts/design/ihp130_gcd",
+    "input_def": "/home/lizhijun/work/ieda-rsi/ieda/scripts/design/ihp130_gcd/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/ieda/scripts/design/ihp130_gcd/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ihp130",
+    "pdk": "ihp130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ihp130/ihp-sg13g2/libs.ref/sg13g2_stdcell/lef/sg13g2_stdcell.lef",
+    "gp_baseline_def": "/home/lizhijun/work/ieda-rsi/ieda/scripts/design/ihp130_gcd/result/iPL_result.def",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/ieda/scripts/design/ihp130_gcd/innovus_placed.def",
+    "alt_input_defs": [
+      {
+        "label": "innovus_die",
+        "path": "/home/lizhijun/work/iEDA/scripts/design/ihp130_gcd/innovus_placed.def",
+        "note": "Innovus placement as GP seed; Round-24 recipe: random_init=0 + congestion_effort=3 -> HPWL 444.7M, rutil 1.549"
+      }
+    ]
+  },
+  "gcd_sky130_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_sky130_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_sky130_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_sky130_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/gcd_sky130_a/innovus_placed.def"
+  },
+  "gcd_nangate45_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_nangate45_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_nangate45_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_nangate45_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/nangate45",
+    "pdk": "nangate45",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/nangate45/lef/NangateOpenCellLibrary.macro.mod.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_nangate45_a/innovus_placed.def"
+  },
+  "gcd_ics55_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_ics55_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_ics55_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_ics55_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ics55",
+    "pdk": "ics55",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ics55/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CR/lef/ics55_LLSC_H7CR_ecos.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_ics55_a/innovus_placed.def"
+  },
+  "salsa20_sky130_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_sky130_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_sky130_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_sky130_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/salsa20_sky130_a/innovus_placed.def"
+  },
+  "salsa20_nangate45_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_nangate45_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_nangate45_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_nangate45_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/nangate45",
+    "pdk": "nangate45",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/nangate45/lef/NangateOpenCellLibrary.macro.mod.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_nangate45_a/innovus_placed.def"
+  },
+  "salsa20_ics55_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_ics55_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_ics55_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_ics55_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ics55",
+    "pdk": "ics55",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ics55/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CR/lef/ics55_LLSC_H7CR_ecos.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_ics55_a/innovus_placed.def"
+  },
+  "s1238_sky130_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_sky130_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_sky130_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_sky130_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s1238_sky130_a/innovus_placed.def"
+  },
+  "s1238_nangate45_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_nangate45_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_nangate45_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_nangate45_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/nangate45",
+    "pdk": "nangate45",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/nangate45/lef/NangateOpenCellLibrary.macro.mod.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_nangate45_a/innovus_placed.def"
+  },
+  "s1238_ics55_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_ics55_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_ics55_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_ics55_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ics55",
+    "pdk": "ics55",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ics55/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CR/lef/ics55_LLSC_H7CR_ecos.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_ics55_a/innovus_placed.def"
+  },
+  "s38584_sky130_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_sky130_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_sky130_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_sky130_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s38584_sky130_a/innovus_placed.def"
+  },
+  "s38584_nangate45_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_nangate45_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_nangate45_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_nangate45_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/nangate45",
+    "pdk": "nangate45",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/nangate45/lef/NangateOpenCellLibrary.macro.mod.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_nangate45_a/innovus_placed.def"
+  },
+  "s38584_ics55_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_ics55_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_ics55_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_ics55_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ics55",
+    "pdk": "ics55",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/ics55/IP/STD_cell/ics55_LLSC_H7C_V1p10C100/ics55_LLSC_H7CR/lef/ics55_LLSC_H7CR_ecos.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_ics55_a/innovus_placed.def"
+  },
+  "s5378_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s5378_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s5378_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s5378_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s5378_sky130_b/innovus_placed.def"
+  },
+  "apb4_timer_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_timer_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_timer_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_timer_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_timer_sky130_b/innovus_placed.def"
+  },
+  "s38417_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s38417_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s38417_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s38417_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s38417_sky130_b/innovus_placed.def"
+  },
+  "picorv32_sky130_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/picorv32_sky130_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/picorv32_sky130_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/picorv32_sky130_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/picorv32_sky130_a/innovus_placed.def"
+  },
+  "PPU_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/PPU_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/PPU_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/PPU_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/PPU_sky130_b/innovus_placed.def"
+  },
+  "aes_sky130_a": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/aes_sky130_a",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/aes_sky130_a/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/aes_sky130_a/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/aes_sky130_a/innovus_placed.def"
+  },
+  "aes_core_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/aes_core_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/aes_core_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/aes_core_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/aes_core_sky130_b/innovus_placed.def"
+  },
+  "apb4_ps2_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_ps2_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_ps2_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_ps2_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_ps2_sky130_b/innovus_placed.def"
+  },
+  "apb4_i2c_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_i2c_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_i2c_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_i2c_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_i2c_sky130_b/innovus_placed.def"
+  },
+  "s1488_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s1488_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s1488_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s1488_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s1488_sky130_b/innovus_placed.def"
+  },
+  "s9234_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s9234_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s9234_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s9234_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s9234_sky130_b/innovus_placed.def"
+  },
+  "s13207_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s13207_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s13207_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s13207_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s13207_sky130_b/innovus_placed.def"
+  },
+  "s15850_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s15850_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s15850_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s15850_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s15850_sky130_b/innovus_placed.def"
+  },
+  "apb4_uart_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_uart_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_uart_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_uart_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_uart_sky130_b/innovus_placed.def"
+  },
+  "apb4_clint_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_clint_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_clint_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/apb4_clint_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_clint_sky130_b/innovus_placed.def"
+  },
+  "s35932_sky130_b": {
+    "case_root": "/home/lizhijun/work/ieda-rsi/assets/cases/s35932_sky130_b",
+    "input_def": "/home/lizhijun/work/ieda-rsi/assets/cases/s35932_sky130_b/result/iFP_result.def",
+    "pl_config": "/home/lizhijun/work/ieda-rsi/assets/cases/s35932_sky130_b/iEDA_config/pl_default_config.json",
+    "foundry_dir": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130",
+    "pdk": "sky130",
+    "lef": "/home/lizhijun/work/ieda-rsi/ieda/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef",
+    "innovus_def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s35932_sky130_b/innovus_placed.def"
+  }
+}

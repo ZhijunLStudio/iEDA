@@ -1819,6 +1819,12 @@ _cur_hpwl = _nes_database->_wirelength->obtainTotalWirelength();
 
 float phi_coef = obtainPhiCoef(static_cast<float>(_cur_hpwl - _prev_hpwl) / _nes_config.get_reference_hpwl(), iter_num);
 _prev_hpwl = _cur_hpwl;
+// SR-1 (do not relax the density penalty while overflow is above target) was retired
+// here. It was measured to be dead code: phi_coef drops below 1 only when the wirelength
+// worsens by more than reference_hpwl in one iteration, while overflow stays above
+// target only early, when the wirelength is still improving, so the two conditions are
+// effectively disjoint. Two designs produced byte-identical placements with and without
+// it. The real defect in this schedule is SR-2, in obtainPhiCoef.
 _nes_database->_density_penalty *= phi_coef;
 
 // print info.

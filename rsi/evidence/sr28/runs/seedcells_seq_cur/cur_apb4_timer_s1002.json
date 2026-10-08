@@ -1,0 +1,15 @@
+{
+ "design": "apb4_timer",
+ "arm": "cur",
+ "seed": 1002,
+ "flow_s": 21.0,
+ "ok": true,
+ "hpwl": 15628987,
+ "union": 1991,
+ "max": 18,
+ "fails": [
+  "max"
+ ],
+ "pass_": false,
+ "def_md5": "d11d6e59"
+}

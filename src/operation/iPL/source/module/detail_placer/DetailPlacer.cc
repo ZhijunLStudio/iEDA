@@ -956,6 +956,7 @@ bool DetailPlacer::runDetailPlace()
     ++shift_iter;
   } while (improve_ratio > threshold && shift_iter < 10);
 
+
   notifyPLPlaceDensity();
 
   // Align every movable instance's orientation to its row so the subsequent
@@ -1006,6 +1007,15 @@ bool DetailPlacer::runDetailPlaceNFS()
 
   NFSpread nfspread_opt(&_config, &_database, &_operator);
   _last_nfs_result = nfspread_opt.runNFSpread();
+  // Report what the spreading stage actually achieved. Without this the stage is silent
+  // whether it moved cells or found nothing to do, which is indistinguishable from a
+  // no-op when it runs inside a multi-stage pipeline.
+  LOG_INFO << "[NFS] moved=" << _last_nfs_result.moved_count
+           << " overflow_before=" << _last_nfs_result.overflow_before
+           << " overflow_after=" << _last_nfs_result.overflow_after
+           << " iterations=" << _last_nfs_result.iterations
+           << " progress=" << (_last_nfs_result.no_progress ? "none" : "reduced")
+           << " reason=" << _last_nfs_result.reason;
   if (!_last_nfs_result.isSuccessful()) {
     LOG_ERROR << "Network flow cell spreading failed: " << _last_nfs_result.reason;
     return false;

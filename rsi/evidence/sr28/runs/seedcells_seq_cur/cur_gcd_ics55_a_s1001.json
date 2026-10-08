@@ -1,0 +1,15 @@
+{
+ "design": "gcd_ics55_a",
+ "arm": "cur",
+ "seed": 1001,
+ "flow_s": 13.9,
+ "ok": true,
+ "hpwl": 4077701,
+ "union": 26,
+ "max": 4,
+ "fails": [
+  "union"
+ ],
+ "pass_": false,
+ "def_md5": "122722b7"
+}

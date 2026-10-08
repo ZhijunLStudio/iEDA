@@ -80,6 +80,8 @@ class PlacerIO
   bool runGlobalPlacementSession(const ipl::GPRunRequest& request, const std::string& mode);
   bool runLegalization();
   bool runDetailPlacement();
+  bool runConvergedFinish(int max_passes, double hpwl_rel_tol);
+  bool runNetworkFlowSpread();
 
   bool checkLegality();
   bool reportPlacement();

@@ -1,0 +1,539 @@
+{
+  "source_commit": "04e26de9",
+  "source_commit_full": "04e26de9e08b4775a6feed39468fc865eebde124",
+  "historical_solver_md5": {
+    "sr28": "48cd5be3770072811bf1feb6d95cdae2",
+    "sr26": "f6f811931b470ee68e05767bb1528446"
+  },
+  "scope": "Frozen sequential records; 11 selected candidate designs x 4 seeds x 3 arms. Not a rerun, not a complete 15-design evaluation, and not a timing/PPA verdict.",
+  "records": [
+    {
+      "path": "runs/seedcells_seq_cur/cur_apb4_timer_s1000.json",
+      "sha256": "7880dde0be02a04516cbd150881a8743b4eab6bbfabeb4c57e56e4468a41b15c"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_apb4_timer_s1001.json",
+      "sha256": "770c3e7f0f956278d4982e33066e4458d8425bbb8a6eab242487c0b88b49530a"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_apb4_timer_s1002.json",
+      "sha256": "499f1ee6b84414367c47602adc3e874c9b0d5c7839bc5e57c85c311abddf373a"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_apb4_timer_s1003.json",
+      "sha256": "3148d91062bb7653d7476d7cf3387bfb55ba9f7dc80f9d7451f555fd67fdf30b"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_ics55_a_s1000.json",
+      "sha256": "d58817c695388c5f1270745299ba7b49dd875bb030a0b90e52929869120ee39b"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_ics55_a_s1001.json",
+      "sha256": "3d80db0706a74bae120e1e8669312ed6460e905dd1f6ed2f5a85c70c69572e19"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_ics55_a_s1002.json",
+      "sha256": "45e8f5d61579d982525fc3c8d30d7ee093c2c96331132c9bef9c22cc892d496f"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_ics55_a_s1003.json",
+      "sha256": "efb99da8775eadd55e8b73959780c1eae67439f15cac684ca92e2dab18e72337"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_nangate45_a_s1000.json",
+      "sha256": "2754b3358363ffc67301e1b04764e3c48179d13ebda34d176441d48fb2ccc68b"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_nangate45_a_s1001.json",
+      "sha256": "9d81af1940bbb2545375a6b84ac60b50e3721425455ecfb484076bda5070b92a"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_nangate45_a_s1002.json",
+      "sha256": "6f5d692c63b165561f4bb4801df0b7e83aedbfbec4aea1b0849da9a454bd2725"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_nangate45_a_s1003.json",
+      "sha256": "92914456574fb545270996ef60689e9d047012848054117642af460ad8fd9536"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_sky130_a_s1000.json",
+      "sha256": "458a5f9304863e3445052f2b16865c58fd4961bf9bf2ce384b6b70efebbae0f1"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_sky130_a_s1001.json",
+      "sha256": "9c3514997f15a402819d1344bb2674dd4315ba9488c9a16dfea9c346090d5839"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_sky130_a_s1002.json",
+      "sha256": "54ecd528593f413b653dcc222ad138b1bf89ad6ec79532dfdd288bafd390313f"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_gcd_sky130_a_s1003.json",
+      "sha256": "57d6f9d9840b7acda06a88e7a370cd2d4f372094e89bbc7e819a0386fe16e6bd"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_ics55_a_s1000.json",
+      "sha256": "6eeb9a3b079f0b3037f19b70492189b1d6d243a1536cc52230d7f64a0bed3253"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_ics55_a_s1001.json",
+      "sha256": "5eb9cb42d5ecd62ee683bf5c1d33f506bd90b7e274dce197cbffc938d61436cb"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_ics55_a_s1002.json",
+      "sha256": "51167bfd0daf623ec54eecc666e59a45c0751d35c7df3129a2aa354ab6e2cc6f"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_ics55_a_s1003.json",
+      "sha256": "c628ced4818056b6a2d2623523a0994f513898fc7bf08687b3d3c7e77aa1ef03"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_nangate45_a_s1000.json",
+      "sha256": "1965ab4dc1b3496220570912bc6206ff8929c4f752d72c85d5051f662edd5dba"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_nangate45_a_s1001.json",
+      "sha256": "9df83acf9f0052a99f2e5ad2717f8ffb63e8b6d5f965ece1a84ba25b64d8b2e5"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_nangate45_a_s1002.json",
+      "sha256": "2e4dee0b392cac7e76b9f6a984109c01ccf19a5359a5b7afec7a59ba091cd5de"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_nangate45_a_s1003.json",
+      "sha256": "1f378faffaac75c26f326502e5ca4abc89f85cfeecc84bfdb993fa85d13249bd"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_s1000.json",
+      "sha256": "0eafeba2e166bd6f47c433cc8f57c3b82c42af6ded2cdabbb8f1bafd15e39b48"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_s1001.json",
+      "sha256": "c095d99cf6c847694ea5400eb14d490c6435607b7309994bae8018848ccb93f0"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_s1002.json",
+      "sha256": "98f77c3e83553320a08ddd20efcdab8cfbf215842abecf4cf344164f9b6f6f45"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_s1003.json",
+      "sha256": "aa38a134313e591edaa6850ac041eaa34344c29c5c8684671ae032bda6e6a6e7"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_sky130_a_s1000.json",
+      "sha256": "ace5890cc5df67ec9a2520dac9c6bac2612f5f57b2f3f2e569a02c404fbb6bcd"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_sky130_a_s1001.json",
+      "sha256": "b0daad15cc72ba64b525a0f10b9f65a57ad08e02ee8afb576a0a8d1a34e38458"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_sky130_a_s1002.json",
+      "sha256": "76639dacef2959163103306b7d4b07cbd7c558904840ea53b37e1112621120c4"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s1238_sky130_a_s1003.json",
+      "sha256": "890ef0521daef25410e2309630d26420d62c0ecbb7d6d0659c6f3fe87777072e"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s38584_ics55_a_s1000.json",
+      "sha256": "76a71f7fe03f6cd5613a42e2534ef2ca9784565259d6e98569815cdc2fb7b378"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s38584_ics55_a_s1001.json",
+      "sha256": "78b2e215559906eea7d251dca27ff1c1e8ed955fa851c5aa7b93965e948d0968"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s38584_ics55_a_s1002.json",
+      "sha256": "437495283d78560d16d97710de6578cdfe9288a18feae4c4d07cac04b0cdc7dc"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s38584_ics55_a_s1003.json",
+      "sha256": "43dd39d8b4efd7879ff3c56a1b8de4716bb322cff51eb66685dc5737b06009dc"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s38584_nangate45_a_s1000.json",
+      "sha256": "2d24c7ab42437c1f03f6dca21ce7d94332dfbd5a766eeadfaee3424392967363"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s38584_nangate45_a_s1001.json",
+      "sha256": "a60fdbe831b500bb71a45300c64a6e2a78ae5d5639fffd9dc204d21ea6c3a5ad"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s38584_nangate45_a_s1002.json",
+      "sha256": "d32549ae896ed9af34edc88fcbd5b379d593e6ac31550d755b524e38cbf2c217"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_s38584_nangate45_a_s1003.json",
+      "sha256": "3be2084899b8874bff661136e9792153211b078a34c3e1292ee2ff6e5d65650c"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_salsa20_ics55_a_s1000.json",
+      "sha256": "f67fa8188696c36336164255b6c028bf64a8a2097989307bf4aa0904a8718124"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_salsa20_ics55_a_s1001.json",
+      "sha256": "93c2223f83a779698b54e5f1071fa15c32a5e0adc978bc9c59d5a2ec08280dd6"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_salsa20_ics55_a_s1002.json",
+      "sha256": "3c9fa4a19a59004eb21c2fdcb6b5610503aa4efb1c204278a6fe21d2d5fed2b0"
+    },
+    {
+      "path": "runs/seedcells_seq_cur/cur_salsa20_ics55_a_s1003.json",
+      "sha256": "0c372a11dc42edd3fa42d6459fef319e4a4c699bfbe7bcc037b63bd391276b24"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_apb4_timer_s1000.json",
+      "sha256": "700adbac5d1b4690b82c38c34a0049f96535a1e1ba5b99448c7df73073c070fe"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_apb4_timer_s1001.json",
+      "sha256": "4aeb459a1c9cd44f81b1705ae642cbd98777b29788f96d2474851d9253010c3f"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_apb4_timer_s1002.json",
+      "sha256": "54d16e5056226b68dfee0a257708e7303f8846a7aa930925c044522f3eecd8af"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_apb4_timer_s1003.json",
+      "sha256": "01b05687253bce22b2b5e97f834f6615a4fddebdf26d055ccbcfc574a9fabe6e"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_ics55_a_s1000.json",
+      "sha256": "2c30180c675a09250b48776a97a15f481c462b7d267094bac050f357d98c968a"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_ics55_a_s1001.json",
+      "sha256": "15f49c93d142762f454a92cfdab7d8e4bfcf36cd60005f8de27077cd05ac2e38"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_ics55_a_s1002.json",
+      "sha256": "f349589d319b135f8cc375030650634e16ce46172c69f0ed3dfeea03e84338a1"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_ics55_a_s1003.json",
+      "sha256": "f06974449522ca7b293f9ca301a1729a80afdce2896f98b34f8e75784ed6f99e"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_nangate45_a_s1000.json",
+      "sha256": "8c73aab202b84c1cf7f6e16e59069e1ad34714d0c0bb3f75825c6eaf7cce150e"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_nangate45_a_s1001.json",
+      "sha256": "adfe25b873d008af13c5192b47fd234f4c4df4c1c25b4d60aff470acb2545666"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_nangate45_a_s1002.json",
+      "sha256": "ce17f45ede6fad23a4c501fb15f295a8343d1cad768bd68ad1ab35e727afa231"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_nangate45_a_s1003.json",
+      "sha256": "ac1913624b0b64307567fba1e0d4410bbd664fb4a60da6107937f8f80315dbdd"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_sky130_a_s1000.json",
+      "sha256": "7670bc37fb7e6e99f247db9c3b51496182bb8a0f79d1aa1e461dd798b020dbf5"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_sky130_a_s1001.json",
+      "sha256": "852a74de151a2670b2b854dc6b18368b85dd15ae34975a7ff84ed078a8e62b2b"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_sky130_a_s1002.json",
+      "sha256": "d64ed0e1f5dace7c6251a20f1b6fdfc1b65bd3a94499477ce30a64727ba85add"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_gcd_sky130_a_s1003.json",
+      "sha256": "d2595602336db6d95dc43ca2b85453d4e774e2ad48b5de281c8493ed0a6658e5"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_ics55_a_s1000.json",
+      "sha256": "f04839a4b50bb77908f10e901e571c9e5b97f6b5875f17f1c0ecd3b85860b3fe"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_ics55_a_s1001.json",
+      "sha256": "6cd05040ead1bb2d7f8ed3d5fc7bb343422b14c9486d56e9b0fa5afda30ea25a"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_ics55_a_s1002.json",
+      "sha256": "564dfa3dfb7afa367448870e9e575ec04c383496d216ac347167b87ee967b40b"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_ics55_a_s1003.json",
+      "sha256": "77eb1d6e2d98332dd7d70c6e3a22be6b7ce61b6ade20541772d1fe6487de6315"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_nangate45_a_s1000.json",
+      "sha256": "d4b1df1c3922103aaed898d2fc30a8a5081f9c2ca85f7ed93c467f6ad8274e66"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_nangate45_a_s1001.json",
+      "sha256": "eeb68c0bc0e87114c22212d37d23641595552293fd0b52869804eb7dc4d38d20"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_nangate45_a_s1002.json",
+      "sha256": "c145781340a5333ab5eb1b2a8edb188cda517adb9e9cc470c1e461aecc6d5f12"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_nangate45_a_s1003.json",
+      "sha256": "6f11e5704d6c7691638c4c9ca6c49b7a134136f806669e8d3cbadb0f0d578427"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_s1000.json",
+      "sha256": "557a73ae5cd02c0decddf3069664f8286a3dcaac7ac7d90e615d2f5e1f6d2317"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_s1001.json",
+      "sha256": "ddcc0853e66048fa5c63c49b11f5d967ec5a98c77430bb3b3ceba567cd96df5c"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_s1002.json",
+      "sha256": "f7652d292a6fd387a2038326e51aa7c598af9c33b701c8a90129e770a5c3f75f"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_s1003.json",
+      "sha256": "e8ec48af2416022f64111baf6a7d061081a41bbf209e74a7000554ee19dec50c"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_sky130_a_s1000.json",
+      "sha256": "6028c57b3b413a22df6558c47828cbcaf1579dd7292ae7504b157d495f3a8e76"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_sky130_a_s1001.json",
+      "sha256": "1c3dcbb2b87d45574e3c7bb8284b47c2c342e2104b9b28a3c14b06e3f501e948"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_sky130_a_s1002.json",
+      "sha256": "0f4a0cb03af7cae58334c976d07e6bdfed008dde1ca618571ca983b1fd43b497"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s1238_sky130_a_s1003.json",
+      "sha256": "1a222e30828eccddeeb5be4f3beefb307795e985254b87f4fbfb2f79bfcd1453"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s38584_ics55_a_s1000.json",
+      "sha256": "ed7eb849cc4afa7e72030f9788679137da068183d2bafec17af44232d2a9fcd0"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s38584_ics55_a_s1001.json",
+      "sha256": "a69d8ed21c71f720ab0091190bfd7a7563295b0966e19c52fd0c546d1257b91e"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s38584_ics55_a_s1002.json",
+      "sha256": "61e8de261ef1b6530325f9aa0ccf544d208b4ccfce1c8ddd01045f2ab40c3c76"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s38584_ics55_a_s1003.json",
+      "sha256": "be5d9e099d94d3b092ecbe203c045c692f16480749ce8c7a9e130368fed8f14f"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s38584_nangate45_a_s1000.json",
+      "sha256": "4d2e4648172d61b8409cfadc55aae8b874d0466a04f01523705af7d9f1cc6897"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s38584_nangate45_a_s1001.json",
+      "sha256": "08671b48ecf4d324d258c16ebd1e5a50b40208789cfe3cf722565007fc4c7460"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s38584_nangate45_a_s1002.json",
+      "sha256": "248ec60038ef18cc8703d9921ab047b93bfc1cffc579510f9a931c9c7ad9d74a"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_s38584_nangate45_a_s1003.json",
+      "sha256": "58c72808e31ed72555fd3f99f98ae498933d8109189756019e0f3d09f1d5cd74"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_salsa20_ics55_a_s1000.json",
+      "sha256": "44d99254fc9ba9a95b490dab4013e487edd3f340eaf07a71b2cb30ba71eb4017"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_salsa20_ics55_a_s1001.json",
+      "sha256": "0913f2f7fefccd602150a756e4585c9238f51777d2ae4c5a637cc25f59a61207"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_salsa20_ics55_a_s1002.json",
+      "sha256": "8b74cfd42db84d9a04e5d5573b33599bbb0ff9bf13ddea04933ab76a7ef953ce"
+    },
+    {
+      "path": "runs/seedcells_seq_sr26/sr26_salsa20_ics55_a_s1003.json",
+      "sha256": "2cee6ef8ac150ad710c984a905fad1316b3cd8e79953a9f8fbba3fe5ccf56c4c"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_apb4_timer_s1000.json",
+      "sha256": "ccc3146566682497d3a0129b4249d0fd4d8bcb6e4f55b974eee4d4352eb6a9d1"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_apb4_timer_s1001.json",
+      "sha256": "7f548b4790f619fba424afe668582c55df4656033823ce9313ef720bad3bdd12"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_apb4_timer_s1002.json",
+      "sha256": "0ef815ddbfa92c3c4fc8a0d39ad1e8780c326d4a21bd8bd2c4681a82cfb9a647"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_apb4_timer_s1003.json",
+      "sha256": "16ad6d81fd235551cde46cd1da6fd688a1dc974bb748433caeb1b1d752b03423"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_ics55_a_s1000.json",
+      "sha256": "f18530315997e50943d99fcaf8cae11daffe66c4ac576361a3a1ec377db7f734"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_ics55_a_s1001.json",
+      "sha256": "68e5f4fa67db1bc1b987e5143f589ebda79f2d500cb4d3c0635c8e25326fb19b"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_ics55_a_s1002.json",
+      "sha256": "8c944d1c330bc9d9a515eb0b666790df02e37bc50be8c5586db80e27815a618a"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_ics55_a_s1003.json",
+      "sha256": "d6aa4d40bf0cc5c48151e79810f9a540e121459271731ccce8d8d581c5088f21"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_nangate45_a_s1000.json",
+      "sha256": "c8de0b4c9a747702b87006360d01651accb00bc04883eac30696f92ac6e3633f"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_nangate45_a_s1001.json",
+      "sha256": "7284501348e0d9e2cd4dd5f38506880c4e9a5770b554d7452450b32d653a4a9d"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_nangate45_a_s1002.json",
+      "sha256": "72ffaee4245c8b7227601be46be014ba5d51d12719399d8541346c21a75cde1c"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_nangate45_a_s1003.json",
+      "sha256": "7102c6db9409d600faea447587a383891cf094250a3a3d69997acddd39a496dc"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_sky130_a_s1000.json",
+      "sha256": "77731a6cc2ee966fcb566173a293d5399a031f260e18e840d6dc503649db9af4"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_sky130_a_s1001.json",
+      "sha256": "15c5fa20f538db6ae59ac3a4742d1a52002d80937d71f56dc57c17fee5c9adea"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_sky130_a_s1002.json",
+      "sha256": "a9cb7e03d97258e246a7194e8f1cb8f66d61f50519e985c349edf034bf6f5d57"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_gcd_sky130_a_s1003.json",
+      "sha256": "3b2b24ba614dff683af73314a152ea8c2b6601e58be60b141683881b0a8438cd"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_ics55_a_s1000.json",
+      "sha256": "7de8f999f1a911780b6c9d8f10c25a1dc6770dee9560fce19272bccde178ca34"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_ics55_a_s1001.json",
+      "sha256": "cfd683aac69430a19daf0916c25d102c15f8c95b2430626a79379ab1b2fbc639"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_ics55_a_s1002.json",
+      "sha256": "bb09cdf0e56d14e90c7346de3fbc014f171f595310ee6ee58c645f7fe26e2f73"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_ics55_a_s1003.json",
+      "sha256": "0384381e26be8e2e234caf8c72368ce4aa5892cbce73c1e3bd07d0f8e17c86bb"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_nangate45_a_s1000.json",
+      "sha256": "cdd3e143fbc9d61aadf45fdcdb378a90992ff88dabdb6cfac30176d065ac665a"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_nangate45_a_s1001.json",
+      "sha256": "b75d773fd8156508b0c50ccd3c6240094e1073f1c218e83e73f698cbb16bfb48"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_nangate45_a_s1002.json",
+      "sha256": "b2b4c15fc227c5b2db1f55e8a318211f127ab1987d33970924ff078437837273"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_nangate45_a_s1003.json",
+      "sha256": "8d4d4f8b040bcd845493cae20819c0a0aec7e3c6e880fca436e1fed44845d873"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_s1000.json",
+      "sha256": "8fe310b5d97e3a2e026374d5874b7623b20339c3ae9aaf91acbb89bc3ea1e531"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_s1001.json",
+      "sha256": "a14d9837712425b2ac8dd9a942f24327c3965693ac4eeee75731eb1016756fda"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_s1002.json",
+      "sha256": "ba79ef0b4bb87e7995c75a7e3ca692eadc3fe32997ac2cee77a93466c460080e"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_s1003.json",
+      "sha256": "173658fafcf18deb8936a5deeb785b1287107ca91601b554f3dd6e4a15fefb57"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_sky130_a_s1000.json",
+      "sha256": "fac724f663d043dc061baf0b521c7d7d21ecbb9f37936a86267417e6805d0470"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_sky130_a_s1001.json",
+      "sha256": "e1924b6fa9c72a0b8c2ce4b71cfed26d1fe2b0a2a6b54669aadcb1f6201670ac"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_sky130_a_s1002.json",
+      "sha256": "89de8d48430f35621201449ee98c2300f60a25c6cef853faa8651c63e6705954"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s1238_sky130_a_s1003.json",
+      "sha256": "88cbd54c3cc8b200cf9bd4525dbf7bd5bf7686308d57789a079fe0a380b4368b"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s38584_ics55_a_s1000.json",
+      "sha256": "8f6ad13ee5e5191a64012292e6d759ddeb8a3a89987398685403197622193da2"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s38584_ics55_a_s1001.json",
+      "sha256": "20a14ff745b1423068b2b3b7849f184ec66712ddc987e96d50f712a18b518eb7"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s38584_ics55_a_s1002.json",
+      "sha256": "1ec962ee356990f3f1fe8050b55bcf16fe789f18f553e439399a0497b26f8219"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s38584_ics55_a_s1003.json",
+      "sha256": "a43a02f842937a0a472c6a68705f38d23e1a7363b82a5085622368cd9d2397bf"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s38584_nangate45_a_s1000.json",
+      "sha256": "2c5650d6873eeb8a32fca2e512ab72ceec07519ddb850ce76f9912363227e546"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s38584_nangate45_a_s1001.json",
+      "sha256": "36e9087bcc912d3957f70a5f13779ffb0a5ae5b5960d3fd3cb35bcae15c36950"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s38584_nangate45_a_s1002.json",
+      "sha256": "7c6255578946d332549c3360f878f906ebc998e68949ceb728a092eff977a155"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_s38584_nangate45_a_s1003.json",
+      "sha256": "921ed7772bb819650444734ec2ce9f46f2ef618f7d6eccdf009037d3a66bbff4"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_salsa20_ics55_a_s1000.json",
+      "sha256": "c0ac9c1dc57c0985cffb61844590670423a51eb6f4dea55f6e10f091917f0cfa"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_salsa20_ics55_a_s1001.json",
+      "sha256": "702790ac53eae4be134927365d908e8ecd07bd267ea85327166008f4d3cb376b"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_salsa20_ics55_a_s1002.json",
+      "sha256": "7e74c410e35dd90b91b6b3ad2240b47da09bf781dccf5cf3d5f92ef2ad6d9649"
+    },
+    {
+      "path": "runs/seedcells_seq_sr28/sr28_salsa20_ics55_a_s1003.json",
+      "sha256": "54bafdb8941a0422d768b3750a99321c9bf271f1c8d8aad270521a34efd03546"
+    }
+  ]
+}

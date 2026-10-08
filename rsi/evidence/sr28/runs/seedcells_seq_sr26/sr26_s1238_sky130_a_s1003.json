@@ -1,0 +1,15 @@
+{
+ "design": "s1238_sky130_a",
+ "arm": "sr26",
+ "seed": 1003,
+ "flow_s": 26.9,
+ "ok": true,
+ "hpwl": 6714325,
+ "union": 1443,
+ "max": 26,
+ "fails": [
+  "hpwl"
+ ],
+ "pass_": false,
+ "def_md5": "749a58d8"
+}

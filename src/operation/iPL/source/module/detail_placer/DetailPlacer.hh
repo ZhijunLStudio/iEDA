@@ -89,6 +89,7 @@ class DetailPlacer
   BinOptResult runBinOpt();
   int64_t calTotalHPWL();
   float calPeakBinDensity();
+
   const DetailPlacementResult& lastResult() const { return _last_result; }
 
   bool runDetailPlaceNFS();

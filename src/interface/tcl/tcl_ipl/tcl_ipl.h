@@ -52,5 +52,7 @@ DEFINE_CMD_CLASS(PlacerRunGP);
 DEFINE_CMD_CLASS(PlacerCompareGP);
 DEFINE_CMD_CLASS(PlacerRunLG);
 DEFINE_CMD_CLASS(PlacerRunDP);
+DEFINE_CMD_CLASS(PlacerFinish);
+DEFINE_CMD_CLASS(PlacerRunNFS);
 
 }  // namespace tcl

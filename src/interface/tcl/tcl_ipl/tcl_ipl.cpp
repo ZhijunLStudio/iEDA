@@ -708,6 +708,56 @@ unsigned CmdPlacerRunDP::exec()
   return ipl::placementTclResult(inst->runDetailPlacement());
 }
 
+CmdPlacerFinish::CmdPlacerFinish(const char* cmd_name) : TclCmd(cmd_name)
+{
+  auto* max_passes = new TclIntOption("-max_passes", 1, 3);
+  addOption(max_passes);
+  auto* hpwl_tol = new TclDoubleOption("-hpwl_tol", 1, 0.002);
+  addOption(hpwl_tol);
+}
+
+unsigned CmdPlacerFinish::check()
+{
+  return 1;
+}
+
+unsigned CmdPlacerFinish::exec()
+{
+  if (not check()) {
+    return 0;
+  }
+  auto* inst = iplf::PlacerIO::getInstance();
+  int max_passes = 3;
+  double hpwl_tol = 0.002;
+  TclOption* mp = getOptionOrArg("-max_passes");
+  if (mp && mp->is_set_val()) {
+    max_passes = mp->getIntVal();
+  }
+  TclOption* ht = getOptionOrArg("-hpwl_tol");
+  if (ht && ht->is_set_val()) {
+    hpwl_tol = ht->getDoubleVal();
+  }
+  return ipl::placementTclResult(inst->runConvergedFinish(max_passes, hpwl_tol));
+}
+
+CmdPlacerRunNFS::CmdPlacerRunNFS(const char* cmd_name) : TclCmd(cmd_name)
+{
+}
+
+unsigned CmdPlacerRunNFS::check()
+{
+  return 1;
+}
+
+unsigned CmdPlacerRunNFS::exec()
+{
+  if (not check()) {
+    return 0;
+  }
+  auto* inst = iplf::PlacerIO::getInstance();
+  return ipl::placementTclResult(inst->runNetworkFlowSpread());
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

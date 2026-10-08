@@ -1,0 +1,954 @@
+[
+ {
+  "design": "PPU_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/PPU_sky130_b/innovus_placed.def",
+   "hpwl": 209530861,
+   "egr_total": 84575,
+   "egr_max": 42,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/PPU_sky130_b/td055_ce0_s1000/placement.def",
+   "hpwl": 323774908,
+   "egr_total": 280583,
+   "egr_max": 92,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/PPU_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 406113827,
+   "egr_total": 395783,
+   "egr_max": 136,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "aes_sky130_a",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/aes_sky130_a/innovus_placed.def",
+   "hpwl": 582987493,
+   "egr_total": 362472,
+   "egr_max": 54,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/aes_sky130_a/td055_ce0_s1000/placement.def",
+   "hpwl": 411596214,
+   "egr_total": 254723,
+   "egr_max": 108,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/aes_sky130_a/td095_ce0_s1000/placement.def",
+   "hpwl": 435847082,
+   "egr_total": 326997,
+   "egr_max": 110,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "apb4_clint_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_clint_sky130_b/innovus_placed.def",
+   "hpwl": 27786965,
+   "egr_total": 2980,
+   "egr_max": 16,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_clint_sky130_b/td055_ce0_s1000/placement.def",
+   "hpwl": 26251330,
+   "egr_total": 4746,
+   "egr_max": 42,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_clint_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 31480171,
+   "egr_total": 13059,
+   "egr_max": 50,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "apb4_i2c_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_i2c_sky130_b/innovus_placed.def",
+   "hpwl": 18454376,
+   "egr_total": 3148,
+   "egr_max": 18,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_i2c_sky130_b/td055_ce0_s1000/placement.def",
+   "hpwl": 16195666,
+   "egr_total": 3062,
+   "egr_max": 26,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_i2c_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 18186937,
+   "egr_total": 7046,
+   "egr_max": 46,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "apb4_ps2_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_ps2_sky130_b/innovus_placed.def",
+   "hpwl": 11469443,
+   "egr_total": 1948,
+   "egr_max": 18,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_ps2_sky130_b/td055_ce3_s1000/placement.def",
+   "hpwl": 10207623,
+   "egr_total": 1471,
+   "egr_max": 18,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_ps2_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 11305930,
+   "egr_total": 4311,
+   "egr_max": 38,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "apb4_timer",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": 20389663,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/apb4_timer/innovus_placed.def",
+   "hpwl": 18566747,
+   "egr_total": 5626,
+   "egr_max": 26,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_timer/td080_ce3_s1002/placement.def",
+   "hpwl": 16216767,
+   "egr_total": 3266,
+   "egr_max": 22,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_timer/td095_ce0_s1000/placement.def",
+   "hpwl": 18913074,
+   "egr_total": 6749,
+   "egr_max": 42,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "apb4_timer_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_timer_sky130_b/innovus_placed.def",
+   "hpwl": 23178076,
+   "egr_total": 3582,
+   "egr_max": 16,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_timer_sky130_b/td055_ce0_s1000/placement.def",
+   "hpwl": 21651200,
+   "egr_total": 2753,
+   "egr_max": 18,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_timer_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 23821367,
+   "egr_total": 6543,
+   "egr_max": 36,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "asap7_aes",
+  "pdk": "asap7",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "error": "missing innovus_def"
+  }
+ },
+ {
+  "design": "gcd_ics55_a",
+  "pdk": "ics55",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_ics55_a/innovus_placed.def",
+   "hpwl": 4333398,
+   "egr_total": 40,
+   "egr_max": 6,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/gcd_ics55_a/td080_ce7_s1000/placement.def",
+   "hpwl": 4095537,
+   "egr_total": 31,
+   "egr_max": 6,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/gcd_ics55_a/td095_ce0_s1000/placement.def",
+   "hpwl": 4159655,
+   "egr_total": 218,
+   "egr_max": 26,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "gcd_nangate45_a",
+  "pdk": "nangate45",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/cases/gcd_nangate45_a/innovus_placed.def",
+   "hpwl": 7751413,
+   "egr_total": 0,
+   "egr_max": 0,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/gcd_nangate45_a/td065_ce0_s1000/placement.def",
+   "hpwl": 6991541,
+   "egr_total": 0,
+   "egr_max": 0,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/gcd_nangate45_a/td095_ce0_s1000/placement.def",
+   "hpwl": 7217236,
+   "egr_total": 0,
+   "egr_max": 0,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "gcd_sky130_a",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/gcd_sky130_a/innovus_placed.def",
+   "hpwl": 7250388,
+   "egr_total": 2004,
+   "egr_max": 24,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/gcd_sky130_a/td065_ce7_s1000/placement.def",
+   "hpwl": 6789439,
+   "egr_total": 700,
+   "egr_max": 13,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/gcd_sky130_a/td095_ce0_s1000/placement.def",
+   "hpwl": 6824186,
+   "egr_total": 1342,
+   "egr_max": 23,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "ihp130_gcd",
+  "pdk": "ihp130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "error": "missing innovus_def"
+  }
+ },
+ {
+  "design": "nangate45_gcd",
+  "pdk": "nangate45",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "error": "missing innovus_def"
+  }
+ },
+ {
+  "design": "aes_core_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/aes_core_sky130_b/innovus_placed.def",
+   "hpwl": 981774139,
+   "egr_total": 446235,
+   "egr_max": 46,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/aes_core_sky130_b/td055_ce0_s1000/placement.def",
+   "hpwl": 1208031366,
+   "egr_total": 920431,
+   "egr_max": 130,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/aes_core_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 1576448601,
+   "egr_total": 1556859,
+   "egr_max": 170,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "apb4_uart_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/apb4_uart_sky130_b/innovus_placed.def",
+   "hpwl": 138455405,
+   "egr_total": 48449,
+   "egr_max": 26,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_uart_sky130_b/td055_ce0_s1000/placement.def",
+   "hpwl": 164595333,
+   "egr_total": 122057,
+   "egr_max": 72,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/apb4_uart_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 217032999,
+   "egr_total": 194368,
+   "egr_max": 94,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s1238",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": 7417394,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/s1238/innovus_placed.def",
+   "hpwl": 8053041,
+   "egr_total": 3693,
+   "egr_max": 30,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1238/td060_ce7_s1000/placement.def",
+   "hpwl": 5585815,
+   "egr_total": 1882,
+   "egr_max": 50,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1238/td095_ce0_s1000/placement.def",
+   "hpwl": 7695846,
+   "egr_total": 4916,
+   "egr_max": 58,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s1238_ics55_a",
+  "pdk": "ics55",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_ics55_a/innovus_placed.def",
+   "hpwl": 4051577,
+   "egr_total": 177,
+   "egr_max": 14,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1238_ics55_a/td055_ce0_s1000/placement.def",
+   "hpwl": 3146281,
+   "egr_total": 146,
+   "egr_max": 10,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1238_ics55_a/td095_ce0_s1000/placement.def",
+   "hpwl": 3529133,
+   "egr_total": 639,
+   "egr_max": 22,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s1238_nangate45_a",
+  "pdk": "nangate45",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/cases/s1238_nangate45_a/innovus_placed.def",
+   "hpwl": 7845521,
+   "egr_total": 0,
+   "egr_max": 0,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1238_nangate45_a/td055_ce0_s1000/placement.def",
+   "hpwl": 5756810,
+   "egr_total": 1,
+   "egr_max": 1,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1238_nangate45_a/td095_ce0_s1000/placement.def",
+   "hpwl": 6416560,
+   "egr_total": 81,
+   "egr_max": 12,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "picorv32",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": 358263695,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/picorv32/innovus_placed.def",
+   "hpwl": 308691343,
+   "egr_total": 167614,
+   "egr_max": 40,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/picorv32/td055_ce0_s1000/placement.def",
+   "hpwl": 268328741,
+   "egr_total": 173405,
+   "egr_max": 80,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/picorv32/td095_ce0_s1000/placement.def",
+   "hpwl": 431719851,
+   "egr_total": 445986,
+   "egr_max": 146,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s1238_sky130_a",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s1238_sky130_a/innovus_placed.def",
+   "hpwl": 6709138,
+   "egr_total": 2500,
+   "egr_max": 32,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1238_sky130_a/td080_ce7_s1000/placement.def",
+   "hpwl": 6242668,
+   "egr_total": 1852,
+   "egr_max": 23,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1238_sky130_a/td095_ce0_s1000/placement.def",
+   "hpwl": 6203487,
+   "egr_total": 2441,
+   "egr_max": 35,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "aes",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": 1154174869,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_refs/aes/innovus_placed.def",
+   "hpwl": 914210691,
+   "egr_total": 481659,
+   "egr_max": 44,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/aes/td055_ce0_s1000/placement.def",
+   "hpwl": 844141843,
+   "egr_total": 671251,
+   "egr_max": 126,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/aes/td095_ce0_s1000/placement.def",
+   "hpwl": 1103706447,
+   "egr_total": 1153905,
+   "egr_max": 154,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "picorv32_sky130_a",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/picorv32_sky130_a/innovus_placed.def",
+   "hpwl": 317149243,
+   "egr_total": 123976,
+   "egr_max": 44,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/picorv32_sky130_a/td055_ce0_s1000/placement.def",
+   "hpwl": 365541628,
+   "egr_total": 239294,
+   "egr_max": 88,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/picorv32_sky130_a/td095_ce0_s1000/placement.def",
+   "hpwl": 454330589,
+   "egr_total": 388836,
+   "egr_max": 100,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s1488_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s1488_sky130_b/innovus_placed.def",
+   "hpwl": 12585977,
+   "egr_total": 4260,
+   "egr_max": 34,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1488_sky130_b/td060_ce7_s1000/placement.def",
+   "hpwl": 8547055,
+   "egr_total": 4410,
+   "egr_max": 52,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s1488_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 9167077,
+   "egr_total": 5511,
+   "egr_max": 72,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s13207_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s13207_sky130_b/innovus_placed.def",
+   "hpwl": 84117014,
+   "egr_total": 15655,
+   "egr_max": 24,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s13207_sky130_b/td060_ce3_s1000/placement.def",
+   "hpwl": 79357438,
+   "egr_total": 14003,
+   "egr_max": 40,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s13207_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 88807419,
+   "egr_total": 30883,
+   "egr_max": 68,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s15850_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s15850_sky130_b/innovus_placed.def",
+   "hpwl": 94956767,
+   "egr_total": 16678,
+   "egr_max": 22,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s15850_sky130_b/td055_ce0_s1000/placement.def",
+   "hpwl": 88618740,
+   "egr_total": 17734,
+   "egr_max": 38,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s15850_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 105419148,
+   "egr_total": 44499,
+   "egr_max": 72,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s38584_ics55_a",
+  "pdk": "ics55",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_ics55_a/innovus_placed.def",
+   "hpwl": 80240724,
+   "egr_total": 3407,
+   "egr_max": 18,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s38584_ics55_a/td055_ce0_s1000/placement.def",
+   "hpwl": 86606591,
+   "egr_total": 15655,
+   "egr_max": 41,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s38584_ics55_a/td095_ce0_s1000/placement.def",
+   "hpwl": 109391775,
+   "egr_total": 58113,
+   "egr_max": 58,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s35932_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s35932_sky130_b/innovus_placed.def",
+   "hpwl": 194253790,
+   "egr_total": 41286,
+   "egr_max": 30,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s35932_sky130_b/td055_ce7_s1000/placement.def",
+   "hpwl": 255634510,
+   "egr_total": 88938,
+   "egr_max": 60,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s35932_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 290632559,
+   "egr_total": 146245,
+   "egr_max": 70,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s38584_nangate45_a",
+  "pdk": "nangate45",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/cases/s38584_nangate45_a/innovus_placed.def",
+   "hpwl": 144607962,
+   "egr_total": 6,
+   "egr_max": 2,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s38584_nangate45_a/td055_ce7_s1000/placement.def",
+   "hpwl": 169462688,
+   "egr_total": 3753,
+   "egr_max": 41,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s38584_nangate45_a/td095_ce0_s1000/placement.def",
+   "hpwl": 232368924,
+   "egr_total": 27431,
+   "egr_max": 69,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s38417_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s38417_sky130_b/innovus_placed.def",
+   "hpwl": 194367427,
+   "egr_total": 41889,
+   "egr_max": 24,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s38417_sky130_b/td055_ce3_s1000/placement.def",
+   "hpwl": 218055815,
+   "egr_total": 91198,
+   "egr_max": 76,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s38417_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 296741811,
+   "egr_total": 202488,
+   "egr_max": 80,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s5378_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s5378_sky130_b/innovus_placed.def",
+   "hpwl": 29407529,
+   "egr_total": 5553,
+   "egr_max": 22,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s5378_sky130_b/td055_ce3_s1000/placement.def",
+   "hpwl": 25698982,
+   "egr_total": 5383,
+   "egr_max": 46,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s5378_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 29305308,
+   "egr_total": 12491,
+   "egr_max": 54,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s9234_sky130_b",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s9234_sky130_b/innovus_placed.def",
+   "hpwl": 36946655,
+   "egr_total": 5998,
+   "egr_max": 30,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s9234_sky130_b/td055_ce0_s1000/placement.def",
+   "hpwl": 32467159,
+   "egr_total": 8348,
+   "egr_max": 34,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s9234_sky130_b/td095_ce0_s1000/placement.def",
+   "hpwl": 39468880,
+   "egr_total": 18973,
+   "egr_max": 64,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "s38584_sky130_a",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/s38584_sky130_a/innovus_placed.def",
+   "hpwl": 219933384,
+   "egr_total": 120158,
+   "egr_max": 42,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s38584_sky130_a/td055_ce0_s1000/placement.def",
+   "hpwl": 258754513,
+   "egr_total": 168044,
+   "egr_max": 90,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/s38584_sky130_a/td095_ce0_s1000/placement.def",
+   "hpwl": 309374820,
+   "egr_total": 262135,
+   "egr_max": 118,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "salsa20_ics55_a",
+  "pdk": "ics55",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_ics55_a/innovus_placed.def",
+   "hpwl": 296610508,
+   "egr_total": 54296,
+   "egr_max": 34,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/salsa20_ics55_a/td080_ce7_s1000/placement.def",
+   "hpwl": 305083815,
+   "egr_total": 123910,
+   "egr_max": 65,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/salsa20_ics55_a/td095_ce0_s1000/placement.def",
+   "hpwl": 432437262,
+   "egr_total": 476794,
+   "egr_max": 117,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "salsa20_nangate45_a",
+  "pdk": "nangate45",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/cases/salsa20_nangate45_a/innovus_placed.def",
+   "hpwl": 534430356,
+   "egr_total": 250,
+   "egr_max": 10,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/salsa20_nangate45_a/td080_ce7_s1000/placement.def",
+   "hpwl": 563450782,
+   "egr_total": 39644,
+   "egr_max": 85,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/salsa20_nangate45_a/td095_ce0_s1000/placement.def",
+   "hpwl": 868218450,
+   "egr_total": 299765,
+   "egr_max": 154,
+   "egr_valid": true
+  }
+ },
+ {
+  "design": "salsa20_sky130_a",
+  "pdk": "sky130",
+  "innovus_hpwl_ref": null,
+  "reference": {
+   "label": "innovus",
+   "def": "/home/lizhijun/work/ieda-rsi/assets/innovus_rebuild/salsa20_sky130_a/innovus_placed.def",
+   "hpwl": 619858873,
+   "egr_total": 361409,
+   "egr_max": 48,
+   "egr_valid": true
+  },
+  "our_truth_best": {
+   "label": "our_truth_best",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/salsa20_sky130_a/td080_ce7_s1000/placement.def",
+   "hpwl": 940716593,
+   "egr_total": 806442,
+   "egr_max": 108,
+   "egr_valid": true
+  },
+  "our_v0_attractor": {
+   "label": "our_v0_attractor",
+   "def": "/home/lizhijun/work/ieda-rsi/runs/v2/stage1/salsa20_sky130_a/td095_ce0_s1000/placement.def",
+   "hpwl": 1195813399,
+   "egr_total": 1284280,
+   "egr_max": 184,
+   "egr_valid": true
+  }
+ }
+]

@@ -24,6 +24,8 @@
  */
 #include "PLAPI.hh"
 
+#include <omp.h>
+
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -642,15 +644,6 @@ PlacementFlowResult PLAPI::runFlowResult()
     notifyPLCongestionInfo(2);
     notifyPLTimingInfo(2);
   }
-
-  std::cout << std::endl;
-
-  // // update LG Database
-  // LOG_INFO << "Repeated execution of legalization to support subsequent incremental legalization";
-  // LegalizerInst.updateInstanceList();
-  // LegalizerInst.runLegalize();
-  // printHPWLInfo();
-  // std::cout << std::endl;
 
   reportPLInfo();
   std::cout << std::endl;
@@ -2181,6 +2174,259 @@ bool PLAPI::runIncrLG(std::vector<std::string> inst_name_list)
   return flag;
 }
 
+bool PLAPI::runConvergedFinish(int32_t max_passes, double hpwl_rel_tol)
+{
+  if (max_passes < 1) {
+    max_passes = 1;
+  }
+  HPWirelength hpwl(PlacerDBInst.get_topo_manager());
+  int64_t prev_hpwl = hpwl.obtainTotalWirelength();
+  for (int32_t pass = 0; pass < max_passes; pass++) {
+    if (!runLG()) {
+      LOG_ERROR << "[SR-6] legalisation failed on finishing pass " << (pass + 1);
+      return false;
+    }
+    if (!runDP()) {
+      LOG_ERROR << "[SR-6] detail placement failed on finishing pass " << (pass + 1);
+      return false;
+    }
+    const int64_t now_hpwl = hpwl.obtainTotalWirelength();
+    double gain = 0.0;
+    if (prev_hpwl > 0) {
+      gain = static_cast<double>(prev_hpwl - now_hpwl) / static_cast<double>(prev_hpwl);
+    }
+    LOG_INFO << "[SR-6] finishing pass " << (pass + 1) << "/" << max_passes << " total wirelength "
+             << now_hpwl << " previous " << prev_hpwl << " relative gain " << gain;
+    prev_hpwl = now_hpwl;
+    if (gain <= hpwl_rel_tol) {
+      LOG_INFO << "[SR-6] converged after " << (pass + 1) << " pass(es): gain " << gain
+               << " is within the tolerance " << hpwl_rel_tol;
+      break;
+    }
+  }
+  return true;
+}
+
+// SR-20: legalisation and detail placement are issued once each by the flow, and measurement says a
+// single pass leaves congestion on the table for some designs and nothing on others:
+//
+//   gcd_ics55_a     three passes took total overflow from 2.20x the reference to 0.80x and peak from
+//                   0.67x to 0.33x, with wirelength flat across the passes (0.9416, 0.9447, 0.9431)
+//   s5378_sky130_b  the extra passes changed nothing at all
+//   s1238_sky130_a  the second pass made both congestion numbers worse
+//
+// Wirelength cannot separate those - it is flat where the gain is largest - so the gate is the congestion
+// measurement the flow now has in process. One extra LG+DP is kept only if either congestion number
+// improved and neither got worse; otherwise the pass is undone and the loop stops.
+//
+// This lives on PLAPI and is called from PlacerIO::runDetailPlacement, which is where the placer_run_dp
+// command lands. Three earlier attempts (SR-15, SR-17, SR-18) failed on placement - one inside
+// runConvergedFinish, which the flow never calls, and one in runFlowResult, which the command-based flow
+// also never reaches - so the location is as much a part of the change as the logic.
+bool PLAPI::runGatedFinish(int32_t max_extra_passes)
+{
+  if (max_extra_passes < 1) {
+    return true;
+  }
+  // SR-21: keep the best result seen across the passes, not the last one.
+  //
+  // The first version of this gate required every pass not to worsen either congestion number and stopped
+  // when one did. Reading the planner's own numbers on gcd_ics55_a shows why that cannot work: the shipped
+  // pass leaves peak 3 / total 37, the second pass leaves peak 6 / total 27, and the third leaves peak 2 /
+  // total 16. The peak gets worse and then better, and the ungated three-pass run ends better on both
+  // numbers than where it started. A rule demanding monotone improvement refuses the second pass - the step
+  // that leads to the third - so it never reaches the result that made this lever worth pursuing.
+  //
+  // This version runs the passes, records the whole state after each one, and returns to whichever pass was
+  // best. "Best" is peak first and total second, the same dominance order the standing uses for its own
+  // candidate selection, because the peak is the dimension the objective is losing on. Nothing is undone
+  // during the loop.
+  auto take_snapshot = [&]() {
+    std::vector<std::pair<Instance*, Rectangle<int32_t>>> snap;
+    if (auto* design = PlacerDBInst.get_design()) {
+      const auto& insts = design->get_instance_list();
+      snap.reserve(insts.size());
+      for (auto* inst : insts) {
+        if (inst != nullptr) {
+          snap.emplace_back(inst, inst->get_shape());
+        }
+      }
+    }
+    return snap;
+  };
+  auto restore = [&](const std::vector<std::pair<Instance*, Rectangle<int32_t>>>& snap) {
+    for (const auto& s : snap) {
+      s.first->set_shape(s.second.get_ll_x(), s.second.get_ll_y(), s.second.get_ur_x(), s.second.get_ur_y());
+    }
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+    writeBackSourceDataBase();
+  };
+
+  notifyPLCongestionInfo(2);
+  int32_t best_mof = PlacerDBInst.egr_mof[2];
+  int32_t best_tof = PlacerDBInst.egr_tof[2];
+  int32_t best_pass = 0;
+  auto best_snapshot = take_snapshot();
+
+  for (int32_t extra = 0; extra < max_extra_passes; extra++) {
+    const int32_t prev_mof = PlacerDBInst.egr_mof[2];
+    const int32_t prev_tof = PlacerDBInst.egr_tof[2];
+
+    updatePlacerDB();
+    const bool lg_ok = runLG();
+    const bool dp_ok = lg_ok && runDP();
+    writeBackSourceDataBase();
+    if (!dp_ok) {
+      LOG_INFO << "[SR-21] pass " << (extra + 1) << " failed; stopping";
+      break;
+    }
+    notifyPLCongestionInfo(2);
+    const int32_t mof = PlacerDBInst.egr_mof[2];
+    const int32_t tof = PlacerDBInst.egr_tof[2];
+
+    const bool better = (mof < best_mof) || (mof == best_mof && tof < best_tof);
+    if (better) {
+      best_mof = mof;
+      best_tof = tof;
+      best_pass = extra + 1;
+      best_snapshot = take_snapshot();
+    }
+    LOG_INFO << "[SR-21] pass " << (extra + 1) << "/" << max_extra_passes << ": peak " << mof << " total "
+             << tof << " | best is pass " << best_pass << " at peak " << best_mof << " total " << best_tof
+             << (better ? " (this pass is the new best)" : "");
+    if (mof == prev_mof && tof == prev_tof) {
+      LOG_INFO << "[SR-21] pass changed neither number; stopping";
+      break;
+    }
+  }
+
+  const int32_t final_mof = PlacerDBInst.egr_mof[2];
+  const int32_t final_tof = PlacerDBInst.egr_tof[2];
+  if (final_mof != best_mof || final_tof != best_tof) {
+    restore(best_snapshot);
+    LOG_INFO << "[SR-21] restored pass " << best_pass << ": peak " << best_mof << " total " << best_tof
+             << " instead of the last one at peak " << final_mof << " total " << final_tof;
+  } else {
+    LOG_INFO << "[SR-21] last pass was the best: peak " << final_mof << " total " << final_tof;
+  }
+  return true;
+}
+bool PLAPI::runGatedGPRefine(int32_t max_segments, int32_t iterations, int32_t congestion_effort)
+{
+  if (max_segments < 1 || iterations <= 0) {
+    return true;
+  }
+  auto take_snapshot = [&]() {
+    std::vector<std::pair<Instance*, Rectangle<int32_t>>> snap;
+    if (auto* design = PlacerDBInst.get_design()) {
+      const auto& insts = design->get_instance_list();
+      snap.reserve(insts.size());
+      for (auto* inst : insts) {
+        if (inst != nullptr) {
+          snap.emplace_back(inst, inst->get_shape());
+        }
+      }
+    }
+    return snap;
+  };
+  auto restore = [&](const std::vector<std::pair<Instance*, Rectangle<int32_t>>>& snap) {
+    for (const auto& s : snap) {
+      s.first->set_shape(s.second.get_ll_x(), s.second.get_ll_y(), s.second.get_ur_x(), s.second.get_ur_y());
+    }
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+    writeBackSourceDataBase();
+  };
+
+  notifyPLCongestionInfo(2);
+  int32_t best_mof = PlacerDBInst.egr_mof[2];
+  int32_t best_tof = PlacerDBInst.egr_tof[2];
+  int32_t best_segment = 0;
+  int32_t stagnant = 0;
+  auto best_snapshot = take_snapshot();
+  LOG_INFO << "[SR-25] entry: peak " << best_mof << " total " << best_tof;
+
+  for (int32_t segment = 1; segment <= max_segments; segment++) {
+    GPRunRequest request;
+    request.mode = GPRunMode::kStart;
+    request.random_init = false;
+    request.accepted_iterations = iterations;
+    // SR-28: the last third of the budget re-linearises at the DEFAULT effort (0) instead of the
+    // congestion-aware one.
+    //
+    // Why: every segment so far re-linearises under the congestion term, so every candidate the gate can
+    // choose is congestion-steered. An effort-0 segment is a plain re-linearise followed by legalisation and
+    // detail placement - the "run the pair again" shape the campaign's earliest multi-pass evidence favoured -
+    // and it is the cheap half of that evidence, since effort 0 does not call the evaluator inside the
+    // Nesterov loop. Adding such candidates cannot weaken the gate's guarantee: a segment is still chosen
+    // only if it is no worse than the entry on either scored number and better on at least one. It can only
+    // add candidates the effort-4 schedule was not producing.
+    //
+    // Context: congestion effort 4 applied to the INITIAL global placement was measured this round and is
+    // worse on both designs tried (s5378_sky130_b union 1.518x -> 1.625x and peak 1.182x -> 1.273x; s1238
+    // union 1.124x -> 1.182x, peak unchanged). So steering the whole run with the congestion term hurts,
+    // while a bounded refinements worth of it helps (SR-26). The schedule below tests the third possibility,
+    // a cheap non-steered refinement, alongside the steered one.
+    const int32_t late_from = (max_segments * 2) / 3 + 1;
+    const bool late_segment = segment >= late_from;
+    request.congestion_effort = late_segment ? 0 : congestion_effort;
+
+    const auto run_result = gpRun(request);
+    if (!run_result.ok) {
+      LOG_INFO << "[SR-25] segment " << segment << " gpRun rejected: " << run_result.reason;
+      break;
+    }
+    const auto accept_result = gpCommitSession();
+    if (!accept_result.ok) {
+      LOG_INFO << "[SR-25] segment " << segment << " commit failed: " << accept_result.reason;
+      break;
+    }
+    const bool lg_ok = runLG();
+    const bool dp_ok = lg_ok && runDP();
+    writeBackSourceDataBase();
+    if (!dp_ok) {
+      LOG_INFO << "[SR-25] segment " << segment << " legalisation or detail placement failed; stopping";
+      break;
+    }
+    notifyPLCongestionInfo(2);
+    const int32_t mof = PlacerDBInst.egr_mof[2];
+    const int32_t tof = PlacerDBInst.egr_tof[2];
+    const bool better = (mof < best_mof) || (mof == best_mof && tof < best_tof);
+    if (better) {
+      best_mof = mof;
+      best_tof = tof;
+      best_segment = segment;
+      best_snapshot = take_snapshot();
+    }
+    LOG_INFO << "[SR-28] segment " << segment << "/" << max_segments << " effort " << (late_segment ? 0 : congestion_effort) << " iterations "
+             << iterations << ": peak " << mof << " total " << tof << " | best is segment " << best_segment << " at peak "
+             << best_mof << " total " << best_tof << (better ? " (this segment is the new best)" : "");
+
+    // Continue only while the refinement is still paying. A segment that does not improve the best is
+    // not discarded as a state - the next segment still starts from it, which is what lets the search
+    // traverse a non-monotone trajectory - but two consecutive non-improvements stop the loop, so a
+    // design the mechanism cannot help (aes rejects both segments and is unchanged) does not pay for the
+    // whole budget. The cap remains the bound.
+    if (better) {
+      stagnant = 0;
+    } else if (++stagnant >= 2) {
+      LOG_INFO << "[SR-25] two consecutive segments without improvement; stopping at " << segment;
+      break;
+    }
+  }
+
+  const int32_t final_mof = PlacerDBInst.egr_mof[2];
+  const int32_t final_tof = PlacerDBInst.egr_tof[2];
+  if (final_mof != best_mof || final_tof != best_tof) {
+    restore(best_snapshot);
+    LOG_INFO << "[SR-25] restored segment " << best_segment << ": peak " << best_mof << " total " << best_tof
+             << " instead of the last one at peak " << final_mof << " total " << final_tof;
+  } else {
+    LOG_INFO << "[SR-25] last segment was the best: peak " << final_mof << " total " << final_tof;
+  }
+  return true;
+}
 bool PLAPI::runPostGP()
 {
   if (failInjectedStage("post_global_placement", PlacementStatusCode::kPostGPFailed,
@@ -2245,15 +2491,84 @@ bool PLAPI::runDP()
     return false;
   }
 
+  // SR-10: measure detail placement with the project's own congestion evaluator, in process.
+  //
+  // Detail placement could not measure routability at all, and three attempts to give it a signal
+  // from the density grid were no-ops because both available quantities are constant on legal
+  // placements (peak density is exactly 1.0, summed overflow area is exactly 0.0). A fourth attempt
+  // computed demand from detail placement's own data and did vary, but moved opposite to the
+  // evaluator on all four designs tried, because a demand model without capacity and without blur
+  // is not the quantity the evaluation scores.
+  //
+  // The project already ships the real thing and iPL already links it: ExternalAPI::evalproCongestion
+  // runs the EGR model on the shared in-memory design and notifyPLCongestionInfo already stores its
+  // total and peak overflow. This measures that, immediately before and immediately after the detail
+  // placement call, so the stage's effect on the metric the objective is scored on is known inside
+  // the tool rather than only in an external harness.
+  notifyPLCongestionInfo(2);
+  const int32_t egr_mof_before = PlacerDBInst.egr_mof[2];
+  const int32_t egr_tof_before = PlacerDBInst.egr_tof[2];
+
+  // SR-11: detail placement is kept only if it does not make routability worse.
+  //
+  // Detail placement's operators accept moves on wirelength alone. Measured across a
+  // netlist-matched vector it raises peak trial-route congestion on six of seven designs, and on two
+  // of them it takes a placement that beats the commercial reference at the peak and turns it into
+  // one that loses: s38584_nangate45_a goes from peak 1 and total overflow 3 before the stage to
+  // peak 4 and total 21 after it, against a reference of 2 and 6.
+  //
+  // The stage could not detect this because the only signals reachable from it are constant on the
+  // placements it produces - the density maximum is saturated at 1.0 and the density overflow sum at
+  // 0.0 for any legal placement - and three attempts to build a proxy from its own data did not
+  // track the score. SR-10 established that iEDA's own congestion evaluator is callable in process
+  // and agrees with the external harness, so this decides on that measurement.
+  //
+  // The rule is a dominance test, not a threshold: the stage's result is discarded only when it is
+  // strictly worse on peak overflow AND no better on total overflow, so a result that trades one
+  // against the other is kept and nothing on the trade-off curve is thrown away.
+  std::vector<std::pair<Instance*, Rectangle<int32_t>>> sr11_snapshot;
+  if (auto* sr11_design = PlacerDBInst.get_design()) {
+    const auto& sr11_inst_list = sr11_design->get_instance_list();
+    sr11_snapshot.reserve(sr11_inst_list.size());
+    for (auto* inst : sr11_inst_list) {
+      if (inst != nullptr) {
+        sr11_snapshot.emplace_back(inst, inst->get_shape());
+      }
+    }
+  }
+
   DetailPlacer detail_place(PlacerDBInst.get_placer_config(), &PlacerDBInst);
-  const bool success = detail_place.runDetailPlace();
+  bool success = detail_place.runDetailPlace();
   const auto& dp_result = detail_place.lastResult();
+
+  notifyPLCongestionInfo(2);
+  const int32_t egr_mof_after = PlacerDBInst.egr_mof[2];
+  const int32_t egr_tof_after = PlacerDBInst.egr_tof[2];
+
+  bool sr11_reverted = false;
+  if (success && egr_mof_after > egr_mof_before && egr_tof_after >= egr_tof_before) {
+    for (const auto& snap : sr11_snapshot) {
+      snap.first->set_shape(snap.second.get_ll_x(), snap.second.get_ll_y(), snap.second.get_ur_x(),
+                            snap.second.get_ur_y());
+    }
+    PlacerDBInst.updateTopoManager();
+    PlacerDBInst.updateGridManager();
+    this->writeBackSourceDataBase();
+    sr11_reverted = true;
+    LOG_INFO << "[SR-11] detail placement reverted: peak overflow rose " << egr_mof_before << " -> "
+             << egr_mof_after << " and total overflow did not improve (" << egr_tof_before << " -> "
+             << egr_tof_after << "); keeping the legalised placement";
+  } else {
+    LOG_INFO << "[SR-11] detail placement kept: peak overflow " << egr_mof_before << " -> "
+             << egr_mof_after << ", total overflow " << egr_tof_before << " -> " << egr_tof_after;
+  }
   HPWirelength hpwl_after(PlacerDBInst.get_topo_manager());
   const int64_t metric_after = hpwl_after.obtainTotalWirelength();
   const bool legal_after = success ? checkLegality() : dp_result.legal_after;
   _flow_status.detail_placement = PlacementStatusEvaluator::detailPlacement(
-      success, legal_after, metric_before, success ? metric_after : dp_result.hpwl_after, dp_result.reason);
-  _flow_status.detail_placement.changed_count = dp_result.changed_count;
+      success, legal_after, metric_before, success ? metric_after : dp_result.hpwl_after,
+      sr11_reverted ? "detail placement reverted by the SR-11 routability guard" : dp_result.reason);
+  _flow_status.detail_placement.changed_count = sr11_reverted ? 0 : dp_result.changed_count;
   _flow_status.detail_placement.exhibit = dp_result.operator_exhibit;
   _flow_status.setFailure(_flow_status.detail_placement);
   writePlacementStatus();
@@ -2335,7 +2650,39 @@ void PLAPI::notifyPLWLInfo(int stage)
 void PLAPI::notifyPLCongestionInfo(int stage)
 {
   this->writeBackSourceDataBase();
+  // The trial route runs iRT in-process, and iRT sets the process-wide OpenMP thread count from its
+  // own thread_number option. That matters beyond the router: the placement stages that run after
+  // this measurement - detail placement re-entered by the finishing passes, legalisation, and the
+  // next global-placement segment - contain parallel reductions whose order depends on the thread
+  // count, so a leaked thread setting changes the placement that follows, and with it the guard
+  // decision this measurement was taken for. The unmodified flow never routes during placement,
+  // which is why it is byte-reproducible and this one was not. Restore the caller's setting so that
+  // the measurement cannot alter what it is measuring.
+  // The in-process trial route is not a pure function of the placement unless its working directory
+  // is cleared first.
+  //
+  // The router writes one overflow_map_<layer>.csv and one net_map_<layer>.csv per routing layer into
+  // <output>/rt/rt_temp_directory/early_router, and the evaluator then builds the congestion numbers
+  // by reading those files back. The directory is reused for every measurement in the process, so a
+  // file left behind by an earlier measurement - a layer the current route did not rewrite, or a
+  // leftover from a previous design in the same working directory - is read as though it belonged to
+  // the current placement. Measured consequence: the same input placement was reported as total
+  // overflow 35 -> 27 in one run and 35 -> 22 in another, which flips the dominance guard that decides
+  // whether detail placement is kept, so the placement iEDA finally writes depends on the history of
+  // the run rather than on its input. Clearing the directory makes the measurement a function of the
+  // placement alone.
+  {
+    std::error_code ec;
+    const std::string target = _external_api->obtainTargetDir();
+    if (!target.empty()) {
+      std::filesystem::remove_all(std::filesystem::path(target) / "rt" / "rt_temp_directory" / "early_router", ec);
+    }
+  }
+  const int omp_threads_before = omp_get_max_threads();
   ieval::OverflowSummary overflow_summary = _external_api->evalproCongestion();
+  if (omp_get_max_threads() != omp_threads_before) {
+    omp_set_num_threads(omp_threads_before);
+  }
   PlacerDBInst.egr_tof[stage] = overflow_summary.total_overflow_union;
   PlacerDBInst.egr_mof[stage] = overflow_summary.max_overflow_union;
   PlacerDBInst.egr_ace[stage] = overflow_summary.weighted_average_overflow_union;

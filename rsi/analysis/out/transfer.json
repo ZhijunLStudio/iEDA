@@ -1,0 +1,75 @@
+{
+ "median_by_pdk": {
+  "ics55": {
+   "climb V0 (internal wirelength)": 0.0714285714285714,
+   "climb V0b (route utilization)": 0.7767857142857143,
+   "climb V1u (unlegalized wirelength)": 0.12499999999999997,
+   "climb V1 (legalized wirelength)": 0.7767857142857143,
+   "climb V2 (fair ruler, Pareto)": 0.7589285714285714,
+   "screen V0 then confirm V2": 0.3794642857142857,
+   "screen V1u then confirm V2": 0.5089285714285714,
+   "screen V1 then confirm V2": 0.8928571428571428
+  },
+  "nangate45": {
+   "climb V0 (internal wirelength)": 0.10714285714285712,
+   "climb V0b (route utilization)": 0.7455357142857143,
+   "climb V1u (unlegalized wirelength)": 0.11607142857142858,
+   "climb V1 (legalized wirelength)": 0.8258928571428572,
+   "climb V2 (fair ruler, Pareto)": 0.8660714285714286,
+   "screen V0 then confirm V2": 0.5133928571428571,
+   "screen V1u then confirm V2": 0.49107142857142855,
+   "screen V1 then confirm V2": 0.7991071428571429
+  },
+  "sky130": {
+   "climb V0 (internal wirelength)": 0.125,
+   "climb V0b (route utilization)": 0.7142857142857142,
+   "climb V1u (unlegalized wirelength)": 0.09821428571428567,
+   "climb V1 (legalized wirelength)": 0.7946428571428572,
+   "climb V2 (fair ruler, Pareto)": 0.8035714285714286,
+   "screen V0 then confirm V2": 0.6607142857142857,
+   "screen V1u then confirm V2": 0.6339285714285714,
+   "screen V1 then confirm V2": 0.9017857142857142
+  }
+ },
+ "groups": {
+  "sky130": [
+   "s1238",
+   "apb4_timer",
+   "picorv32",
+   "aes",
+   "gcd_sky130_a",
+   "salsa20_sky130_a",
+   "s1238_sky130_a",
+   "s38584_sky130_a",
+   "s5378_sky130_b",
+   "apb4_timer_sky130_b",
+   "s38417_sky130_b",
+   "picorv32_sky130_a",
+   "PPU_sky130_b",
+   "aes_sky130_a",
+   "aes_core_sky130_b",
+   "apb4_ps2_sky130_b",
+   "apb4_i2c_sky130_b",
+   "s1488_sky130_b",
+   "s9234_sky130_b",
+   "s13207_sky130_b",
+   "s15850_sky130_b",
+   "apb4_uart_sky130_b",
+   "apb4_clint_sky130_b",
+   "s35932_sky130_b"
+  ],
+  "nangate45": [
+   "gcd_nangate45_a",
+   "salsa20_nangate45_a",
+   "s1238_nangate45_a",
+   "s38584_nangate45_a"
+  ],
+  "ics55": [
+   "gcd_ics55_a",
+   "salsa20_ics55_a",
+   "s1238_ics55_a",
+   "s38584_ics55_a"
+  ]
+ },
+ "budget": 140.0
+}

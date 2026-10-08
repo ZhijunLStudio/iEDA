@@ -1,8 +1,9 @@
 # iEDA placement research branches
 
-This checkout is the **Agent PL tools** snapshot. Start with
+This checkout is the **PL RSI research** snapshot. Start with
 [the research map](docs/research/README.md) and
 [the current DSH plugin entry point](benchmarks/flows/deepseek_harness/README.md).
+The RSI entry point is [rsi/README.md](rsi/README.md).
 
 - `feat/agent-pl-tools`: stateful placement tools, evaluators, DSH plugins and optional knowledge mining.
 - `feat/parity-pl-rsi`: the same foundation plus the RSI harness, research evidence and the SR-28 source changes.

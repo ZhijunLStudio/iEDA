@@ -1,0 +1,15 @@
+{
+ "design": "s38584_ics55_a",
+ "arm": "sr26",
+ "seed": 1001,
+ "flow_s": 157.2,
+ "ok": true,
+ "hpwl": 76850500,
+ "union": 2704,
+ "max": 16,
+ "fails": [
+  "max"
+ ],
+ "pass_": false,
+ "def_md5": "4ec5c81b"
+}

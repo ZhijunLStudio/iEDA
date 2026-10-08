@@ -1,0 +1,13 @@
+{
+ "design": "s1238_ics55_a",
+ "arm": "cur",
+ "seed": 1003,
+ "flow_s": 9.3,
+ "ok": true,
+ "hpwl": 3235503,
+ "union": 80,
+ "max": 8,
+ "fails": [],
+ "pass_": true,
+ "def_md5": "6cf07aee"
+}

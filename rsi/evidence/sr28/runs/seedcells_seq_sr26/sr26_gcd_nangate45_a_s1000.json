@@ -1,0 +1,13 @@
+{
+ "design": "gcd_nangate45_a",
+ "arm": "sr26",
+ "seed": 1000,
+ "flow_s": 20.6,
+ "ok": true,
+ "hpwl": 7348201,
+ "union": 0,
+ "max": 0,
+ "fails": [],
+ "pass_": true,
+ "def_md5": "8b12c015"
+}

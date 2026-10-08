@@ -1,0 +1,15 @@
+{
+ "design": "salsa20_ics55_a",
+ "arm": "cur",
+ "seed": 1001,
+ "flow_s": 225.0,
+ "ok": true,
+ "hpwl": 281061235,
+ "union": 40171,
+ "max": 38,
+ "fails": [
+  "max"
+ ],
+ "pass_": false,
+ "def_md5": "d7b43748"
+}

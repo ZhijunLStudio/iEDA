@@ -1,0 +1,1949 @@
+{
+  "parent_branch": "feat/agent-pl-tools",
+  "parent_commit": "e5ac9886594a14de5f68b344a0bc26586b2ead95",
+  "source_commit": "04e26de9e08b4775a6feed39468fc865eebde124",
+  "source_branch": "feat/parity-congestion-iteration",
+  "publication_branch": "feat/parity-pl-rsi",
+  "imported_changes": [
+    {
+      "path": "benchmarks/flows/gp_agent.py",
+      "sha256": "a0b108993396a518eb04b1d68a2370ea30c029d99bed09852383d420defdb799",
+      "bytes": 132811
+    },
+    {
+      "path": "rsi/README.md",
+      "sha256": "26350663232cd303d3952ecd9bb76493a67292d9188da61d53186e79a6f22d23",
+      "bytes": 10225
+    },
+    {
+      "path": "rsi/analysis/analyse_cluster.py",
+      "sha256": "d1983a5568ba39c5956c513cac309af3252a83504de2539db952bb087191e601",
+      "bytes": 6777
+    },
+    {
+      "path": "rsi/analysis/analyse_seeds.py",
+      "sha256": "ac4d03ee8bccad0c035716950bbd05918b291110898e50e62e0acde93bcf1192",
+      "bytes": 3737
+    },
+    {
+      "path": "rsi/analysis/anchor_report.py",
+      "sha256": "5accb221379d15a10ebd387a3ef48c04703762c37a2bbf15cbf8782b6a000322",
+      "bytes": 5910
+    },
+    {
+      "path": "rsi/analysis/area_profile.py",
+      "sha256": "d591724285ed8b3d79fdcc12e25658a2849ccf0b5ccac8bcc238979b41f18a9c",
+      "bytes": 2110
+    },
+    {
+      "path": "rsi/analysis/bypass_test.py",
+      "sha256": "066947383de89ca42e8c0cc134ab57861889ac6b0b92d0c8bbedd351d38c281f",
+      "bytes": 1724
+    },
+    {
+      "path": "rsi/analysis/convergence_effect.py",
+      "sha256": "c855a7a2a00505eb1b19f6753493c3b88ff0fd15778500ea76de384d94e1e528",
+      "bytes": 3499
+    },
+    {
+      "path": "rsi/analysis/coverage_count.py",
+      "sha256": "0d23f3cbe11712530abd4a2f456efc88567241b1ca3944ce9a33d1646cefc84b",
+      "bytes": 3535
+    },
+    {
+      "path": "rsi/analysis/direction.py",
+      "sha256": "29eac3994dd20bfb4a5968e505b27a8695a55171dcc7afab415ab46449c553ec",
+      "bytes": 2935
+    },
+    {
+      "path": "rsi/analysis/direction_check.py",
+      "sha256": "b09d80e9e05f8576c515479335c64e8f6c1dc2e7219826b13a4e7e4a0656d94c",
+      "bytes": 1119
+    },
+    {
+      "path": "rsi/analysis/dp_decision.py",
+      "sha256": "5c129da1bbd9fab588c8bbc2538d10582eeb4e7a1fbb8c12f141fcec99a8f3f0",
+      "bytes": 2515
+    },
+    {
+      "path": "rsi/analysis/dp_signal.py",
+      "sha256": "b90b2d7de868896eeccc383afaf3fd02b1640cb1125c9d7f715af1e477f1d0db",
+      "bytes": 2972
+    },
+    {
+      "path": "rsi/analysis/dp_trade.py",
+      "sha256": "70c0aac0aef3af911150596e3c3eb6aac903d046078270bed89b98a718b33d10",
+      "bytes": 2630
+    },
+    {
+      "path": "rsi/analysis/dynamics.py",
+      "sha256": "1a1b4c2cf820ed715bccf3acffc543d24a5dd4699d8ce2adfb6abbc7d03cc010",
+      "bytes": 9525
+    },
+    {
+      "path": "rsi/analysis/dynamics_replay.py",
+      "sha256": "d7cfc7c88531cc61a10f5b4cbc75a7a7ae9ad9605143dd16569beced8d327bc7",
+      "bytes": 12150
+    },
+    {
+      "path": "rsi/analysis/fidelity.py",
+      "sha256": "809be5153c0964f27dfacb0a41abff4d6812d49d0a0c3ecefab64f34e19a5586",
+      "bytes": 8832
+    },
+    {
+      "path": "rsi/analysis/figures_stage1.py",
+      "sha256": "8a49ec8d8664b813c5794d79a80854199f57f46f232360202b06c79c5009ce04",
+      "bytes": 6942
+    },
+    {
+      "path": "rsi/analysis/final_table.py",
+      "sha256": "f52e2961216a74442f1c1308fc1cad852abb689e2ba2e5c797423e4915aca619",
+      "bytes": 6487
+    },
+    {
+      "path": "rsi/analysis/go_no_go.py",
+      "sha256": "0f20dad90884a898426aabcc9b739f16d6ff352fb76c3922a4f564ad7deb2520",
+      "bytes": 6646
+    },
+    {
+      "path": "rsi/analysis/innovus_anchor.py",
+      "sha256": "a2fc7cc46b691dfbb59dbd87f8aa3d2ea98278499631f4788bdfb53cef2cda0f",
+      "bytes": 5258
+    },
+    {
+      "path": "rsi/analysis/live_vs_replay.py",
+      "sha256": "365039de80c015d92e03571d472038a65f940fe3b573337ecb3c6ab032279fd1",
+      "bytes": 9933
+    },
+    {
+      "path": "rsi/analysis/mechanism.py",
+      "sha256": "0a72478e0b77d043e1ee8ee5866e2450f1b1a18164eb350af1eddcbf335464cf",
+      "bytes": 6453
+    },
+    {
+      "path": "rsi/analysis/number_audit.py",
+      "sha256": "e62557eac922d29241da45dcb8ea827828d9945e0960d7327c5dc16ae2861fff",
+      "bytes": 8364
+    },
+    {
+      "path": "rsi/analysis/out/anchor_report.md",
+      "sha256": "99d4c1ed444b879fd30924e8b6b3efffbec014513f88646381f94ee3e40b8293",
+      "bytes": 3881
+    },
+    {
+      "path": "rsi/analysis/out/dynamics_replay.json",
+      "sha256": "c5a4e525935901b6a1df532dff1f943bba699ea5129b1a006bd83339d261b503",
+      "bytes": 1054989
+    },
+    {
+      "path": "rsi/analysis/out/dynamics_replay.md",
+      "sha256": "936f68d6cc41833f0b1748a30e4e6561f71633535637c12bc890dcb6fd879c72",
+      "bytes": 786
+    },
+    {
+      "path": "rsi/analysis/out/innovus_anchor.json",
+      "sha256": "52ec04b81dcc1304ddc0ead72c31fa6c814db558ae76555e4a5fd4114c0b7be7",
+      "bytes": 25897
+    },
+    {
+      "path": "rsi/analysis/out/live_vs_replay.json",
+      "sha256": "fcd9075c38c0d273b64f36778e3a76fa3105be0342c57a264370c28d219a75b3",
+      "bytes": 362724
+    },
+    {
+      "path": "rsi/analysis/out/live_vs_replay.md",
+      "sha256": "5ef408d4265c5be1b89d7002cb25c27ef3cea29b9789571dfe69a2ed9572e967",
+      "bytes": 1606
+    },
+    {
+      "path": "rsi/analysis/out/mechanism.json",
+      "sha256": "bd9e38b3ed4061d005b0b14f2db3c83bb7212069ec7fd8f28090ee2495b1fd7b",
+      "bytes": 183958
+    },
+    {
+      "path": "rsi/analysis/out/mechanism.md",
+      "sha256": "5dfa9474629128d3d1cdaffcdf1f80cad72df6abc8ebb911c8262b95647a01cf",
+      "bytes": 900
+    },
+    {
+      "path": "rsi/analysis/out/scheduling_pool.json",
+      "sha256": "ec0e3a4bfc081f3f27a5c54177bf4f712947b82371db1b05adef8ec815b20c07",
+      "bytes": 239882
+    },
+    {
+      "path": "rsi/analysis/out/scheduling_pool.md",
+      "sha256": "432badd4ebcb2c62623b211ba20c773dac998c4cadd637bdfd53c795fcc4f08c",
+      "bytes": 791
+    },
+    {
+      "path": "rsi/analysis/out/scheduling_pool_budget.json",
+      "sha256": "0de1ae3fba74a40c36cd2d8173cec026966405a093055c98be52cd8d94e6d4b4",
+      "bytes": 964804
+    },
+    {
+      "path": "rsi/analysis/out/scheduling_pool_budget.md",
+      "sha256": "865494ab0297b15e5d6a3449c692452b8b67d05abf4465ba453d8ceefe051ac4",
+      "bytes": 910
+    },
+    {
+      "path": "rsi/analysis/out/sealed_arms.json",
+      "sha256": "7ac56ecd1f144b4c63846252fd58002cce25acb35fc0088ce19b8713c6d31041",
+      "bytes": 12110
+    },
+    {
+      "path": "rsi/analysis/out/sealed_arms.md",
+      "sha256": "33333c66f4124577db41f91afa0fa6d1bb8f2da4df9692667cf665205e0ed355",
+      "bytes": 1490
+    },
+    {
+      "path": "rsi/analysis/out/signoff_geo_best_drc.json",
+      "sha256": "2f8140c978b4a30e1b14c92b1fea946ad75a34dacd5c397b13df80ae8b0ae8df",
+      "bytes": 3458
+    },
+    {
+      "path": "rsi/analysis/out/signoff_v0_attractor_drc.json",
+      "sha256": "7ad21a815698aa9fb90c4cfdef741100b2d91a5e4100ceec1fdaa8cba4008762",
+      "bytes": 3458
+    },
+    {
+      "path": "rsi/analysis/out/stage1T_timing.json",
+      "sha256": "96586cfff46f2703a351fa18f7abc9eb6a8e0fe5ce5c4cfb21d4287a9e1ad11a",
+      "bytes": 22196
+    },
+    {
+      "path": "rsi/analysis/out/stage1T_timing.md",
+      "sha256": "78d6145e05d29d0b798453c944b4ecd42b7f33127920d333e2396896e9dcf9a3",
+      "bytes": 2593
+    },
+    {
+      "path": "rsi/analysis/out/stage1_fidelity.json",
+      "sha256": "3bc2566bd66133b8fe4bfdedc3138dbc6570e8d61e00d8440e1852dfdba04cdd",
+      "bytes": 57016
+    },
+    {
+      "path": "rsi/analysis/out/stage1_fidelity.md",
+      "sha256": "14e371167eeb0f15d4d94954ec9f37366c06cc9988355ae80afbf51a9920cb98",
+      "bytes": 4698
+    },
+    {
+      "path": "rsi/analysis/out/stage3_scheduling.md",
+      "sha256": "0f6471a0b0bd6e1c735f1bbc5852957cc4b52fd5b4cc8ed39e08265418225c1b",
+      "bytes": 627
+    },
+    {
+      "path": "rsi/analysis/out/transfer.json",
+      "sha256": "a535e93d56aa634ae0e8a3efb828ec8959fee57ea42c8fbfdd1af94f80264a90",
+      "bytes": 2177
+    },
+    {
+      "path": "rsi/analysis/out/transfer.md",
+      "sha256": "2d13670b8b838283ba6c9260e49a2c8a0c52172e72ba5af7d0f8ccf73215e2e1",
+      "bytes": 1764
+    },
+    {
+      "path": "rsi/analysis/pareto_combined.py",
+      "sha256": "bbd403dc696f45bc8274ea65be95bf8dff190c4a0a3524a37707ff23a55082e9",
+      "bytes": 2994
+    },
+    {
+      "path": "rsi/analysis/pareto_effect.py",
+      "sha256": "b9ec00027613c2cc32b32edb1b7a91b07793f799f86c9c79106eff02d11b19b4",
+      "bytes": 2984
+    },
+    {
+      "path": "rsi/analysis/pool_all.py",
+      "sha256": "17a6071a0599579bad2c7675802d1bac79f10d98dd178df92b234cf8aa0da877",
+      "bytes": 3038
+    },
+    {
+      "path": "rsi/analysis/pool_effect.py",
+      "sha256": "41f0431684c1e30f836dd6866ee15106dbf919d78a61346f1386b853b62525a4",
+      "bytes": 3647
+    },
+    {
+      "path": "rsi/analysis/reconstruct_sweep.py",
+      "sha256": "279011790e734350025f9377f2b514d26246fd6bbd7ecbbc9bc7a4d2ac653a38",
+      "bytes": 4958
+    },
+    {
+      "path": "rsi/analysis/ref_state.py",
+      "sha256": "b66285e866e686617e76cfbb375f03c6ce3bfa4b5d4cb8a4abccd480187a972b",
+      "bytes": 1687
+    },
+    {
+      "path": "rsi/analysis/robust_peak.py",
+      "sha256": "ba1e97f9cd3acd717110ba44e0b693a2fc1c82cd8b9f3e62c4072e272e2c6d8a",
+      "bytes": 3013
+    },
+    {
+      "path": "rsi/analysis/scheduling.py",
+      "sha256": "777234b94c76b6c2259171c68cbf13cccba9e7e009ec9b5f13daa0c4c0db6196",
+      "bytes": 8122
+    },
+    {
+      "path": "rsi/analysis/scheduling_pool.py",
+      "sha256": "46347749abd76467c30e7c8886ae1e71f1a5eaeef8af57ed955d222d5787e11a",
+      "bytes": 9597
+    },
+    {
+      "path": "rsi/analysis/sealed_arms.py",
+      "sha256": "482aa220dc9051c75b031e63c19f12f2daa1b13806fbe66ff8ab00e630a0c7bc",
+      "bytes": 5548
+    },
+    {
+      "path": "rsi/analysis/shape_profile.py",
+      "sha256": "c8554d6151134d3dd88064edfd38d35e387c9c077af2354f11a6f933f0d8ac42",
+      "bytes": 1874
+    },
+    {
+      "path": "rsi/analysis/stage_hpwl.py",
+      "sha256": "9d3c691014751f27e420831b5dcbac3fbba70a2c5851c3eaec894c15f01d475d",
+      "bytes": 2364
+    },
+    {
+      "path": "rsi/analysis/stage_hpwl2.py",
+      "sha256": "4ea38ff10ff766b28dff2dac3a15ff70d6d6f89a4c1b174e3cbb53b0646d7e3b",
+      "bytes": 2312
+    },
+    {
+      "path": "rsi/analysis/standing_corrected.py",
+      "sha256": "cc25b27fd1b50b4b9381714c4f7ad50f7519d2b5d03320e0e94b8ba9a0c7e3a8",
+      "bytes": 4051
+    },
+    {
+      "path": "rsi/analysis/standing_corrected2.py",
+      "sha256": "1efa7c38be862885e64bcde36ab06ad88c91ccea79efcc7df6f69c14f79bc49e",
+      "bytes": 3843
+    },
+    {
+      "path": "rsi/analysis/standing_valid.py",
+      "sha256": "0dc851c4348b3bcd74105eb9a557d4fddb3999e6210f5ec1d59b0a97c97ab322",
+      "bytes": 3443
+    },
+    {
+      "path": "rsi/analysis/timing_fidelity.py",
+      "sha256": "1dc3ca388849cb9cb66d19b910a09395a527e18d84bcb9039a38523c4cbdf2d0",
+      "bytes": 8411
+    },
+    {
+      "path": "rsi/analysis/tiny_denominator.py",
+      "sha256": "c62dd4cafce16529108b3da16e159a26fdeaf3357a109e52733d8820ed03e140",
+      "bytes": 1911
+    },
+    {
+      "path": "rsi/analysis/transfer.py",
+      "sha256": "a6f22f5e8f51726cf6a7bcac2817c21c45debf40833fa79a52ca5da7d6d1c120",
+      "bytes": 5793
+    },
+    {
+      "path": "rsi/analysis/valid_signal.py",
+      "sha256": "8d33d9592595ea0aea80c65b80ee55be6c818ba0070f8863260d940bc1dee138",
+      "bytes": 6569
+    },
+    {
+      "path": "rsi/harness/_sr8probe.py",
+      "sha256": "e5bb06aae75d34203b6af69f7601c00b56c5868028310ecaf173185c1c1cfc3d",
+      "bytes": 1509
+    },
+    {
+      "path": "rsi/harness/arm_score.py",
+      "sha256": "9fc053643980cd4cc81b413e3dfc9a5f0b0445e2c3e0b310baf8c2f4c4b72fdb",
+      "bytes": 1555
+    },
+    {
+      "path": "rsi/harness/base_run.py",
+      "sha256": "cc3f7d2b46695d365dd125215fd0a63e1036d08058205a56a8700916e2b8e029",
+      "bytes": 1274
+    },
+    {
+      "path": "rsi/harness/bin_check.py",
+      "sha256": "392ffc28fecd27e93f78d63a30e71f70bf55fbc537a21ae53fba9d3b1e5c9404",
+      "bytes": 2226
+    },
+    {
+      "path": "rsi/harness/candidate_pool.py",
+      "sha256": "ea234b9f7ba75903ceeec5566981f6609bcfac1ee37fd04f0de5f82474e762c9",
+      "bytes": 3530
+    },
+    {
+      "path": "rsi/harness/ce_compare.py",
+      "sha256": "a4465c878034c342df8bb4a108d188562d666e486a0e2b8a7006cd250529b9fe",
+      "bytes": 2361
+    },
+    {
+      "path": "rsi/harness/ce_recheck.py",
+      "sha256": "32ae86a253f110851812c76cf6f7be2608496a3c47a605268a6c1df158e58bb8",
+      "bytes": 3600
+    },
+    {
+      "path": "rsi/harness/ce_run.py",
+      "sha256": "59a6372e258eada101dcd2c96ad1642b396a578bb9fda67c5f9b007c6848133b",
+      "bytes": 1733
+    },
+    {
+      "path": "rsi/harness/ce_sweep.py",
+      "sha256": "0e6115433bf5e26d409b09be03d9584133e129ec11362a11c958ee895dd251d3",
+      "bytes": 2596
+    },
+    {
+      "path": "rsi/harness/congestion_test.py",
+      "sha256": "33761b69d2481c0b00f13c5a1ffea9885fe5d264372dddf9d278daad3f4d491c",
+      "bytes": 3190
+    },
+    {
+      "path": "rsi/harness/converge_sweep.py",
+      "sha256": "8bd1454e1c085a33a677e5498368cd624b5bda74f4207e4aab83748e9d8e7d10",
+      "bytes": 2522
+    },
+    {
+      "path": "rsi/harness/cur21_run.py",
+      "sha256": "76d35b894927062fc00db44d6f418cd0fe2897f58ba09e8c6b354cc2acf649d3",
+      "bytes": 1266
+    },
+    {
+      "path": "rsi/harness/curtree_sweep.py",
+      "sha256": "fba32e10c21e46668e9e6990b8844bca5796bfa5d5305d3bb8c4936109752a94",
+      "bytes": 2337
+    },
+    {
+      "path": "rsi/harness/designs.local.json",
+      "sha256": "f8a2e2f68ade38673b1c73d00c39d696813ef6b01f9c946247c58e4aad593a6a",
+      "bytes": 23331
+    },
+    {
+      "path": "rsi/harness/determinism.py",
+      "sha256": "8bf3acb187500a5fdb55921238a9f920aae7819025d947519db61ae4609271c7",
+      "bytes": 2165
+    },
+    {
+      "path": "rsi/harness/dp_ablate.py",
+      "sha256": "330e618c8058afe6eb6fa12da79163cef5c606c04a56750fea5444c18b8059d9",
+      "bytes": 2797
+    },
+    {
+      "path": "rsi/harness/dp_cost.py",
+      "sha256": "3d0872efda441afcd66a5b9fd13bbb9fe22d24d29369d883509e5abd1412f52c",
+      "bytes": 2937
+    },
+    {
+      "path": "rsi/harness/dp_seed_check.py",
+      "sha256": "b2d480321d98cc1cfaa1ad01010b6508f68041157dee388e2748ec5b5001f9f8",
+      "bytes": 2126
+    },
+    {
+      "path": "rsi/harness/dp_swap_seeds.py",
+      "sha256": "c893eda3bfe86069c89b519a846e81e42741869aee266a22a869b5a1e76115c6",
+      "bytes": 2679
+    },
+    {
+      "path": "rsi/harness/egr_repeat.py",
+      "sha256": "407dc48c880682d9a9cc883614f242524de983f1d0ca8df89ca74f0e07016224",
+      "bytes": 1009
+    },
+    {
+      "path": "rsi/harness/egr_ruler_batch.py",
+      "sha256": "77f575cedc73e5b7b4d3027cce46d5e3d7845107cd543ae43f85f295f7b2eb50",
+      "bytes": 8417
+    },
+    {
+      "path": "rsi/harness/envprobe.py",
+      "sha256": "e46eb3760a2dbf61848562a83b1dac277d97b19b5bbbac5fca5228f5bad85f83",
+      "bytes": 1486
+    },
+    {
+      "path": "rsi/harness/five_dim.py",
+      "sha256": "5938da3b9560d57ab18ec17d0b47f7a2061ebf1b6514ac8ce9eea54a3eeda866",
+      "bytes": 4369
+    },
+    {
+      "path": "rsi/harness/gated_flow_sweep.py",
+      "sha256": "d56a0439817b0aa0786923fed37acf174c44d647b33c1250ce9e0875c662aadb",
+      "bytes": 10211
+    },
+    {
+      "path": "rsi/harness/gp1.py",
+      "sha256": "a792514b9e1df9a9971c4ca2b32d90cc2880bfa62ba3b59619ea95cabc8c8741",
+      "bytes": 2655
+    },
+    {
+      "path": "rsi/harness/guard_check.py",
+      "sha256": "71dd5b288fe7eecf75647662de51970c6ded2ed0eddd4f49ba08540bf31aa23a",
+      "bytes": 2994
+    },
+    {
+      "path": "rsi/harness/initial_gp_effort_ab.py",
+      "sha256": "95075d439621d73dbc6b3ad7ff3245e273db46d65474d41fdba3f4ef2521c42a",
+      "bytes": 2388
+    },
+    {
+      "path": "rsi/harness/iter_test.py",
+      "sha256": "4e459e8599d2a62a57fc259b00b9a6f17e90bcaab7811b0d6460d685f5164f70",
+      "bytes": 2603
+    },
+    {
+      "path": "rsi/harness/lgdp_split.py",
+      "sha256": "729beca4a045667f5eeb4b7c52095a1f403d073eb7a75f8f3a7688b8f7ee32ef",
+      "bytes": 2086
+    },
+    {
+      "path": "rsi/harness/make_ieda_nosshim.sh",
+      "sha256": "fa391f5832eb1e713185c9ad0efe65b61e4f5dfd20c72e0acab69545a9c1c242",
+      "bytes": 956
+    },
+    {
+      "path": "rsi/harness/mp3.py",
+      "sha256": "e445df5715bded5bce8d7ae29f8faf9b3c15d760e30b9c3da6565fb33f16badc",
+      "bytes": 1535
+    },
+    {
+      "path": "rsi/harness/mp_one.py",
+      "sha256": "4166ab7094ab35b36de403087a402c515c51ae8f60c2dd5bc7e8eabd1c1267c3",
+      "bytes": 1018
+    },
+    {
+      "path": "rsi/harness/mp_read.py",
+      "sha256": "52d422aa56fd162f6ae95a78512cc0b9e99973503135b0ac2ef2dca9254d1702",
+      "bytes": 1353
+    },
+    {
+      "path": "rsi/harness/multi_seed_sweep.py",
+      "sha256": "a6be0a5693045a2083ef5ea49a4ad1b26f1f56a0f13d5c4a763713f038d11c7e",
+      "bytes": 8276
+    },
+    {
+      "path": "rsi/harness/netdemand.py",
+      "sha256": "06fb80bb465ac14a39fd767c8628a4c540c7ce45d8c1704e945a3c78b2b54cb4",
+      "bytes": 5220
+    },
+    {
+      "path": "rsi/harness/netpeak.py",
+      "sha256": "aca2b2c86e0ec39296f8f0a03815d3aa1dc26cb8bcb47b6ea092d6daa887d16a",
+      "bytes": 6063
+    },
+    {
+      "path": "rsi/harness/nfs_ab.py",
+      "sha256": "08b1c4b30febba69d0aed33e58a9065422fed6a5ccf88e00bafa133c28c869c7",
+      "bytes": 4113
+    },
+    {
+      "path": "rsi/harness/nfs_test.py",
+      "sha256": "bac3c328a763eef5dc29c811a797571e90f1035c260cd2d1232a30c9a119ef46",
+      "bytes": 2654
+    },
+    {
+      "path": "rsi/harness/ours_batch.py",
+      "sha256": "1c8fcdebc0560f8031d34de2723f381b5067f0cda705c79e3e288d6a706329fb",
+      "bytes": 1355
+    },
+    {
+      "path": "rsi/harness/paired_sequential_verdict.py",
+      "sha256": "7383b09718fccf48d2adfdc3efb86c72fb0f4472238ffcbb50190aab171dafa2",
+      "bytes": 7299
+    },
+    {
+      "path": "rsi/harness/pareto3_flow.py",
+      "sha256": "6480dca33a696feffdc5718e6ad656736fb81b2328f871cb4e84f73acfad0004",
+      "bytes": 3160
+    },
+    {
+      "path": "rsi/harness/pareto_flow.py",
+      "sha256": "8312b352cd8ec98790e4de4a17651b7b2a677d7cf98a547b697241ab04d9d364",
+      "bytes": 3034
+    },
+    {
+      "path": "rsi/harness/passes_score.py",
+      "sha256": "e98273fdb692924592dfec4f979fda61976f9bc00c6a80186ae595d835e0220f",
+      "bytes": 1532
+    },
+    {
+      "path": "rsi/harness/passes_test.py",
+      "sha256": "4548924a1079de8e819577b06e9ba849e6fa8bd97b84dadd956d94c00b6363cd",
+      "bytes": 2839
+    },
+    {
+      "path": "rsi/harness/peak_map.py",
+      "sha256": "2a2e43803cecddd340fce9fb21580ef97f8279b1b1444b75a2e2435175c17ffe",
+      "bytes": 2698
+    },
+    {
+      "path": "rsi/harness/peak_source.py",
+      "sha256": "b71dbbeb54e0a6429cc6fde16c164726b94c2bf64d4fbb500f4511c6fd231a81",
+      "bytes": 2362
+    },
+    {
+      "path": "rsi/harness/phi_fix_test.py",
+      "sha256": "989e5d12d3ad5d17d20317432e18564e70ce378a0249e53414afa2db049f9c72",
+      "bytes": 3049
+    },
+    {
+      "path": "rsi/harness/placement_shape.py",
+      "sha256": "7dada74b4d156c3b88714357f76170365f560d522e63133829614b67029097be",
+      "bytes": 4113
+    },
+    {
+      "path": "rsi/harness/pool3.py",
+      "sha256": "fa878078d09b4dad4b7ab3582fb878a796eab7a13f01520094bbf6ba8d1a4f42",
+      "bytes": 3794
+    },
+    {
+      "path": "rsi/harness/pooldim_timing.py",
+      "sha256": "9858ff055be7f077edd0270b5d7e4d41003e38ec6be4233036b1249a0a8d5a7a",
+      "bytes": 2786
+    },
+    {
+      "path": "rsi/harness/postdp_arms.py",
+      "sha256": "65aab7c9ab162568f37f699cc3f8c44ba69e2865a60d0f4c71770a02f478edc5",
+      "bytes": 2825
+    },
+    {
+      "path": "rsi/harness/postdp_seeds.py",
+      "sha256": "1b811bc941910aca953962c349e4f53a420cdeacb9f2b08e714a2973d75dee6b",
+      "bytes": 2473
+    },
+    {
+      "path": "rsi/harness/prune_runs.py",
+      "sha256": "32b422d267b67fcbe463b43f06cbc0ca3d834c7137d5512c20d8adf44bce983d",
+      "bytes": 1968
+    },
+    {
+      "path": "rsi/harness/randinit_check.py",
+      "sha256": "00c02e9e012080c32c7098ccd525780736d3e88709be02d5162728ead39eb4dd",
+      "bytes": 2598
+    },
+    {
+      "path": "rsi/harness/ref_batch.py",
+      "sha256": "fe193fef7ca7dad71e5fe9cb20f5ef1a6e9d92d602168667191aa7a69097067a",
+      "bytes": 1190
+    },
+    {
+      "path": "rsi/harness/ref_maps.py",
+      "sha256": "211c00c206a5ed2d66bdd28c4611da912320638c0f22afe2b12ceff2b147a270",
+      "bytes": 765
+    },
+    {
+      "path": "rsi/harness/repro.py",
+      "sha256": "0d1a25aa74aad0287cabb69099cb0a4c7127cc7a4772b380f95fe9b78fc7e726",
+      "bytes": 2505
+    },
+    {
+      "path": "rsi/harness/rsi_lib.py",
+      "sha256": "4a1024bc202446c7036d154ecbac91f42c79e421060ebb4550025bc09f709fa8",
+      "bytes": 11302
+    },
+    {
+      "path": "rsi/harness/run_cur4_validation.sh",
+      "sha256": "8f2ba21c601ce40e0a581f98b147d1e73d4cb4dc7444edf3392265ab5f0f0254",
+      "bytes": 1019
+    },
+    {
+      "path": "rsi/harness/run_eff_screen.sh",
+      "sha256": "0af7843d2812ba79a2a378c25f51ddc161c5884d6e7126da2a64212d92911f44",
+      "bytes": 570
+    },
+    {
+      "path": "rsi/harness/run_initial_gp_effort_ab.sh",
+      "sha256": "e7deb4f3b61e6f7c1b84b4208538050630fada82da84c3f991d3c7f05fd2d7db",
+      "bytes": 652
+    },
+    {
+      "path": "rsi/harness/run_seq_validation.sh",
+      "sha256": "a12028d4a3cba7c49567cdf1d9b4d4f18f212daf22fa5292b298b5d749f70ea3",
+      "bytes": 1810
+    },
+    {
+      "path": "rsi/harness/run_sr25_validation.sh",
+      "sha256": "e3041ff95455ef9a13906db646db9e3a5cbf3dbb930fe3b5a498f55d5875ce08",
+      "bytes": 1128
+    },
+    {
+      "path": "rsi/harness/run_sr26_validation.sh",
+      "sha256": "666d2cbcd34806d8dec979087456d7cd17301c3264adfd53179f9f903732851a",
+      "bytes": 998
+    },
+    {
+      "path": "rsi/harness/run_sr27_validation.sh",
+      "sha256": "eaeacf968b919a1781858bac6818894984c04cb6d07a161877e251993bab8455",
+      "bytes": 896
+    },
+    {
+      "path": "rsi/harness/run_sr28_validation.sh",
+      "sha256": "cd926b68cdc68a0c8e0c647e99ea812a3500e0a8572076ea9be36b14b3ac0b22",
+      "bytes": 1181
+    },
+    {
+      "path": "rsi/harness/score_ce.py",
+      "sha256": "4bd3ccf0500675bceccedbdb91deca8132ee56f4583ef55b45aac0ac51b34684",
+      "bytes": 2206
+    },
+    {
+      "path": "rsi/harness/seed_repeat.py",
+      "sha256": "09f3d36fe0c27296bba57759e06acab87e11abc52da5fbb21de24e4e1984a4b3",
+      "bytes": 3480
+    },
+    {
+      "path": "rsi/harness/shape_stages.py",
+      "sha256": "a130c48f4237de300fa82d97b8832dbca15f07c7162cfbbcf77e5c6432b863fa",
+      "bytes": 2728
+    },
+    {
+      "path": "rsi/harness/signoff_rung.py",
+      "sha256": "c174206e24a299c3ce12950d18444dc2a972b0269995abb52f796ebf79679599",
+      "bytes": 7692
+    },
+    {
+      "path": "rsi/harness/sourcesweep.py",
+      "sha256": "ffd32ebe972ea4d7df1f9645d92d5ba98c09c80fee2dfcef6f6904d669d8f9ed",
+      "bytes": 9597
+    },
+    {
+      "path": "rsi/harness/splits.json",
+      "sha256": "0090ce58f677538d211d9d18d53587bd44a7ab1994f3556c139bcc6772db90f3",
+      "bytes": 772
+    },
+    {
+      "path": "rsi/harness/splits.py",
+      "sha256": "431919e44d59abe9ef153d7a8c99115e8e77893cb983e80941b58cd90577e801",
+      "bytes": 2405
+    },
+    {
+      "path": "rsi/harness/sr11_seeds.py",
+      "sha256": "0a4341f5a7fcd11555beea72d356f241c248e7549d2b74662731b0d34f71ea15",
+      "bytes": 2607
+    },
+    {
+      "path": "rsi/harness/sr13_ab.py",
+      "sha256": "009a81f353a9a299838566ae681b839714e04ca68e47a150a61cf4ff5873b66b",
+      "bytes": 2378
+    },
+    {
+      "path": "rsi/harness/sr14_test.py",
+      "sha256": "c8e0e9524c66f6c82ab8fc57806ee60225c512f9ba929515bc48290d110333bb",
+      "bytes": 2603
+    },
+    {
+      "path": "rsi/harness/sr16_score.py",
+      "sha256": "949265c6eaaeb53a8a260e08741370ddd43b91586806ca292c01a2328339486e",
+      "bytes": 2041
+    },
+    {
+      "path": "rsi/harness/sr20_ab.py",
+      "sha256": "e060fe0c1695773ff1494949207a2f91794d4f4657541d8193e2b4e93b5a4b62",
+      "bytes": 2680
+    },
+    {
+      "path": "rsi/harness/sr21_run.py",
+      "sha256": "36af4325c614f1f142145765a5785051b62eacc5daafd64e13d9b02569873be7",
+      "bytes": 1265
+    },
+    {
+      "path": "rsi/harness/sr21_score.py",
+      "sha256": "621e84ed54c5508b09cc2537505ad293fab070b0402a51c8c60347b170e81271",
+      "bytes": 1177
+    },
+    {
+      "path": "rsi/harness/sr25_verdict.py",
+      "sha256": "b5a3d1ec63f85014bb0952736f2b4c94ded3532169559d7592e06aa535788036",
+      "bytes": 2661
+    },
+    {
+      "path": "rsi/harness/sr6_ab.py",
+      "sha256": "49be06bca93dbc9a4a89a0b0702c2b39ff212321eda906ea402936f149becdc1",
+      "bytes": 3028
+    },
+    {
+      "path": "rsi/harness/sr_ab.py",
+      "sha256": "4e39da886aa2bf0c38a34cde80afc3feccbcfc2cb6612c9c6989845a0c685ae8",
+      "bytes": 3278
+    },
+    {
+      "path": "rsi/harness/sr_rejudge.py",
+      "sha256": "7d17030b97003ed886af880857ebf076929bc3de541603ba592fc48ea80e585b",
+      "bytes": 3336
+    },
+    {
+      "path": "rsi/harness/srrej_score.py",
+      "sha256": "7273e940698f30c31b1e604f25adff6b4f8f132ed07d8fe5fb586a510620b6dd",
+      "bytes": 2795
+    },
+    {
+      "path": "rsi/harness/stage1_pool.py",
+      "sha256": "9b0f9423b503db8f8510f0e85f87fd556953df792ca1aacead6aea0d1dc67147",
+      "bytes": 7942
+    },
+    {
+      "path": "rsi/harness/stage1_timing.py",
+      "sha256": "23340d9a8094ac733ad80109eb7137245171e659101bceb94e22fbcf708f38b8",
+      "bytes": 4563
+    },
+    {
+      "path": "rsi/harness/stage2_loop.py",
+      "sha256": "079e9097ceca34ed1f267cff9e7931f00a66a44d69e4d75d8e4ba864f212619e",
+      "bytes": 13590
+    },
+    {
+      "path": "rsi/harness/stage3_arms.py",
+      "sha256": "12e95dd82a50cadaba901b1536b7582f363bf14cb4271296e1fdc704a17748bb",
+      "bytes": 6090
+    },
+    {
+      "path": "rsi/harness/stage_localize.py",
+      "sha256": "42ccad1a2c3d944566cf18d3b313b430fb44dbed17c32377fd81be10cf6b1f0f",
+      "bytes": 3270
+    },
+    {
+      "path": "rsi/harness/stage_localize2.py",
+      "sha256": "3e53af85d63327ef0363a0ce1d456b7cbc0b51ad78edc824350771c1e4ae2ff0",
+      "bytes": 3147
+    },
+    {
+      "path": "rsi/harness/stagesplit.py",
+      "sha256": "cb3c39a716dab0337616186d1e936485baef54db56f7901eb42fe7152b419f61",
+      "bytes": 2352
+    },
+    {
+      "path": "rsi/harness/standing_aggregate.py",
+      "sha256": "c960e40528213dec81e2feed1fe5b24b627c83d49248c27f404b8a4a8bfafb65",
+      "bytes": 2061
+    },
+    {
+      "path": "rsi/harness/standing_batch.py",
+      "sha256": "21c253a312bc1af64a30b1d3f5fe1ae46ec4df9cb333ef578ad020b72985feef",
+      "bytes": 3922
+    },
+    {
+      "path": "rsi/harness/tcl/pl_stage.tcl",
+      "sha256": "a93e23faf1aee0c807df147b1b0b7d0458c9d1df4dafd5b802f85828e580711a",
+      "bytes": 967
+    },
+    {
+      "path": "rsi/harness/tcl/signoff_stage.tcl",
+      "sha256": "7581aef751f63389abb544bffc2ef0f90dd9e05d4e450a18ea0eb3f9a5bcbf19",
+      "bytes": 1424
+    },
+    {
+      "path": "rsi/harness/tcl/timing_eval.tcl",
+      "sha256": "432cbc955eeb801bb9895241adbff35cebe8229c71b7400fbbc16d7bbd06d0a4",
+      "bytes": 797
+    },
+    {
+      "path": "rsi/harness/timing_baseline.py",
+      "sha256": "b162e33c8ecde1c3a42dada4c106a96caac084cb5ae23f6ad099c01425d83a4c",
+      "bytes": 2628
+    },
+    {
+      "path": "rsi/harness/timing_four_arm.py",
+      "sha256": "67c2e6c3b7907a994dfc62a6f64c31e45b9727bbc5dffef269b86700e9cc5505",
+      "bytes": 1401
+    },
+    {
+      "path": "rsi/harness/timing_rung.py",
+      "sha256": "95fd1de45f0f8041efee3f6d2f4b7761f48d0d6bf921a53aab65480ed6d790ad",
+      "bytes": 6838
+    },
+    {
+      "path": "rsi/harness/verify.py",
+      "sha256": "457093b68f3294078a0d1bd7d1bdebf259e81eddcf648f707f4f3860c110ff40",
+      "bytes": 5765
+    },
+    {
+      "path": "rsi/paper/.gitignore",
+      "sha256": "384aebb4d47cc23e7be79ca80dd9e540c8bee1c53207e4ba09a446dfb874848a",
+      "bytes": 18
+    },
+    {
+      "path": "rsi/paper/CORRECTION-anchoring.md",
+      "sha256": "7877e1b19a54e6ebdff1ef86f85f195fa5393868ed69cdeaf60bf2e569eb5767",
+      "bytes": 4539
+    },
+    {
+      "path": "rsi/paper/DRAFT-v0.1.md",
+      "sha256": "65a50cfcb683c8b07660d52035de30b47713fc28ad25de44ab56b8df2c67fe24",
+      "bytes": 44937
+    },
+    {
+      "path": "rsi/paper/FINAL-STATE.md",
+      "sha256": "5b09f62f4ec624b5c69042bc258e8dc9cfdde2dae630400dea90d0844ffdac59",
+      "bytes": 7929
+    },
+    {
+      "path": "rsi/paper/HANDOVER.md",
+      "sha256": "8c6cf8d476e7cf7382b2f52d3e5ed418b946944bccaca61d3e6413dde65f97d9",
+      "bytes": 22947
+    },
+    {
+      "path": "rsi/paper/MECHANISM-peak-congestion.md",
+      "sha256": "b5e6c4f88c721ae99f8b0af85b9aa3eada81a79933eb2e307f1508e08f429a33",
+      "bytes": 3236
+    },
+    {
+      "path": "rsi/paper/METHOD-STUDY-FINDINGS.md",
+      "sha256": "f777f9939ff38c10262702094e0239f3e9b1f1e766f1d89c131b056faba00df5",
+      "bytes": 4726
+    },
+    {
+      "path": "rsi/paper/RESULTS.md",
+      "sha256": "b0b7af667e4a39dbfd6789ae857bfb4052d57535feb524fb26d2824510e80ac5",
+      "bytes": 10185
+    },
+    {
+      "path": "rsi/paper/ROUND-1-congestion.md",
+      "sha256": "444b02660acaf3f9467681e45be70c48aa2093a18441323b674a4e72d0e28972",
+      "bytes": 8708
+    },
+    {
+      "path": "rsi/paper/ROUND-10-dp-attempts.md",
+      "sha256": "b14fe988657ebf2322c25d0dfe3a7800c5d3dfecdc4bf1e4b0d14a18029fb657",
+      "bytes": 8677
+    },
+    {
+      "path": "rsi/paper/ROUND-11-converged-finish.md",
+      "sha256": "d79574f19bd7e67fac053ad3253a5d8057b693aeea7e611560d6f75e3046fb65",
+      "bytes": 12884
+    },
+    {
+      "path": "rsi/paper/ROUND-12-reference-value-error.md",
+      "sha256": "b7904cd407ba4ac0728452139f3f3a9e1aa41f02159f3a0e7611177f6aeffe43",
+      "bytes": 4865
+    },
+    {
+      "path": "rsi/paper/ROUND-13-pareto-choice.md",
+      "sha256": "caeb4ba7f2df43ca97ec3a3e32f6478421b06ac9def39959cf580bdc30416b70",
+      "bytes": 10291
+    },
+    {
+      "path": "rsi/paper/ROUND-14-candidate-pool.md",
+      "sha256": "9dbfa9a72b5368ac88cfbd7a8f26c44a7c4d20b25b863c5fa6253b625945d6e8",
+      "bytes": 5764
+    },
+    {
+      "path": "rsi/paper/ROUND-15-timing-check-and-coverage.md",
+      "sha256": "3a226895f8eaab58090c83231f9cf742f4ec0110e9b16424f519269e9e938ff8",
+      "bytes": 4502
+    },
+    {
+      "path": "rsi/paper/ROUND-16-pool-crosses-reference.md",
+      "sha256": "5c5ae200ade5842e3e83c6f829c01c339d4449fcd888a259e305f0ab48cec9d7",
+      "bytes": 6745
+    },
+    {
+      "path": "rsi/paper/ROUND-17-standing-table.md",
+      "sha256": "2e15d94f2fd48827e2beb5b25b3b664ca4f38e50d4f99d9c6ca43d8526d9a510",
+      "bytes": 6405
+    },
+    {
+      "path": "rsi/paper/ROUND-18-sr7-null-and-the-wall.md",
+      "sha256": "8c224b84afe99bb586b6ce8be729ee96ec4e92de7fa71aa3defa597c177ad29d",
+      "bytes": 5121
+    },
+    {
+      "path": "rsi/paper/ROUND-19-dp-demand-instrument.md",
+      "sha256": "738858beec42494744c804d7b963dda96ccf0657749a10bc397378eae12189e9",
+      "bytes": 4716
+    },
+    {
+      "path": "rsi/paper/ROUND-2-nfs-and-dp.md",
+      "sha256": "d67b92293772a47c0ab1e94b2de7cf5e751fef36d93abd35e2d38bf17b818dd6",
+      "bytes": 11705
+    },
+    {
+      "path": "rsi/paper/ROUND-20-in-tool-congestion.md",
+      "sha256": "e7b8dc256fed9b6d2b2c2c87ef1563fceea88b5eafc77b6e0d7611e30e53d53e",
+      "bytes": 5328
+    },
+    {
+      "path": "rsi/paper/ROUND-21-sr11-guard.md",
+      "sha256": "ea603e42a08019b31e5c840f2b906ae3fdde06d7691b13ef19fb37240277e16d",
+      "bytes": 7601
+    },
+    {
+      "path": "rsi/paper/ROUND-22-target-moved.md",
+      "sha256": "1f63ad203aa3dff4732a2150f580b6146e21bdacd7dc58e54b1fefd3b7958ea5",
+      "bytes": 4559
+    },
+    {
+      "path": "rsi/paper/ROUND-23-direction-aware-coef.md",
+      "sha256": "aa63296c5e1cd336177dbdfad39cd70001a5f3e72e7cbf39719e47908e6e4db3",
+      "bytes": 5325
+    },
+    {
+      "path": "rsi/paper/ROUND-24-sr12-withdrawn.md",
+      "sha256": "7c0e0ee00447f427cf45b4a2820941c75a7f742a9228bc8a662b47e7f338a1a4",
+      "bytes": 4377
+    },
+    {
+      "path": "rsi/paper/ROUND-25-coverage-count.md",
+      "sha256": "5fcc9e5b0ed059775d4f73de615b16b1201b575837657094adf412100b5302fd",
+      "bytes": 3333
+    },
+    {
+      "path": "rsi/paper/ROUND-26-source-inventory.md",
+      "sha256": "a2959dd0724f2e9d56eb6cc9d9feda6d6735b6c8186d9e7913d76a5771a19d06",
+      "bytes": 3677
+    },
+    {
+      "path": "rsi/paper/ROUND-27-congestion-effort-closed.md",
+      "sha256": "617bfbf27978ffb9660cbcec010f1553c68a32870aa017667c60763d1694ccba",
+      "bytes": 4613
+    },
+    {
+      "path": "rsi/paper/ROUND-28-protocol-correction.md",
+      "sha256": "838911234bccb0620bde9ba93daa48884955e7ebbf1a1ff440a66f5b2dfe4111",
+      "bytes": 5280
+    },
+    {
+      "path": "rsi/paper/ROUND-29-gp-debt-and-sr13.md",
+      "sha256": "fd2eb4a3fa7d386b74ea0b6809cb85f45a1711efb76f1d775d4d9ad9403df95c",
+      "bytes": 8372
+    },
+    {
+      "path": "rsi/paper/ROUND-3-density-ramp.md",
+      "sha256": "dd45f804bf1f65fe7da570390079ff78b67d3a3da89ddbeec82816f7cfc5cb38",
+      "bytes": 10047
+    },
+    {
+      "path": "rsi/paper/ROUND-30-sr14-revert-and-retraction.md",
+      "sha256": "774ae37f6193fc54d51e609afdedd82b47c4120e335fc2d526cab43be2a03c62",
+      "bytes": 4400
+    },
+    {
+      "path": "rsi/paper/ROUND-31-batch-determinism.md",
+      "sha256": "c1be87f4624859dbff4dd9a8f260cd2bf36e98846806499fad6f8a47ce6d9622",
+      "bytes": 3918
+    },
+    {
+      "path": "rsi/paper/ROUND-32-blocked-log-directory.md",
+      "sha256": "6caac0c6035165d553a0f18718c0d63b3349afaf65784ae4ea5f2da84108e437",
+      "bytes": 4162
+    },
+    {
+      "path": "rsi/paper/ROUND-33-blocker-diagnosed.md",
+      "sha256": "af6d55065a6077d01a7578c4afce1425e473b087135344467fa564f74bc754fc",
+      "bytes": 4074
+    },
+    {
+      "path": "rsi/paper/ROUND-34-workaround-limit.md",
+      "sha256": "355342929b05b7f2f1ed7ddbafac928c3e7b165c89fa487389582ae056e1845e",
+      "bytes": 4391
+    },
+    {
+      "path": "rsi/paper/ROUND-35-route1-not-effective.md",
+      "sha256": "de9f68c5841ef7d50db33e838185515ffffc76a794a17d51ac020e4d3978ac72",
+      "bytes": 3871
+    },
+    {
+      "path": "rsi/paper/ROUND-36-unblocked-and-a-defect-in-my-own-harness.md",
+      "sha256": "6474084d042d4ab5a5c3bd00c9a3320b05988132a4190d3478f59f3de4ec2a42",
+      "bytes": 5373
+    },
+    {
+      "path": "rsi/paper/ROUND-37-standing-confirmed-in-one-batch.md",
+      "sha256": "4a78c976c5890c9811e35242eccd1e84f67c2596b7945da553701604e3fc3692",
+      "bytes": 3680
+    },
+    {
+      "path": "rsi/paper/ROUND-38-nine-designs-single-batch.md",
+      "sha256": "c2b120cdaad8172d986f042b48204ebb5fc977bf2bace56cc634a301f9325d8b",
+      "bytes": 3239
+    },
+    {
+      "path": "rsi/paper/ROUND-39-fourteen-refs-and-two-long-runs.md",
+      "sha256": "5bd0669d7ad0a1e5165e63b3ecba7ff5fb6f64822c05faa83fd8379813ae6ad2",
+      "bytes": 3578
+    },
+    {
+      "path": "rsi/paper/ROUND-4-reformulation-fails.md",
+      "sha256": "0320af4501eb183e68c3aca053f84926dabfc3f3cb38293e98361b2c15707b25",
+      "bytes": 8634
+    },
+    {
+      "path": "rsi/paper/ROUND-40-complete-standing-and-a-contradiction.md",
+      "sha256": "45d18083a2e7f286baf8008861a7370b45a634d33d3af09ab1989c10e0afb802",
+      "bytes": 4559
+    },
+    {
+      "path": "rsi/paper/ROUND-41-congestion-effort-exclusion-confirmed.md",
+      "sha256": "9ea2434f2bcfb38c0a4d9803b6089759be919d511c47fe4239f593c803ae2a1e",
+      "bytes": 4144
+    },
+    {
+      "path": "rsi/paper/ROUND-42-sr13-sr14-are-not-noops.md",
+      "sha256": "04ab2c7c7c60f7adc50c011df336073fcf7c0eb0b6ebd2c52eb9c180d2cb6e11",
+      "bytes": 3263
+    },
+    {
+      "path": "rsi/paper/ROUND-43-sr14-is-real.md",
+      "sha256": "227cbbfdfae003a525887748887c57a2da470c000d3c0ba24e129685ba1aba65",
+      "bytes": 3954
+    },
+    {
+      "path": "rsi/paper/ROUND-44-sr14-mechanism-verified.md",
+      "sha256": "d6155a906558b6d4dafc443e0b1cec4e1fe8c0b37d713059a91b2e9ef005c319",
+      "bytes": 4459
+    },
+    {
+      "path": "rsi/paper/ROUND-45-sr15-self-guarded.md",
+      "sha256": "a9502513e6eb45e7340b4263e516613d72b841ce9b67c2466b33de07c748cd51",
+      "bytes": 3577
+    },
+    {
+      "path": "rsi/paper/ROUND-46-sr15-withdrawn.md",
+      "sha256": "3bb9f8e37b5acd1218d4dba55598c07462b2fa3fcbb06a00608bd1e46c4b7f70",
+      "bytes": 3813
+    },
+    {
+      "path": "rsi/paper/ROUND-47-sr16-fixed-but-still-a-knob.md",
+      "sha256": "7ba2cc5dab7f59228f0a8c28048a3ad446587c7ee933bf09127ab29dfb641ff3",
+      "bytes": 4567
+    },
+    {
+      "path": "rsi/paper/ROUND-48-congestion-shape.md",
+      "sha256": "4ee752994a58244c0298c741938197279046d1079b60876d85beedca2f498c89",
+      "bytes": 3654
+    },
+    {
+      "path": "rsi/paper/ROUND-49-area-hypothesis-killed.md",
+      "sha256": "13c50a3196bec40099bdd1328e4e6b03bfa59b746f3ed365adbcaeecb7c5e123",
+      "bytes": 4239
+    },
+    {
+      "path": "rsi/paper/ROUND-5-seed-robustness.md",
+      "sha256": "2c1193765a5ef6a6081926c4118b7d1c0293a555420f313e923d10cfb8a33b59",
+      "bytes": 8233
+    },
+    {
+      "path": "rsi/paper/ROUND-50-multi-pass-first-real-signal.md",
+      "sha256": "75c1287f9f362cd6e5383f34979805b92d329e3d83aeb746f205128b669b092e",
+      "bytes": 3220
+    },
+    {
+      "path": "rsi/paper/ROUND-51-multi-pass-signal-holds.md",
+      "sha256": "29114e48681a5b052e227a685085b19f96fb3e256f89561734707cdd8f295fa5",
+      "bytes": 3398
+    },
+    {
+      "path": "rsi/paper/ROUND-52-sr17-gated-passes.md",
+      "sha256": "0dcab46c122bc8609be14976d7446bbbd74187af201fe784171a44b4a47c458e",
+      "bytes": 3879
+    },
+    {
+      "path": "rsi/paper/ROUND-53-sr17-cost-correction.md",
+      "sha256": "9b82d4e940c07e9bbb46fafeb33210626ad913ac786939901e31c76e8b4f2df8",
+      "bytes": 3395
+    },
+    {
+      "path": "rsi/paper/ROUND-54-sr17-executing-cost-measured.md",
+      "sha256": "3b0145f5599605a9f2f41d564b8b92d6284c993f12863c8345229fab8a3aad56",
+      "bytes": 3828
+    },
+    {
+      "path": "rsi/paper/ROUND-55-sr17-unbounded-withdrawn.md",
+      "sha256": "8eebcda3e6fd4a7064f0bd1dd0883e6e169482c1dd1ba65b3500bcbd3f80f3aa",
+      "bytes": 3366
+    },
+    {
+      "path": "rsi/paper/ROUND-56-dp-called-once.md",
+      "sha256": "1254a399640f8f21d6e62332aa9f5d29e487036ea5608abc72b192aea1f82ade",
+      "bytes": 3428
+    },
+    {
+      "path": "rsi/paper/ROUND-57-sr18-congestion-gated-finish.md",
+      "sha256": "570f7f5de3a6d23875b10dbfe905eba618fb619ae931ed33d6aa3bd19cb7d6ee",
+      "bytes": 4215
+    },
+    {
+      "path": "rsi/paper/ROUND-58-sr18-inert-sr19-aborted.md",
+      "sha256": "2fc9b9b11c7a9c5188e486adc378b13a1bcbf8e1ec207b453ce032538c470962",
+      "bytes": 3740
+    },
+    {
+      "path": "rsi/paper/ROUND-59-sr20-executes.md",
+      "sha256": "f00c09469ff9f63ea39db7dbcfb38cab8bec860075730d94a06e25abac9aa3c1",
+      "bytes": 3912
+    },
+    {
+      "path": "rsi/paper/ROUND-6-timing-baseline.md",
+      "sha256": "46fee0970d56dc8cbb2d4fcd02e8bd0a6806fb4fa6325054363b1b63975808da",
+      "bytes": 8621
+    },
+    {
+      "path": "rsi/paper/ROUND-60-sr20-bounded-but-not-the-same-passes.md",
+      "sha256": "2d74247a8696e82d0ccc2c168c6aab8361946b39e149427c25cd17817a417586",
+      "bytes": 3721
+    },
+    {
+      "path": "rsi/paper/ROUND-61-gate-too-strict.md",
+      "sha256": "bcc7dde9cb45dfed61af7eaac4404468548588f92b7ada3ef88a94ef9c6d6d27",
+      "bytes": 3675
+    },
+    {
+      "path": "rsi/paper/ROUND-62-sr21-captures-the-lever.md",
+      "sha256": "3f8f7717bbbe8cffc07f5e78913a8181ecd25c9fb7012ba6fd74d68f457945cb",
+      "bytes": 4035
+    },
+    {
+      "path": "rsi/paper/ROUND-63-sr21-three-designs.md",
+      "sha256": "32c7ce8dafa7159637d269812e696c700a0b4c0828325f4df7f59de7c7f8cd0f",
+      "bytes": 3259
+    },
+    {
+      "path": "rsi/paper/ROUND-64-what-changed-and-the-standing.md",
+      "sha256": "a7d296daafd77fa286d16c9b8698be791549a867dc44aa3a5fdb9fb087d98ba6",
+      "bytes": 4390
+    },
+    {
+      "path": "rsi/paper/ROUND-65-three-arm-and-protocol-violation.md",
+      "sha256": "a6d5aa1dad04148f1bd279f7adea7ca20891cf3ed51b35734d88187b1761b3ab",
+      "bytes": 4832
+    },
+    {
+      "path": "rsi/paper/ROUND-66-four-arm-standing-and-two-scoring-defects.md",
+      "sha256": "28dfb658edc14a7570dfb44c5da5cf5b8f55ff9f70ec90516c1c917e497f05f6",
+      "bytes": 8777
+    },
+    {
+      "path": "rsi/paper/ROUND-67-the-tree-is-not-reproducible.md",
+      "sha256": "dffaa1e6f54dd48ed6db3d929e90fa7316a87613b099932cd7f22b2ef651530e",
+      "bytes": 8782
+    },
+    {
+      "path": "rsi/paper/ROUND-68-the-instrument-part-2.md",
+      "sha256": "3f39b1c28c16a7ae2f3a3f5c747a732d24c9313aa9790bb59b63a7cfd791b2bc",
+      "bytes": 7438
+    },
+    {
+      "path": "rsi/paper/ROUND-69-standing-and-the-race.md",
+      "sha256": "4cf61a221e9c957a6eb781cb3de925c5d51d10456f72ade02dba920e35ab56ca",
+      "bytes": 5435
+    },
+    {
+      "path": "rsi/paper/ROUND-7-netlist-integrity.md",
+      "sha256": "21b20283327213d486d86ac347eda5c21657220ac8d1ffd26a646ac6f660575f",
+      "bytes": 6811
+    },
+    {
+      "path": "rsi/paper/ROUND-70-retraction-and-the-real-defect.md",
+      "sha256": "1d5334cdd98ada4072c9c64e5762548a572bb34de61f45f455ae637beec445c0",
+      "bytes": 5710
+    },
+    {
+      "path": "rsi/paper/ROUND-71-standing-5-of-15.md",
+      "sha256": "666012983dfef964539c27aad023526bd524a382d25d0f66a74a180f662ff3c5",
+      "bytes": 5903
+    },
+    {
+      "path": "rsi/paper/ROUND-72-the-standing-is-seed-dependent.md",
+      "sha256": "998cdd07025ba414976c58285ca9f097923d6be2465630fd9d294833bee2a61a",
+      "bytes": 5047
+    },
+    {
+      "path": "rsi/paper/ROUND-73-paired-multi-seed-baseline.md",
+      "sha256": "ddec4870a3fe05af22ddb4dad29d2c8057025299ed14a1fba347310fd287c6cd",
+      "bytes": 4617
+    },
+    {
+      "path": "rsi/paper/ROUND-74-complete-paired-multi-seed-baseline.md",
+      "sha256": "67b149e0ab0a6aea7f496bb776332085b56a951f43ec82719f6e40467cd2d27a",
+      "bytes": 6435
+    },
+    {
+      "path": "rsi/paper/ROUND-75-a-real-defect-and-why-it-must-be-withdrawn.md",
+      "sha256": "30f819967986b9ebdf6cb77ef31663c5da80aa95ca838970170b54919bf0b78c",
+      "bytes": 6310
+    },
+    {
+      "path": "rsi/paper/ROUND-76-the-co-run-pattern-decides-the-verdict.md",
+      "sha256": "a71863a4fe76658ef582d9dcd6bda809071241178bf97b68502cd8a31ebd0704",
+      "bytes": 4482
+    },
+    {
+      "path": "rsi/paper/ROUND-77-sr25-global-placement-refinement.md",
+      "sha256": "0fb779c4194ab027d5c50f42ddf57b1a1df267c3c099134b1e8cb836230d4c78",
+      "bytes": 6883
+    },
+    {
+      "path": "rsi/paper/ROUND-78-sr25-partial-validation.md",
+      "sha256": "dc40f8ee4060f1717cec715fc14886133bb5a9db46ecb5ed7d814e85e0cdb160",
+      "bytes": 3352
+    },
+    {
+      "path": "rsi/paper/ROUND-79-my-own-orchestration-error.md",
+      "sha256": "a8c28997e95256229826245aa6c9276020b47eba8706ebf4b585e11869e5de9a",
+      "bytes": 3512
+    },
+    {
+      "path": "rsi/paper/ROUND-8-problem-point.md",
+      "sha256": "53f44ae0a6789ac3c61235f0345ae7fbf34042e990f5ff3a5472d7df147a2d91",
+      "bytes": 9696
+    },
+    {
+      "path": "rsi/paper/ROUND-80-sr25-meets-the-acceptance-rule.md",
+      "sha256": "81f154b848f576aa1b2d7e405e49c4f4533764414d052ba4b7843ca2a5c759ed",
+      "bytes": 5223
+    },
+    {
+      "path": "rsi/paper/ROUND-81-matched-confirmation-and-sr26.md",
+      "sha256": "fd3491db2b1a687a49ac4784c78e95df7ba21280b164064e4d3fb2282725986a",
+      "bytes": 4526
+    },
+    {
+      "path": "rsi/paper/ROUND-82-tree-restored-and-sr26-partial.md",
+      "sha256": "52c0f97582411a140dff1441d2c9a3d9710912fc1e5f886bf713900377ae3e37",
+      "bytes": 3227
+    },
+    {
+      "path": "rsi/paper/ROUND-83-sr26-supersedes-sr25.md",
+      "sha256": "a6e29b38b71aea72db45f1d7fbbb20807796959afe9f2d5e9d14c5f2f5718c23",
+      "bytes": 4407
+    },
+    {
+      "path": "rsi/paper/ROUND-84-sr27-pareto-chooser.md",
+      "sha256": "e32447960b660e656ad2cf6b39c7fc6a6138146957f64362385593e0ec56708c",
+      "bytes": 3237
+    },
+    {
+      "path": "rsi/paper/ROUND-85-sr27-ties-and-its-evidence-did-not-reproduce.md",
+      "sha256": "864e2de8fafe07dde80365f49d5bb67f0a2d0aa09eb15f618350c47f6b668da7",
+      "bytes": 4917
+    },
+    {
+      "path": "rsi/paper/ROUND-86-the-gate-is-sound-the-outcome-is-not.md",
+      "sha256": "d33c66f64f99cbecad7aff712c47f41b813ad1a85597b3e627dae5b6f92613d1",
+      "bytes": 4741
+    },
+    {
+      "path": "rsi/paper/ROUND-87-protocol-correct-confirmation.md",
+      "sha256": "50924b2e1a98a498864aa9645bb59959a563c3e57b26e102cd2cf254eb77b3d6",
+      "bytes": 4016
+    },
+    {
+      "path": "rsi/paper/ROUND-88-retraction-of-the-sequential-confirmation.md",
+      "sha256": "2ffb2d4ba26e383148f441062db64dfa838b4b307ad1708e8b20d18dcc38b923",
+      "bytes": 4597
+    },
+    {
+      "path": "rsi/paper/ROUND-89-the-sequential-count-is-lower.md",
+      "sha256": "ee357f701a497fe9acd02eb7e76bdb38a5505e05398e84c04afec9306bba586d",
+      "bytes": 4910
+    },
+    {
+      "path": "rsi/paper/ROUND-9-which-dp-operator.md",
+      "sha256": "4f5c2e661b1bc560d7ceb1282fe40bce081170cbdcd0580f045ed14bb32c6146",
+      "bytes": 7018
+    },
+    {
+      "path": "rsi/paper/ROUND-90-one-arm-away.md",
+      "sha256": "06ee9d565eaeca9095ea976335c8666b0f412ebd353a121486765707d8fb9865",
+      "bytes": 3517
+    },
+    {
+      "path": "rsi/paper/ROUND-91-sr26-accepted-sequentially.md",
+      "sha256": "2470eb2ea23f03327bd79a00bea07c9ac774780be8367b12552fbc734e1cb6d7",
+      "bytes": 4648
+    },
+    {
+      "path": "rsi/paper/ROUND-92-initial-gp-effort-screen.md",
+      "sha256": "87e8f984e64728954d05817dcbb39575d4e39225acb8b42e3941c5eba46e5e3f",
+      "bytes": 4634
+    },
+    {
+      "path": "rsi/paper/ROUND-93-initial-gp-negative-and-sr28.md",
+      "sha256": "8fcced8b2f6f959ad3feaa342f43537ed34174c2e3bb85e6def4cd6d3ab9aedf",
+      "bytes": 4992
+    },
+    {
+      "path": "rsi/paper/ROUND-94-tree-hygiene-and-sr28-interim.md",
+      "sha256": "de8735fd51ff937bbe669715dc36e1159154883cc9d15bee0a396c1bf0daa7af",
+      "bytes": 3029
+    },
+    {
+      "path": "rsi/paper/ROUND-95-final-state-and-sr28-interim.md",
+      "sha256": "0104438b872e44878c96586f197698cb7319a4d3d7ccc63a49de017add341a4e",
+      "bytes": 3190
+    },
+    {
+      "path": "rsi/paper/ROUND-96-sr28-accepted.md",
+      "sha256": "15b70e694966762ed58135a1cebbe69ed584ca8fff0c99d838a6b9fb01b15d9e",
+      "bytes": 3635
+    },
+    {
+      "path": "rsi/paper/SOURCE-CHANGE-SR1.md",
+      "sha256": "aa3afcf382590d0360c903713f4e687b41812b8db26e36fed431c4953bb1a670",
+      "bytes": 3241
+    },
+    {
+      "path": "rsi/paper/WORK-SUMMARY.md",
+      "sha256": "db04cc1879977fdff3aa3f4538667fbd8cad7f60378691e1c06bde97b55688f1",
+      "bytes": 18259
+    },
+    {
+      "path": "rsi/paper/figures/fig10_live_vs_replay.png",
+      "sha256": "74515aa8342442f53ec81f227578d47c5e6641265f80f27e471fff0ddc2fa9ce",
+      "bytes": 164174
+    },
+    {
+      "path": "rsi/paper/figures/fig11_mechanism.png",
+      "sha256": "08143290acfaf067bf9a2671448b6b1ebc461ba9a9af39ee69b5e8780663d7c9",
+      "bytes": 82083
+    },
+    {
+      "path": "rsi/paper/figures/fig1_fidelity_heatmap.png",
+      "sha256": "ccbe799d4c43942da9a36ec53c7dcbeeb6c88da4d4273a2652b8519317664b01",
+      "bytes": 106098
+    },
+    {
+      "path": "rsi/paper/figures/fig2_selection_regret.png",
+      "sha256": "ca07fa234a452f7c8344868d2d9a77b1926f4d15701bc225f19af989072b2bee",
+      "bytes": 66784
+    },
+    {
+      "path": "rsi/paper/figures/fig3_mechanism.png",
+      "sha256": "beba78b310c50f08bb2ebcc2ad3ed2d5e0aa4e97015d500944ea1d12100da2f2",
+      "bytes": 174366
+    },
+    {
+      "path": "rsi/paper/figures/fig4_dynamics.png",
+      "sha256": "3b62980b97d9f01d5d76b110514de08e96db4a27e3a3a6204c3bf504542479ed",
+      "bytes": 295318
+    },
+    {
+      "path": "rsi/paper/figures/fig5_scheduling.png",
+      "sha256": "6b6f14f13ec61dc4de984db307d6e635f4bd64a40fb7e7fbc5f0c3a6b7168b08",
+      "bytes": 138589
+    },
+    {
+      "path": "rsi/paper/figures/fig6_timing_vs_ruler.png",
+      "sha256": "ed34c70e156438c204430196aa6b980cba533c73036254e7f15f1fb309fe4c9c",
+      "bytes": 50051
+    },
+    {
+      "path": "rsi/paper/figures/fig7_external_anchor.png",
+      "sha256": "990253a2df2d52b1036d95b4536588f1f9cc640394b6256feaa7db5cddd31178",
+      "bytes": 69186
+    },
+    {
+      "path": "rsi/paper/figures/fig8_transfer.png",
+      "sha256": "4ce70ed41497f41b63b70a1a4102be4654db6204ceca686e4bf60b14346d5c25",
+      "bytes": 71030
+    },
+    {
+      "path": "rsi/paper/figures/fig9_arms_by_split.png",
+      "sha256": "ec6cea5e55e55ebce5661f9bb0a3b22ce03443549c838996f084000917de8304",
+      "bytes": 64576
+    },
+    {
+      "path": "rsi/paper/main.tex",
+      "sha256": "9ba2f3dfa74daa93c24997c63b79c43cf3d9d6368651eaf04a5005cde059bddf",
+      "bytes": 41235
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A1.md",
+      "sha256": "313e7943667bc2dc472e83c4a3af2a708ee897ab36f4659f71f955c6d2e31ada",
+      "bytes": 3570
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A1.sha256",
+      "sha256": "fa4c9047b81d1aa8a5fedadfc960aab2e07c2cb5593bdd83aa07b5f76650f913",
+      "bytes": 100
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A2.md",
+      "sha256": "b797c34b763d5ce4ca89cf6a16fe77e19d352c265bdc2975417f59960008d61d",
+      "bytes": 1866
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A2.sha256",
+      "sha256": "49d5925363663dc93fa03b13b5766179dae6acf98c61bb53c8f29ee79b06cf09",
+      "bytes": 129
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A3.md",
+      "sha256": "65275b7daeb9c7765265891e4c5a8e4d1a373501e97ba4c90a4038391301eb38",
+      "bytes": 1992
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A3.sha256",
+      "sha256": "067d492e0d9a0c7bf8381630128d31434ac1d144b8997dadaa884afe8d1ad1f9",
+      "bytes": 82
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A4.md",
+      "sha256": "a6dc39ba4f08473e15d1bdd04147461cfdee91b4b5bd4294e7ce5bc1848b986a",
+      "bytes": 1645
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A4.sha256",
+      "sha256": "bb6fcde1888fa30e47887268326a567ec972d79d56262b5027aa3f305712a1b3",
+      "bytes": 129
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A5.md",
+      "sha256": "94151c87b1881301cf6aebc441b1b8f9c38fc6dcdbb563e784f4f31ec841e67a",
+      "bytes": 1337
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A5.sha256",
+      "sha256": "1f81ced5c6e5d3ec563c4a4e70c5cc02f405088496d0353c1c43cfe70139dd1e",
+      "bytes": 100
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A6.md",
+      "sha256": "13a6122b03f545df6cc42e5e3c5b2bd6c72cedb6ae02e0a36996dd775e11b6ca",
+      "bytes": 1735
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A6.sha256",
+      "sha256": "e398ad484cc22394a973ab473a71d7fdfeb07a71bb4fa836e120d02285eb277a",
+      "bytes": 100
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A7.md",
+      "sha256": "4062a7812daac4befeffb623bad466dfe4ead65098b1c153cf50c9f547f5abfe",
+      "bytes": 1850
+    },
+    {
+      "path": "rsi/protocol/AMENDMENT-A7.sha256",
+      "sha256": "db2d24b1c3fe74044f11969e9a9af6990f4ff68344faf1674132150739d80707",
+      "bytes": 100
+    },
+    {
+      "path": "rsi/protocol/PROTOCOL-v1.0.md",
+      "sha256": "7ffbf737a2296692787131eddcd039a628c147a1236819bc74f5b80c2e9e26c1",
+      "bytes": 9279
+    },
+    {
+      "path": "rsi/protocol/PROTOCOL-v1.0.sha256",
+      "sha256": "9de2b1f6fa19ef330ad6bed268523943aa0d79a464c220406146e3e845e18d39",
+      "bytes": 92
+    },
+    {
+      "path": "src/interface/tcl/tcl_ipl/tcl_ipl.cpp",
+      "sha256": "d09a056b00850f82e1544e9b64a44a599b7ac88af7c3ead93d4b1ce8bbc30d4b",
+      "bytes": 30108
+    },
+    {
+      "path": "src/interface/tcl/tcl_ipl/tcl_ipl.h",
+      "sha256": "c18f68b2163afc6623a6f430ff06dc8fc6ae41079a1f75c3e5054a068527984e",
+      "bytes": 1801
+    },
+    {
+      "path": "src/interface/tcl/tcl_ipl/tcl_register_pl.h",
+      "sha256": "fc997a2fbdd440bdfa2b540ba8410e3dbfbc60547b52d349ee8b64c1c057bf30",
+      "bytes": 2078
+    },
+    {
+      "path": "src/operation/iPL/api/PLAPI.cc",
+      "sha256": "ed54eac628f359cb8edd2bf4732b8bbce60bd7e3ce3fae95f3befc408ef8d002",
+      "bytes": 129538
+    },
+    {
+      "path": "src/operation/iPL/api/PLAPI.hh",
+      "sha256": "0fc92e6cc55c3504fb09f8c9d1b78404dfa1a3c11a82fe68e84cfa6ed4c80042",
+      "bytes": 11737
+    },
+    {
+      "path": "src/operation/iPL/source/module/detail_placer/DetailPlacer.cc",
+      "sha256": "212b753888fb77a2aaf3b08ec1896f5557073c23c3e1c5dde1ef1d5cec4351f7",
+      "bytes": 42824
+    },
+    {
+      "path": "src/operation/iPL/source/module/detail_placer/DetailPlacer.hh",
+      "sha256": "60c559d8106099bbae395e5cab17cc5051c65b1c6981cacea26d8e6a30958a82",
+      "bytes": 4125
+    },
+    {
+      "path": "src/operation/iPL/source/module/global_placer/electrostatic_placer/NesterovPlace.cc",
+      "sha256": "55873867ab0f40eb33f6be8c9f18dc211573a46344fefd88454158a30ca9b79d",
+      "bytes": 159543
+    },
+    {
+      "path": "src/operation/iRT/interface/RTInterface.cpp",
+      "sha256": "a7e6d76162064a374658d5296a37ac237b1614add7286a525c7fa707ea2d4020",
+      "bytes": 80981
+    },
+    {
+      "path": "src/platform/tool_manager/tool_api/ipl_io/ipl_io.cpp",
+      "sha256": "6ba0ea2dab695a3342eb2470c56ae153f4a0dc5fd5ba1216c283bb4bfa0fab8e",
+      "bytes": 16887
+    },
+    {
+      "path": "src/platform/tool_manager/tool_api/ipl_io/ipl_io.h",
+      "sha256": "9f5649c7bd9c67b762122f0214b7c73c990e9ddcaddfc3308032c43342f7afb2",
+      "bytes": 3897
+    }
+  ],
+  "excluded_changes": [
+    "rsi/analysis/out/cluster_baseV2.md",
+    "rsi/analysis/out/cur_aes_s1000.json",
+    "rsi/analysis/out/cur_aes_s1001.json",
+    "rsi/analysis/out/cur_aes_s1002.json",
+    "rsi/analysis/out/cur_aes_s1003.json",
+    "rsi/analysis/out/cur_apb4_timer_s1000.json",
+    "rsi/analysis/out/cur_apb4_timer_s1001.json",
+    "rsi/analysis/out/cur_apb4_timer_s1002.json",
+    "rsi/analysis/out/cur_apb4_timer_s1003.json",
+    "rsi/analysis/out/cur_gcd_ics55_a_s1000.json",
+    "rsi/analysis/out/cur_gcd_ics55_a_s1001.json",
+    "rsi/analysis/out/cur_gcd_ics55_a_s1002.json",
+    "rsi/analysis/out/cur_gcd_ics55_a_s1003.json",
+    "rsi/analysis/out/cur_gcd_nangate45_a_s1000.json",
+    "rsi/analysis/out/cur_gcd_nangate45_a_s1001.json",
+    "rsi/analysis/out/cur_gcd_nangate45_a_s1002.json",
+    "rsi/analysis/out/cur_gcd_nangate45_a_s1003.json",
+    "rsi/analysis/out/cur_gcd_sky130_a_s1000.json",
+    "rsi/analysis/out/cur_gcd_sky130_a_s1001.json",
+    "rsi/analysis/out/cur_gcd_sky130_a_s1002.json",
+    "rsi/analysis/out/cur_gcd_sky130_a_s1003.json",
+    "rsi/analysis/out/cur_picorv32_s1000.json",
+    "rsi/analysis/out/cur_picorv32_s1001.json",
+    "rsi/analysis/out/cur_picorv32_s1002.json",
+    "rsi/analysis/out/cur_picorv32_s1003.json",
+    "rsi/analysis/out/cur_s1238_ics55_a_s1000.json",
+    "rsi/analysis/out/cur_s1238_ics55_a_s1001.json",
+    "rsi/analysis/out/cur_s1238_ics55_a_s1002.json",
+    "rsi/analysis/out/cur_s1238_ics55_a_s1003.json",
+    "rsi/analysis/out/cur_s1238_nangate45_a_s1000.json",
+    "rsi/analysis/out/cur_s1238_nangate45_a_s1001.json",
+    "rsi/analysis/out/cur_s1238_nangate45_a_s1002.json",
+    "rsi/analysis/out/cur_s1238_nangate45_a_s1003.json",
+    "rsi/analysis/out/cur_s1238_s1000.json",
+    "rsi/analysis/out/cur_s1238_s1001.json",
+    "rsi/analysis/out/cur_s1238_s1002.json",
+    "rsi/analysis/out/cur_s1238_s1003.json",
+    "rsi/analysis/out/cur_s1238_sky130_a_s1000.json",
+    "rsi/analysis/out/cur_s1238_sky130_a_s1001.json",
+    "rsi/analysis/out/cur_s1238_sky130_a_s1002.json",
+    "rsi/analysis/out/cur_s1238_sky130_a_s1003.json",
+    "rsi/analysis/out/cur_s38584_ics55_a_s1000.json",
+    "rsi/analysis/out/cur_s38584_ics55_a_s1001.json",
+    "rsi/analysis/out/cur_s38584_ics55_a_s1002.json",
+    "rsi/analysis/out/cur_s38584_ics55_a_s1003.json",
+    "rsi/analysis/out/cur_s38584_nangate45_a_s1000.json",
+    "rsi/analysis/out/cur_s38584_nangate45_a_s1001.json",
+    "rsi/analysis/out/cur_s38584_nangate45_a_s1002.json",
+    "rsi/analysis/out/cur_s38584_nangate45_a_s1003.json",
+    "rsi/analysis/out/cur_s5378_sky130_b_s1000.json",
+    "rsi/analysis/out/cur_s5378_sky130_b_s1001.json",
+    "rsi/analysis/out/cur_s5378_sky130_b_s1002.json",
+    "rsi/analysis/out/cur_s5378_sky130_b_s1003.json",
+    "rsi/analysis/out/cur_salsa20_ics55_a_s1000.json",
+    "rsi/analysis/out/cur_salsa20_ics55_a_s1001.json",
+    "rsi/analysis/out/cur_salsa20_ics55_a_s1002.json",
+    "rsi/analysis/out/cur_salsa20_ics55_a_s1003.json",
+    "rsi/analysis/out/cur_salsa20_nangate45_a_s1000.json",
+    "rsi/analysis/out/cur_salsa20_nangate45_a_s1001.json",
+    "rsi/analysis/out/cur_salsa20_nangate45_a_s1002.json",
+    "rsi/analysis/out/cur_salsa20_nangate45_a_s1003.json",
+    "rsi/analysis/out/four_arm_standing.json",
+    "rsi/analysis/out/multi_seed_summary.json",
+    "rsi/analysis/out/sr23_aes_s1000.json",
+    "rsi/analysis/out/sr23_aes_s1001.json",
+    "rsi/analysis/out/sr23_aes_s1002.json",
+    "rsi/analysis/out/sr23_aes_s1003.json",
+    "rsi/analysis/out/sr23_apb4_timer_s1000.json",
+    "rsi/analysis/out/sr23_apb4_timer_s1001.json",
+    "rsi/analysis/out/sr23_apb4_timer_s1002.json",
+    "rsi/analysis/out/sr23_apb4_timer_s1003.json",
+    "rsi/analysis/out/sr23_gcd_ics55_a_s1000.json",
+    "rsi/analysis/out/sr23_gcd_ics55_a_s1001.json",
+    "rsi/analysis/out/sr23_gcd_ics55_a_s1002.json",
+    "rsi/analysis/out/sr23_gcd_ics55_a_s1003.json",
+    "rsi/analysis/out/sr23_gcd_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr23_gcd_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr23_gcd_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr23_gcd_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr23_gcd_sky130_a_s1000.json",
+    "rsi/analysis/out/sr23_gcd_sky130_a_s1001.json",
+    "rsi/analysis/out/sr23_gcd_sky130_a_s1002.json",
+    "rsi/analysis/out/sr23_gcd_sky130_a_s1003.json",
+    "rsi/analysis/out/sr23_picorv32_s1000.json",
+    "rsi/analysis/out/sr23_picorv32_s1001.json",
+    "rsi/analysis/out/sr23_picorv32_s1002.json",
+    "rsi/analysis/out/sr23_picorv32_s1003.json",
+    "rsi/analysis/out/sr23_s1238_ics55_a_s1000.json",
+    "rsi/analysis/out/sr23_s1238_ics55_a_s1001.json",
+    "rsi/analysis/out/sr23_s1238_ics55_a_s1002.json",
+    "rsi/analysis/out/sr23_s1238_ics55_a_s1003.json",
+    "rsi/analysis/out/sr23_s1238_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr23_s1238_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr23_s1238_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr23_s1238_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr23_s1238_s1000.json",
+    "rsi/analysis/out/sr23_s1238_s1001.json",
+    "rsi/analysis/out/sr23_s1238_s1002.json",
+    "rsi/analysis/out/sr23_s1238_s1003.json",
+    "rsi/analysis/out/sr23_s1238_sky130_a_s1000.json",
+    "rsi/analysis/out/sr23_s1238_sky130_a_s1001.json",
+    "rsi/analysis/out/sr23_s1238_sky130_a_s1002.json",
+    "rsi/analysis/out/sr23_s1238_sky130_a_s1003.json",
+    "rsi/analysis/out/sr23_s38584_ics55_a_s1000.json",
+    "rsi/analysis/out/sr23_s38584_ics55_a_s1001.json",
+    "rsi/analysis/out/sr23_s38584_ics55_a_s1002.json",
+    "rsi/analysis/out/sr23_s38584_ics55_a_s1003.json",
+    "rsi/analysis/out/sr23_s38584_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr23_s38584_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr23_s38584_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr23_s38584_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr23_s5378_sky130_b_s1000.json",
+    "rsi/analysis/out/sr23_s5378_sky130_b_s1001.json",
+    "rsi/analysis/out/sr23_s5378_sky130_b_s1002.json",
+    "rsi/analysis/out/sr23_s5378_sky130_b_s1003.json",
+    "rsi/analysis/out/sr23_salsa20_ics55_a_s1000.json",
+    "rsi/analysis/out/sr23_salsa20_ics55_a_s1001.json",
+    "rsi/analysis/out/sr23_salsa20_ics55_a_s1002.json",
+    "rsi/analysis/out/sr23_salsa20_ics55_a_s1003.json",
+    "rsi/analysis/out/sr23_salsa20_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr23_salsa20_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr23_salsa20_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr23_salsa20_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr24_aes_s1000.json",
+    "rsi/analysis/out/sr24_aes_s1001.json",
+    "rsi/analysis/out/sr24_aes_s1002.json",
+    "rsi/analysis/out/sr24_aes_s1003.json",
+    "rsi/analysis/out/sr24_apb4_timer_s1000.json",
+    "rsi/analysis/out/sr24_apb4_timer_s1001.json",
+    "rsi/analysis/out/sr24_apb4_timer_s1002.json",
+    "rsi/analysis/out/sr24_apb4_timer_s1003.json",
+    "rsi/analysis/out/sr24_gcd_ics55_a_s1000.json",
+    "rsi/analysis/out/sr24_gcd_ics55_a_s1001.json",
+    "rsi/analysis/out/sr24_gcd_ics55_a_s1002.json",
+    "rsi/analysis/out/sr24_gcd_ics55_a_s1003.json",
+    "rsi/analysis/out/sr24_gcd_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr24_gcd_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr24_gcd_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr24_gcd_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr24_gcd_sky130_a_s1000.json",
+    "rsi/analysis/out/sr24_gcd_sky130_a_s1001.json",
+    "rsi/analysis/out/sr24_gcd_sky130_a_s1002.json",
+    "rsi/analysis/out/sr24_gcd_sky130_a_s1003.json",
+    "rsi/analysis/out/sr24_picorv32_s1000.json",
+    "rsi/analysis/out/sr24_picorv32_s1001.json",
+    "rsi/analysis/out/sr24_picorv32_s1002.json",
+    "rsi/analysis/out/sr24_picorv32_s1003.json",
+    "rsi/analysis/out/sr24_s1238_ics55_a_s1000.json",
+    "rsi/analysis/out/sr24_s1238_ics55_a_s1001.json",
+    "rsi/analysis/out/sr24_s1238_ics55_a_s1002.json",
+    "rsi/analysis/out/sr24_s1238_ics55_a_s1003.json",
+    "rsi/analysis/out/sr24_s1238_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr24_s1238_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr24_s1238_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr24_s1238_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr24_s1238_s1000.json",
+    "rsi/analysis/out/sr24_s1238_s1001.json",
+    "rsi/analysis/out/sr24_s1238_s1002.json",
+    "rsi/analysis/out/sr24_s1238_s1003.json",
+    "rsi/analysis/out/sr24_s1238_sky130_a_s1000.json",
+    "rsi/analysis/out/sr24_s1238_sky130_a_s1001.json",
+    "rsi/analysis/out/sr24_s1238_sky130_a_s1002.json",
+    "rsi/analysis/out/sr24_s1238_sky130_a_s1003.json",
+    "rsi/analysis/out/sr24_s38584_ics55_a_s1000.json",
+    "rsi/analysis/out/sr24_s38584_ics55_a_s1001.json",
+    "rsi/analysis/out/sr24_s38584_ics55_a_s1002.json",
+    "rsi/analysis/out/sr24_s38584_ics55_a_s1003.json",
+    "rsi/analysis/out/sr24_s38584_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr24_s38584_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr24_s38584_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr24_s38584_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr24_s5378_sky130_b_s1000.json",
+    "rsi/analysis/out/sr24_s5378_sky130_b_s1001.json",
+    "rsi/analysis/out/sr24_s5378_sky130_b_s1002.json",
+    "rsi/analysis/out/sr24_s5378_sky130_b_s1003.json",
+    "rsi/analysis/out/sr24_salsa20_ics55_a_s1000.json",
+    "rsi/analysis/out/sr24_salsa20_ics55_a_s1001.json",
+    "rsi/analysis/out/sr24_salsa20_ics55_a_s1002.json",
+    "rsi/analysis/out/sr24_salsa20_ics55_a_s1003.json",
+    "rsi/analysis/out/sr24_salsa20_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr24_salsa20_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr24_salsa20_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr24_salsa20_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr25_aes_s1000.json",
+    "rsi/analysis/out/sr25_aes_s1001.json",
+    "rsi/analysis/out/sr25_aes_s1002.json",
+    "rsi/analysis/out/sr25_aes_s1003.json",
+    "rsi/analysis/out/sr25_apb4_timer_s1000.json",
+    "rsi/analysis/out/sr25_apb4_timer_s1001.json",
+    "rsi/analysis/out/sr25_apb4_timer_s1002.json",
+    "rsi/analysis/out/sr25_apb4_timer_s1003.json",
+    "rsi/analysis/out/sr25_gcd_ics55_a_s1000.json",
+    "rsi/analysis/out/sr25_gcd_ics55_a_s1001.json",
+    "rsi/analysis/out/sr25_gcd_ics55_a_s1002.json",
+    "rsi/analysis/out/sr25_gcd_ics55_a_s1003.json",
+    "rsi/analysis/out/sr25_gcd_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr25_gcd_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr25_gcd_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr25_gcd_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr25_gcd_sky130_a_s1000.json",
+    "rsi/analysis/out/sr25_gcd_sky130_a_s1001.json",
+    "rsi/analysis/out/sr25_gcd_sky130_a_s1002.json",
+    "rsi/analysis/out/sr25_gcd_sky130_a_s1003.json",
+    "rsi/analysis/out/sr25_picorv32_s1000.json",
+    "rsi/analysis/out/sr25_picorv32_s1001.json",
+    "rsi/analysis/out/sr25_picorv32_s1002.json",
+    "rsi/analysis/out/sr25_picorv32_s1003.json",
+    "rsi/analysis/out/sr25_s1238_ics55_a_s1000.json",
+    "rsi/analysis/out/sr25_s1238_ics55_a_s1001.json",
+    "rsi/analysis/out/sr25_s1238_ics55_a_s1002.json",
+    "rsi/analysis/out/sr25_s1238_ics55_a_s1003.json",
+    "rsi/analysis/out/sr25_s1238_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr25_s1238_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr25_s1238_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr25_s1238_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr25_s1238_s1000.json",
+    "rsi/analysis/out/sr25_s1238_s1001.json",
+    "rsi/analysis/out/sr25_s1238_s1002.json",
+    "rsi/analysis/out/sr25_s1238_s1003.json",
+    "rsi/analysis/out/sr25_s1238_sky130_a_s1000.json",
+    "rsi/analysis/out/sr25_s1238_sky130_a_s1001.json",
+    "rsi/analysis/out/sr25_s1238_sky130_a_s1002.json",
+    "rsi/analysis/out/sr25_s1238_sky130_a_s1003.json",
+    "rsi/analysis/out/sr25_s38584_ics55_a_s1000.json",
+    "rsi/analysis/out/sr25_s38584_ics55_a_s1001.json",
+    "rsi/analysis/out/sr25_s38584_ics55_a_s1002.json",
+    "rsi/analysis/out/sr25_s38584_ics55_a_s1003.json",
+    "rsi/analysis/out/sr25_s38584_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr25_s38584_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr25_s38584_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr25_s38584_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr25_s5378_sky130_b_s1000.json",
+    "rsi/analysis/out/sr25_s5378_sky130_b_s1001.json",
+    "rsi/analysis/out/sr25_s5378_sky130_b_s1002.json",
+    "rsi/analysis/out/sr25_s5378_sky130_b_s1003.json",
+    "rsi/analysis/out/sr25_salsa20_ics55_a_s1000.json",
+    "rsi/analysis/out/sr25_salsa20_ics55_a_s1001.json",
+    "rsi/analysis/out/sr25_salsa20_ics55_a_s1002.json",
+    "rsi/analysis/out/sr25_salsa20_ics55_a_s1003.json",
+    "rsi/analysis/out/sr25_salsa20_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr25_salsa20_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr25_salsa20_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr25_salsa20_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr26_aes_s1000.json",
+    "rsi/analysis/out/sr26_aes_s1001.json",
+    "rsi/analysis/out/sr26_aes_s1002.json",
+    "rsi/analysis/out/sr26_aes_s1003.json",
+    "rsi/analysis/out/sr26_apb4_timer_s1000.json",
+    "rsi/analysis/out/sr26_apb4_timer_s1001.json",
+    "rsi/analysis/out/sr26_apb4_timer_s1002.json",
+    "rsi/analysis/out/sr26_apb4_timer_s1003.json",
+    "rsi/analysis/out/sr26_gcd_ics55_a_s1000.json",
+    "rsi/analysis/out/sr26_gcd_ics55_a_s1001.json",
+    "rsi/analysis/out/sr26_gcd_ics55_a_s1002.json",
+    "rsi/analysis/out/sr26_gcd_ics55_a_s1003.json",
+    "rsi/analysis/out/sr26_gcd_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr26_gcd_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr26_gcd_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr26_gcd_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr26_gcd_sky130_a_s1000.json",
+    "rsi/analysis/out/sr26_gcd_sky130_a_s1001.json",
+    "rsi/analysis/out/sr26_gcd_sky130_a_s1002.json",
+    "rsi/analysis/out/sr26_gcd_sky130_a_s1003.json",
+    "rsi/analysis/out/sr26_picorv32_s1000.json",
+    "rsi/analysis/out/sr26_picorv32_s1001.json",
+    "rsi/analysis/out/sr26_picorv32_s1002.json",
+    "rsi/analysis/out/sr26_picorv32_s1003.json",
+    "rsi/analysis/out/sr26_s1238_ics55_a_s1000.json",
+    "rsi/analysis/out/sr26_s1238_ics55_a_s1001.json",
+    "rsi/analysis/out/sr26_s1238_ics55_a_s1002.json",
+    "rsi/analysis/out/sr26_s1238_ics55_a_s1003.json",
+    "rsi/analysis/out/sr26_s1238_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr26_s1238_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr26_s1238_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr26_s1238_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr26_s1238_s1000.json",
+    "rsi/analysis/out/sr26_s1238_s1001.json",
+    "rsi/analysis/out/sr26_s1238_s1002.json",
+    "rsi/analysis/out/sr26_s1238_s1003.json",
+    "rsi/analysis/out/sr26_s1238_sky130_a_s1000.json",
+    "rsi/analysis/out/sr26_s1238_sky130_a_s1001.json",
+    "rsi/analysis/out/sr26_s1238_sky130_a_s1002.json",
+    "rsi/analysis/out/sr26_s1238_sky130_a_s1003.json",
+    "rsi/analysis/out/sr26_s38584_ics55_a_s1000.json",
+    "rsi/analysis/out/sr26_s38584_ics55_a_s1001.json",
+    "rsi/analysis/out/sr26_s38584_ics55_a_s1002.json",
+    "rsi/analysis/out/sr26_s38584_ics55_a_s1003.json",
+    "rsi/analysis/out/sr26_s38584_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr26_s38584_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr26_s38584_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr26_s38584_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr26_s5378_sky130_b_s1000.json",
+    "rsi/analysis/out/sr26_s5378_sky130_b_s1001.json",
+    "rsi/analysis/out/sr26_s5378_sky130_b_s1002.json",
+    "rsi/analysis/out/sr26_s5378_sky130_b_s1003.json",
+    "rsi/analysis/out/sr26_salsa20_ics55_a_s1000.json",
+    "rsi/analysis/out/sr26_salsa20_ics55_a_s1001.json",
+    "rsi/analysis/out/sr26_salsa20_ics55_a_s1002.json",
+    "rsi/analysis/out/sr26_salsa20_ics55_a_s1003.json",
+    "rsi/analysis/out/sr26_salsa20_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr26_salsa20_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr26_salsa20_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr27_aes_s1000.json",
+    "rsi/analysis/out/sr27_aes_s1001.json",
+    "rsi/analysis/out/sr27_aes_s1002.json",
+    "rsi/analysis/out/sr27_aes_s1003.json",
+    "rsi/analysis/out/sr27_apb4_timer_s1000.json",
+    "rsi/analysis/out/sr27_apb4_timer_s1001.json",
+    "rsi/analysis/out/sr27_apb4_timer_s1002.json",
+    "rsi/analysis/out/sr27_apb4_timer_s1003.json",
+    "rsi/analysis/out/sr27_gcd_ics55_a_s1000.json",
+    "rsi/analysis/out/sr27_gcd_ics55_a_s1001.json",
+    "rsi/analysis/out/sr27_gcd_ics55_a_s1002.json",
+    "rsi/analysis/out/sr27_gcd_ics55_a_s1003.json",
+    "rsi/analysis/out/sr27_gcd_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr27_gcd_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr27_gcd_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr27_gcd_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr27_gcd_sky130_a_s1000.json",
+    "rsi/analysis/out/sr27_gcd_sky130_a_s1001.json",
+    "rsi/analysis/out/sr27_gcd_sky130_a_s1002.json",
+    "rsi/analysis/out/sr27_gcd_sky130_a_s1003.json",
+    "rsi/analysis/out/sr27_picorv32_s1000.json",
+    "rsi/analysis/out/sr27_picorv32_s1001.json",
+    "rsi/analysis/out/sr27_picorv32_s1002.json",
+    "rsi/analysis/out/sr27_picorv32_s1003.json",
+    "rsi/analysis/out/sr27_s1238_ics55_a_s1000.json",
+    "rsi/analysis/out/sr27_s1238_ics55_a_s1001.json",
+    "rsi/analysis/out/sr27_s1238_ics55_a_s1002.json",
+    "rsi/analysis/out/sr27_s1238_ics55_a_s1003.json",
+    "rsi/analysis/out/sr27_s1238_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr27_s1238_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr27_s1238_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr27_s1238_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr27_s1238_s1000.json",
+    "rsi/analysis/out/sr27_s1238_s1001.json",
+    "rsi/analysis/out/sr27_s1238_s1002.json",
+    "rsi/analysis/out/sr27_s1238_s1003.json",
+    "rsi/analysis/out/sr27_s1238_sky130_a_s1000.json",
+    "rsi/analysis/out/sr27_s1238_sky130_a_s1001.json",
+    "rsi/analysis/out/sr27_s1238_sky130_a_s1002.json",
+    "rsi/analysis/out/sr27_s1238_sky130_a_s1003.json",
+    "rsi/analysis/out/sr27_s38584_ics55_a_s1000.json",
+    "rsi/analysis/out/sr27_s38584_ics55_a_s1001.json",
+    "rsi/analysis/out/sr27_s38584_ics55_a_s1002.json",
+    "rsi/analysis/out/sr27_s38584_ics55_a_s1003.json",
+    "rsi/analysis/out/sr27_s38584_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr27_s38584_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr27_s38584_nangate45_a_s1002.json",
+    "rsi/analysis/out/sr27_s38584_nangate45_a_s1003.json",
+    "rsi/analysis/out/sr27_s5378_sky130_b_s1000.json",
+    "rsi/analysis/out/sr27_s5378_sky130_b_s1001.json",
+    "rsi/analysis/out/sr27_s5378_sky130_b_s1002.json",
+    "rsi/analysis/out/sr27_s5378_sky130_b_s1003.json",
+    "rsi/analysis/out/sr27_salsa20_ics55_a_s1000.json",
+    "rsi/analysis/out/sr27_salsa20_ics55_a_s1001.json",
+    "rsi/analysis/out/sr27_salsa20_ics55_a_s1002.json",
+    "rsi/analysis/out/sr27_salsa20_ics55_a_s1003.json",
+    "rsi/analysis/out/sr27_salsa20_nangate45_a_s1000.json",
+    "rsi/analysis/out/sr27_salsa20_nangate45_a_s1001.json",
+    "rsi/analysis/out/sr27_salsa20_nangate45_a_s1002.json",
+    "rsi/analysis/out/sweep_p1.json",
+    "rsi/analysis/out/sweep_p2.json",
+    "rsi/paper/main.pdf"
+  ],
+  "packaging_changes": [
+    "rsi/README.md",
+    "rsi/paper/README.md",
+    "RESEARCH.md",
+    "rsi/harness/rsi_lib.py: derive default workspace location",
+    "rsi/harness/paired_sequential_verdict.py: explicit runs root and correct arm labels",
+    "rsi/evidence/sr28/: frozen paired records with hashes"
+  ],
+  "behavior_policy": "Preserve existing C++ solver refinement. Document unresolved issues; change only paths, presentation and evidence packaging."
+}

@@ -83,6 +83,30 @@ class PLAPI
   GPRunResult gpCommitSession();
 
   bool runLG();
+  // Run legalisation and detail placement until the placement stops improving.
+  // The plain flow runs each of those stages exactly once, which measurement across a
+  // netlist-matched vector shows leaves the placement unconverged: a third pass lowered
+  // peak congestion on 9 of 16 seed-pairs and total overflow on 12 of 16, with wirelength
+  // also better on every design measured.
+  bool runConvergedFinish(int32_t max_passes, double hpwl_rel_tol);
+  bool runGatedFinish(int32_t max_extra_passes);
+  // SR-25: bounded, congestion-gated refinement of global placement.
+  //
+  // Why this and not more detail placement: the finishing passes already act on the repair stage, and
+  // the deficit is upstream of it - measurement localised global placement plus legalisation at 1.87x-2.07x
+  // the reference on wirelength on the designs the flow still fails, and the peak deficit is created there.
+  //
+  // The mechanism is the tree's own congestion-aware global placement, selected by congestion_effort,
+  // which ships switched off (is_congestion_effort = 0) and whose levels 2-7 were excluded as
+  // unconditional defaults because their sign varies by design. That exclusion says a level cannot be
+  // trusted applied to everything; it does not say a level cannot be used as an accepted-or-rejected
+  // refinement, which is the shape that made the finishing passes bounded and self-guarding.
+  //
+  // Each segment re-linearises global placement from the current coordinates at the given effort level and
+  // is followed by one legalisation and one detail placement; a segment is kept only if it improves peak
+  // congestion, or holds the peak and improves the total. Nothing is undone during the loop, so a segment
+  // that looks worse alone can lead to the one that wins, and the best segment is restored at the end.
+  bool runGatedGPRefine(int32_t max_segments, int32_t iterations, int32_t congestion_effort);
   bool runIncrLG();
   bool runIncrLG(std::vector<std::string> inst_name_list);
   bool runPostGP();

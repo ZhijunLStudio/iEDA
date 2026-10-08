@@ -1,0 +1,47 @@
+{
+ "dev": [
+  "apb4_clint_sky130_b",
+  "apb4_timer_sky130_b",
+  "apb4_timer",
+  "aes_sky130_a",
+  "picorv32_sky130_a",
+  "s13207_sky130_b",
+  "s1238_sky130_a",
+  "gcd_sky130_a",
+  "aes_core_sky130_b",
+  "s35932_sky130_b",
+  "apb4_uart_sky130_b",
+  "picorv32",
+  "s5378_sky130_b"
+ ],
+ "val": [
+  "apb4_i2c_sky130_b",
+  "s38584_sky130_a",
+  "aes",
+  "salsa20_sky130_a",
+  "PPU_sky130_b"
+ ],
+ "sealed": [
+  "s38417_sky130_b",
+  "s9234_sky130_b",
+  "s1238",
+  "apb4_ps2_sky130_b",
+  "s15850_sky130_b",
+  "s1488_sky130_b"
+ ],
+ "ood": [
+  "gcd_ics55_a",
+  "gcd_nangate45_a",
+  "s1238_ics55_a",
+  "s1238_nangate45_a",
+  "s38584_ics55_a",
+  "s38584_nangate45_a",
+  "salsa20_ics55_a",
+  "salsa20_nangate45_a"
+ ],
+ "excluded": [
+  "asap7_aes",
+  "ihp130_gcd",
+  "nangate45_gcd"
+ ]
+}

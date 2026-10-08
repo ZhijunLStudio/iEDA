@@ -16,6 +16,8 @@
 // ***************************************************************************************
 #include "RTInterface.hpp"
 
+#include <cstdlib>
+
 #include "DRCEngine.hpp"
 #include "DRCInterface.hpp"
 #include "DetailedRouter.hpp"
@@ -358,7 +360,26 @@ void RTInterface::wrapConfig(std::map<std::string, std::any>& config_map)
 {
   /////////////////////////////////////////////
   RTDM.getConfig().temp_directory_path = RTUTIL.getConfigValue<std::string>(config_map, "-temp_directory_path", "./rt_temp_directory");
-  RTDM.getConfig().thread_number = RTUTIL.getConfigValue<int32_t>(config_map, "-thread_number", 128);
+  // A thread count the caller pinned in the environment must survive this call.
+  //
+  // This used to override it unconditionally with 128, which meant a caller that set
+  // OMP_NUM_THREADS=1 and then asked for a trial route had it silently reset to 128 threads.
+  // A trial route's overflow counts are integers produced by parallel reductions, so the value
+  // returned depends on how the work was split; anything that gates on that value then makes a
+  // different decision from run to run. Measured on this tree: with placement guards gating on
+  // the in-process trial-route congestion, three identical runs of one binary on one design and
+  // one seed produced two different placements (union 16 and 37 against a reference of 20), while
+  // the same three runs of the unmodified binary were byte-identical. Reading the environment
+  // first makes the caller's pin effective and leaves the previous default in place when nothing
+  // is pinned.
+  int32_t default_thread_number = 128;
+  if (const char* env_thread_number = std::getenv("OMP_NUM_THREADS")) {
+    const int32_t parsed = std::atoi(env_thread_number);
+    if (parsed > 0) {
+      default_thread_number = parsed;
+    }
+  }
+  RTDM.getConfig().thread_number = RTUTIL.getConfigValue<int32_t>(config_map, "-thread_number", default_thread_number);
   omp_set_num_threads(std::max(RTDM.getConfig().thread_number, 1));
   RTDM.getConfig().bottom_routing_layer = RTUTIL.getConfigValue<std::string>(config_map, "-bottom_routing_layer", "");
   RTDM.getConfig().top_routing_layer = RTUTIL.getConfigValue<std::string>(config_map, "-top_routing_layer", "");

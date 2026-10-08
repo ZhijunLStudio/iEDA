@@ -1,0 +1,16 @@
+{
+ "design": "s1238",
+ "arm": "cur",
+ "seed": 1000,
+ "flow_s": 15.9,
+ "ok": true,
+ "hpwl": 5595083,
+ "union": 1846,
+ "max": 32,
+ "fails": [
+  "union",
+  "max"
+ ],
+ "pass_": false,
+ "def_md5": "64cdd7da"
+}

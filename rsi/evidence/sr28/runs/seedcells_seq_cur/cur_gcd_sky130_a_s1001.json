@@ -1,0 +1,13 @@
+{
+ "design": "gcd_sky130_a",
+ "arm": "cur",
+ "seed": 1001,
+ "flow_s": 15.7,
+ "ok": true,
+ "hpwl": 7018216,
+ "union": 889,
+ "max": 19,
+ "fails": [],
+ "pass_": true,
+ "def_md5": "4f5da58f"
+}
