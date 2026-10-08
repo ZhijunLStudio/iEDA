@@ -1831,16 +1831,6 @@
       "bytes": 228339
     },
     {
-      "path": "src/operation/iRT/source/module/detailed_router/DetailedRouter.cpp.fat_diverged_backup",
-      "sha256": "4324473fd4ed78de650fdc513a44bfcdf442e469d9e7df3c2cb0855e3a0801a7",
-      "bytes": 258699
-    },
-    {
-      "path": "src/operation/iRT/source/module/detailed_router/DetailedRouter.cpp.ieda_patched_backup",
-      "sha256": "e3b4e8ff282a462db9c3c482bf451efcb8899cb860a3b73a02654b58c12edb6e",
-      "bytes": 193237
-    },
-    {
       "path": "src/operation/iRT/source/module/detailed_router/DetailedRouter.hpp",
       "sha256": "52cd0efbc0afbe9bbe0baafecfa8e10a23ceb59e6bb6a67e3bec94a244ffbd88",
       "bytes": 11269
@@ -4087,6 +4077,8 @@
     "quick_test_plateau.sh",
     "run_experiment_single.sh",
     "run_experiments_WP-iRT-01-02.sh",
+    "src/operation/iRT/source/module/detailed_router/DetailedRouter.cpp.fat_diverged_backup",
+    "src/operation/iRT/source/module/detailed_router/DetailedRouter.cpp.ieda_patched_backup",
     "test_improvements_full_flow.sh",
     "与原始iEDA差异梳理.md"
   ],
@@ -4113,6 +4105,14 @@
     "run_experiment_single.sh": 1,
     "run_experiments_WP-iRT-01-02.sh": 1,
     "test_improvements_full_flow.sh": 1,
-    "与原始iEDA差异梳理.md": 1
-  }
+    "与原始iEDA差异梳理.md": 1,
+    "src": 2
+  },
+  "packaging_changes": [
+    {
+      "path": "src/operation/iCTS/source/flow/synthesis/htree/analytical_solver/CMakeLists.txt",
+      "sha256": "7d55be72b44cc920f8eaf8195dbd2bed095f897215de6ae1cfa82598f200afe3",
+      "reason": "Explicit PIC on the HiGHS consumer fixes fresh CMake generation; no placement algorithm change."
+    }
+  ]
 }

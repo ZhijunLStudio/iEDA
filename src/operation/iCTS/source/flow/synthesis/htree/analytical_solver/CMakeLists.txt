@@ -13,6 +13,10 @@ set(ICTS_FLOW_SYNTHESIS_HTREE_ANALYTICAL_SOLVER_SRC
 
 add_library(icts_source_flow_synthesis_htree_analytical_solver ${ICTS_FLOW_SYNTHESIS_HTREE_ANALYTICAL_SOLVER_SRC})
 
+# HiGHS exports an INTERFACE_POSITION_INDEPENDENT_CODE requirement. Set the
+# consumer explicitly so a fresh configuration does not depend on a cached default.
+set_target_properties(icts_source_flow_synthesis_htree_analytical_solver PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 target_link_libraries(
   icts_source_flow_synthesis_htree_analytical_solver
   PUBLIC
