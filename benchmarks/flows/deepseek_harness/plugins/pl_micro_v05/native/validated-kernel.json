@@ -1,0 +1,24 @@
+{
+  "original_source": {
+    "path": "/mnt/data/lizhijun/ieda-research-validation/2026-10-08-fixed-suite-v4/round482/reconstructed-kernel-base/source/src/operation/iPL/source/module/global_placer/electrostatic_placer/NesterovPlace.cc",
+    "sha256": "b6d8c19882f5abc9cb87455fd4d6db32e07f09b148f3ffc3d1c114009f55c2fe",
+    "size_bytes": 195045
+  },
+  "patched_source": {
+    "path": "/mnt/data/lizhijun/ieda-research-validation/2026-10-17-rudy-microtools-v1/rebuild/attempt-v1/isolated_patch/src/operation/iPL/source/module/global_placer/electrostatic_placer/NesterovPlace.cc",
+    "sha256": "a9c2cc4902d935335551b20da8a5d28a60d6318bc980726e8cd004286be5eec3",
+    "size_bytes": 195433
+  },
+  "solver": {
+    "path": "/mnt/data/lizhijun/ieda-research-validation/2026-10-17-rudy-microtools-v1/rebuild/attempt-v1/bin/iEDA",
+    "sha256": "f3f62b12432225494c0506bd4be934ff9da7d5b27d07d3c45e82175568885ec4",
+    "size_bytes": 249701632
+  },
+  "original_solver": {
+    "path": "/mnt/data/lizhijun/ieda-research-validation/2026-10-08-fixed-suite-v4/round482/reconstructed-kernel-base/build-static-zlib/bin/iEDA",
+    "sha256": "e711810e883671bb2e94f1f38d5beef8dfbdffc57aa304480b4ca131b177dbbd",
+    "size_bytes": 249705928
+  },
+  "required_checkpoint_semantics": "live_instance_materialization_v2",
+  "source_scope": "Patch is against the frozen kernel source above. Current agent/parity working-tree kernels differ; this bundle does not claim that their unrelated changes were rebuilt or validated."
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@ieda-ai/dsh-tool-pl-micro-v05",
+  "version": "0.5.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

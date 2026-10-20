@@ -1,0 +1,8 @@
+{
+  "scope": "Exact Pythonmeasurementhelpers used by the frozenvalidation; sourcebinary/PDKs/DEFs not included.",
+  "files": {
+    "def_hpwl_eval.py": "1512afb4af730b59d7d51b5d20c65f34c9b6c981c6d7d7babd1a65cd5171b1f4",
+    "def_identity.py": "202ee1fcb0e2ee8244e1ac134644db0ced0b94828bfb675b94749698e7039499",
+    "placement_legality.py": "6fb3e8b50638492212ff4e2f268e4348ea61bd583fab706e1b868e908692c091"
+  }
+}

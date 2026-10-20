@@ -1,0 +1,547 @@
+{
+  "schema": "ieda.pl-policy-study.v05",
+  "model": "deepseek-flash",
+  "effort": "max",
+  "arms": {
+    "main": {
+      "budget": {
+        "wall_seconds": 7200,
+        "physical_cpu_seconds": 3600,
+        "starts": 6,
+        "actual_gp_steps": 12000,
+        "neighbor_trials": 131072,
+        "fresh_sta": 24,
+        "tool_calls": 256,
+        "model_requests": 120,
+        "finalization_reserve_s": 180,
+        "requested_gp_steps": 12000,
+        "legalizations": 24,
+        "timing_observations": 24
+      }
+    }
+  },
+  "agent": [
+    {
+      "id": "c00-a0",
+      "design": "gcd_nangate45_a",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c00-a1",
+      "design": "gcd_nangate45_a",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c00-a2",
+      "design": "gcd_nangate45_a",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c01-a0",
+      "design": "gcd_ics55_a",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c01-a1",
+      "design": "gcd_ics55_a",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c01-a2",
+      "design": "gcd_ics55_a",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c02-a0",
+      "design": "s1238_sky130_a",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c02-a1",
+      "design": "s1238_sky130_a",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c02-a2",
+      "design": "s1238_sky130_a",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c03-a0",
+      "design": "apb4_timer",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c03-a1",
+      "design": "apb4_timer",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c03-a2",
+      "design": "apb4_timer",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c04-a0",
+      "design": "s38584_nangate45_a",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c04-a1",
+      "design": "s38584_nangate45_a",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c04-a2",
+      "design": "s38584_nangate45_a",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c05-a0",
+      "design": "picorv32",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c05-a1",
+      "design": "picorv32",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c05-a2",
+      "design": "picorv32",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c06-a0",
+      "design": "salsa20_sky130_a",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c06-a1",
+      "design": "salsa20_sky130_a",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c06-a2",
+      "design": "salsa20_sky130_a",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c07-a0",
+      "design": "aes",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c07-a1",
+      "design": "aes",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c07-a2",
+      "design": "aes",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c08-a0",
+      "design": "s5378_sky130_b",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c08-a1",
+      "design": "s5378_sky130_b",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c08-a2",
+      "design": "s5378_sky130_b",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c09-a0",
+      "design": "s9234_sky130_b",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c09-a1",
+      "design": "s9234_sky130_b",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c09-a2",
+      "design": "s9234_sky130_b",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c10-a0",
+      "design": "s38417_sky130_b",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c10-a1",
+      "design": "s38417_sky130_b",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c10-a2",
+      "design": "s38417_sky130_b",
+      "arm": "main",
+      "repeat": 2
+    },
+    {
+      "id": "c11-a0",
+      "design": "PPU_sky130_b",
+      "arm": "main",
+      "repeat": 0
+    },
+    {
+      "id": "c11-a1",
+      "design": "PPU_sky130_b",
+      "arm": "main",
+      "repeat": 1
+    },
+    {
+      "id": "c11-a2",
+      "design": "PPU_sky130_b",
+      "arm": "main",
+      "repeat": 2
+    }
+  ],
+  "rule": [
+    {
+      "id": "c00-r0",
+      "design": "gcd_nangate45_a",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c00-r1",
+      "design": "gcd_nangate45_a",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c00-r2",
+      "design": "gcd_nangate45_a",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c01-r0",
+      "design": "gcd_ics55_a",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c01-r1",
+      "design": "gcd_ics55_a",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c01-r2",
+      "design": "gcd_ics55_a",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c02-r0",
+      "design": "s1238_sky130_a",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c02-r1",
+      "design": "s1238_sky130_a",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c02-r2",
+      "design": "s1238_sky130_a",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c03-r0",
+      "design": "apb4_timer",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c03-r1",
+      "design": "apb4_timer",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c03-r2",
+      "design": "apb4_timer",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c04-r0",
+      "design": "s38584_nangate45_a",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c04-r1",
+      "design": "s38584_nangate45_a",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c04-r2",
+      "design": "s38584_nangate45_a",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c05-r0",
+      "design": "picorv32",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c05-r1",
+      "design": "picorv32",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c05-r2",
+      "design": "picorv32",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c06-r0",
+      "design": "salsa20_sky130_a",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c06-r1",
+      "design": "salsa20_sky130_a",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c06-r2",
+      "design": "salsa20_sky130_a",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c07-r0",
+      "design": "aes",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c07-r1",
+      "design": "aes",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c07-r2",
+      "design": "aes",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c08-r0",
+      "design": "s5378_sky130_b",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c08-r1",
+      "design": "s5378_sky130_b",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c08-r2",
+      "design": "s5378_sky130_b",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c09-r0",
+      "design": "s9234_sky130_b",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c09-r1",
+      "design": "s9234_sky130_b",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c09-r2",
+      "design": "s9234_sky130_b",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c10-r0",
+      "design": "s38417_sky130_b",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c10-r1",
+      "design": "s38417_sky130_b",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c10-r2",
+      "design": "s38417_sky130_b",
+      "arm": "main",
+      "controller": "adaptive"
+    },
+    {
+      "id": "c11-r0",
+      "design": "PPU_sky130_b",
+      "arm": "main",
+      "controller": "coarse"
+    },
+    {
+      "id": "c11-r1",
+      "design": "PPU_sky130_b",
+      "arm": "main",
+      "controller": "fine"
+    },
+    {
+      "id": "c11-r2",
+      "design": "PPU_sky130_b",
+      "arm": "main",
+      "controller": "adaptive"
+    }
+  ],
+  "stage_rule": [],
+  "repeats": [],
+  "concurrency": {
+    "agent": 4,
+    "rule": 4,
+    "stage_rule": 4
+  },
+  "formal_gate": "closed",
+  "study_phase": "formal",
+  "dsh_version": "0.2.1-rc.2",
+  "tools_mode": "native",
+  "cpu_threads_per_native": 1,
+  "aggregation": "middle actual agent delivery under frozen worst-gap/sum rank, failures last; no synthetic coordinate or per-axis-median endpoint",
+  "execution_order": [
+    "c00-r0",
+    "c00-r1",
+    "c00-r2",
+    "c00-a0",
+    "c00-a1",
+    "c00-a2",
+    "c01-r1",
+    "c01-r2",
+    "c01-a0",
+    "c01-a1",
+    "c01-a2",
+    "c01-r0",
+    "c02-r2",
+    "c02-a0",
+    "c02-a1",
+    "c02-a2",
+    "c02-r0",
+    "c02-r1",
+    "c03-a0",
+    "c03-a1",
+    "c03-a2",
+    "c03-r0",
+    "c03-r1",
+    "c03-r2",
+    "c04-a1",
+    "c04-a2",
+    "c04-r0",
+    "c04-r1",
+    "c04-r2",
+    "c04-a0",
+    "c05-a2",
+    "c05-r0",
+    "c05-r1",
+    "c05-r2",
+    "c05-a0",
+    "c05-a1",
+    "c06-r0",
+    "c06-r1",
+    "c06-r2",
+    "c06-a0",
+    "c06-a1",
+    "c06-a2",
+    "c07-r1",
+    "c07-r2",
+    "c07-a0",
+    "c07-a1",
+    "c07-a2",
+    "c07-r0",
+    "c08-r2",
+    "c08-a0",
+    "c08-a1",
+    "c08-a2",
+    "c08-r0",
+    "c08-r1",
+    "c09-a0",
+    "c09-a1",
+    "c09-a2",
+    "c09-r0",
+    "c09-r1",
+    "c09-r2",
+    "c10-a1",
+    "c10-a2",
+    "c10-r0",
+    "c10-r1",
+    "c10-r2",
+    "c10-a0",
+    "c11-a2",
+    "c11-r0",
+    "c11-r1",
+    "c11-r2",
+    "c11-a0",
+    "c11-a1"
+  ],
+  "gateway_base_url": "http://localhost:8317/v1"
+}

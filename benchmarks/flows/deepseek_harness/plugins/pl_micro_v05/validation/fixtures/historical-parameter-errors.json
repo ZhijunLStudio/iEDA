@@ -1,0 +1,145 @@
+{
+  "scope": "Exact10 malformedrequests from priorvalidation; provenance and verbose responses omitted.",
+  "errors": [
+    {
+      "request": {
+        "op": "observe",
+        "args": {
+          "view": "state"
+        }
+      }
+    },
+    {
+      "request": {
+        "op": "refine",
+        "args": {
+          "candidate_id": "l01",
+          "objective": "hpwl",
+          "operator": "all",
+          "protect_reported_timing": true,
+          "scope": "global",
+          "strength": 4,
+          "wire_guard": "both"
+        }
+      }
+    },
+    {
+      "request": {
+        "op": "refine",
+        "args": {
+          "candidate_id": "l11",
+          "max_moves": 16,
+          "neighbor_trials": 16384,
+          "objective": "rudy",
+          "operator": "rudy_swap",
+          "path_guard": "critical",
+          "protect_reported_timing": false,
+          "scope": "global",
+          "wire_guard": "none"
+        }
+      }
+    },
+    {
+      "request": {
+        "op": "refine",
+        "args": {
+          "candidate_id": "l03",
+          "hotspot_index": 0,
+          "max_moves": 16,
+          "neighbor_trials": 8192,
+          "objective": "rudy",
+          "operator": "rudy_swap",
+          "path_guard": "critical",
+          "protect_reported_timing": true,
+          "radius_bins": 3,
+          "scope": "hotspot",
+          "wire_guard": "both"
+        }
+      }
+    },
+    {
+      "request": {
+        "op": "refine",
+        "args": {
+          "candidate_id": "l04",
+          "max_moves": 8,
+          "neighbor_trials": 4096,
+          "objective": "hpwl",
+          "operator": "instance_swap",
+          "protect_reported_timing": true,
+          "scope": "global",
+          "strength": 4
+        }
+      }
+    },
+    {
+      "request": {
+        "op": "observe",
+        "args": {
+          "view": "state"
+        }
+      }
+    },
+    {
+      "request": {
+        "op": "refine",
+        "args": {
+          "candidate_id": "l05",
+          "max_moves": 32,
+          "neighbor_trials": 32768,
+          "objective": "rudy",
+          "operator": "rudy_swap",
+          "path_guard": "critical",
+          "protect_reported_timing": false,
+          "scope": "global",
+          "wire_guard": "none"
+        }
+      }
+    },
+    {
+      "request": {
+        "op": "refine",
+        "args": {
+          "candidate_id": "l01",
+          "max_moves": 16,
+          "objective": "timing",
+          "operator": "all",
+          "path_guard": "critical",
+          "protect_reported_timing": false,
+          "scope": "critical",
+          "strength": 6
+        }
+      }
+    },
+    {
+      "request": {
+        "op": "refine",
+        "args": {
+          "candidate_id": "l00",
+          "max_moves": 16,
+          "neighbor_trials": 8192,
+          "objective": "rudy",
+          "operator": "rudy_swap",
+          "path_guard": "critical",
+          "protect_reported_timing": false,
+          "scope": "global",
+          "wire_guard": "both"
+        }
+      }
+    },
+    {
+      "request": {
+        "op": "refine",
+        "args": {
+          "candidate_id": "l11",
+          "objective": "timing",
+          "operator": "all",
+          "path_guard": "critical_and_hold",
+          "protect_reported_timing": true,
+          "scope": "global",
+          "strength": 4
+        }
+      }
+    }
+  ]
+}

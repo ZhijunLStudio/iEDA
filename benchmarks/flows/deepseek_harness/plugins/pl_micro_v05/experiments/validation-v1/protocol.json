@@ -1,0 +1,215 @@
+{
+  "schema": "ieda.pl-validation-protocol-summary.v1",
+  "scope": "Parameter summary of the archived study; not an executable open gate.",
+  "model": "deepseek-flash",
+  "effort": "max",
+  "dsh_version": "0.2.1-rc.2",
+  "tools_mode": "native",
+  "seed": 42,
+  "kernel_sha256": "f3f62b12432225494c0506bd4be934ff9da7d5b27d07d3c45e82175568885ec4",
+  "original_solver_sha256": "e711810e883671bb2e94f1f38d5beef8dfbdffc57aa304480b4ca131b177dbbd",
+  "budget": {
+    "wall_seconds": 7200,
+    "physical_cpu_seconds": 3600,
+    "starts": 6,
+    "actual_gp_steps": 12000,
+    "neighbor_trials": 131072,
+    "fresh_sta": 24,
+    "tool_calls": 256,
+    "model_requests": 120,
+    "finalization_reserve_s": 180,
+    "requested_gp_steps": 12000,
+    "legalizations": 24,
+    "timing_observations": 24
+  },
+  "concurrency": {
+    "agent": 4,
+    "rule": 4,
+    "stage_rule": 4
+  },
+  "design_order": [
+    "gcd_nangate45_a",
+    "gcd_ics55_a",
+    "s1238_sky130_a",
+    "apb4_timer",
+    "s38584_nangate45_a",
+    "picorv32",
+    "salsa20_sky130_a",
+    "aes",
+    "s5378_sky130_b",
+    "s9234_sky130_b",
+    "s38417_sky130_b",
+    "PPU_sky130_b"
+  ],
+  "holdouts": [
+    "s5378_sky130_b",
+    "s9234_sky130_b",
+    "s38417_sky130_b",
+    "PPU_sky130_b"
+  ],
+  "input_identities": {
+    "gcd_nangate45_a": {
+      "top": "gcd",
+      "units": 2000,
+      "components": 862,
+      "connected_components": 251,
+      "nets": 322,
+      "netlist_sha256": "d4ede3b9752ee6cbade6bac8b7349c71f778cd2911558970ae06c827f2f0d13d",
+      "connectivity_sha256": "fc60d7b766412dc776b419dd594809dbb26dca7be4220dd4eb893125754a0c8d",
+      "floorplan_sha256": "94381f7cf87768a41d2d8350f16e6dfa362f928681429e2405780b31335d0bb2",
+      "def_sha256": "ef1d599ae23eb074a6d0d317d5d50201f3e6e34128a8af413f98c97eac47b5fc"
+    },
+    "gcd_ics55_a": {
+      "top": "gcd",
+      "units": 1000,
+      "components": 664,
+      "connected_components": 238,
+      "nets": 274,
+      "netlist_sha256": "1d26f8abdd6aedaf36dff7cb117f22653ac98e1b146d3c942c5525d0ea8f76c6",
+      "connectivity_sha256": "920123d0aa7df2d21f71aff6c9b74438851f75ef6e0d408f7c1c942518529c92",
+      "floorplan_sha256": "eab0c4a61f0d8509c02838b397dca17e5dbcff0e1c4c5565a084f4cd49c293e5",
+      "def_sha256": "987e7e02fbad3b37209295e8685a389346bae7c6f5cacf46c5a79356b5df3ed8"
+    },
+    "s1238_sky130_a": {
+      "top": "s1238",
+      "units": 1000,
+      "components": 647,
+      "connected_components": 291,
+      "nets": 306,
+      "netlist_sha256": "fbcf5db9ba4993b14973dbb74491fe970f5af3d41482646e06147a4c435a33b7",
+      "connectivity_sha256": "71ca59412c4b0ec4e5cc34d732ca366255ada1440b4b215938fa38600647a9d5",
+      "floorplan_sha256": "ff5ce4d3a2da3027f02247362219426ba4e29e4d76d3d260a54d8850271d6415",
+      "def_sha256": "2f7e91c6918fd1ad6e7f073944c7c43a081d21438d70f36fe98f3e0f6ff25059"
+    },
+    "apb4_timer": {
+      "top": "apb4_timer",
+      "units": 1000,
+      "components": 1953,
+      "connected_components": 769,
+      "nets": 876,
+      "netlist_sha256": "161e01bdde050f4c89834ebf9162b3484a12298a204772c080344a0723170621",
+      "connectivity_sha256": "a0e1c88a7225a578dc5ec0bbbef87157e0ecf0dc7792d4a2bdb82dc392209ec5",
+      "floorplan_sha256": "bf3451d089fc77406bb87fea02e26bed7a1868e9568b431e1e8d01269441e95d",
+      "def_sha256": "036da847431c737428b8b9f5f37b756032f21313f31515b06339474d7dfc4d38"
+    },
+    "s38584_nangate45_a": {
+      "top": "s38584",
+      "units": 2000,
+      "components": 8284,
+      "connected_components": 6247,
+      "nets": 7548,
+      "netlist_sha256": "e816eaa050af4061ebe2da88d5725d556ac74892b17f627f3ccc1af9bf899671",
+      "connectivity_sha256": "a8a330915df9709081fcc98292ca63f2c598a52af5446188b0727016ac69bfa0",
+      "floorplan_sha256": "19943660e5c042b0575bb2f1cdde60afa9011a40815e4421eb26227f30717c30",
+      "def_sha256": "c55f68ef9dd218b6f94822b3741d4b34c91f56f96e82ff86fae67865618282f2"
+    },
+    "picorv32": {
+      "top": "picorv32",
+      "units": 1000,
+      "components": 16235,
+      "connected_components": 9742,
+      "nets": 9868,
+      "netlist_sha256": "e106618760f9f3db613f838ff6fa167550ee2938d0074f7f5f58f2753b87c539",
+      "connectivity_sha256": "d994b4580d847eae12bb4ae475929bfc8906a180b4aa2ae015acfaa75846db4c",
+      "floorplan_sha256": "cc690aee0a7b0e5942f3d703a9c349d18ee592e1e40132db2581fe92a8ae6df4",
+      "def_sha256": "aec8c931f069bb6a3a9ea55ba81acc1d6b9b2c2d998f89cf4406c190690d9583"
+    },
+    "salsa20_sky130_a": {
+      "top": "salsa20",
+      "units": 1000,
+      "components": 29816,
+      "connected_components": 22660,
+      "nets": 22876,
+      "netlist_sha256": "06e26847e02462696b3ee7cff76b6e1a78d8bd12dd70b6424302f8c62f5da79c",
+      "connectivity_sha256": "2fc25cfe6a3981bbdfbab8f2441975454a5ed73717fe8ce3f89afa3466161437",
+      "floorplan_sha256": "c87b2b23efca900bf073b2a0059a4a7fd5301846ab19a0a6345a9a42d4e63b00",
+      "def_sha256": "bc970f426fc437ebc77d99caccf2ee19c6ac25f325e781878b3960b3082fea8f"
+    },
+    "aes": {
+      "top": "aes",
+      "units": 1000,
+      "components": 39685,
+      "connected_components": 25981,
+      "nets": 27847,
+      "netlist_sha256": "a03cb15f247dc50c91dbf87ea949c75a2abb3ae12614a2d13c9f0ffa08c747a1",
+      "connectivity_sha256": "2b3c10dbaf30844a08211108f9beb5322a4313eb383daff56942adf987955919",
+      "floorplan_sha256": "64cd78dd1da62ee743ab342242dfa5697852b3ebdf50f68a019e20756f54f90d",
+      "def_sha256": "a3c5b22188e4b91383439eb4fb3e33e7f2c8a160d820398d9892c7582399c3e7"
+    },
+    "s5378_sky130_b": {
+      "top": "s5378",
+      "units": 1000,
+      "components": 2322,
+      "connected_components": 833,
+      "nets": 869,
+      "netlist_sha256": "be30419353406ec248b400f9e5a6d2c5df1ca02f55c853ce4e84c92aec13f43f",
+      "connectivity_sha256": "b5a10bce72d671eceb935aecf3ade3b87cb3e58f77e0ed0ad1b2ce81f9185591",
+      "floorplan_sha256": "663037ce7f2169a8b67b16c94ea248cfc89eea8535797f195eae140187804a2b",
+      "def_sha256": "56074b7774dba470bd55f3c5eb302826094f9429f0c34ad7c33c85734be45a7d"
+    },
+    "s9234_sky130_b": {
+      "top": "s9234",
+      "units": 1000,
+      "components": 3259,
+      "connected_components": 1323,
+      "nets": 1360,
+      "netlist_sha256": "64f8e31ccb6b5a02c816cce80b483a44212bdc429d5501d8698ffe4a1a3afab8",
+      "connectivity_sha256": "13fe0065605d3424b05244d1094ae0001a0614f4345489bf5282f1c244ea2fdb",
+      "floorplan_sha256": "94d199747aeecf9de2dc76b6f303a6600e0e8ff9ed10440ff0d992bbdcd05a61",
+      "def_sha256": "cddf7ee48041fa7c4de5fa6eaddfef75f8e96a45d9791842e325718526d7938e"
+    },
+    "s38417_sky130_b": {
+      "top": "s38417",
+      "units": 1000,
+      "components": 15387,
+      "connected_components": 7658,
+      "nets": 7687,
+      "netlist_sha256": "0b05d3013a830de60152c935d1dd4f9259af6eeb439240e9ee95408f895094c0",
+      "connectivity_sha256": "278c30b5432b27bca71885a3bf6c68f66b0ccf5258a940a382a84be50c8432a1",
+      "floorplan_sha256": "610ea6be6ed3cc0e0f0daec2c9058aa0dad02d7747f8275c19886b25eaa2fa04",
+      "def_sha256": "70630dc4cc58efdbc03ed12242b888a8c505411bf57c7ec213dfd971f2fcb521"
+    },
+    "PPU_sky130_b": {
+      "top": "PPU",
+      "units": 1000,
+      "components": 18138,
+      "connected_components": 7594,
+      "nets": 7663,
+      "netlist_sha256": "e46fd7b56863a5396721e98573993abbb4f3ef5ce0ef35a93c51370b0f6ff71e",
+      "connectivity_sha256": "7f51e1fa66224eff2ab82a5ff477a8c05792ac2070f0a930f9aa3ab8ff3aa6ee",
+      "floorplan_sha256": "326719b2bceff96da544e218643c9af3ca9cfe2f1b026349125b5d65fa922802",
+      "def_sha256": "a5525c9d68ee9dcb1637fbb02429ffad5f2e664325b4eb50157cb09ded95dad3"
+    }
+  },
+  "controllers": [
+    "coarse",
+    "fine",
+    "adaptive",
+    "Flash/max agent"
+  ],
+  "agent_repeats": 3,
+  "formal_episodes": 72,
+  "quality_axes": [
+    "hpwl_um",
+    "rudy_peak",
+    "rudy_overflow_sum",
+    "setup_wns_ns",
+    "setup_tns_ns",
+    "hold_wns_ns",
+    "hold_tns_ns"
+  ],
+  "ranking": "Worst positive normalized Inn gap first, then sum; one actual middle delivery from3agent repetitions.",
+  "observed": {
+    "research_validation_status": "validation_incomplete",
+    "main_observed_quality_gate_passed": false,
+    "normal_agent_deliveries": 36,
+    "normal_rule_deliveries": 35,
+    "median_challenge_wins_before_catchup": "4/11",
+    "median_holdout_wins_before_catchup": "2/4",
+    "actual_CPU_matched_catchups": 3,
+    "surviving_matched_wins": 3,
+    "surviving_practical_challenge_gains": 2,
+    "retained_failed_main_episode": "c07-r0",
+    "conditional_model_ablations": "not_triggered"
+  }
+}
