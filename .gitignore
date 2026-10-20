@@ -78,3 +78,6 @@ node_modules/
 
 # 知识挖掘运行产物（可重新生成）
 benchmarks/flows/knowledge_mining/output/
+
+# Finder metadata is local and must not be tracked.
+.DS_Store
